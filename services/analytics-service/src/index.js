@@ -1,0 +1,5 @@
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('Hello from analytics-service!'));
+app.listen(PORT, () => console.log(`analytics-service running on port ${PORT}`));
