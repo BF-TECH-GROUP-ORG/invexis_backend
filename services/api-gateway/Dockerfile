@@ -7,17 +7,20 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies
+# Install all dependencies (including devDependencies)
 RUN npm install
 
-# Install nodemon globally for development
+# Install nodemon globally for live reloading
 RUN npm install -g nodemon
 
 # Copy source code
 COPY . .
 
+# Set environment variables
+ENV NODE_ENV=development
+
 # Expose default port
 EXPOSE 8000
 
-# Command to start service in dev mode
-CMD ["nodemon", "index.js"]
+# Start the application with nodemon for live reloading
+CMD ["nodemon", "src/index.js"]
