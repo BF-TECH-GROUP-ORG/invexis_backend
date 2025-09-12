@@ -1,5 +1,28 @@
-const express = require('express');
-const app = express();
+const { app, logger } = require('./app');
+const mongoose = require('mongoose');
+const { connectDB } = require('./config/db');
+const { connectRabbitMQ, closeRabbitMQ } = require('./config/rabbitmq');
+const { scheduleDailyReport } = require('./services/reportService');
+
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send('Hello from inventory-service!'));
-app.listen(PORT, () => console.log(`inventory-service running on port ${PORT}`));
+
+const startServer = async () => {
+  try {
+    await connectDB();
+    await connectRabbitMQ();
+    scheduleDailyReport();
+    app.listen(PORT, () => logger.info(`Invexis Inventory Service running on port ${PORT}`));
+  } catch (error) {
+    logger.error('Server startup error:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down');
+  await closeRabbitMQ();
+  await mongoose.connection.close();
+  process.exit(0);
+});
