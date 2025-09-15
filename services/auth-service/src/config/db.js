@@ -5,8 +5,6 @@ const logger = require('../utils/app');
 const connectDB = async () => {
     try {
         const conn = await mongoose.connect(process.env.MONGO_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             serverSelectionTimeoutMS: 5000,
             heartbeatFrequencyMS: 10000,
             maxPoolSize: 10,
