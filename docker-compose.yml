@@ -1,4 +1,4 @@
-version: '3.8'
+# version: '3.8'
 
 # ======================
 # Services
@@ -106,8 +106,8 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
-    ports:
-      - "27018:27017"   # host:container
+    # ports:
+    #   - "27019:27017"   # host:container
     volumes:
       - mongodb_data:/data/db
     networks:
@@ -474,6 +474,10 @@ services:
       start_period: 30s
     networks:
       - invexis-network
+  websocket-service:
+    build: ./services/websocket-service
+    container_name: invexis-websocket-service
+    restart: unless-stopped
 
 # ======================
 # Volumes

@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "test": "jest"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "express": "^5.1.0"
+  }
 }

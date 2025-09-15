@@ -131,3 +131,9 @@
 {"level":"info","message":"Server running on port http://localhost:4001","timestamp":"2025-09-08T13:18:13.047Z"}
 {"level":"info","message":"MongoDB connected: localhost","timestamp":"2025-09-08T13:22:50.038Z"}
 {"level":"info","message":"Server running on port http://localhost:4001","timestamp":"2025-09-08T13:22:50.045Z"}
+{"level":"info","message":"MongoDB connected: localhost","timestamp":"2025-09-15T21:23:42.308Z"}
+{"level":"info","message":"Server running on port http://localhost:4001","timestamp":"2025-09-15T21:23:42.320Z"}
+{"level":"info","message":"MongoDB connected: localhost","timestamp":"2025-09-15T21:24:43.783Z"}
+{"level":"info","message":"Server running on port http://localhost:4001","timestamp":"2025-09-15T21:24:43.796Z"}
+{"level":"info","message":"MongoDB connected: localhost","timestamp":"2025-09-15T21:24:58.714Z"}
+{"level":"info","message":"Server running on port http://localhost:4001","timestamp":"2025-09-15T21:24:58.729Z"}

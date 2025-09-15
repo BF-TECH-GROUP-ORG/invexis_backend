@@ -37,6 +37,7 @@ app.use(limiter);
 // ----------- ROUTES ------------
 
 app.use('/auth', authRoutes);
+app.get('/health', (req, res) => res.sendStatus(200));
 
 // Optional: protected test route
 // const { protect } = require('./middleware/authMiddleware');
