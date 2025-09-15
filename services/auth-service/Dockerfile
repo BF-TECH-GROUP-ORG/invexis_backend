@@ -20,4 +20,4 @@ COPY . .
 EXPOSE 8001
 
 # Command to start service in dev mode
-CMD ["nodemon", "src/index.js"]
+CMD ["nodemon", "./src/index.js"]

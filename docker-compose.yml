@@ -1,4 +1,5 @@
 version: '3.8'
+
 # ======================
 # Services
 # ======================
@@ -10,7 +11,7 @@ services:
   company-postgres:
     image: postgres:15
     container_name: invexis-company-postgres
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       POSTGRES_USER: invexis
       POSTGRES_PASSWORD: invexispass
@@ -21,17 +22,18 @@ services:
       - company_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U invexis -d companydb"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
       - invexis-network
+
   # PostgreSQL for shop-service
   shop-postgres:
     image: postgres:15
     container_name: invexis-shop-postgres
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       POSTGRES_USER: invexis
       POSTGRES_PASSWORD: invexispass
@@ -42,17 +44,18 @@ services:
       - shop_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U invexis -d shopdb"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
       - invexis-network
+
   # PostgreSQL for payment-service
   payment-postgres:
     image: postgres:15
     container_name: invexis-payment-postgres
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       POSTGRES_USER: invexis
       POSTGRES_PASSWORD: invexispass
@@ -63,17 +66,18 @@ services:
       - payment_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U invexis -d paymentdb"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
       - invexis-network
+
   # PostgreSQL for analytics-service
   analytics-postgres:
     image: postgres:15
     container_name: invexis-analytics-postgres
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       POSTGRES_USER: invexis
       POSTGRES_PASSWORD: invexispass
@@ -84,209 +88,121 @@ services:
       - analytics_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U invexis -d analyticsdb"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
       - invexis-network
-  # MySQL for sales-service
-  sales-mysql:
-    image: mysql:8.4.6
-    container_name: invexis-sales-mysql
-    restart: on-failure:5
+
+  # ======================
+  # Single MongoDB Service - All databases in one container
+  # ======================
+
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: invexispass
-      MYSQL_USER: invexis
-      MYSQL_PASSWORD: invexispass
-      MYSQL_DATABASE: salesdb
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27018:27017"   # host:container
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - invexis-network
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --username root --password password --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+
+  # ======================
+  # MySQL Service
+  # ======================
+
+  sales-mysql:
+    image: mysql:8.4.0
+    container_name: invexis-sales-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass   # set a strong password in real deployments
+      MYSQL_DATABASE: salesdb         # will be created automatically
     ports:
       - "3306:3306"
     volumes:
       - sales_mysql_data:/var/lib/mysql
-    command: --log_error_verbosity=3
+    command: [
+      "--log-error-verbosity=3",
+      "--innodb-flush-method=fsync",
+      "--skip-log-bin",
+      "--innodb-buffer-pool-size=128M",
+      "--bind-address=0.0.0.0"
+    ]
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "invexis", "-pinvexispass"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -prootpass || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 60s
+      retries: 5
+      start_period: 30s
     networks:
       - invexis-network
-  # MongoDB for auth-service
-  auth-mongodb:
-    image: mongo:6.0
-    container_name: invexis-auth-mongodb
-    restart: on-failure:5
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: invexis
-      MONGO_INITDB_ROOT_PASSWORD: invexispass
-      MONGO_INITDB_DATABASE: authdb
-    ports:
-      - "27017:27017"
-    volumes:
-      - auth_mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--username", "invexis", "--password", "invexispass", "--authenticationDatabase", "admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    networks:
-      - invexis-network
-  # MongoDB for inventory-service
-  inventory-mongodb:
-    image: mongo:6.0
-    container_name: invexis-inventory-mongodb
-    restart: on-failure:5
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: invexis
-      MONGO_INITDB_ROOT_PASSWORD: invexispass
-      MONGO_INITDB_DATABASE: inventorydb
-    ports:
-      - "27018:27017"
-    volumes:
-      - inventory_mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--username", "invexis", "--password", "invexispass", "--authenticationDatabase", "admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    networks:
-      - invexis-network
-  # MongoDB for ecommerce-service
-  ecommerce-mongodb:
-    image: mongo:6.0
-    container_name: invexis-ecommerce-mongodb
-    restart: on-failure:5
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: invexis
-      MONGO_INITDB_ROOT_PASSWORD: invexispass
-      MONGO_INITDB_DATABASE: ecommercedb
-    ports:
-      - "27019:27017"
-    volumes:
-      - ecommerce_mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--username", "invexis", "--password", "invexispass", "--authenticationDatabase", "admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    networks:
-      - invexis-network
-  # MongoDB for analytics-service
-  analytics-mongodb:
-    image: mongo:6.0
-    container_name: invexis-analytics-mongodb
-    restart: on-failure:5
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: invexis
-      MONGO_INITDB_ROOT_PASSWORD: invexispass
-      MONGO_INITDB_DATABASE: analytics_mongodb
-    ports:
-      - "27020:27017"
-    volumes:
-      - analytics_mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--username", "invexis", "--password", "invexispass", "--authenticationDatabase", "admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    networks:
-      - invexis-network
-  # MongoDB for audit-service
-  audit-mongodb:
-    image: mongo:6.0
-    container_name: invexis-audit-mongodb
-    restart: on-failure:5
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: invexis
-      MONGO_INITDB_ROOT_PASSWORD: invexispass
-      MONGO_INITDB_DATABASE: auditdb
-    ports:
-      - "27021:27017"
-    volumes:
-      - audit_mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--username", "invexis", "--password", "invexispass", "--authenticationDatabase", "admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    networks:
-      - invexis-network
-  # MongoDB for debt-service
-  debt-mongodb:
-    image: mongo:6.0
-    container_name: invexis-debt-mongodb
-    restart: on-failure:5
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: invexis
-      MONGO_INITDB_ROOT_PASSWORD: invexispass
-      MONGO_INITDB_DATABASE: debtdb
-    ports:
-      - "27022:27017"
-    volumes:
-      - debt_mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--username", "invexis", "--password", "invexispass", "--authenticationDatabase", "admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    networks:
-      - invexis-network
+
   # ----------------------
   # Messaging & Caching
   # ----------------------
+  
   # Redis for notification-service
   redis:
-    image: redis:7
+    image: redis:7-alpine
     container_name: invexis-redis
-    restart: on-failure:5
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 60s
+      retries: 3
+      start_period: 10s
     networks:
       - invexis-network
+
   # RabbitMQ for messaging
   rabbitmq:
-    image: rabbitmq:3.13.7-management
+    image: rabbitmq:3.13.7-management-alpine
     container_name: invexis-rabbitmq
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: invexis
       RABBITMQ_DEFAULT_PASS: invexispass
+      RABBITMQ_DEFAULT_VHOST: /
     ports:
       - "5672:5672"     # AMQP protocol
       - "15672:15672"   # Management UI
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 20s
+      timeout: 15s
+      retries: 10
     networks:
       - invexis-network
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+
   # ----------------------
   # Microservices
   # ----------------------
+  
   api-gateway:
     build: ./services/api-gateway
     container_name: invexis-api-gateway
-    restart: on-failure:5
+    restart: unless-stopped
     ports:
       - "4000:4000"
     environment:
@@ -315,58 +231,60 @@ services:
       debt-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   auth-service:
     build: ./services/auth-service
     container_name: invexis-auth-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
-      DB_MONGO: mongodb://invexis:invexispass@auth-mongodb:27017/authdb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/authdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     depends_on:
-      auth-mongodb:
+      mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   company-service:
     build: ./services/company-service
     container_name: invexis-company-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@company-postgres:5432/companydb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
-    command: nodemon src/index.js
     depends_on:
       company-postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   shop-service:
     build: ./services/shop-service
     container_name: invexis-shop-service
-    restart: on-failure:5
+    restart: unless-stopped
     ports:
       - "4009:4009"
     environment:
@@ -378,37 +296,39 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4009/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4009/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   inventory-service:
     build: ./services/inventory-service
     container_name: invexis-inventory-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
-      DB_MONGO: mongodb://invexis:invexispass@inventory-mongodb:27017/inventorydb?authSource=admin
+      DB_MONGO: mongodb://root@mongodb:27017/inventorydb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     depends_on:
-      inventory-mongodb:
+      mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   sales-service:
     build: ./services/sales-service
     container_name: invexis-sales-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       DB_MYSQL: mysql://invexis:invexispass@sales-mysql:3306/salesdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -418,168 +338,164 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   payment-service:
     build: ./services/payment-service
     container_name: invexis-payment-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@payment-postgres:5432/paymentdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
-    command: nodemon src/index.js
     depends_on:
       payment-postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   ecommerce-service:
     build: ./services/ecommerce-service
     container_name: invexis-ecommerce-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
-      DB_MONGO: mongodb://invexis:invexispass@ecommerce-mongodb:27017/ecommercedb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/ecommercedb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     depends_on:
-      ecommerce-mongodb:
+      mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   notification-service:
     build: ./services/notification-service
     container_name: invexis-notification-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
-    command: nodemon src/index.js
     depends_on:
       redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   analytics-service:
     build: ./services/analytics-service
     container_name: invexis-analytics-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@analytics-postgres:5432/analyticsdb
-      DB_MONGO: mongodb://invexis:invexispass@analytics-mongodb:27017/analytics_mongodb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/analytics_mongodb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     depends_on:
       analytics-postgres:
         condition: service_healthy
-      analytics-mongodb:
+      mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   audit-service:
     build: ./services/audit-service
     container_name: invexis-audit-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
-      DB_MONGO: mongodb://invexis:invexispass@audit-mongodb:27017/auditdb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/auditdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     depends_on:
-      audit-mongodb:
+      mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
   debt-service:
     build: ./services/debt-service
     container_name: invexis-debt-service
-    restart: on-failure:5
+    restart: unless-stopped
     environment:
-      DB_MONGO: mongodb://invexis:invexispass@debt-mongodb:27017/debtdb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/debtdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     depends_on:
-      debt-mongodb:
+      mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - invexis-network
+
 # ======================
 # Volumes
 # ======================
 volumes:
   company_postgres_data:
-    name: company_postgres_data
+    name: invexis_company_postgres_data
   shop_postgres_data:
-    name: shop_postgres_data
+    name: invexis_shop_postgres_data
   payment_postgres_data:
-    name: payment_postgres_data
+    name: invexis_payment_postgres_data
   analytics_postgres_data:
-    name: analytics_postgres_data
+    name: invexis_analytics_postgres_data
   sales_mysql_data:
-    name: sales_mysql_data
-  auth_mongo_data:
-    name: auth_mongo_data
-  inventory_mongo_data:
-    name: inventory_mongo_data
-  ecommerce_mongo_data:
-    name: ecommerce_mongo_data
-  analytics_mongo_data:
-    name: analytics_mongo_data
-  audit_mongo_data:
-    name: audit_mongo_data
-  debt_mongo_data:
-    name: debt_mongo_data
+    name: invexis_sales_mysql_data
+  mongodb_data:
+    name: invexis_mongodb_data
   redis_data:
-    name: redis_data
+    name: invexis_redis_data
   rabbitmq_data:
-    name: rabbitmq_data
+    name: invexis_rabbitmq_data
+
 # ======================
 # Networks
 # ======================
