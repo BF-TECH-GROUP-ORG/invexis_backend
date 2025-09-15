@@ -1,13 +1,22 @@
 {
   "name": "company-service",
   "version": "1.0.0",
-  "main": "dist/index.js",
-  "scripts": {
-    "dev": "nodemon src/index.js",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "jest"
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "knex": "^3.1.0"
+  }
 }
