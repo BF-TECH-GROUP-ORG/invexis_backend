@@ -1,0 +1,98 @@
+1️⃣ Initialize Knex in the Project (once)
+npm install knex pg
+npx knex init
+
+
+Creates knexfile.js.
+
+Configure database settings (we already did with env variables).
+
+2️⃣ Creating Migrations
+
+Migrations are used to create/alter/drop tables.
+
+Create a new migration:
+
+npx knex migrate:make migration_name
+
+
+Examples for your tables:
+
+npx knex migrate:make create_companies_table
+npx knex migrate:make create_company_roles_table
+npx knex migrate:make create_company_role_assignments_table
+
+
+Creates files in migrations/ folder with timestamp prefix.
+
+3️⃣ Running Migrations
+
+Run all pending migrations:
+
+npx knex migrate:latest
+
+
+Rollback last batch of migrations:
+
+npx knex migrate:rollback
+
+
+Rollback all migrations (dangerous, deletes tables):
+
+npx knex migrate:rollback --all
+
+
+Check current migration status:
+
+npx knex migrate:status
+
+4️⃣ Seeds (Optional, for initial data)
+
+Create a seed file:
+
+npx knex seed:make seed_file_name
+
+
+Examples:
+
+npx knex seed:make seed_companies
+npx knex seed:make seed_company_roles
+npx knex seed:make seed_role_assignments
+
+
+Run all seeds:
+
+npx knex seed:run
+
+
+Run a specific seed file:
+
+npx knex seed:run --specific=seed_companies.js
+
+5️⃣ Using Knex CLI in Different Environments
+
+By default, Knex uses development from knexfile.js.
+To run migrations/seeds in staging or production, set NODE_ENV:
+
+NODE_ENV=staging npx knex migrate:latest
+NODE_ENV=production npx knex migrate:latest
+
+
+Or for seeds:
+
+NODE_ENV=staging npx knex seed:run
+
+6️⃣ Useful Knex CLI Tips
+
+View generated SQL (debug mode):
+
+npx knex migrate:latest --debug
+
+
+Undo last seed:
+
+Knex doesn’t natively rollback seeds, but you can write a migration or truncate the table.
+
+Help / full CLI commands:
+
+npx knex --help

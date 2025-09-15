@@ -1,0 +1,1 @@
+{"level":"error","message":"Server startup error: connectRabbitMQ is not a function","stack":"TypeError: connectRabbitMQ is not a function\n    at startServer (C:\\Life-Work\\Invexis\\Backend\\services\\auth-service\\src\\index.js:11:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-09-07T22:37:03.443Z"}
