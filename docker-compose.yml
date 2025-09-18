@@ -1,12 +1,10 @@
-# version: '3.8'
+version: '3.8'
 
-# ======================
-# Services
-# ======================
 services:
   # ----------------------
   # Databases
   # ----------------------
+
   # PostgreSQL for company-service
   company-postgres:
     image: postgres:15
@@ -95,14 +93,13 @@ services:
     networks:
       - invexis-network
 
-  # ======================
-  # Single MongoDB Service - All databases in one container
-  # ======================
-
+  # ----------------------
+  # Single MongoDB for all services
+  # ----------------------
   mongodb:
     image: mongo:6.0
-    container_name: mongodb
-    restart: always
+    container_name: invexis-mongodb
+    restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
@@ -113,24 +110,22 @@ services:
     networks:
       - invexis-network
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --username root --password password --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")' || exit 1"]
+      test: ["CMD-SHELL", "mongosh --username root --password invexispass --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
-
-  # ======================
-  # MySQL Service
-  # ======================
-
+  # ----------------------
+  # MySQL for sales-service
+  # ----------------------
   sales-mysql:
     image: mysql:8.4.0
     container_name: invexis-sales-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass   # set a strong password in real deployments
-      MYSQL_DATABASE: salesdb         # will be created automatically
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: salesdb
     ports:
       - "3306:3306"
     volumes:
@@ -154,8 +149,6 @@ services:
   # ----------------------
   # Messaging & Caching
   # ----------------------
-  
-  # Redis for notification-service
   redis:
     image: redis:7-alpine
     container_name: invexis-redis
@@ -173,7 +166,6 @@ services:
     networks:
       - invexis-network
 
-  # RabbitMQ for messaging
   rabbitmq:
     image: rabbitmq:3.13.7-management-alpine
     container_name: invexis-rabbitmq
@@ -183,8 +175,8 @@ services:
       RABBITMQ_DEFAULT_PASS: invexispass
       RABBITMQ_DEFAULT_VHOST: /
     ports:
-      - "5672:5672"     # AMQP protocol
-      - "15672:15672"   # Management UI
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -198,7 +190,6 @@ services:
   # ----------------------
   # Microservices
   # ----------------------
-  
   api-gateway:
     build: ./services/api-gateway
     container_name: invexis-api-gateway
@@ -228,12 +219,6 @@ services:
         condition: service_healthy
       debt-service:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -249,12 +234,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4001/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -270,12 +249,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -293,12 +266,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4009/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -307,19 +274,13 @@ services:
     container_name: invexis-inventory-service
     restart: unless-stopped
     environment:
-      DB_MONGO: mongodb://root@mongodb:27017/inventorydb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/inventorydb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     depends_on:
       mongodb:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -359,12 +320,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -380,12 +335,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -401,12 +350,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -416,7 +359,7 @@ services:
     restart: unless-stopped
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@analytics-postgres:5432/analyticsdb
-      DB_MONGO: mongodb://root:invexispass@mongodb:27017/analytics_mongodb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/analyticsdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     depends_on:
       analytics-postgres:
@@ -425,12 +368,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -446,12 +383,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
 
@@ -467,22 +398,19 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     networks:
       - invexis-network
+
   websocket-service:
     build: ./services/websocket-service
     container_name: invexis-websocket-service
     restart: unless-stopped
+    networks:
+      - invexis-network
 
-# ======================
+# ----------------------
 # Volumes
-# ======================
+# ----------------------
 volumes:
   company_postgres_data:
     name: invexis_company_postgres_data
@@ -501,9 +429,9 @@ volumes:
   rabbitmq_data:
     name: invexis_rabbitmq_data
 
-# ======================
+# ----------------------
 # Networks
-# ======================
+# ----------------------
 networks:
   invexis-network:
     driver: bridge
