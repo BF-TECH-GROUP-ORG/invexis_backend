@@ -9,6 +9,20 @@
     "test": "jest"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "amqplib": "^0.10.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "helmet": "^7.1.0",
+    "joi": "^17.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.20.0",
+    "mongoose": "^8.0.0",
+    "node-schedule": "^2.1.1",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1"
   }
 }
