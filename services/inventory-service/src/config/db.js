@@ -7,9 +7,9 @@ const connectDB = async () => {
       serverSelectionTimeoutMS: 5000,
       maxPoolSize: 10,
     });
-    logger.info('MongoDB connected');
+    console.info('MongoDB connected');
   } catch (error) {
-    logger.error('MongoDB connection error:', error);
+    console.error('MongoDB connection error:', error);
     setTimeout(connectDB, 5000); // Retry after 5s
   }
 };
