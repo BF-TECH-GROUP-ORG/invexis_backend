@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 3000
 
 # Run RabbitMQ service
-CMD ["node", "src/index.js"]
+CMD ["nodemon", "./src/index.js"]
