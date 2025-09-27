@@ -1,17 +1,16 @@
-require('dotenv').config();
+
 const mongoose = require('mongoose');
-const logger = require('../utils/app');
 
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect(process.env.MONGO_URI, {
+        await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/auth-service', {
             serverSelectionTimeoutMS: 5000,
             heartbeatFrequencyMS: 10000,
             maxPoolSize: 10,
         });
-        logger.info(`MongoDB connected: ${conn.connection.host}`);
+        console.log('MongoDB connected');
     } catch (error) {
-        logger.error('MongoDB connection error:', error);
+        console.error('MongoDB connection error:', error);
         process.exit(1);
     }
 };

@@ -1,12 +1,19 @@
+// src/utils/hashPassword.js
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
-const hashPassword = async (password) => {
-    const salt = await bcrypt.genSalt(12);
-    return await bcrypt.hash(password, salt);
-};
+const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
 
-const comparePassword = async (password, hash) => {
-    return await bcrypt.compare(password, hash);
-};
+async function hashPassword(plain) {
+    return bcrypt.hash(plain, saltRounds);
+}
 
-module.exports = { hashPassword, comparePassword };
+async function comparePassword(plain, hash) {
+    return bcrypt.compare(plain, hash);
+}
+
+function hashToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+module.exports = { hashPassword, comparePassword, hashToken };
