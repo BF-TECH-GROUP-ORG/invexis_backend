@@ -1,16 +1,16 @@
-const connectDB = require("./config/db");
-const { connectRabbitMQ } = require("./events/reportEvents");
-const { scheduleDailyReport } = require("./services/reportService");
-const logger = require("./utils/logger");
+const connectDB = require('./config/db');
+const logger = require('./utils/logger');
+const { scheduleDailyReport } = require('./services/reportService');
 
 const startServer = async () => {
   try {
     await connectDB();
-    await connectRabbitMQ();
     await scheduleDailyReport();
-    require("./app"); // Start Express server
+    require('./app');
+    logger.info('Server started successfully');
   } catch (error) {
-    console.log("Failed to start server:", error);
+    logger.error('Failed to start server: %s', error.message);
+    process.exit(1);
   }
 };
 

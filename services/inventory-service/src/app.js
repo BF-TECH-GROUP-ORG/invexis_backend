@@ -3,7 +3,10 @@ const helmet = require('helmet');
 const cors = require('cors');
 const errorMiddleware = require('./middleware/error');
 const productRoutes = require('./routes/productRoutes');
-const reportRoutes = require('./routes/reportRoutes');
+const stockChangeRoutes = require('./routes/stockChangeRoutes');
+const favoriteRoutes = require('./routes/favoriteRoutes');
+const discountRoutes = require('./routes/discountRoutes');
+const alertRoutes = require('./routes/alertRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const logger = require('./utils/logger');
 
@@ -16,7 +19,10 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/v1/products', productRoutes);
-app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/stock-changes', stockChangeRoutes);
+app.use('/api/v1/favorites', favoriteRoutes);
+app.use('/api/v1/discounts', discountRoutes);
+app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/categories', categoryRoutes);
 
 // Health check
@@ -26,10 +32,5 @@ app.get('/health', (req, res) => {
 
 // Error handling
 app.use(errorMiddleware);
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  logger.info(`Inventory Service running on port ${PORT}`);
-});
 
 module.exports = app;

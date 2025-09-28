@@ -3,14 +3,13 @@ const winston = require('winston');
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
-    winston.format.timestamp(),
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.json()
   ),
   transports: [
-    new winston.transports.File({ filename: '/app/logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: '/app/logs/combined.log' }),
-    new winston.transports.Console({ format: winston.format.simple() })
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: '/app/logs/inventory-service.log' })
   ]
 });
 
-module.exports = { logger };
+module.exports = logger;
