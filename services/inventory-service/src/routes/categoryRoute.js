@@ -1,12 +1,26 @@
 const express = require('express');
-const { createCategory, getCategoryTree, getCategory, updateCategory, deleteCategory } = require('../controllers/categoryController');
-const authMiddleware = require('../middleware/auth');
 const router = express.Router();
+const {
+  getAllCategories,
+  getCategoryById,
+  getCategoryBySlug,
+  getCategoryTree,
+  getCategoryPath,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  toggleActiveStatus
+} = require('../controllers/categoryController');
+const authMiddleware = require('../middleware/auth');
 
+router.get('/', getAllCategories);
+router.get('/:id', getCategoryById);
+router.get('/slug/:slug', getCategoryBySlug);
+router.get('/tree', getCategoryTree);
+router.get('/path/:id', getCategoryPath);
 router.post('/', authMiddleware, createCategory);
-router.get('/tree', authMiddleware, getCategoryTree);
-router.get('/:categoryId', authMiddleware, getCategory);
-router.put('/:categoryId', authMiddleware, updateCategory);
-router.delete('/:categoryId', authMiddleware, deleteCategory);
+router.put('/:id', authMiddleware, updateCategory);
+router.delete('/:id', authMiddleware, deleteCategory);
+router.patch('/:id/toggle-active', authMiddleware, toggleActiveStatus);
 
 module.exports = router;
