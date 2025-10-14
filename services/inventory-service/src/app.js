@@ -4,7 +4,6 @@ const cors = require('cors');
 const errorMiddleware = require('./middleware/error');
 const productRoutes = require('./routes/productRoutes');
 const stockChangeRoutes = require('./routes/stockChangeRoutes');
-const favoriteRoutes = require('./routes/favoriteRoutes');
 const discountRoutes = require('./routes/discountRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');

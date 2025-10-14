@@ -1,4 +1,4 @@
-// categoryController.js
+// controllers/categoryController.js (Unchanged, but aligned with Product deletes/updates)
 const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Category = require('../models/Category');

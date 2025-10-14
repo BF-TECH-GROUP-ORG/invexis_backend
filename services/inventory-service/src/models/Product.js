@@ -1,3 +1,4 @@
+// models/Product.js (Updated for warehouse support: added inventory.perWarehouse array)
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
@@ -56,6 +57,13 @@ const ProductAuditSchema = new mongoose.Schema({
   newValue: Schema.Types.Mixed
 });
 
+// New: Per-warehouse inventory sub-schema
+const WarehouseInventorySchema = new mongoose.Schema({
+  warehouseId: { type: Schema.Types.ObjectId, ref: 'Warehouse', required: true },
+  quantity: { type: Number, default: 0, min: [0, 'Quantity cannot be negative'] },
+  lowStockThreshold: { type: Number, default: 10, min: [0, 'Low stock threshold cannot be negative'] },
+});
+
 // Product schema
 const productSchema = new Schema({
   companyId: { type: String, required: true, index: true },
@@ -85,9 +93,10 @@ const productSchema = new Schema({
   },
   inventory: {
     trackQuantity: { type: Boolean, default: true },
-    quantity: { type: Number, default: 0, min: [0, 'Quantity cannot be negative'] },
+    quantity: { type: Number, default: 0, min: [0, 'Quantity cannot be negative'] }, // Total across warehouses
     lowStockThreshold: { type: Number, default: 10, min: [0, 'Low stock threshold cannot be negative'] },
     allowBackorder: { type: Boolean, default: false },
+    perWarehouse: [WarehouseInventorySchema] // New: Breakdown by warehouse
   },
   condition: { type: String, enum: ['new', 'used', 'refurbished'], default: 'new' },
   availability: { type: String, enum: ['in_stock', 'out_of_stock', 'limited', 'scheduled'], default: 'in_stock' },
@@ -129,10 +138,8 @@ const productSchema = new Schema({
   toObject: { virtuals: true },
 });
 
-// Indexes for performance
+// Updated indexes
 productSchema.index({ companyId: 1, category: 1, subcategory: 1, subSubcategory: 1 });
-productSchema.index({ asin: 1 });
-productSchema.index({ sku: 1 });
 productSchema.index({ name: 'text', 'description.short': 'text', 'description.long': 'text' });
 productSchema.index({ 'pricing.basePrice': 1 });
 productSchema.index({ 'inventory.quantity': 1 });
@@ -181,6 +188,9 @@ productSchema.pre('save', function(next) {
   } else if (this.scheduledAvailabilityDate && new Date() >= this.scheduledAvailabilityDate) {
     this.availability = 'in_stock';
   }
+
+  // Aggregate total quantity from perWarehouse
+  this.inventory.quantity = this.inventory.perWarehouse.reduce((total, wh) => total + wh.quantity, 0);
 
   next();
 });
@@ -255,6 +265,17 @@ productSchema.statics.getScheduledProducts = async function (companyId) {
     scheduledAvailabilityDate: { $ne: null },
     availability: 'scheduled'
   }).sort({ scheduledAvailabilityDate: 1 });
+};
+
+// New static method for old unbought products (as per earlier discussion)
+productSchema.statics.getOldUnboughtProducts = async function (companyId, daysOld = 30) {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+  return await this.find({
+    companyId,
+    'sales.totalSold': 0,
+    createdAt: { $lt: cutoffDate }
+  }).sort({ createdAt: 1 });
 };
 
 module.exports = mongoose.model('Product', productSchema);

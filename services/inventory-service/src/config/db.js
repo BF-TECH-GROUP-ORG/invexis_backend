@@ -3,7 +3,7 @@ const logger = require('../utils/logger');
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.DB_MONGO, {
+    await mongoose.connect(process.env.DB_MONGO || 'mongodb://localhost:27017/inventorydb', {
       serverSelectionTimeoutMS: 5000,
       maxPoolSize: 10,
     });

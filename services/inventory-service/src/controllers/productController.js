@@ -1,4 +1,4 @@
-// productController.js
+// controllers/productController.js (Updated with warehouse awareness in updateInventory, added getOldUnboughtProducts)
 const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Product = require('../models/Product');
@@ -328,7 +328,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
 const updateInventory = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoId(id);
-  const { quantity, operation = 'set' } = req.body; // set, increment, decrement
+  const { quantity, operation = 'set', warehouseId, variationId } = req.body; // Added warehouseId, variationId
 
   const product = await Product.findById(id);
   if (!product) {
@@ -338,48 +338,32 @@ const updateInventory = asyncHandler(async (req, res) => {
     });
   }
 
-  const oldQuantity = product.inventory.quantity;
-  let newQuantity;
-
-  switch (operation) {
-    case 'increment':
-      newQuantity = oldQuantity + quantity;
-      break;
-    case 'decrement':
-      newQuantity = Math.max(0, oldQuantity - quantity);
-      break;
-    case 'set':
-    default:
-      newQuantity = quantity;
-  }
-
-  product.inventory.quantity = newQuantity;
-  
-  // Update availability based on stock
-  if (newQuantity <= 0 && !product.inventory.allowBackorder) {
-    product.availability = 'out_of_stock';
-  } else if (newQuantity > 0) {
-    product.availability = 'in_stock';
-  }
-
-  // Add audit trail
-  product.auditTrail.push({
-    action: 'stock_change',
-    changedBy: req.user?.id || 'system',
-    oldValue: { quantity: oldQuantity },
-    newValue: { quantity: newQuantity, operation }
+  // Use StockChange for logging instead of direct update
+  const StockChange = require('../models/StockChange');
+  const stockChange = new StockChange({
+    companyId: product.companyId,
+    productId: id,
+    variationId,
+    warehouseId,
+    changeType: 'adjustment', // Or determine based on operation
+    quantity: operation === 'decrement' ? -quantity : quantity,
+    previousStock: variationId ? product.variations.find(v => v._id.equals(variationId)).stockQty : product.inventory.quantity,
+    reason: req.body.reason || 'Manual inventory update',
+    userId: req.user?.id || 'system'
   });
+  await stockChange.save();
 
-  await product.save();
+  // Refresh product after save (since hook updates it)
+  const updatedProduct = await Product.findById(id);
 
   res.status(200).json({
     success: true,
     message: 'Inventory updated successfully',
     data: {
-      id: product._id,
-      oldQuantity,
-      newQuantity,
-      stockStatus: product.stockStatus
+      id: updatedProduct._id,
+      oldQuantity: stockChange.previousStock,
+      newQuantity: stockChange.newStock,
+      stockStatus: updatedProduct.stockStatus
     }
   });
 });
@@ -509,6 +493,19 @@ const searchProducts = asyncHandler(async (req, res) => {
   });
 });
 
+const getOldUnboughtProducts = asyncHandler(async (req, res) => {
+  const { companyId, daysOld = 30 } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'Company ID is required' });
+  }
+  validateMongoId(companyId);
+
+  const products = await Product.getOldUnboughtProducts(companyId, parseInt(daysOld));
+
+  res.status(200).json({ success: true, data: products, count: products.length });
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -521,5 +518,6 @@ module.exports = {
   getLowStockProducts,
   getScheduledProducts,
   getFeaturedProducts,
-  searchProducts
+  searchProducts,
+  getOldUnboughtProducts
 };

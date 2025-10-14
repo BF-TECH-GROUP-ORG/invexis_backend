@@ -8,6 +8,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Configure storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -18,6 +19,7 @@ const storage = multer.diskStorage({
   }
 });
 
+// File filter to allow only images and videos
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|webm/;
   const mimetype = allowedTypes.test(file.mimetype);
@@ -29,6 +31,7 @@ const fileFilter = (req, file, cb) => {
   cb(new Error('Only images (jpeg, jpg, png, gif) and videos (mp4, mov, avi, webm) are allowed'));
 };
 
+// Multer upload instance
 const upload = multer({
   storage,
   fileFilter,
@@ -38,6 +41,7 @@ const upload = multer({
   { name: 'videos', maxCount: 5 }   // Allow up to 5 videos
 ]);
 
+// Upload handler function
 const handleUploads = (req, res, next) => {
   upload(req, res, (err) => {
     if (err instanceof multer.MulterError) {
@@ -54,6 +58,7 @@ const handleUploads = (req, res, next) => {
       });
     }
 
+    // Process uploaded files and add to req.body if needed
     if (req.files) {
       if (req.files.images) {
         req.body.images = req.files.images.map(file => ({

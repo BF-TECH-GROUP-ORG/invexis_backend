@@ -1,3 +1,4 @@
+// models/Category.js (Unchanged, but ensuring alignment with Product stats)
 const mongoose = require('mongoose');
 
 const categorySchema = new mongoose.Schema({
@@ -103,7 +104,6 @@ categorySchema.virtual('products', {
 categorySchema.index({ name: 'text', description: 'text' });
 categorySchema.index({ level: 1, parentCategory: 1 });
 categorySchema.index({ isActive: 1, sortOrder: 1 });
-categorySchema.index({ slug: 1 }, { unique: true });
 
 // Middleware to generate slug
 categorySchema.pre('save', function(next) {

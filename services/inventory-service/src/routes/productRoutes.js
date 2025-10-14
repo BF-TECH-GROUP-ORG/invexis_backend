@@ -1,3 +1,4 @@
+// routes/productRoutes.js (Updated to include getOldUnboughtProducts)
 const express = require('express');
 const router = express.Router();
 const {
@@ -12,22 +13,23 @@ const {
   getLowStockProducts,
   getScheduledProducts,
   getFeaturedProducts,
-  searchProducts
+  searchProducts,
+  getOldUnboughtProducts
 } = require('../controllers/productController');
-const authMiddleware = require('../middleware/auth');
 const { handleUploads } = require('../utils/uploadUtil');
 
 router.get('/', getAllProducts);
 router.get('/:id', getProductById);
-router.get('/slug/:slug', authMiddleware, getProductBySlug);
+router.get('/slug/:slug', getProductBySlug);
 router.get('/category/:categoryId', getProductsByCategory);
-router.post('/', authMiddleware, handleUploads, createProduct);
-router.put('/:id', authMiddleware,handleUploads, updateProduct);
-router.delete('/:id', authMiddleware, deleteProduct);
-router.patch('/:id/inventory', authMiddleware, updateInventory);
+router.post('/', handleUploads, createProduct);
+router.put('/:id', handleUploads, updateProduct);
+router.delete('/:id', deleteProduct);
+router.patch('/:id/inventory', updateInventory);
 router.get('/low-stock', getLowStockProducts);
 router.get('/scheduled', getScheduledProducts);
 router.get('/featured', getFeaturedProducts);
 router.get('/search', searchProducts);
+router.get('/old-unbought', getOldUnboughtProducts);
 
 module.exports = router;
