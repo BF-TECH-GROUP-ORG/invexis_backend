@@ -1,8 +1,11 @@
+// productController.js
 const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const { validateMongoId } = require('../utils/validateMongoId');
+const fs = require('fs');
+const path = require('path');
 
 const getAllProducts = asyncHandler(async (req, res) => {
   const {
@@ -120,12 +123,12 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
   const { includeSubcategories = false, page = 1, limit = 20, sort = '-createdAt' } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
-  const products = await Product.getProductsByCategory(categoryId, includeSubcategories === 'true')
+  const productQuery = Product.getProductsByCategory(categoryId, includeSubcategories === 'true');
+  const total = await productQuery.clone().countDocuments();
+  const products = await productQuery
     .sort(sort)
     .skip(skip)
     .limit(parseInt(limit));
-
-  const total = products.length; // Note: This is approximate for performance
 
   res.status(200).json({
     success: true,
@@ -150,14 +153,28 @@ const createProduct = asyncHandler(async (req, res) => {
     });
   }
 
+  const newImages = req.body.images || [];
+  const newVideos = req.body.videos || [];
+  delete req.body.images;
+  delete req.body.videos;
+
   const product = new Product(req.body);
-  
+
   // Add audit trail entry
   product.auditTrail.push({
     action: 'create',
     changedBy: req.user?.id || 'system',
     newValue: req.body
   });
+
+  product.images = newImages.map((img, index) => ({
+    url: img.url,
+    alt: img.altText,
+    isPrimary: index === 0,
+    sortOrder: index
+  }));
+
+  product.videoUrls = newVideos.map(v => v.url);
 
   await product.save();
 
@@ -191,6 +208,11 @@ const updateProduct = asyncHandler(async (req, res) => {
     });
   }
 
+  const newImages = req.body.images || [];
+  const newVideos = req.body.videos || [];
+  delete req.body.images;
+  delete req.body.videos;
+
   const oldProduct = await Product.findById(id);
   if (!oldProduct) {
     return res.status(404).json({
@@ -198,6 +220,20 @@ const updateProduct = asyncHandler(async (req, res) => {
       message: 'Product not found'
     });
   }
+
+  let updatedImages = oldProduct.images || [];
+  updatedImages = [...updatedImages, ...newImages.map((img, index) => ({
+    url: img.url,
+    alt: img.altText,
+    isPrimary: updatedImages.length === 0 && index === 0,
+    sortOrder: updatedImages.length + index
+  }))];
+
+  let updatedVideoUrls = oldProduct.videoUrls || [];
+  updatedVideoUrls = [...updatedVideoUrls, ...newVideos.map(v => v.url)];
+
+  req.body.images = updatedImages;
+  req.body.videoUrls = updatedVideoUrls;
 
   const product = await Product.findByIdAndUpdate(
     id,
@@ -233,6 +269,36 @@ const deleteProduct = asyncHandler(async (req, res) => {
       message: 'Product not found'
     });
   }
+
+  // Delete associated files
+  product.images.forEach(img => {
+    if (img.url && img.url.startsWith('/uploads/')) {
+      const filePath = path.join(__dirname, '..', img.url);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+  });
+
+  product.videoUrls.forEach(url => {
+    if (url && url.startsWith('/uploads/')) {
+      const filePath = path.join(__dirname, '..', url);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+  });
+
+  product.variations.forEach(variation => {
+    variation.images.forEach(img => {
+      if (img.url && img.url.startsWith('/uploads/')) {
+        const filePath = path.join(__dirname, '..', img.url);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    });
+  });
 
   // Add audit trail entry before deletion
   product.auditTrail.push({

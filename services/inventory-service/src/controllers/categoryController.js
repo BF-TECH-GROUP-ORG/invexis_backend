@@ -4,6 +4,8 @@ const { validationResult } = require('express-validator');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
 const { validateMongoId } = require('../utils/validateMongoId');
+const fs = require('fs');
+const path = require('path');
 
 const getAllCategories = asyncHandler(async (req, res) => {
   const { level, parentCategory, isActive, search, page = 1, limit = 50 } = req.query;
@@ -118,7 +120,13 @@ const createCategory = asyncHandler(async (req, res) => {
     });
   }
 
+  const newImage = req.body.images ? { url: req.body.images[0].url, alt: req.body.images[0].altText } : undefined;
+  delete req.body.images;
+
   const category = new Category(req.body);
+  if (newImage) {
+    category.image = newImage;
+  }
   await category.save();
 
   // Update parent category's subcategory count
@@ -149,6 +157,13 @@ const updateCategory = asyncHandler(async (req, res) => {
       message: 'Validation errors',
       errors: errors.array()
     });
+  }
+
+  const newImage = req.body.images ? { url: req.body.images[0].url, alt: req.body.images[0].altText } : undefined;
+  delete req.body.images;
+
+  if (newImage) {
+    req.body.image = newImage;
   }
 
   const category = await Category.findByIdAndUpdate(
@@ -200,7 +215,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
     });
   }
 
-  const category = await Category.findByIdAndDelete(id);
+  const category = await Category.findById(id);
 
   if (!category) {
     return res.status(404).json({
@@ -208,6 +223,16 @@ const deleteCategory = asyncHandler(async (req, res) => {
       message: 'Category not found'
     });
   }
+
+  // Delete image file if exists
+  if (category.image && category.image.url && category.image.url.startsWith('/uploads/')) {
+    const filePath = path.join(__dirname, '..', category.image.url);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  }
+
+  await Category.findByIdAndDelete(id);
 
   // Update parent category's subcategory count
   if (category.parentCategory) {
