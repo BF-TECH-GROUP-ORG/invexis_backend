@@ -1,4 +1,5 @@
 // models/Review.js
+const mongoose = require('mongoose');
 const ReviewSchema = new mongoose.Schema({
     reviewId: { type: String, required: true, unique: true, index: true },
     userId: { type: String, required: true, index: true },

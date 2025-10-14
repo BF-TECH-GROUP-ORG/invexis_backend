@@ -1,4 +1,5 @@
 // models/Promotion.js
+const mongoose = require('mongoose');
 const PromotionSchema = new mongoose.Schema({
     promotionId: { type: String, required: true, unique: true },
     companyId: { type: String, required: true, index: true },

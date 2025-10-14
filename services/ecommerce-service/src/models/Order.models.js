@@ -1,4 +1,5 @@
 // models/Order.js
+const mongoose = require('mongoose');
 const OrderItemSchema = new mongoose.Schema({
     productId: { type: String, required: true },
     quantity: { type: Number, required: true },

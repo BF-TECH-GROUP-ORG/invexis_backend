@@ -1,4 +1,5 @@
 // models/Cart.js
+const mongoose = require('mongoose');
 const CartItemSchema = new mongoose.Schema({
     productId: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },
@@ -8,7 +9,7 @@ const CartItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const CartSchema = new mongoose.Schema({
-    userId: { type: String, required: true, index: true },
+    // userId removed: guest carts allowed
     companyId: { type: String, required: true, index: true },
     shopId: { type: String, index: true },
 
