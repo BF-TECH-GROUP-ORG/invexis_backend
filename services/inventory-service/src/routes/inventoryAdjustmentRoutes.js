@@ -8,6 +8,7 @@ const {
   approveAdjustment,
   rejectAdjustment
 } = require('../controllers/inventoryAdjustmentController');
+
 router.get('/', getAllAdjustments);
 router.get('/:id', getAdjustmentById);
 router.post('/', createAdjustment);

@@ -1,4 +1,3 @@
-// reportController.js
 const asyncHandler = require('express-async-handler');
 const Product = require('../models/Product');
 const Category = require('../models/Category');

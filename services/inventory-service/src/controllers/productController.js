@@ -1,4 +1,3 @@
-// controllers/productController.js (Updated with warehouse awareness in updateInventory, added getOldUnboughtProducts)
 const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Product = require('../models/Product');
@@ -120,15 +119,28 @@ const getProductBySlug = asyncHandler(async (req, res) => {
 const getProductsByCategory = asyncHandler(async (req, res) => {
   const { categoryId } = req.params;
   validateMongoId(categoryId);
-  const { includeSubcategories = false, page = 1, limit = 20, sort = '-createdAt' } = req.query;
+
+  const {
+    includeSubcategories = false,
+    page = 1,
+    limit = 20,
+    sort = '-createdAt'
+  } = req.query;
+
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
-  const productQuery = Product.getProductsByCategory(categoryId, includeSubcategories === 'true');
-  const total = await productQuery.clone().countDocuments();
-  const products = await productQuery
-    .sort(sort)
-    .skip(skip)
-    .limit(parseInt(limit));
+const productQuery = await Product.getProductsByCategory(
+  categoryId,
+  includeSubcategories === 'true'
+);
+
+const total = await productQuery.clone().countDocuments();
+
+const products = await productQuery
+  .sort(sort)
+  .skip(skip)
+  .limit(parseInt(limit));
+
 
   res.status(200).json({
     success: true,
@@ -141,6 +153,7 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
     }
   });
 });
+
 
 const createProduct = asyncHandler(async (req, res) => {
   // Check validation errors

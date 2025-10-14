@@ -16,7 +16,7 @@ const {
 router.get('/', getAllCategories);
 router.get('/:id', getCategoryById);
 router.get('/slug/:slug', getCategoryBySlug);
-router.get('/tree', getCategoryTree);
+router.get('/view/tree', getCategoryTree);
 router.get('/path/:id', getCategoryPath);
 router.post('/', createCategory);
 router.put('/:id', updateCategory);

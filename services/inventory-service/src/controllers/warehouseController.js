@@ -1,4 +1,3 @@
-// controllers/warehouseController.js (Controller for new Warehouse model)
 const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Warehouse = require('../models/Warehouse');

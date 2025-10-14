@@ -1,4 +1,3 @@
-// controllers/alertController.js (Unchanged)
 const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Alert = require('../models/Alert');

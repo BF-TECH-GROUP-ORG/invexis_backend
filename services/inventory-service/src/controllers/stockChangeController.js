@@ -1,4 +1,3 @@
-// controllers/stockChangeController.js
 const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const StockChange = require('../models/StockChange');

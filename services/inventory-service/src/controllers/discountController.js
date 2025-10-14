@@ -1,4 +1,3 @@
-// controllers/discountController.js
 const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Discount = require('../models/Discount');

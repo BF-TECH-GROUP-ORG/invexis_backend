@@ -227,31 +227,36 @@ productSchema.methods.isAvailableNow = function () {
   return this.availability === 'in_stock' || this.availability === 'limited' || (this.scheduledAvailabilityDate && new Date() >= this.scheduledAvailabilityDate);
 };
 
-// Static method to get products by category
-productSchema.statics.getProductsByCategory = async function(categoryId, includeSubcategories = false) {
-  let query = { category: categoryId };
- 
-  if (includeSubcategories) {
-    const Category = mongoose.model('Category');
-    const subcategories = await Category.find({ parentCategory: categoryId });
-    const subcategoryIds = subcategories.map(sub => sub._id);
-   
-    if (subcategoryIds.length > 0) {
-      const subSubcategories = await Category.find({ parentCategory: { $in: subcategoryIds } });
-      const subSubcategoryIds = subSubcategories.map(subSub => subSub._id);
-     
-      query = {
-        $or: [
-          { category: categoryId },
-          { subcategory: { $in: subcategoryIds } },
-          { subSubcategory: { $in: subSubcategoryIds } }
-        ]
-      };
+productSchema.statics.getProductsByCategory = function (categoryId, includeSubcategories = false) {
+  const Category = mongoose.model('Category');
+
+  return (async () => {
+    let filter = { category: categoryId };
+
+    if (includeSubcategories) {
+      const subcategories = await Category.find({ parentCategory: categoryId }).select('_id');
+      const subcategoryIds = subcategories.map(sub => sub._id);
+
+      if (subcategoryIds.length > 0) {
+        const subSubcategories = await Category.find({ parentCategory: { $in: subcategoryIds } }).select('_id');
+        const subSubcategoryIds = subSubcategories.map(subSub => subSub._id);
+
+        filter = {
+          $or: [
+            { category: categoryId },
+            { subcategory: { $in: subcategoryIds } },
+            { subSubcategory: { $in: subSubcategoryIds } }
+          ]
+        };
+      }
     }
-  }
- 
-  return this.find(query).populate('category subcategory subSubcategory');
+
+    // Return the unevaluated query object
+    return this.find(filter).populate('category subcategory subSubcategory');
+  })();
 };
+
+
 
 // Static method to get low stock products
 productSchema.statics.getLowStockProducts = async function (companyId, threshold = 10) {
