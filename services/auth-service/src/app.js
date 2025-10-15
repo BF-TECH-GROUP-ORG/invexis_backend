@@ -1,3 +1,4 @@
+// app.js (Updated with Shared RabbitMQ and Redis Integration)
 require('dotenv').config();
 
 const express = require('express');
@@ -15,10 +16,13 @@ const User = require('./models/User.models');
 const Preference = require('./models/Preference.models');
 const { hashPassword } = require('./utils/hashPassword');
 
+// Shared Modules (from mounted /app/shared)
+const { connect: connectRabbitMQ, publish: publishRabbitMQ, exchanges } = require('/app/shared/rabbitmq.js');
+const redis = require('/app/shared/redis.js');  // Auto-connects
+
 const app = express();
 
-
-// Passport setup
+// Passport setup (unchanged)
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID || '464910696321-v7ni53rmm1o4elauuckb6p30i27aub7n.apps.googleusercontent.com',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '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',
@@ -41,15 +45,35 @@ passport.use(new GoogleStrategy({
             await preference.save();
             user.preferences = preference._id;
             await user.save();
-            // Publish to RabbitMQ
-            // rabbitMQChannel.sendToQueue('auth.events', Buffer.from(JSON.stringify({
-            //     event: 'user.registered',
-            //     data: { userId: user._id, email: user.email }
-            // })));
+
+            // Publish to RabbitMQ using shared module (uncommented and integrated)
+            try {
+                await publishRabbitMQ(exchanges.topic, 'auth.user.registered', {
+                    userId: user._id,
+                    email: user.email,
+                    event: 'user.registered'
+                });
+                console.log('Auth-service: User registration event published to RabbitMQ');
+            } catch (rabbitErr) {
+                console.error('Auth-service: Failed to publish registration event:', rabbitErr.message);
+            }
+
+            // Cache user session in Redis using shared module
+            try {
+                await redis.set(`user:session:${user._id}`, JSON.stringify({
+                    userId: user._id,
+                    email: user.email,
+                    role: user.role
+                }), 'EX', 3600);  // 1-hour expiry
+                console.log('Auth-service: User session cached in Redis');
+            } catch (redisErr) {
+                console.error('Auth-service: Failed to cache session in Redis:', redisErr.message);
+            }
         }
         done(null, user);
     } catch (err) { done(err); }
 }));
+
 passport.serializeUser((user, done) => done(null, user._id));
 passport.deserializeUser(async (id, done) => {
     try {
@@ -58,7 +82,7 @@ passport.deserializeUser(async (id, done) => {
     } catch (err) { done(err); }
 });
 
-// Middleware
+// Middleware (unchanged)
 app.use(helmet());
 app.use(cors({
     origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : '*',
@@ -77,21 +101,37 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Rate limiting
+// Rate limiting (unchanged)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     message: { error: 'Too many requests, please try again later.' }
 });
 app.use(limiter);
-// Serve uploads
+
+// Serve uploads (unchanged)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes
+// Routes (unchanged)
 app.use('/auth', authRoutes);
-app.get('/health', (req, res) => res.sendStatus(200));
 
-// Error handling
+// Health endpoint with Redis check (enhanced)
+app.get('/health', async (req, res) => {
+    try {
+        const testKey = `health:${Date.now()}`;
+        await redis.set(testKey, 'healthy', 'EX', 10);  // Quick set with expiry
+        const value = await redis.get(testKey);
+        res.json({
+            status: 'healthy',
+            redisConnected: redis.isConnected,
+            timestamp: new Date().toISOString()
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Health check failed - Redis unavailable', details: err.message });
+    }
+});
+
+// Error handling (unchanged)
 app.use(authErrorHandler);
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
 app.use((err, req, res, next) => {

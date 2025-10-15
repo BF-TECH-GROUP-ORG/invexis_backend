@@ -1,8 +1,10 @@
-const redis = require('redis');
 const joi = require('joi');
 const speakeasy = require('speakeasy');
 const crypto = require('crypto');
-// const amqp = require('amqplib');
+
+// Shared Modules
+const redis = require('/app/shared/redis.js');  // Auto-connected; use get/set/del
+const { publish: publishRabbitMQ, exchanges } = require('/app/shared/rabbitmq.js');
 
 const User = require('../models/User.models');
 const Session = require('../models/Session.models');
@@ -13,30 +15,15 @@ const Preference = require('../models/Preference.models');
 const { hashPassword, comparePassword, hashToken } = require('../utils/hashPassword');
 const tokenService = require('./tokenService');
 
-// Redis client
-const redisClient = redis.createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379'
-});
-redisClient.connect().catch(err => console.error('Redis connection error:', err));
-
-// // RabbitMQ setup
-// let rabbitMQChannel;
-// async function setupRabbitMQ() {
-//     try {
-//         const conn = await amqp.connect(process.env.RABBITMQ_URI);
-//         rabbitMQChannel = await conn.createChannel();
-//         await rabbitMQChannel.assertQueue('auth.events', { durable: true });
-//     } catch (err) {
-//         console.error('RabbitMQ connection error:', err);
-//     }
-// }
-// setupRabbitMQ();
-
-// async function publishEvent(event, data) {
-//     if (rabbitMQChannel) {
-//         rabbitMQChannel.sendToQueue('auth.events', Buffer.from(JSON.stringify({ event, data })));
-//     }
-// }
+// Custom publishEvent using shared RabbitMQ
+async function publishEvent(event, data) {
+    try {
+        await publishRabbitMQ(exchanges.topic, `auth.${event}`, { event, data });
+        console.log(`Auth event published: ${event}`);
+    } catch (err) {
+        console.error(`Failed to publish auth event ${event}:`, err.message);
+    }
+}
 
 // Custom error for auth
 class AuthError extends Error {
@@ -207,22 +194,20 @@ function generateNumericCode(digits = 6) {
     return String(Math.floor(Math.random() * (max - min + 1)) + min);
 }
 
-// Redis rate limit helpers
+// Redis rate limit helpers (using shared Redis module)
 async function checkRateLimit(userId) {
     const rateLimitKey = `rate_limit:${userId}`;
     const lockoutKey = `lockout:${userId}`;
-    const pipeline = redisClient.multi();
-    pipeline.get(lockoutKey);
-    pipeline.get(rateLimitKey);
-    const [[, lockout], [, attempts]] = await pipeline.exec();
+    const lockout = await redis.get(lockoutKey);
+    const attempts = await redis.get(rateLimitKey);
     if (lockout) {
-        // await publishEvent('login.locked', { userId });
+        await publishEvent('login.locked', { userId });
         throw new AuthError('Too many attempts. Try again later.', 429);
     }
     const count = parseInt(attempts || '0');
     if (count >= 5) {
-        await redisClient.set(lockoutKey, 'locked', { EX: 5 * 60 });
-        // await publishEvent('login.locked', { userId });
+        await redis.set(lockoutKey, 'locked', 'EX', 5 * 60);  // 5 min lockout
+        await publishEvent('login.locked', { userId });
         throw new AuthError('Too many failed attempts. Account locked temporarily.', 429);
     }
     return count;
@@ -230,17 +215,16 @@ async function checkRateLimit(userId) {
 
 async function incrementRateLimit(userId) {
     const rateLimitKey = `rate_limit:${userId}`;
-    await redisClient.incr(rateLimitKey);
-    await redisClient.expire(rateLimitKey, 5 * 60);
+    const current = await redis.get(rateLimitKey);
+    const newCount = (parseInt(current || '0') + 1).toString();
+    await redis.set(rateLimitKey, newCount, 'EX', 5 * 60);  // 5 min window
 }
 
 async function resetRateLimit(userId) {
     const rateLimitKey = `rate_limit:${userId}`;
     const lockoutKey = `lockout:${userId}`;
-    const pipeline = redisClient.multi();
-    pipeline.del(rateLimitKey);
-    pipeline.del(lockoutKey);
-    await pipeline.exec();
+    await redis.del(rateLimitKey);
+    await redis.del(lockoutKey);
 }
 
 async function register(data, options = {}) {
