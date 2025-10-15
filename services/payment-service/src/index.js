@@ -7,7 +7,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const { connect: connectRabbitMQ } = require('/app/shared/rabbitmq');
 const redis = require('/app/shared/redis');
 const app = express();
-const PORT = process.env.PORT || 3080;
+const PORT = process.env.PORT || 8009;
 
 app.use(express.json());
 app.use('/api/v1/payments', paymentRoutes);
@@ -15,7 +15,7 @@ app.get('/api/v1', (req, res) => {
     res.status(200).send('Payment Service is running');
 })
 
-// Health check (DB + shared services)s
+// Health check (DB + shared services)
 app.get('/health', async (req, res) => {
     try {
         await knex.raw('SELECT 1');
