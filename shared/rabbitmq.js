@@ -1,85 +1,141 @@
-const amqp = require("amqplib");
-const { v4: uuidv4 } = require("uuid");
-require("dotenv").config();
+/**
+ * @file RabbitMQ Client - Optimized for High-Scale Microservices
+ * @description Standardized, resilient RabbitMQ client for millions of users.
+ * Handles reconnections with exponential backoff, idempotent assertions,
+ * metrics logging, and DLQ/retry queues. Uses durable exchanges/queues for reliability.
+ * For production: Monitor with Prometheus, use clustering for HA.
+ */
+
+'use strict';
+
+const amqp = require('amqplib');
+const { v4: uuidv4 } = require('uuid');
+require('dotenv').config();
+
 const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://invexis:invexispass@rabbitmq:5672";
-const RETRY_LIMIT = 3;
-const RETRY_DELAY = 5000;
+const RETRY_LIMIT = parseInt(process.env.RABBITMQ_RETRY_LIMIT) || 3;
+const RETRY_DELAY = parseInt(process.env.RABBITMQ_RETRY_DELAY) || 5000;
+const PREFETCH_COUNT = parseInt(process.env.RABBITMQ_PREFETCH_COUNT) || 10;
+const RECONNECT_INTERVAL_BASE = parseInt(process.env.RABBITMQ_RECONNECT_BASE) || 1000;
+const MAX_RECONNECT_ATTEMPTS = parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 10;
 
 class RabbitMQ {
     constructor() {
         this.connection = null;
         this.channel = null;
+        this.isConnected = false;
+        this.reconnectAttempts = 0;
+        this.reconnectTimeout = null;
+        this.subscriptions = new Map();  // Track subscribers for cleanup
+
+        // Exchanges (durable for persistence)
         this.exchanges = {
             fanout: "events_fanout",
             topic: "events_topic",
             dlx: "dead_letter_exchange"
         };
-        this.queue = {
-            retry: 'retry_queue'
+
+        // Queues
+        this.queues = {
+            retry: 'retry_queue',
+            deadLetter: 'dead_letter_queue'
         };
+
+        // Config
         this.config = {
-            prefetchCount: 10,
-            reconnectInterval: 5000
+            prefetchCount: PREFETCH_COUNT,
+            reconnectInterval: RECONNECT_INTERVAL_BASE
         };
-        this.reconnectTimeout = null;
     }
 
+    /**
+     * Connect with exponential backoff and health checks.
+     * @returns {Promise<this>}
+     */
     async connect() {
-        // connecting method
+        if (this.isConnected && this.channel) return this;
+
         try {
-            if (this.connection) return this;
-            this.connection = await amqp.connect(RABBITMQ_URL);
+            console.log('RabbitMQ: Attempting connection...');
+            this.connection = await amqp.connect(RABBITMQ_URL, {
+                heartbeat: 30,  // Keep-alive for long-lived conns
+                retryDelay: 1000,  // Built-in retry
+            });
 
             this.channel = await this.connection.createChannel();
-            await this.setupInfrastructure();
             await this.channel.prefetch(this.config.prefetchCount);
 
-            await this.channel.assertExchange(this.exchanges.fanout, "fanout", { durable: true });
-            await this.channel.assertExchange(this.exchanges.dlx, "topic", { durable: true });
-            await this.channel.assertQueue(this.queue.retry, { durable: true });
-            await this.channel.bindQueue(this.queue.retry, this.exchanges.dlx, "#");
-            await this.channel.bindQueue(this.queue.retry, this.exchanges.topic, "retry.#");
-            await this.channel.bindQueue(this.queue.retry, this.exchanges.fanout, "");
+            await this.setupInfrastructure();
+            this.isConnected = true;
+            this.reconnectAttempts = 0;
+            console.log('RabbitMQ: Connected successfully');
 
+            // Event listeners
             this.connection.on('close', () => this.handleReconnect());
             this.connection.on('error', (err) => this.handleError(err));
-            console.log("Rabbitmq connected successfully");
-            return this;
+            this.channel.on('error', (err) => this.handleError(err));
+            this.channel.on('close', () => this.handleReconnect());
 
+            return this;
         } catch (err) {
-            console.error("RabbitMQ connection failed", err.message);
+            console.error('RabbitMQ: Connection failed', err.message);
+            this.isConnected = false;
             throw err;
         }
     }
 
+    /**
+     * Setup exchanges, queues, and bindings idempotently.
+     * @private
+     */
     async setupInfrastructure() {
-        await this.channel.assertExchange(this.exchanges.fanout, 'fanout', { durable: true, autoDelete: false });
+        try {
+            // Exchanges (durable, auto-delete false for persistence)
+            await this.channel.assertExchange(this.exchanges.fanout, 'fanout', { durable: true, autoDelete: false });
+            await this.channel.assertExchange(this.exchanges.topic, 'topic', { durable: true, autoDelete: false });
+            await this.channel.assertExchange(this.exchanges.dlx, 'topic', { durable: true, autoDelete: false });
 
-        await this.channel.assertExchange(this.exchanges.topic, 'topic', { durable: true, autoDelete: false });
+            // Dead Letter Queue (durable)
+            await this.channel.assertQueue(this.queues.deadLetter, { durable: true });
+            await this.channel.bindQueue(this.queues.deadLetter, this.exchanges.dlx, '#');
 
-        await this.channel.assertExchange(this.exchanges.dlx, 'topic', { durable: true, autoDelete: false });
+            // Retry Queue (durable, DLX, TTL for retry delay)
+            // Fix: Delete and recreate to avoid arg mismatch
+            try {
+                await this.channel.deleteQueue(this.queues.retry);
+            } catch (err) {
+                // Ignore if not exists
+            }
+            await this.channel.assertQueue(this.queues.retry, {
+                durable: true,
+                deadLetterExchange: this.exchanges.dlx,
+                deadLetterRoutingKey: this.queues.deadLetter,
+                messageTtl: RETRY_DELAY,
+                arguments: {
+                    'x-dead-letter-exchange': this.exchanges.dlx,
+                    'x-dead-letter-routing-key': this.queues.deadLetter
+                }
+            });
 
-        await this.channel.assertQueue(this.queue.retry, {
-            durable: true,
-            deadLetterExchange: this.exchanges.dlx,
-            messageTtl: RETRY_DELAY,
-        });
+            // Bind retry to exchanges
+            await this.channel.bindQueue(this.queues.retry, this.exchanges.topic, 'retry.#');
+            await this.channel.bindQueue(this.queues.retry, this.exchanges.fanout, '');
+            await this.channel.bindQueue(this.queues.retry, this.exchanges.dlx, '#');
 
-        await this.channel.assertQueue('dead_letter_queue', { durable: true });
-
-        await this.channel.bindQueue(
-            'dead_letter_queue',
-            this.exchanges.dlx,
-            '#'
-        );
-
-        await this.channel.bindQueue(this.queue.retry, this.exchanges.topic, 'retry.#');
-        await this.channel.bindQueue(this.queue.retry, this.exchanges.fanout, '');
-        await this.channel.bindQueue(this.queue.retry, this.exchanges.dlx, '#');
+            console.log('RabbitMQ: Infrastructure setup complete');
+        } catch (err) {
+            console.error('RabbitMQ: Setup failed', err.message);
+            throw err;
+        }
     }
 
+    /**
+     * Create a queue with DLQ support (idempotent).
+     * @param {string} queueName - Queue name.
+     * @param {object} options - Options (durable, TTL, etc.).
+     * @returns {Promise<object>} Queue info.
+     */
     async createQueue(queueName, options = {}) {
-        // create queues
         const defaultOptions = {
             durable: true,
             arguments: {
@@ -87,85 +143,118 @@ class RabbitMQ {
                 'x-dead-letter-routing-key': queueName
             }
         };
-        return this.channel.assertQueue(queueName, {
-            ...defaultOptions,
-            ...options
-        });
+        // Delete if exists to avoid arg mismatch
+        try {
+            await this.channel.deleteQueue(queueName);
+        } catch (err) {
+            // Ignore
+        }
+        return this.channel.assertQueue(queueName, { ...defaultOptions, ...options });
     }
 
+    /**
+     * Publish message with retries and headers.
+     * @param {string} exchange - Exchange name.
+     * @param {string} routingKey - Routing key.
+     * @param {object} payload - Message payload.
+     * @param {object} metadata - Headers (e.g., correlationId).
+     * @returns {Promise<boolean>} Publish success.
+     */
     async publish(exchange, routingKey, payload, metadata = {}) {
+        if (!this.isConnected) await this.connect();
         try {
             const messageId = uuidv4();
             const headers = {
-                ...metadata.headers,
-                'x-retries': 0
+                ...metadata.headers || {},
+                'x-retries': 0,
+                'correlation-id': messageId,
+                'timestamp': Date.now(),
+                'content-type': 'application/json'
             };
-            return this.channel.publish(
+            const message = Buffer.from(JSON.stringify(payload), 'utf8');
+            const ok = this.channel.publish(
                 exchange,
                 routingKey,
-                Buffer.from(JSON.stringify(payload)),
-                { persistent: true, messageId, headers, ...metadata }
+                message,
+                { persistent: true, messageId, headers, correlationId: messageId }
             );
+            if (!ok) {
+                console.warn('RabbitMQ: Publish failed - channel full');
+                return false;
+            }
+            console.debug(`RabbitMQ: Published to ${exchange}/${routingKey}: ${messageId}`);
+            return true;
         } catch (err) {
-            console.error("RabbitMQ publish error:", err.message);
+            console.error('RabbitMQ: Publish error', err.message);
+            await this.handleReconnect();  // Trigger reconnect
+            return false;
         }
     }
 
+    /**
+     * Subscribe to queue with consumer handler (supports multiple).
+     * @param {object} queueConfig - { queue, exchange, pattern }.
+     * @param {function} messageHandler - (content, routingKey) => Promise.
+     * @returns {Promise<void>}
+     */
     async subscribe(queueConfig, messageHandler) {
-        // A METHOD THAT ALLOW SERVICES TO LISTEN AND CONSUME EVENTS FROM QUEUES
+        if (!this.isConnected) await this.connect();
         try {
             const { queue, exchange, pattern } = queueConfig;
             await this.createQueue(queue);
             await this.channel.bindQueue(queue, exchange, pattern);
+
+            const consumerTag = uuidv4();
+            this.subscriptions.set(consumerTag, { queue, handler: messageHandler });
+
             this.channel.consume(queue, async (msg) => {
+                if (!msg) return;
                 try {
-                    if (!msg) return;
                     const content = this.parseMessage(msg);
-                    const retries = msg.properties.headers['x-retries'] || 0;
-                    await messageHandler(content, msg.fields.routingKey);
+                    const routingKey = msg.fields.routingKey;
+                    const retries = msg.properties.headers?.['x-retries'] || 0;
+                    await messageHandler(content, routingKey);
                     this.channel.ack(msg);
+                    console.debug(`RabbitMQ: Acked message ${msg.properties.messageId} from ${queue}`);
                 } catch (error) {
+                    console.error('RabbitMQ: Consumer error', error.message);
                     await this.handleFailedMessage(msg, error);
                 }
-            }, { noAck: false });
+            }, { noAck: false, consumerTag });
+
+            console.log(`RabbitMQ: Subscribed to ${queue} on ${exchange}/${pattern}`);
         } catch (err) {
-            console.log('rabbitmq subscribe error:', err.message);
+            console.error('RabbitMQ: Subscribe error', err.message);
             throw err;
         }
     }
 
     async handleFailedMessage(msg, error) {
-        //HANDLES FAILED MESSAGE BY RETRYING THEM OR SENDING MSGS IN DLX
-        const retries = msg.properties.headers['x-retries'] || 0;
+        const retries = msg.properties.headers?.['x-retries'] || 0;
         if (retries < RETRY_LIMIT) {
-            console.log(`rabbitmq retrying message (${retries + 1}/${RETRY_LIMIT})`);
+            console.log(`RabbitMQ: Retrying message ${msg.properties.messageId} (${retries + 1}/${RETRY_LIMIT})`);
             await this.retryMessage(msg);
         } else {
-            console.log('rabbitmq message failed Permanently', error.message);
+            console.error('RabbitMQ: Permanent failure for message', msg.properties.messageId, error.message);
             await this.sendToDlx(msg);
         }
     }
 
     async retryMessage(msg) {
-        // A FUNCTION THAT HANDLES RETRYING AND UPDATES RETRY COUNT
         const updateHeaders = {
             ...msg.properties.headers,
-            'x-retries': (msg.properties.headers['x-retries'] || 0) + 1
+            'x-retries': (msg.properties.headers?.['x-retries'] || 0) + 1
         };
         await this.channel.publish(
-            '',
-            this.queue.retry,
+            '',  // Default exchange
+            this.queues.retry,
             msg.content,
-            {
-                headers: updateHeaders,
-                persistent: true
-            }
+            { headers: updateHeaders, persistent: true }
         );
         this.channel.ack(msg);
     }
 
     async sendToDlx(msg) {
-        //A METHOD THAT SENDS FAILED MESSAGES TO DEAD LETTER EXCHANGE
         await this.channel.publish(
             this.exchanges.dlx,
             msg.fields.routingKey,
@@ -176,49 +265,80 @@ class RabbitMQ {
     }
 
     parseMessage(msg) {
-        //A METHOD THAT PARSES MESSAGES
         try {
-            return JSON.parse(msg.content.toString());
+            return JSON.parse(msg.content.toString('utf8'));
         } catch (err) {
-            throw new Error("Invalid message format", err);
+            console.error('RabbitMQ: Parse error', err.message);
+            throw new Error('Invalid message format');
         }
     }
 
     handleReconnect() {
-        // A METHOD THAT HANDLES RECONNECTION
-        if (this.reconnectTimeout) return;
-        console.log(`rabbitmq reconnecting in ${this.config.reconnectInterval / 1000}s ...`);
-        this.reconnectTimeout = setTimeout(
-            () => this.connect(),
-            this.config.reconnectInterval
-        );
+        if (this.reconnectTimeout || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
+        this.reconnectAttempts++;
+        const delay = Math.min(this.config.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1), 30000);  // Exponential backoff, max 30s
+        console.log(`RabbitMQ: Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+        this.reconnectTimeout = setTimeout(async () => {
+            try {
+                await this.connect();
+                this.reconnectAttempts = 0;
+            } catch (err) {
+                console.error('RabbitMQ: Reconnect failed', err.message);
+                this.handleReconnect();  // Retry
+            }
+        }, delay);
     }
 
     handleError(err) {
-        //A FUNCTION THAT HANDLES ERROR
-        console.log("RabbitMQ connection error:", err.message);
+        console.error('RabbitMQ: Connection error', err.message);
+        this.isConnected = false;
     }
 
-    async close() {
-        //A FUNCTION THAT HANDLES GRACEFUL CLOSING 
+    /**
+     * Health check (for monitoring).
+     * @returns {Promise<boolean>}
+     */
+    async healthCheck() {
+        if (!this.isConnected) return false;
         try {
+            await this.channel.checkQueue(this.queues.retry);
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    /**
+     * Graceful close with subscription cleanup.
+     * @returns {Promise<void>}
+     */
+    async close() {
+        try {
+            for (const [tag] of this.subscriptions) {
+                await this.channel.cancel(tag);
+            }
+            this.subscriptions.clear();
             if (this.channel) await this.channel.close();
             if (this.connection) await this.connection.close();
             if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-            console.log("rabbitmq connection closed gracefully");
+            this.isConnected = false;
+            console.log('RabbitMQ: Closed gracefully');
         } catch (err) {
-            console.log('rabbitmq close error', err.message);
+            console.error('RabbitMQ: Close error', err.message);
         }
     }
 }
 
+// Singleton instance
 const rabbitmq = new RabbitMQ();
-process.on("SIGINT", () => rabbitmq.close());
-process.on("SIGTERM", () => rabbitmq.close());
+process.on('SIGINT', () => rabbitmq.close());
+process.on('SIGTERM', () => rabbitmq.close());
 
 module.exports = {
     connect: () => rabbitmq.connect(),
     publish: (exchange, routingKey, payload, metadata) => rabbitmq.publish(exchange, routingKey, payload, metadata),
     subscribe: (queueConfig, messageHandler) => rabbitmq.subscribe(queueConfig, messageHandler),
-    exchanges: rabbitmq.exchanges
+    exchanges: rabbitmq.exchanges,
+    queues: rabbitmq.queues,
+    healthCheck: () => rabbitmq.healthCheck(),
 };

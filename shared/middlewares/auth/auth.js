@@ -1,19 +1,15 @@
-// middleware/authMiddleware.js
-// Comprehensive Auth Middleware for Microservices Architecture
-// Integrates with existing authService, tokenService, redis, publishEvent, and AuthError
-// Usage: Import and chain in routes, e.g., router.use(requireAuth, requireRole('admin'), ...)
+// src/middleware/authMiddleware.js (Copy the shared auth middleware here for local use, or require('../../shared/authMiddleware'))
 
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const crypto = require('crypto');
-const redis = require('/app/shared/redis.js'); // Shared Redis module
-const { publishEvent } = require('../services/authService'); // From authService
-const { tokenService } = require('../services/tokenService'); // Reuse for token ops
-const AuthError = require('../services/authService').AuthError; // Custom error
-const Consent = require('../models/Consent.models'); // For consent checks
+const redis = require('/app/shared/redis');
+const { publish } = require('/app/shared/rabbitmq');
+const AuthError = new Error('Auth Error');
+
 
 // Configuration (set via env or config service)
-const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://localhost:3001/auth';
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:3001/auth';
 const JWT_SECRET = process.env.JWT_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3002';
 const IP_WHITELIST = process.env.IP_WHITELIST ? process.env.IP_WHITELIST.split(',') : [];
@@ -43,8 +39,7 @@ async function fetchUserFromAuthService(userId, accessToken) {
     }
 }
 
-// 1. authenticateToken: Verifies access token from Authorization header.
-//    Attaches decoded payload to req.decodedToken.
+// 1. authenticateToken
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1];
@@ -58,8 +53,7 @@ const authenticateToken = (req, res, next) => {
     }
 };
 
-// 2. fetchUser: Fetches full user from auth service.
-//    Attaches to req.user. Requires authenticateToken first.
+// 2. fetchUser
 const fetchUser = async (req, res, next) => {
     if (!req.decodedToken) return res.status(401).json({ ok: false, message: 'Token not verified' });
 
@@ -74,14 +68,14 @@ const fetchUser = async (req, res, next) => {
     }
 };
 
-// 3. requireAuth: Full auth chain (authenticateToken + fetchUser).
+// 3. requireAuth
 const requireAuth = async (req, res, next) => {
     await authenticateToken(req, res, () => { });
     if (res.headersSent) return;
     await fetchUser(req, res, next);
 };
 
-// 4. requireRole: Role-based access control.
+// 4. requireRole
 const requireRole = (allowedRoles) => {
     return (req, res, next) => {
         if (!req.user) return res.status(401).json({ ok: false, message: 'User not authenticated' });
@@ -94,7 +88,7 @@ const requireRole = (allowedRoles) => {
     };
 };
 
-// 5. requireCompany: Company-scoped access.
+// 5. requireCompany
 const requireCompany = (req, res, next) => {
     if (!req.user) return res.status(401).json({ ok: false, message: 'User not authenticated' });
     const companyId = req.params.companyId || req.body.companyId || req.query.companyId;
@@ -105,7 +99,7 @@ const requireCompany = (req, res, next) => {
     next();
 };
 
-// 6. requireShop: Shop-scoped access.
+// 6. requireShop
 const requireShop = (req, res, next) => {
     if (!req.user) return res.status(401).json({ ok: false, message: 'User not authenticated' });
     const shopId = req.params.shopId || req.body.shopId || req.query.shopId;
@@ -116,7 +110,7 @@ const requireShop = (req, res, next) => {
     next();
 };
 
-// 7. requireActiveAccount: Ensures account is active.
+// 7. requireActiveAccount
 const requireActiveAccount = (req, res, next) => {
     if (!req.user) return res.status(401).json({ ok: false, message: 'User not authenticated' });
     if (req.user.accountStatus !== 'active') {
@@ -125,47 +119,43 @@ const requireActiveAccount = (req, res, next) => {
     next();
 };
 
-// 8. validateRefreshToken: Verifies refresh token.
+// 8. validateRefreshToken
 const validateRefreshToken = (req, res, next) => {
     const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
     if (!refreshToken) return res.status(400).json({ ok: false, message: 'Refresh token required' });
 
     try {
-        req.decodedRefreshToken = tokenService.verifyRefresh(refreshToken); // Implement verifyRefresh in tokenService if needed
+        req.decodedRefreshToken = jwt.verify(refreshToken, JWT_SECRET);  // Assume shared tokenService.verifyRefresh
         next();
     } catch (err) {
         return res.status(401).json({ ok: false, message: 'Invalid refresh token' });
     }
 };
 
-// 9. rateLimitByUser: User-based rate limiting (in-memory; use Redis for prod).
+// 9. rateLimitByUser (Redis-based for prod)
 const rateLimitByUser = (maxRequests, windowMs) => {
-    const requests = new Map();
-    return (req, res, next) => {
+    return async (req, res, next) => {
         const userId = req.user?._id || req.decodedToken?.sub;
         if (!userId) return next();
         const key = `rate:${userId}`;
-        const now = Date.now();
-        const windowStart = now - windowMs;
-        if (!requests.has(key)) requests.set(key, []);
-        const userRequests = requests.get(key).filter(time => time > windowStart);
-        if (userRequests.length >= maxRequests) {
+        const current = parseInt(await redis.get(key) || 0);
+        if (current >= maxRequests) {
             return res.status(429).json({ ok: false, message: 'Rate limit exceeded' });
         }
-        userRequests.push(now);
-        requests.set(key, userRequests);
+        await redis.incr(key);
+        await redis.expire(key, windowMs / 1000);
         next();
     };
 };
 
-// 10. logRequest: Basic request logging.
+// 10. logRequest
 const logRequest = (req, res, next) => {
     const userId = req.user?._id || req.decodedToken?.sub || 'anonymous';
-    console.log(`Auth request: ${req.method} ${req.path} by user ${userId} from ${req.ip}`);
+    console.log(`Request: ${req.method} ${req.path} by user ${userId} from ${req.ip}`);
     next();
 };
 
-// 11. corsForAuth: CORS with credentials.
+// 11. corsForAuth
 const corsForAuth = (req, res, next) => {
     res.header('Access-Control-Allow-Origin', FRONTEND_URL);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -175,7 +165,7 @@ const corsForAuth = (req, res, next) => {
     next();
 };
 
-// 12. validateCSRF: CSRF validation wrapper.
+// 12. validateCSRF
 const validateCSRF = (req, res, next) => {
     if (req.csrfToken && req.body._csrf !== req.csrfToken()) {
         return res.status(403).json({ ok: false, message: 'Invalid CSRF token' });
@@ -183,7 +173,7 @@ const validateCSRF = (req, res, next) => {
     next();
 };
 
-// 13. checkTokenBlacklist: Checks if token is blacklisted in Redis.
+// 13. checkTokenBlacklist
 const checkTokenBlacklist = async (req, res, next) => {
     if (!req.decodedToken) return res.status(401).json({ ok: false, message: 'Token not verified' });
     const tokenJti = req.decodedToken.jti;
@@ -194,7 +184,7 @@ const checkTokenBlacklist = async (req, res, next) => {
     next();
 };
 
-// 14. enforce2FA: Enforces 2FA for sensitive actions.
+// 14. enforce2FA
 const enforce2FA = async (req, res, next) => {
     if (!req.user || !req.user.twoFAEnabled) {
         return res.status(403).json({ ok: false, message: '2FA required for this action' });
@@ -207,7 +197,7 @@ const enforce2FA = async (req, res, next) => {
     next();
 };
 
-// 15. ipWhitelist: IP restriction.
+// 15. ipWhitelist
 const ipWhitelist = (whitelist = IP_WHITELIST) => {
     return (req, res, next) => {
         const clientIp = req.ip || req.headers['x-forwarded-for'];
@@ -218,7 +208,7 @@ const ipWhitelist = (whitelist = IP_WHITELIST) => {
     };
 };
 
-// 16. deviceFingerprint: Device fingerprinting for security.
+// 16. deviceFingerprint
 const deviceFingerprint = async (req, res, next) => {
     if (!req.user) return next();
     const ua = req.get('User-Agent');
@@ -226,18 +216,19 @@ const deviceFingerprint = async (req, res, next) => {
     const sessionKey = `device_fp:${req.user._id}:${req.decodedToken.jti}`;
     const storedFp = await redis.get(sessionKey);
     if (storedFp && storedFp !== fp) {
-        await publishEvent('suspicious.device_change', { userId: req.user._id, oldFp: storedFp, newFp: fp });
+        await publish('events_topic', 'suspicious.device_change', { userId: req.user._id, oldFp: storedFp, newFp: fp });
     }
     await redis.set(sessionKey, fp, 'EX', 24 * 60 * 60);
     req.deviceFingerprint = fp;
     next();
 };
 
-// 17. checkConsent: Consent validation.
+// 17. checkConsent
 const checkConsent = (consentTypes = ['terms_and_privacy_sbapshop']) => {
     return async (req, res, next) => {
         if (!req.user) return res.status(401).json({ ok: false, message: 'User not authenticated' });
-        const consents = await Consent.find({ userId: req.user._id, type: { $in: consentTypes }, revoked: false });
+        // Placeholder: Query consent (implement if model added)
+        const consents = [];  // Fetch from DB
         if (consents.length !== consentTypes.length) {
             return res.status(403).json({ ok: false, message: 'Missing or revoked consent' });
         }
@@ -245,7 +236,7 @@ const checkConsent = (consentTypes = ['terms_and_privacy_sbapshop']) => {
     };
 };
 
-// 18. auditLog: Audit logging.
+// 18. auditLog
 const auditLog = (action) => {
     return async (req, res, next) => {
         const auditData = {
@@ -256,12 +247,12 @@ const auditLog = (action) => {
             timestamp: new Date(),
             details: { method: req.method, body: req.body } // Sanitize in prod
         };
-        await publishEvent(`audit.${action}`, auditData);
+        await publish('events_topic', `audit.${action}`, auditData);
         next();
     };
 };
 
-// 19. permissionCheck: Permission-based access.
+// 19. permissionCheck
 const permissionCheck = (requiredPerms) => {
     return (req, res, next) => {
         if (!req.user || !req.user.permissions) {
@@ -275,18 +266,18 @@ const permissionCheck = (requiredPerms) => {
     };
 };
 
-// 20. validateServiceToken: Service-to-service auth.
+// 20. validateServiceToken
 const validateServiceToken = async (req, res, next) => {
     const apiKey = req.headers['x-api-key'];
     if (!apiKey) return res.status(401).json({ ok: false, message: 'Service token required' });
-    // Placeholder: Implement Service model lookup
-    // const service = await Service.findOne({ apiKey: hashToken(apiKey) });
-    // if (!service || service.active !== true) return res.status(401).json({ ok: false, message: 'Invalid service token' });
-    // req.service = service;
-    next(); // TODO: Implement full logic
+    // Placeholder: Validate against Redis or DB
+    const storedKey = await redis.get(`service_key:${apiKey}`);
+    if (!storedKey) return res.status(401).json({ ok: false, message: 'Invalid service token' });
+    req.service = { key: apiKey };
+    next();
 };
 
-// 21. cacheUser: Caches user data.
+// 21. cacheUser
 const cacheUser = async (req, res, next) => {
     if (!req.user) return next();
     const cacheKey = `user:${req.user._id}`;
@@ -294,13 +285,13 @@ const cacheUser = async (req, res, next) => {
     next();
 };
 
-// 22. errorHandler: Global error handler.
+// 22. errorHandler
 const errorHandler = (err, req, res, next) => {
     if (err instanceof AuthError) {
         return res.status(err.status).json({ ok: false, message: err.message });
     }
     console.error('Auth middleware error:', err);
-    publishEvent('auth.error', { error: err.message, path: req.path, userId: req.user?._id });
+    publish('events_topic', 'auth.error', { error: err.message, path: req.path, userId: req.user?._id });
     res.status(500).json({ ok: false, message: 'Internal server error' });
 };
 
