@@ -26,10 +26,10 @@ router.post('/', handleUploads, createProduct);
 router.put('/:id', handleUploads, updateProduct);
 router.delete('/:id', deleteProduct);
 router.patch('/:id/inventory', updateInventory);
-router.get('/low-stock', getLowStockProducts);
-router.get('/scheduled', getScheduledProducts);
-router.get('/featured', getFeaturedProducts);
-router.get('/search', searchProducts);
-router.get('/old-unbought', getOldUnboughtProducts);
+router.get('/low/stock', getLowStockProducts);
+router.get('/get/scheduled', getScheduledProducts);
+router.get('/get/featured', getFeaturedProducts);
+router.get('/search/product', searchProducts);
+router.get('/old/unbought', getOldUnboughtProducts);
 
 module.exports = router;

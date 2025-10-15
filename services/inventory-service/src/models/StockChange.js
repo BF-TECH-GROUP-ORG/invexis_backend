@@ -10,7 +10,7 @@ const stockChangeSchema = new Schema({
   quantity: { type: Number, required: true },
   previousStock: { type: Number, required: true },
   newStock: { type: Number, required: true },
-  reason: { type: String, trim: true }, // Optional but encouraged for adjustments
+  reason: { type: String, trim: true },
   userId: { type: String, default: null },
   warehouseId: { type: Schema.Types.ObjectId, ref: 'Warehouse', default: null, index: true }, // Added for multi-location support
   changeDate: { type: Date, default: Date.now, index: true }
@@ -52,7 +52,7 @@ stockChangeSchema.pre('save', async function(next) {
 
   this.newStock = this.previousStock + this.quantity;
   if (this.newStock < 0) {
-    return next(new Error('New stock cannot be negative'));
+    return next(new Error('You do not have enough products in stock'));
   }
 
   // Update product stock

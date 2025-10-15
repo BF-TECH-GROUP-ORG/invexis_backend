@@ -9,7 +9,7 @@ const getAllAdjustments = asyncHandler(async (req, res) => {
   if (!companyId) {
     return res.status(400).json({ success: false, message: 'Company ID is required' });
   }
-  validateMongoId(companyId);
+//   validateMongoId(companyId);
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -53,8 +53,8 @@ const createAdjustment = asyncHandler(async (req, res) => {
 
   const adjustment = new InventoryAdjustment({
     ...req.body,
-    companyId: req.user.companyId,
-    userId: req.user.id
+    companyId: "testCompany",
+    userId: "req.user.id"
   });
   await adjustment.save();
 
@@ -71,7 +71,7 @@ const approveAdjustment = asyncHandler(async (req, res) => {
   }
 
   adjustment.status = 'approved';
-  adjustment.approvedBy = req.user.id;
+  adjustment.approvedBy = "req.user.id";
   await adjustment.save();
 
   res.status(200).json({ success: true, message: 'Adjustment approved successfully', data: adjustment });

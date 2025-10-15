@@ -189,12 +189,14 @@ productSchema.pre('save', function(next) {
     this.availability = 'in_stock';
   }
 
-  // Aggregate total quantity from perWarehouse
-  this.inventory.quantity = this.inventory.perWarehouse.reduce((total, wh) => total + wh.quantity, 0);
+  // Aggregate total quantity from perWarehouse ONLY if perWarehouse has entries
+  if (this.inventory.perWarehouse && this.inventory.perWarehouse.length > 0) {
+    this.inventory.quantity = this.inventory.perWarehouse.reduce((total, wh) => total + wh.quantity, 0);
+  }
+  // Else, keep the manually set quantity (for single-warehouse or non-warehouse updates)
 
   next();
 });
-
 // Middleware to validate category hierarchy
 productSchema.pre('save', async function(next) {
   if (this.isModified('category') || this.isModified('subcategory') || this.isModified('subSubcategory')) {
@@ -227,36 +229,37 @@ productSchema.methods.isAvailableNow = function () {
   return this.availability === 'in_stock' || this.availability === 'limited' || (this.scheduledAvailabilityDate && new Date() >= this.scheduledAvailabilityDate);
 };
 
-productSchema.statics.getProductsByCategory = function (categoryId, includeSubcategories = false) {
+productSchema.statics.getProductsByCategory = async function (categoryId, includeSubcategories = false) {
   const Category = mongoose.model('Category');
 
-  return (async () => {
-    let filter = { category: categoryId };
+  let filter = { category: categoryId };
 
-    if (includeSubcategories) {
-      const subcategories = await Category.find({ parentCategory: categoryId }).select('_id');
-      const subcategoryIds = subcategories.map(sub => sub._id);
+  if (includeSubcategories) {
+    // Recursive function to fetch all descendant category IDs
+    const getAllSubcategoryIds = async (parentIds) => {
+      const subs = await Category.find({ parentCategory: { $in: parentIds } }).select('_id');
+      if (!subs.length) return [];
+      const subIds = subs.map(s => s._id);
+      const nestedSubIds = await getAllSubcategoryIds(subIds);
+      return subIds.concat(nestedSubIds);
+    };
 
-      if (subcategoryIds.length > 0) {
-        const subSubcategories = await Category.find({ parentCategory: { $in: subcategoryIds } }).select('_id');
-        const subSubcategoryIds = subSubcategories.map(subSub => subSub._id);
+    const allSubIds = await getAllSubcategoryIds([categoryId]);
 
-        filter = {
-          $or: [
-            { category: categoryId },
-            { subcategory: { $in: subcategoryIds } },
-            { subSubcategory: { $in: subSubcategoryIds } }
-          ]
-        };
-      }
+    if (allSubIds.length > 0) {
+      filter = {
+        $or: [
+          { category: categoryId },
+          { subcategory: { $in: allSubIds } },
+          { subSubcategory: { $in: allSubIds } } // optional if your schema has this
+        ]
+      };
     }
+  }
 
-    // Return the unevaluated query object
-    return this.find(filter).populate('category subcategory subSubcategory');
-  })();
+  // Return a Query object
+  return this.find(filter).populate('category subcategory subSubcategory');
 };
-
-
 
 // Static method to get low stock products
 productSchema.statics.getLowStockProducts = async function (companyId, threshold = 10) {
