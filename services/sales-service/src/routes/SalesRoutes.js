@@ -14,7 +14,7 @@ router.get(
   "/reports/sales/customer/:customerId",
   salesController.customerSalesReport
 );
-
+ 
 // Trends
 router.get("/trends/top-products", salesController.topSellingProducts);
 router.get("/trends/revenue", salesController.revenueTrend);
