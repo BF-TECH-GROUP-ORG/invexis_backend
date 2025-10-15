@@ -10,15 +10,15 @@ const CartItemSchema = new mongoose.Schema({
 
 const CartSchema = new mongoose.Schema({
     // userId removed: guest carts allowed
-    companyId: { type: String, required: true, index: true },
-    shopId: { type: String, index: true },
+    companyId: { type: String, required: true },
+    shopId: { type: String },
 
     items: { type: [CartItemSchema], default: [] },
 
-    status: { type: String, enum: ['active', 'checked_out', 'abandoned'], default: 'active', index: true },
+    status: { type: String, enum: ['active', 'checked_out', 'abandoned'], default: 'active' },
 
     // timestamps: updatedAt used to detect abandoned carts
-    lastActivity: { type: Date, default: Date.now, index: true },
+    lastActivity: { type: Date, default: Date.now },
 
     isDeleted: { type: Boolean, default: false }
 }, { timestamps: true });

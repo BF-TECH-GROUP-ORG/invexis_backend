@@ -8,6 +8,7 @@ const orderController = require('../controllers/orderController');
 const promotionController = require('../controllers/promotionController');
 const reviewController = require('../controllers/reviewController');
 const wishlistController = require('../controllers/wishlistController');
+const featuredBannerController = require('../controllers/featureBannerController');
 
 // Cart routes
 router.get('/cart', cartController.getCart);
@@ -46,5 +47,13 @@ router.delete('/reviews/:id', reviewController.deleteReview);
 router.get('/wishlist', wishlistController.getWishlist);
 router.post('/wishlist', wishlistController.addOrUpdateWishlist); // strict: full wishlist create/update
 router.post('/wishlist/remove', wishlistController.removeFromWishlist);
+
+// Featured Banner routes
+router.get('/banners', featuredBannerController.getBanners); // List banners with filters
+router.get('/banners/:companyId/:bannerId', featuredBannerController.getBannerById); // Get single banner
+router.post('/banners', featuredBannerController.createBanner); // Create new banner
+router.put('/banners/:companyId/:bannerId', featuredBannerController.updateBanner); // Update banner
+router.delete('/banners/:companyId/:bannerId', featuredBannerController.deleteBanner); // Soft delete banner
+router.patch('/banners/:companyId/:bannerId/active', featuredBannerController.toggleActive); // Toggle active status
 
 module.exports = router;
