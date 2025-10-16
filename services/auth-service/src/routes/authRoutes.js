@@ -26,6 +26,10 @@ router.use(corsForAuth);
 // Rate limiting for high-traffic public routes (e.g., 100 req/hour per user/IP)
 const loginRateLimit = rateLimitByUser(100, 3600000); // 1 hour window
 
+router.get('/', (req, res) => {
+    res.json({ message: "auth service is roued to the gateway" })
+})
+
 // Public routes (no auth)
 router.post('/register', loginRateLimit, authCtrl.register);
 router.post('/login', loginRateLimit, authCtrl.login);
@@ -39,7 +43,7 @@ router.post('/password/reset/confirm', csrfProtection, authCtrl.confirmPasswordR
 // Protected user routes (auth + active account)
 router.post('/refresh', csrfProtection, checkTokenBlacklist, authCtrl.refresh); // Add blacklist check for refresh
 router.post('/logout', requireAuth, csrfProtection, checkTokenBlacklist, deviceFingerprint, authCtrl.logout);
-router.get('/me', requireAuth, checkTokenBlacklist, authCtrl.getMe); // Updated to use middleware
+// router.get('/me', requireAuth, checkTokenBlacklist, authCtrl.getMe); // Updated to use middleware
 router.put('/me', requireAuth, csrfProtection, checkTokenBlacklist, deviceFingerprint, authCtrl.updateProfile);
 router.put('/me/profile-picture', requireAuth, csrfProtection, uploadProfileImage, checkTokenBlacklist, authCtrl.updateProfilePicture);
 router.delete('/me', requireAuth, csrfProtection, checkTokenBlacklist, enforce2FA, auditLog('account_delete'), authCtrl.deleteAccount);

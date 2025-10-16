@@ -17,6 +17,11 @@ const {
     validateWebhookSignature
 } = require('../middleware/paymentMiddleware')
 
+
+router.get('/', (req, res) => {
+    res.send('Payment Service is routed to gateway');
+})
+
 // Public (guest e-com initiate—no auth)
 router.post('/initiate', idempotencyCheck, rateLimitPayments(), paymentController.initiatePayment, cacheIdempotencyResponse);
 

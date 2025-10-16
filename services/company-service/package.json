@@ -1,23 +1,33 @@
 {
   "name": "company-service",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/index.js",
   "directories": {
     "test": "tests"
   },
   "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "company",
+    "microservice",
+    "invexis"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Company management microservice for Invexis platform",
   "dependencies": {
-    "dotenv": "^17.2.2",
+    "amqplib": "^0.10.3",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "pg": "^8.16.3"
+    "express-async-handler": "^1.2.0",
+    "knex": "^3.1.0",
+    "pg": "^8.16.3",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "knex": "^3.1.0"
+    "nodemon": "^3.0.1"
   }
 }

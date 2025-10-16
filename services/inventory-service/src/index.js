@@ -1,6 +1,17 @@
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
-app.get('/health', (req, res) => res.sendStatus(200));
-app.get('/', (req, res) => res.send('Hello from inventory-service!'));
-app.listen(PORT, () => console.log(`inventory-service running on port ${PORT}`));
+const connectDB = require('./config/db');
+const logger = require('./utils/logger');
+const { scheduleDailyReport } = require('./services/reportService');
+
+const startServer = async () => {
+  try {
+    await connectDB();
+    await scheduleDailyReport();
+    require('./app');
+    logger.info('Server started successfully');
+  } catch (error) {
+    logger.error('Failed to start server: %s', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();

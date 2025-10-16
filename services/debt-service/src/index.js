@@ -1,7 +1,8 @@
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8005;
+const router = require('./routes/debt')
 app.get('/health', (req, res) => res.sendStatus(200));
 
-app.get('/', (req, res) => res.send('Hello from debit-service!'));
+app.use('/debt' , router)
 app.listen(PORT, () => console.log(`sales-service running on port ${PORT}`));
