@@ -217,6 +217,7 @@ class PaymentController {
             // Build query (selective JOINs, no unnecessary data)
             let query = knex('payments as p')
                 .leftJoin('transactions as t', 't.payment_id', 'p.payment_id')
+                .leftJoin('invoices as i', 'i.payment_id', 'p.payment_id')
                 .where('p.status', 'succeeded')
                 .select(
                     'p.payment_id',
