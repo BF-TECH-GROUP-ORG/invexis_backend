@@ -1,24 +1,47 @@
 const multer = require('multer');
 const path = require('path');
-const logger = require('../utils/app');
+const fs = require('fs');
+
+const uploadDir = process.env.UPLOAD_PATH || './uploads/profiles';
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/');
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
     },
-    filename: function (req, file, cb) {
-        cb(null, `${Date.now()}-${file.originalname}`);
-    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, `profile-${req.user._id}-${uniqueSuffix}${path.extname(file.originalname)}`);
+    }
 });
 
-const upload = multer({ storage });
-
-const uploadToLocal = async (req, res, next) => {
-    if (!req.file) return next();
-
-    const filePath = path.join('uploads', req.file.filename);
-    req.body.profilePicture = { url: filePath, publicId: req.file.filename }; // Store local path
-    next();
+const fileFilter = (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only images allowed'), false);
+    }
 };
 
-module.exports = { upload, uploadToLocal };
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter
+});
+
+const uploadProfileImage = (req, res, next) => {
+    upload.single('profilePicture')(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({ ok: false, message: err.message });
+        }
+        if (!req.file) {
+            return res.status(400).json({ ok: false, message: 'No file uploaded' });
+        }
+        req.profilePictureUrl = `/uploads/${req.file.filename}`;
+        next();
+    });
+};
+
+module.exports = { uploadProfileImage };
