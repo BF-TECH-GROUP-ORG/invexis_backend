@@ -1,5 +1,9 @@
+<<<<<<< HEAD
 // reportScheduler.js (Improved: Integrate with reportController, add more schedulers, handle failures)
 const { logger } = require('../utils/logger');
+=======
+const logger = require('../utils/logger');
+>>>>>>> ce9cc58373456b16292975932d180f8fad336166
 const amqp = require('amqp-connection-manager');
 const { getDailyReport, getInventorySummary, getAlertSummary } = require('../controllers/reportController'); // Integrate our reports
 

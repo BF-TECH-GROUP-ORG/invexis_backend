@@ -3,6 +3,9 @@ const router = express.Router();
 const salesController = require("../controllers/SalesController");
 
 // Create sale
+router.get("/", (req, res) => {
+  res.json({message:"sales service is routed to gateway"})
+})
 router.post("/", salesController.createSale);
 
 // Returns
@@ -14,7 +17,7 @@ router.get(
   "/reports/sales/customer/:customerId",
   salesController.customerSalesReport
 );
-
+ 
 // Trends
 router.get("/trends/top-products", salesController.topSellingProducts);
 router.get("/trends/revenue", salesController.revenueTrend);
