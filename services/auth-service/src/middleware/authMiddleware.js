@@ -1,21 +1,46 @@
-const { verifyAccessToken } = require('../utils/jwt');
+const tokenService = require('../services/tokenService');
 const User = require('../models/User.models');
 
-const protect = async (req, res, next) => {
-    let token;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        token = req.headers.authorization.split(' ')[1];
+class AuthError extends Error {
+    constructor(message, status = 400) {
+        super(message);
+        this.status = status;
     }
+}
 
-    if (!token) return res.status(401).json({ message: 'Not authorized' });
-
+async function requireAuth(req, res, next) {
     try {
-        const decoded = verifyAccessToken(token);
-        req.user = await User.findById(decoded.id).select('-passwordHash -twoFASecret');
+        const header = req.headers.authorization;
+        if (!header) throw new AuthError('No authorization header', 401);
+        const token = header.split(' ')[1];
+        if (!token) throw new AuthError('Invalid authorization format', 401);
+        const payload = tokenService.verifyAccess(token);
+        const user = await User.findById(payload.sub);
+        if (!user || user.accountStatus !== 'active') throw new AuthError('Unauthorized', 401);
+        req.user = user;
         next();
-    } catch (error) {
-        res.status(401).json({ message: error.message });
+    } catch (err) {
+        return res.status(401).json({ ok: false, message: 'Unauthorized', error: err.message });
     }
-};
+}
 
-module.exports = { protect };
+function requireRole(...roles) {
+    return (req, res, next) => {
+        if (!req.user) return res.status(401).json({ ok: false, message: 'Unauthorized' });
+        if (!roles.includes(req.user.role)) return res.status(403).json({ ok: false, message: 'Forbidden' });
+        next();
+    };
+}
+
+function authErrorHandler(err, req, res, next) {
+    if (err.code === 'EBADCSRFTOKEN') {
+        // TODO: Publish to RabbitMQ: csrf.invalid { ip, device }
+        return res.status(403).json({ ok: false, message: 'Invalid CSRF token' });
+    }
+    if (err instanceof AuthError) {
+        return res.status(err.status).json({ ok: false, message: err.message });
+    }
+    next(err);
+}
+
+module.exports = { requireAuth, requireRole, authErrorHandler };

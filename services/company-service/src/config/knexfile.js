@@ -1,0 +1,75 @@
+require("dotenv").config();
+
+/**
+ * @type { Object.<string, import("knex").Knex.Config> }
+ */
+module.exports = {
+  development: {
+    client: "pg",
+    connection: {
+      host: process.env.DEV_DB_HOST || "127.0.0.1",
+      port: process.env.DEV_DB_PORT || 5432,
+      database: process.env.DEV_DB_NAME || "company_service_dev",
+      user: process.env.DEV_DB_USER || "postgres",
+      password: process.env.DEV_DB_PASSWORD || "password",
+      ssl: process.env.DEV_DB_SSL === "true", // optional SSL
+    },
+    pool: {
+      min: parseInt(process.env.DEV_DB_POOL_MIN) || 2,
+      max: parseInt(process.env.DEV_DB_POOL_MAX) || 10,
+    },
+    migrations: {
+      directory: "./migrations",
+      tableName: "knex_migrations",
+    },
+    seeds: {
+      directory: "./seeds",
+    },
+  },
+
+  staging: {
+    client: "pg",
+    connection: {
+      host: process.env.STAGING_DB_HOST,
+      port: process.env.STAGING_DB_PORT || 5432,
+      database: process.env.STAGING_DB_NAME,
+      user: process.env.STAGING_DB_USER,
+      password: process.env.STAGING_DB_PASSWORD,
+      ssl: process.env.STAGING_DB_SSL === "true",
+    },
+    pool: {
+      min: parseInt(process.env.STAGING_DB_POOL_MIN) || 2,
+      max: parseInt(process.env.STAGING_DB_POOL_MAX) || 10,
+    },
+    migrations: {
+      directory: "./migrations",
+      tableName: "knex_migrations",
+    },
+    seeds: {
+      directory: "./seeds",
+    },
+  },
+
+  production: {
+    client: "pg",
+    connection: {
+      host: process.env.PROD_DB_HOST,
+      port: process.env.PROD_DB_PORT || 5432,
+      database: process.env.PROD_DB_NAME,
+      user: process.env.PROD_DB_USER,
+      password: process.env.PROD_DB_PASSWORD,
+      ssl: process.env.PROD_DB_SSL === "true",
+    },
+    pool: {
+      min: parseInt(process.env.PROD_DB_POOL_MIN) || 2,
+      max: parseInt(process.env.PROD_DB_POOL_MAX) || 10,
+    },
+    migrations: {
+      directory: "./migrations",
+      tableName: "knex_migrations",
+    },
+    seeds: {
+      directory: "./seeds",
+    },
+  },
+};

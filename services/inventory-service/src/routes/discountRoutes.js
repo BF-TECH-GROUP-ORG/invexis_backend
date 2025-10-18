@@ -11,7 +11,7 @@ const {
 } = require('../controllers/discountController');
 
 router.get('/', getAllDiscounts);
-router.get('/active', getActiveDiscounts);
+router.get('/get/active', getActiveDiscounts);
 router.get('/:id', getDiscountById);
 router.post('/', createDiscount);
 router.put('/:id', updateDiscount);

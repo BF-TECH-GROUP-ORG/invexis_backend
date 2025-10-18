@@ -120,39 +120,43 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
   const { categoryId } = req.params;
   validateMongoId(categoryId);
 
-  const {
-    includeSubcategories = false,
-    page = 1,
-    limit = 20,
-    sort = '-createdAt'
-  } = req.query;
+  const { includeSubcategories = false, page = 1, limit = 20, sort = '-createdAt' } = req.query;
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const pageInt = parseInt(page);
+  const limitInt = parseInt(limit);
 
-const productQuery = await Product.getProductsByCategory(
-  categoryId,
-  includeSubcategories === 'true'
-);
+  // Fetch all products (query returns a Mongoose array)
+  let products = await Product.getProductsByCategory(categoryId, includeSubcategories === 'true');
 
-const total = await productQuery.clone().countDocuments();
+  // Optional: sort manually if needed
+  if (sort) {
+    const sortField = sort.replace('-', '');
+    const desc = sort.startsWith('-');
+    products.sort((a, b) => {
+      if (a[sortField] < b[sortField]) return desc ? 1 : -1;
+      if (a[sortField] > b[sortField]) return desc ? -1 : 1;
+      return 0;
+    });
+  }
 
-const products = await productQuery
-  .sort(sort)
-  .skip(skip)
-  .limit(parseInt(limit));
+  const total = products.length;
+  const startIndex = (pageInt - 1) * limitInt;
+  const endIndex = startIndex + limitInt;
 
+  const paginatedProducts = products.slice(startIndex, endIndex);
 
   res.status(200).json({
     success: true,
-    data: products,
+    data: paginatedProducts,
     pagination: {
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pageInt,
+      limit: limitInt,
       total,
-      pages: Math.ceil(total / parseInt(limit))
+      pages: Math.ceil(total / limitInt)
     }
   });
 });
+
 
 
 const createProduct = asyncHandler(async (req, res) => {
@@ -341,7 +345,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
 const updateInventory = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoId(id);
-  const { quantity, operation = 'set', warehouseId, variationId } = req.body; // Added warehouseId, variationId
+  const { quantity, operation = 'set', warehouseId, variationId, reason } = req.body;
 
   const product = await Product.findById(id);
   if (!product) {
@@ -351,32 +355,110 @@ const updateInventory = asyncHandler(async (req, res) => {
     });
   }
 
-  // Use StockChange for logging instead of direct update
+  let oldQuantity;
+  let targetPath = 'inventory.quantity'; // Default
+  if (variationId) {
+    const variation = product.variations.id(variationId); // Use Mongoose id() for subdoc
+    if (!variation) {
+      return res.status(404).json({ success: false, message: 'Variation not found' });
+    }
+    oldQuantity = variation.stockQty;
+    targetPath = `variations.${variationId}.stockQty`;
+  } else {
+    oldQuantity = product.inventory.quantity;
+  }
+
+  let newQuantity;
+  switch (operation) {
+    case 'increment':
+      newQuantity = oldQuantity + quantity;
+      break;
+    case 'decrement':
+      newQuantity = Math.max(0, oldQuantity - quantity);
+      break;
+    case 'set':
+    default:
+      newQuantity = Math.max(0, quantity);
+  }
+
+  if (newQuantity < 0) {
+    return res.status(400).json({ success: false, message: 'You do not have enough products in stock' });
+  }
+
+  // Handle perWarehouse if warehouseId provided
+  let warehouseUpdate = null;
+  if (warehouseId) {
+    validateMongoId(warehouseId);
+    const warehouseEntry = product.inventory.perWarehouse.find(wh => wh.warehouseId.equals(warehouseId));
+    if (warehouseEntry) {
+      warehouseEntry.quantity = newQuantity; // Update existing
+    } else {
+      product.inventory.perWarehouse.push({
+        warehouseId,
+        quantity: newQuantity,
+        lowStockThreshold: product.inventory.lowStockThreshold
+      });
+    }
+    warehouseUpdate = true;
+  }
+
   const StockChange = require('../models/StockChange');
   const stockChange = new StockChange({
     companyId: product.companyId,
     productId: id,
     variationId,
     warehouseId,
-    changeType: 'adjustment', // Or determine based on operation
+    changeType: operation === 'decrement' ? 'sale' : (operation === 'increment' ? 'restock' : 'adjustment'),
     quantity: operation === 'decrement' ? -quantity : quantity,
-    previousStock: variationId ? product.variations.find(v => v._id.equals(variationId)).stockQty : product.inventory.quantity,
-    reason: req.body.reason || 'Manual inventory update',
+    previousStock: oldQuantity,
+    newStock: newQuantity,
+    reason: reason || `Manual ${operation} update`,
     userId: req.user?.id || 'system'
   });
   await stockChange.save();
 
-  // Refresh product after save (since hook updates it)
-  const updatedProduct = await Product.findById(id);
+  // Update main quantity if not warehouse-specific (or aggregate if warehouse)
+  if (!warehouseId) {
+    product.inventory.quantity = newQuantity;
+  } else if (warehouseUpdate) {
+    // Re-aggregate main quantity
+    product.inventory.quantity = product.inventory.perWarehouse.reduce((total, wh) => total + wh.quantity, 0);
+  }
+
+  // Update availability based on total
+  product.availability = product.inventory.quantity > 0 ? 'in_stock' : 'out_of_stock';
+
+  // Add audit trail
+  product.auditTrail.push({
+    action: 'stock_change',
+    changedBy: req.user?.id || 'system',
+    oldValue: { quantity: oldQuantity },
+    newValue: { quantity: newQuantity, operation }
+  });
+
+  await product.save();
+
+  // Trigger alert if low (use total quantity)
+  if (product.inventory.quantity <= product.inventory.lowStockThreshold && operation === 'decrement') {
+    const Alert = require('../models/Alert');
+    const alert = new Alert({
+      companyId: product.companyId,
+      type: 'low_stock',
+      productId: id,
+      threshold: product.inventory.lowStockThreshold,
+      message: `Stock for product ${product.name} is low: ${product.inventory.quantity}`
+    });
+    await alert.save();
+  }
 
   res.status(200).json({
     success: true,
     message: 'Inventory updated successfully',
     data: {
-      id: updatedProduct._id,
-      oldQuantity: stockChange.previousStock,
-      newQuantity: stockChange.newStock,
-      stockStatus: updatedProduct.stockStatus
+      id: product._id,
+      oldQuantity,
+      newQuantity: product.inventory.quantity, // Use aggregated total
+      stockStatus: product.stockStatus
     }
   });
 });
@@ -391,7 +473,7 @@ const getLowStockProducts = asyncHandler(async (req, res) => {
     });
   }
 
-  validateMongoId(companyId);
+  // validateMongoId(companyId);
 
   const products = await Product.getLowStockProducts(companyId, parseInt(threshold));
 
@@ -412,7 +494,7 @@ const getScheduledProducts = asyncHandler(async (req, res) => {
     });
   }
 
-  validateMongoId(companyId);
+  // validateMongoId(companyId);
 
   const products = await Product.getScheduledProducts(companyId);
 
@@ -512,7 +594,7 @@ const getOldUnboughtProducts = asyncHandler(async (req, res) => {
   if (!companyId) {
     return res.status(400).json({ success: false, message: 'Company ID is required' });
   }
-  validateMongoId(companyId);
+  // validateMongoId(companyId);
 
   const products = await Product.getOldUnboughtProducts(companyId, parseInt(daysOld));
 

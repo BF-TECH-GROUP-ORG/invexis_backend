@@ -9,7 +9,7 @@ const getAllStockChanges = asyncHandler(async (req, res) => {
   if (!companyId) {
     return res.status(400).json({ success: false, message: 'Company ID is required' });
   }
-  validateMongoId(companyId);
+  // validateMongoId(companyId);
   if (productId) validateMongoId(productId);
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -55,7 +55,7 @@ const createStockChange = asyncHandler(async (req, res) => {
 
   const stockChange = new StockChange({
     ...req.body,
-    companyId: req.user.companyId, // Assuming auth middleware
+    companyId: req.user.companyId,
     userId: req.user.id
   });
   await stockChange.save();

@@ -1,26 +1,23 @@
 const rateLimit = require('express-rate-limit');
 
-// General API rate limiter (all non-sensitive routes)
-const generalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per window
+// Global limiter (like reference: 50 req/min)
+const limiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 50,
+    message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
-    message: { message: 'Too many requests, please try again later.' },
-    skip: (req, res) => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development',
+    skip: (req) => process.env.NODE_ENV === 'development' || req.path === '/health',
 });
 
-// Stricter limiter for sensitive routes (e.g., login, password reset)
+// Stricter for auth (5 req/min)
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // Limit each IP to 5 requests per window
+    windowMs: 1 * 60 * 1000,
+    max: 5,
+    message: { error: 'Too many auth attempts, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
-    message: { message: 'Too many login attempts, please try again later.' },
-    skip: (req, res) => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development',
+    skip: (req) => process.env.NODE_ENV === 'development' || req.path === '/health',
 });
 
-module.exports = {
-    generalLimiter,
-    authLimiter,
-};
+module.exports = { limiter, authLimiter };
