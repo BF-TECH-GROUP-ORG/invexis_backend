@@ -4,7 +4,7 @@ const logger = require('../utils/app');
 
 const connectDB = async () => {
     try {
-    const conn = await mongoose.connect(process.env.DB_MONGO, {
+    const conn = await mongoose.connect(process.env.DB_MONGO || 'mongodb://localhost:27017/ecommercedb', {
             serverSelectionTimeoutMS: 5000,
             heartbeatFrequencyMS: 10000,
             maxPoolSize: 10,
