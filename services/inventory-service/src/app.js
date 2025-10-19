@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
@@ -10,6 +11,13 @@ const alertRoutes = require("./routes/alertRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const logger = require("./utils/logger");
 
+=======
+const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const errorMiddleware = require('./middleware/error');
+const router = require('./routes/index')
+>>>>>>> ce9cc58373456b16292975932d180f8fad336166
 const app = express();
 
 app.use(helmet());
@@ -18,12 +26,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
+<<<<<<< HEAD
 app.use("/api/v1/products", productRoutes);
 app.use("/api/v1/stock-changes", stockChangeRoutes);
 app.use("/api/v1/favorites", favoriteRoutes);
 app.use("/api/v1/discounts", discountRoutes);
 app.use("/api/v1/alerts", alertRoutes);
 app.use("/api/v1/categories", categoryRoutes);
+=======
+app.use('/inventory', router);
+
+>>>>>>> ce9cc58373456b16292975932d180f8fad336166
 
 // Health check
 app.get("/health", (req, res) => {

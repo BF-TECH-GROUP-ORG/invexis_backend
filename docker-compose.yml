@@ -1,3 +1,4 @@
+# docker-compose.yml
 version: "3.8"
 
 # ======================
@@ -126,11 +127,11 @@ services:
       start_period: 90s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
-  # ----------------------
-  # Single MongoDB for all services
-  # ----------------------
+
+  # ======================
+  # Single MongoDB Service - All databases in one container
+  # ======================
+
   mongodb:
     image: mongo:6.0
     container_name: mongodb
@@ -139,17 +140,20 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: invexispass
     ports:
-      - "27017:27017"
+      - "27018:27017" # host:container
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      test:
+        - "CMD-SHELL"
+        - "mongosh --username root --password invexispass --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")' || exit 1"
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
     networks:
       - invexis-network
+
   # ======================
   # MySQL Service
   # ======================
@@ -159,28 +163,19 @@ services:
     container_name: invexis-sales-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: salesdb
+      MYSQL_ROOT_PASSWORD: rootpass # set a strong password in real deployments
+      MYSQL_DATABASE: salesdb # will be created automatically
       MYSQL_USER: invexis
       MYSQL_PASSWORD: invexispass
     ports:
       - "3306:3306"
     volumes:
       - sales_mysql_data:/var/lib/mysql
-    command:
-      [
-        "--log-error-verbosity=3",
-        "--innodb-flush-method=fsync",
-        "--skip-log-bin",
-        "--innodb-buffer-pool-size=128M",
-        "--bind-address=0.0.0.0",
-      ]
+    command: [ "--log-error-verbosity=3", "--innodb-flush-method=fsync", "--skip-log-bin", "--innodb-buffer-pool-size=128M", "--bind-address=0.0.0.0" ]
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "mysqladmin ping -h localhost -u root -prootpass || exit 1",
-        ]
+        - "CMD-SHELL"
+        - "mysqladmin ping -h localhost -u root -prootpass || exit 1"
       interval: 10s
       timeout: 5s
       retries: 5
@@ -261,8 +256,8 @@ services:
         condition: service_healthy
       shop-service:
         condition: service_healthy
-      # inventory-service:
-      #   condition: service_healthy
+      inventory-service:
+        condition: service_healthy
       sales-service:
         condition: service_healthy
       ecommerce-service:
@@ -281,14 +276,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8000/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8000/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -307,6 +300,8 @@ services:
     build: ./services/auth-service
     container_name: invexis-auth-service
     restart: unless-stopped
+    ports:
+      - "8001:8001"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/authdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -320,14 +315,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8001/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8001/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -346,6 +339,8 @@ services:
     build: ./services/company-service
     container_name: invexis-company-service
     restart: unless-stopped
+    ports:
+      - "8004:8004"
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@company-postgres:5432/companydb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -359,14 +354,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8002/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8004/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -378,7 +371,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.company-service.rule=Host(`company.local`)"
-      - "traefik.http.services.company-service.loadbalancer.server.port=8002"
+      - "traefik.http.services.company-service.loadbalancer.server.port=8004"
       - "traefik.http.routers.company-service.entrypoints=web"
 
   shop-service:
@@ -386,7 +379,7 @@ services:
     container_name: invexis-shop-service
     restart: unless-stopped
     ports:
-      - "8003:8003"
+      - "9001:9001"
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@shop-postgres:5432/shopdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -400,14 +393,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8003/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:9001/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -419,15 +410,17 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.shop-service.rule=Host(`shop.local`)"
-      - "traefik.http.services.shop-service.loadbalancer.server.port=8003"
+      - "traefik.http.services.shop-service.loadbalancer.server.port=9001"
       - "traefik.http.routers.shop-service.entrypoints=web"
 
   inventory-service:
     build: ./services/inventory-service
     container_name: invexis-inventory-service
     restart: unless-stopped
+    ports:
+      - "8007:8007"
     environment:
-      DB_MONGO: mongodb://root:password@mongodb:27017/inventorydb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/inventorydb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
@@ -439,14 +432,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8004/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8007/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -458,18 +449,21 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.inventory-service.rule=Host(`inventory.local`)"
-      - "traefik.http.services.inventory-service.loadbalancer.server.port=8004"
+      - "traefik.http.services.inventory-service.loadbalancer.server.port=8007"
       - "traefik.http.routers.inventory-service.entrypoints=web"
 
   sales-service:
     build: ./services/sales-service
     container_name: invexis-sales-service
     restart: unless-stopped
+    ports:
+      - "9000:9000"
     environment:
       DB_MYSQL: mysql://invexis:invexispass@sales-mysql:3306/salesdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/sales-service/uploads:/app/uploads
       - ./services/sales-service:/app
     depends_on:
       sales-mysql:
@@ -478,14 +472,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8005/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:9000/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -497,13 +489,15 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.sales-service.rule=Host(`sales.local`)"
-      - "traefik.http.services.sales-service.loadbalancer.server.port=8005"
+      - "traefik.http.services.sales-service.loadbalancer.server.port=9000"
       - "traefik.http.routers.sales-service.entrypoints=web"
 
   payment-service:
     build: ./services/payment-service
     container_name: invexis-payment-service
     restart: unless-stopped
+    ports:
+      - "8009:8009"
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@payment-postgres:5432/paymentdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -517,14 +511,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8006/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8009/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -536,13 +528,15 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.payment-service.rule=Host(`payment.local`)"
-      - "traefik.http.services.payment-service.loadbalancer.server.port=8006"
+      - "traefik.http.services.payment-service.loadbalancer.server.port=8009"
       - "traefik.http.routers.payment-service.entrypoints=web"
 
   ecommerce-service:
     build: ./services/ecommerce-service
     container_name: invexis-ecommerce-service
     restart: unless-stopped
+    ports:
+      - "8006:8006"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/ecommercedb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -556,14 +550,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8007/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8006/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -575,13 +567,15 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.ecommerce-service.rule=Host(`ecommerce.local`)"
-      - "traefik.http.services.ecommerce-service.loadbalancer.server.port=8007"
+      - "traefik.http.services.ecommerce-service.loadbalancer.server.port=8006"
       - "traefik.http.routers.ecommerce-service.entrypoints=web"
 
   notification-service:
     build: ./services/notification-service
     container_name: invexis-notification-service
     restart: unless-stopped
+    ports:
+      - "8008:8008"
     environment:
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -594,14 +588,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8008/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8008/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -620,9 +612,11 @@ services:
     build: ./services/analytics-service
     container_name: invexis-analytics-service
     restart: unless-stopped
+    ports:
+      - "8002:8002"
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@analytics-postgres:5432/analyticsdb
-      DB_MONGO: mongodb://root:invexispass@mongodb:27017/analytics_mongodb?authSource=admin
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/analyticsdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
@@ -635,14 +629,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8009/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8002/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -654,13 +646,15 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.analytics-service.rule=Host(`analytics.local`)"
-      - "traefik.http.services.analytics-service.loadbalancer.server.port=8009"
+      - "traefik.http.services.analytics-service.loadbalancer.server.port=8002"
       - "traefik.http.routers.analytics-service.entrypoints=web"
 
   audit-service:
     build: ./services/audit-service
     container_name: invexis-audit-service
     restart: unless-stopped
+    ports:
+      - "8003:8003"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/auditdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -673,14 +667,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8010/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8003/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -692,13 +684,15 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.audit-service.rule=Host(`audit.local`)"
-      - "traefik.http.services.audit-service.loadbalancer.server.port=8010"
+      - "traefik.http.services.audit-service.loadbalancer.server.port=8003"
       - "traefik.http.routers.audit-service.entrypoints=web"
 
   debt-service:
     build: ./services/debt-service
     container_name: invexis-debt-service
     restart: unless-stopped
+    ports:
+      - "8005:8005"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/debtdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -711,14 +705,12 @@ services:
         condition: service_healthy
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8011/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:8005/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -730,35 +722,30 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.debt-service.rule=Host(`debt.local`)"
-      - "traefik.http.services.debt-service.loadbalancer.server.port=8011"
+      - "traefik.http.services.debt-service.loadbalancer.server.port=8005"
       - "traefik.http.routers.debt-service.entrypoints=web"
 
   websocket-service:
     build: ./services/websocket-service
     container_name: invexis-websocket-service
     restart: unless-stopped
+    ports:
+      - "9002:9002"
     environment:
-      REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
     depends_on:
-      redis:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    ports:
-      - "8012:8012"
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8012/health",
-        ]
+        - "CMD"
+        - "wget"
+        - "--no-verbose"
+        - "--tries=1"
+        - "--spider"
+        - "http://localhost:9002/health"
       interval: 15s
       timeout: 10s
       retries: 3
@@ -770,10 +757,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.websocket-service.rule=Host(`websocket.local`)"
-      - "traefik.http.services.websocket-service.loadbalancer.server.port=8012"
+      - "traefik.http.services.websocket-service.loadbalancer.server.port=9002"
       - "traefik.http.routers.websocket-service.entrypoints=web"
 
-# ----------------------
+# ======================
 # Volumes
 # ======================
 volumes:

@@ -17,7 +17,7 @@ RUN npm install -g nodemon
 COPY . .
 
 # Expose default port
-EXPOSE 8005
+EXPOSE 9000
 
 # Command to start service in dev mode
 CMD ["nodemon", "./src/app.js"]

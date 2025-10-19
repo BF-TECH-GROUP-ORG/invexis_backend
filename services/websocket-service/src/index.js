@@ -1,10 +1,15 @@
+require("dotenv").config();
 const express = require("express");
 const app = express();
-const PORT = process.env.PORT || 8012;
+const routes = require("./routes/routes");
 
-app.get("/health", (req, res) => res.sendStatus(200));
-app.get("/", (req, res) => res.send("Hello from websocket-service!"));
+app.use(express.json());
 
-app.listen(PORT, () =>
-  console.log(`websocket-service running on port ${PORT}`)
-);
+app.use("/websocket", routes);
+
+const PORT = process.env.PORT || 9002;
+
+app.listen(PORT, () => {
+    console.log(`websocket service running on ${PORT}`);
+});
+app.get('/health', (req, res) => res.sendStatus(200));

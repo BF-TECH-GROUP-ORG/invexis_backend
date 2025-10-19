@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const StockChange = require('../models/StockChange');
-const { logger } = require('../utils/logger');
 
 const addProduct = async (data) => {
   const session = await mongoose.startSession();

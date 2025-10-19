@@ -1,5 +1,3 @@
-const ProductReport = require('../models/ProductReport');
-const DailyReport = require('../models/DailyReport');
 const logger = require('../utils/logger');
 const amqp = require('amqp-connection-manager');
 

@@ -1,20 +1,18 @@
 // src/index.js (Updated: Mount routes, connect RabbitMQ/Redis)
-'use strict';
 
 const express = require('express');
 const knex = require('knex')(require('../knexfile')[process.env.NODE_ENV || 'development']);
 const paymentRoutes = require('./routes/paymentRoutes');
 const { connect: connectRabbitMQ } = require('/app/shared/rabbitmq');
 const redis = require('/app/shared/redis');
+const morgan = require('morgan');
 const app = express();
 const PORT = process.env.PORT || 8006;
 
 app.use(express.json());
-app.use('/api/v1/payments', paymentRoutes);
-app.get('/api/v1', (req, res) => {
-    res.status(200).send('Payment Service is running');
-})
+app.use('/payment', paymentRoutes);
 
+app.use(morgan('dev'))
 // Health check (DB + shared services)
 app.get('/health', async (req, res) => {
     try {

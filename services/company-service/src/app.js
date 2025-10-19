@@ -1,13 +1,11 @@
 require("dotenv").config();
 const express = require("express");
-const { connectRabbitMQ } = require("./config/rabbitmq");
-const consumeEvents = require("./events/consumer");
+const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 
+const { initPublishers } = require("./events/producer");
+const consumeEvents = require("./events/consumer");
 // Import routes
-const companyRoutes = require("./routes/companyRoutes");
-const roleRoutes = require("./routes/roleRoutes");
-const companyUserRoutes = require("./routes/companyUserRoutes");
-const subscriptionRoutes = require("./routes/subscriptionRoutes");
+const router = require('./routes/index')
 
 
 const app = express();
@@ -63,10 +61,8 @@ app.get("/", (req, res) => {
 });
 
 // API Routes
-app.use("/api/companies", companyRoutes);
-app.use("/api/roles", roleRoutes);
-app.use("/api/company-users", companyUserRoutes);
-app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/company", router);
+
 
 // 404 handler
 app.use((req, res) => {
@@ -94,6 +90,7 @@ const initializeEventSystem = async () => {
   try {
     await connectRabbitMQ();
     await consumeEvents();
+    await initPublishers();
     console.log("✅ Event system initialized");
   } catch (error) {
     console.error("❌ Failed to initialize event system:", error);

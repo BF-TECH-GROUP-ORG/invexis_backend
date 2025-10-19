@@ -5,7 +5,7 @@ const connectDB = require("./config/db");
 // Shared RabbitMQ Module
 const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq.js");
 
-const PORT = process.env.PORT || 8001; // Default to 8001 for auth-service
+const PORT = process.env.PORT || 8001;  // Default to 3001 for auth-service
 
 const startServer = async () => {
   try {

@@ -26,6 +26,10 @@ router.use(corsForAuth);
 // Rate limiting for high-traffic public routes (e.g., 100 req/hour per user/IP)
 const loginRateLimit = rateLimitByUser(100, 3600000); // 1 hour window
 
+router.get('/', (req, res) => {
+    res.json({ message: "auth service is roued to the gateway" })
+})
+
 // Public routes (no auth)
 router.post('/register', loginRateLimit, authCtrl.register);
 router.post('/login', loginRateLimit, authCtrl.login);

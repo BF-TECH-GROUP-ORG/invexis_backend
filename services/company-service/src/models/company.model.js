@@ -11,6 +11,7 @@ class Company {
     this.phone = data.phone || null;
     this.country = data.country || null;
     this.city = data.city || null;
+    this.coordinates = data.coordinates || null;
     this.tier = data.tier || "basic";
     this.status = data.status || "active";
     this.createdBy = data.createdBy || null;
