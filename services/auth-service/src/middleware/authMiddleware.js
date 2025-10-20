@@ -1,3 +1,4 @@
+// /app/src/middleware/authMiddleware.js
 const tokenService = require('../services/tokenService');
 const User = require('../models/User.models');
 
@@ -5,6 +6,7 @@ class AuthError extends Error {
     constructor(message, status = 400) {
         super(message);
         this.status = status;
+        this.name = 'AuthError';
     }
 }
 
@@ -20,7 +22,7 @@ async function requireAuth(req, res, next) {
         req.user = user;
         next();
     } catch (err) {
-        return res.status(401).json({ ok: false, message: 'Unauthorized', error: err.message });
+        return res.status(err.status || 401).json({ ok: false, message: 'Unauthorized', error: err.message });
     }
 }
 
@@ -40,7 +42,7 @@ function authErrorHandler(err, req, res, next) {
     if (err instanceof AuthError) {
         return res.status(err.status).json({ ok: false, message: err.message });
     }
-    next(err);
+    next(err); // Pass to shared errorHandler
 }
 
-module.exports = { requireAuth, requireRole, authErrorHandler };
+module.exports = { AuthError, requireAuth, requireRole, authErrorHandler };

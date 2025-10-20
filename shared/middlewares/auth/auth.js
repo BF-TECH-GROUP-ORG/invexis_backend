@@ -1,15 +1,21 @@
-// src/middleware/authMiddleware.js (Copy the shared auth middleware here for local use, or require('../../shared/authMiddleware'))
-
+// /app/shared/middlewares/auth/auth.js
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const crypto = require('crypto');
 const redis = require('/app/shared/redis');
 const { publish } = require('/app/shared/rabbitmq');
-const AuthError = new Error('Auth Error');
 
+// Define AuthError as a class
+class AuthError extends Error {
+    constructor(message, status = 400) {
+        super(message);
+        this.status = status;
+        this.name = 'AuthError';
+    }
+}
 
-// Configuration (set via env or config service)
-const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:3001/auth';
+// Configuration
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:8001/auth';
 const JWT_SECRET = process.env.JWT_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3002';
 const IP_WHITELIST = process.env.IP_WHITELIST ? process.env.IP_WHITELIST.split(',') : [];
@@ -125,14 +131,14 @@ const validateRefreshToken = (req, res, next) => {
     if (!refreshToken) return res.status(400).json({ ok: false, message: 'Refresh token required' });
 
     try {
-        req.decodedRefreshToken = jwt.verify(refreshToken, JWT_SECRET);  // Assume shared tokenService.verifyRefresh
+        req.decodedRefreshToken = jwt.verify(refreshToken, JWT_SECRET); // Assume shared tokenService.verifyRefresh
         next();
     } catch (err) {
         return res.status(401).json({ ok: false, message: 'Invalid refresh token' });
     }
 };
 
-// 9. rateLimitByUser (Redis-based for prod)
+// 9. rateLimitByUser
 const rateLimitByUser = (maxRequests, windowMs) => {
     return async (req, res, next) => {
         const userId = req.user?._id || req.decodedToken?.sub;
@@ -228,7 +234,7 @@ const checkConsent = (consentTypes = ['terms_and_privacy_sbapshop']) => {
     return async (req, res, next) => {
         if (!req.user) return res.status(401).json({ ok: false, message: 'User not authenticated' });
         // Placeholder: Query consent (implement if model added)
-        const consents = [];  // Fetch from DB
+        const consents = []; // Fetch from DB
         if (consents.length !== consentTypes.length) {
             return res.status(403).json({ ok: false, message: 'Missing or revoked consent' });
         }

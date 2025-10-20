@@ -1,6 +1,5 @@
-// app.js (Updated with Shared RabbitMQ and Redis Integration)
+// app.js
 require('dotenv').config();
-
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -16,17 +15,25 @@ const User = require('./models/User.models');
 const Preference = require('./models/Preference.models');
 const { hashPassword } = require('./utils/hashPassword');
 
-// Shared Modules (from mounted /app/shared)
-const { connect: connectRabbitMQ, publish: publishRabbitMQ, exchanges } = require('/app/shared/rabbitmq.js');
-const redis = require('/app/shared/redis.js');  // Auto-connects
+// Shared dependencies
+const redis = require('/app/shared/redis.js');
+const { connect: connectRabbitMQ, exchanges, publish: publishRabbitMQ } = require('/app/shared/rabbitmq.js');
 
 const app = express();
 
-// Passport setup (unchanged)
+// Validate Google OAuth environment variables
+const requiredEnvVars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+    throw new Error(`Missing Google OAuth environment variables: ${missingEnvVars.join(', ')}`);
+}
+
+// Passport configuration
 passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID || '464910696321-v7ni53rmm1o4elauuckb6p30i27aub7n.apps.googleusercontent.com',
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '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',
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/auth/google/callback'
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: process.env.GOOGLE_CALLBACK_URL,
+    scope: ['profile', 'email']
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ googleId: profile.id });
@@ -37,7 +44,6 @@ passport.use(new GoogleStrategy({
                 firstName: profile.name.givenName,
                 lastName: profile.name.familyName,
                 role: 'customer',
-                accountStatus: 'active',
                 password: await hashPassword(require('crypto').randomBytes(32).toString('hex'))
             });
             await user.save();
@@ -46,97 +52,99 @@ passport.use(new GoogleStrategy({
             user.preferences = preference._id;
             await user.save();
 
-            // Publish to RabbitMQ using shared module (uncommented and integrated)
-            try {
-                await publishRabbitMQ(exchanges.topic, 'auth.user.registered', {
-                    userId: user._id,
-                    email: user.email,
-                    event: 'user.registered'
-                });
-                console.log('Auth-service: User registration event published to RabbitMQ');
-            } catch (rabbitErr) {
-                console.error('Auth-service: Failed to publish registration event:', rabbitErr.message);
-            }
+            // Publish event for external audit service
+            await publishRabbitMQ(exchanges.topic, 'auth.user.registered', {
+                userId: user._id,
+                email: user.email,
+                via: 'google'
+            }, { headers: { traceId: require('uuid').v4() } });
 
-            // Cache user session in Redis using shared module
-            try {
-                await redis.set(`user:session:${user._id}`, JSON.stringify({
-                    userId: user._id,
-                    email: user.email,
-                    role: user.role
-                }), 'EX', 3600);  // 1-hour expiry
-                console.log('Auth-service: User session cached in Redis');
-            } catch (redisErr) {
-                console.error('Auth-service: Failed to cache session in Redis:', redisErr.message);
-            }
+            // Cache user
+            await redis.set(`user:${user._id}`, JSON.stringify(user.toObject({ versionKey: false })), 'EX', 300);
         }
         done(null, user);
-    } catch (err) { done(err); }
+    } catch (err) {
+        done(err);
+    }
 }));
 
-passport.serializeUser((user, done) => done(null, user._id));
+// Passport serialize/deserialize
+passport.serializeUser((user, done) => {
+    done(null, user._id);
+});
+
 passport.deserializeUser(async (id, done) => {
     try {
         const user = await User.findById(id);
-        done(null, user);
-    } catch (err) { done(err); }
+        done(null, user || null);
+    } catch (err) {
+        done(err)
+    }
 });
 
-// Middleware (unchanged)
+// Middleware
 app.use(helmet());
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: process.env.FRONTEND_URL || 'http://localhost:3002',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'fhkjjflkajflkajdfhbjkabvajkhiowejfiodaojakhfna',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: process.env.NODE_ENV === 'production' }
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Rate limiting (unchanged)
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    message: { error: 'Too many requests, please try again later.' }
-});
+// Global rate limit
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 app.use(limiter);
 
-// Serve uploads (unchanged)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static uploads for profile pictures
+app.use('/uploads', express.static(path.join(__dirname, '../Uploads')));
 
-// Routes (unchanged)
+// Routes
 app.use('/auth', authRoutes);
 
-// Health endpoint with Redis check (enhanced)
+// Health check endpoint
 app.get('/health', async (req, res) => {
     try {
+        // Test Redis
         const testKey = `health:${Date.now()}`;
-        await redis.set(testKey, 'healthy', 'EX', 10);  // Quick set with expiry
-        const value = await redis.get(testKey);
+        await redis.set(testKey, 'ok', 'EX', 10);
+        const cacheOk = (await redis.get(testKey)) === 'ok';
+
+        // Test RabbitMQ
+        const eventOk = await publishRabbitMQ(exchanges.topic, 'health.test', { ping: 'pong' });
+
+        // Test MongoDB
+        const dbOk = (await User.countDocuments({})) >= 0;
+
         res.json({
-            status: 'healthy',
-            redisConnected: redis.isConnected,
+            status: (cacheOk && eventOk && dbOk) ? 'healthy' : 'degraded',
+            redis: { connected: redis.status === 'ready', test: cacheOk },
+            rabbit: { connected: true, test: eventOk },
+            db: { connected: true, test: dbOk },
             timestamp: new Date().toISOString()
         });
     } catch (err) {
-        res.status(500).json({ error: 'Health check failed - Redis unavailable', details: err.message });
+        res.status(500).json({ status: 'unhealthy', error: err.message });
     }
 });
 
-// Error handling (unchanged)
+// Error handling
 app.use(authErrorHandler);
-app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
-app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
-});
+app.use((req, res) => res.status(404).json({ ok: false, message: 'Not found' }));
 
 module.exports = app;
