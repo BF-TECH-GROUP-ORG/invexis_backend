@@ -20,3 +20,30 @@
 {"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-16 20:54:04"}
 {"level":"info","message":"RabbitMQ connection established","timestamp":"2025-10-16 20:54:04"}
 {"level":"info","message":"Daily report task queued","timestamp":"2025-10-16 20:54:04"}
+{"level":"info","message":"Daily report scheduler started","timestamp":"2025-10-17 14:04:22"}
+{"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-17 14:04:22"}
+{"level":"info","message":"RabbitMQ connection established","timestamp":"2025-10-17 14:04:22"}
+{"level":"info","message":"Daily report task queued","timestamp":"2025-10-17 14:04:22"}
+{"level":"info","message":"Daily report scheduler started","timestamp":"2025-10-18 11:08:23"}
+{"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-18 11:08:23"}
+{"level":"info","message":"RabbitMQ connection established","timestamp":"2025-10-18 11:08:23"}
+{"level":"info","message":"Daily report task queued","timestamp":"2025-10-18 11:08:23"}
+{"level":"info","message":"Daily report scheduler started","timestamp":"2025-10-20 12:08:56"}
+{"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-20 12:08:56"}
+{"level":"info","message":"Daily report scheduler started","timestamp":"2025-10-20 13:59:03"}
+{"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-20 13:59:03"}
+{"level":"info","message":"RabbitMQ connection established","timestamp":"2025-10-20 13:59:03"}
+{"level":"info","message":"Daily report scheduler started","timestamp":"2025-10-20 18:34:18"}
+{"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-20 18:34:18"}
+{"level":"info","message":"RabbitMQ connection established","timestamp":"2025-10-20 18:34:18"}
+{"level":"info","message":"Daily report task queued","timestamp":"2025-10-20 18:34:18"}
+{"level":"info","message":"Daily report scheduler started","timestamp":"2025-10-20 21:05:35"}
+{"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-20 21:05:36"}
+{"level":"info","message":"RabbitMQ connection established","timestamp":"2025-10-20 21:05:36"}
+{"level":"info","message":"Daily report task queued","timestamp":"2025-10-20 21:05:36"}
+{"level":"info","message":"Daily report scheduler started","timestamp":"2025-10-20 23:59:05"}
+{"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-20 23:59:05"}
+{"level":"info","message":"RabbitMQ connection established","timestamp":"2025-10-20 23:59:05"}
+{"level":"info","message":"Daily report scheduler started","timestamp":"2025-10-21 02:54:23"}
+{"level":"info","message":"RabbitMQ channel initialized for report queue","timestamp":"2025-10-21 02:54:23"}
+{"level":"info","message":"RabbitMQ connection established","timestamp":"2025-10-21 02:54:23"}

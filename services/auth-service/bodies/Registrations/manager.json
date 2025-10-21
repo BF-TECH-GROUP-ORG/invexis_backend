@@ -1,0 +1,38 @@
+{
+    "firstName": "Shop",
+    "lastName": "Manager",
+    "email": "shop.manager@company.com",
+    "phone": "+250789123461",
+    "password": "Test@123456",
+    "role": "shop_manager",
+    "dateOfBirth": "1988-01-01",
+    "gender": "male",
+    "nationalId": "SHOP12345",
+    "position": "Manager",
+    "department": "sales_manager",
+    "companies": [
+        "company-uuid-123"
+    ],
+    "shops": [
+        "shop-uuid-456"
+    ],
+    "emergencyContact": {
+        "name": "Emergency Contact",
+        "phone": "+250789123462"
+    },
+    "address": {
+        "street": "789 Shop Street",
+        "city": "Kigali",
+        "state": "Kigali",
+        "postalCode": "00000",
+        "country": "Rwanda"
+    },
+    "preferences": {
+        "language": "en",
+        "notifications": {
+            "email": true,
+            "sms": true,
+            "inApp": true
+        }
+    }
+}

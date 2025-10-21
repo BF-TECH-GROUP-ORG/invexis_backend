@@ -1,5 +1,3 @@
-'use strict';
-
 const knex = require('knex')(require('../../knexfile')[process.env.NODE_ENV || 'development']);
 const redis = require('/app/shared/redis');
 const crypto = require('crypto');
