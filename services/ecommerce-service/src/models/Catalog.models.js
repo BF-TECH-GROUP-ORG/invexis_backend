@@ -17,9 +17,9 @@ const ImageSchema = new mongoose.Schema({
 
 const CatalogProductSchema = new mongoose.Schema({
     // references (IDs from other services)
-    productId: { type: String, required: true, index: true }, // inventory-service id
-    companyId: { type: String, required: true, index: true },
-    shopId: { type: String, index: true },
+    productId: { type: String, required: true }, // inventory-service id
+    companyId: { type: String, required: true },
+    shopId: { type: String },
 
     // localized content
     title: { type: LocalizedString, required: true },
@@ -29,7 +29,7 @@ const CatalogProductSchema = new mongoose.Schema({
     // media & SEO
     images: { type: [ImageSchema], default: [] },
     seo: {
-        slug: { type: String, index: true },
+        slug: { type: String },
         metaTitle: { type: LocalizedString },
         metaDescription: { type: LocalizedString }
     },
@@ -43,13 +43,13 @@ const CatalogProductSchema = new mongoose.Schema({
     featured: { type: Boolean, default: false },
 
     // visibility & lifecycle
-    visibility: { type: String, enum: ['public', 'private', 'unlisted'], default: 'public', index: true },
-    status: { type: String, enum: ['active', 'inactive', 'archived'], default: 'active', index: true },
+    visibility: { type: String, enum: ['public', 'private', 'unlisted'], default: 'public' },
+    status: { type: String, enum: ['active', 'inactive', 'archived'], default: 'active' },
 
     // security & audit
     createdBy: { type: String }, // auth-service user id
     updatedBy: { type: String },
-    isDeleted: { type: Boolean, default: false, index: true },
+    isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
 
     // region & localization defaults
@@ -61,8 +61,8 @@ const CatalogProductSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Indexes
-CatalogProductSchema.index({ companyId: 1, shopId: 1, status: 1 });
-CatalogProductSchema.index({ 'seo.slug': 1 }, { unique: false, sparse: true });
-CatalogProductSchema.index({ tags: 1 });
+// CatalogProductSchema.index({ companyId: 1, shopId: 1, status: 1 });
+// CatalogProductSchema.index({ 'seo.slug': 1 }, { unique: false, sparse: true });
+// CatalogProductSchema.index({ tags: 1 });
 
 module.exports = mongoose.model('CatalogProduct', CatalogProductSchema);

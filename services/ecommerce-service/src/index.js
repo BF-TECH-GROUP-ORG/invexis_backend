@@ -1,8 +1,17 @@
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 8006;
-const router = require('./routes/eccomm')
-app.use('/ecommerce', router)
+const connectDB = require('./config/db');
+const logger = require('./utils/app');
+const PORT = 3004;
+const app = require('./app');
 
-app.listen(PORT, () => console.log(`ecommerce-service running on port ${PORT}`));
-app.get('/health', (req, res) => res.sendStatus(200));
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => logger.info(`Server running on port http://localhost:${PORT}`));
+    logger.info('Server started successfully');
+  } catch (error) {
+    logger.error(`Failed to start server: ${error.message}`, error);
+    process.exit(1);
+  }
+};
+
+startServer();
