@@ -332,10 +332,10 @@ async function logout(userId, refreshToken) {
 // Update Profile (invalidate cache)
 async function updateProfile(userId, data, profilePictureUrl = null) {
     const { error, value } = updateProfileSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message, 400);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(userId);
-    if (!user) throw new AuthError('User not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'User not found' };
 
     if (profilePictureUrl) value.profilePicture = profilePictureUrl;
     if (value.preferences) {
@@ -357,10 +357,10 @@ async function updateProfile(userId, data, profilePictureUrl = null) {
 // Change Password (invalidate)
 async function changePassword(userId, data) {
     const { error, value } = changePasswordSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message, 400);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(userId).select('+password');
-    if (!await comparePassword(value.oldPassword, user.password)) throw new AuthError('Old password wrong', 401);
+    if (!await comparePassword(value.oldPassword, user.password)) return { ok: false, status: 401, message: 'Old password wrong' };
 
     user.password = await hashPassword(value.newPassword);
     await user.save();
@@ -368,7 +368,7 @@ async function changePassword(userId, data) {
 
     await publishEvent('user.password.changed', { userId });
 
-    return { message: 'Changed' };
+    return { message: 'password is successfully Changed', user: await getCachedUser(userId) };
 }
 
 // Verify (cached code check)
@@ -406,7 +406,7 @@ async function verify(userId, data) {
 // Setup 2FA
 async function setup2FA(userId) {
     const user = await User.findById(userId);
-    if (user.twoFAEnabled) throw new AuthError('2FA enabled', 400);
+    if (user.twoFAEnabled) return { ok: false, status: 400, message: '2FA enabled' };
 
     const secret = speakeasy.generateSecret({ name: `Invexis (${user.email || user.phone})` });
     user.twoFASecret = secret.base32;
@@ -421,11 +421,11 @@ async function setup2FA(userId) {
 // Verify 2FA Setup
 async function verify2FASetup(userId, data) {
     const { error, value } = twoFASchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message, 400);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(userId).select('+twoFASecret');
     const verified = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: value.otp, window: 1 });
-    if (!verified) throw new AuthError('Invalid code', 400);
+    if (!verified) return { ok: false, status: 400, message: 'Invalid code' };
 
     user.twoFAEnabled = true;
     await user.save();
@@ -440,7 +440,7 @@ async function verify2FASetup(userId, data) {
 async function disable2FA(userId, otp) {
     const user = await User.findById(userId).select('+twoFASecret');
     const verified = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: otp, window: 1 });
-    if (!verified) throw new AuthError('Invalid code', 400);
+    if (!verified) return { ok: false, status: 400, message: 'Invalid code' };
 
     user.twoFAEnabled = false;
     user.twoFASecret = undefined;
@@ -455,10 +455,10 @@ async function disable2FA(userId, otp) {
 // Change Email
 async function changeEmail(userId, newEmail, currentPassword) {
     const user = await User.findById(userId).select('+password');
-    if (!await comparePassword(currentPassword, user.password)) throw new AuthError('Password wrong', 401);
+    if (!await comparePassword(currentPassword, user.password)) return { ok: false, status: 401, message: 'Password wrong' };
 
     const existing = await User.findOne({ email: newEmail });
-    if (existing) throw new AuthError('Email in use', 409);
+    if (existing) return { ok: false, status: 409, message: 'Email in use' };
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     await Verification.create({ userId, type: 'email_change', code, meta: { newEmail } });
@@ -487,7 +487,7 @@ async function confirmChangeEmail(userId, data) {
 // Request Password Reset
 async function requestPasswordReset(identifier) {
     const user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] });
-    if (!user) throw new AuthError('Not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     await Verification.create({ userId: user._id, type: 'password_reset', code, meta: { identifier } });
@@ -496,13 +496,13 @@ async function requestPasswordReset(identifier) {
 
     await publishEvent('verification.requested', { userId: user._id, type: 'password_reset', details: { identifier } });
 
-    return { message: 'Code sent' };
+    return { message: 'request initialized and code is sent', code, user: await getCachedUser(user._id) };
 }
 
 // Confirm Password Reset
 async function confirmPasswordReset(identifier, code, newPassword) {
     const token = await Verification.findOne({ type: 'password_reset', code, used: false, expiresAt: { $gt: new Date() }, 'meta.identifier': identifier });
-    if (!token) throw new AuthError('Invalid code', 400);
+    if (!token) return { ok: false, status: 400, message: 'Invalid code' };
 
     token.used = true;
     await token.save();
@@ -516,14 +516,14 @@ async function confirmPasswordReset(identifier, code, newPassword) {
 
     await publishEvent('user.password.reset_completed', { userId: token.userId });
 
-    return { message: 'Reset' };
+    return { message: 'password is successfully reset', user };
 }
 
 // Resend Verification
 async function resendVerification(userId, type) {
     const user = await getCachedUser(userId);
-    if (!user) throw new AuthError('Not found', 404);
-    if (type === 'email' && user.isEmailVerified) throw new AuthError('Verified', 400);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
+    if (type === 'email' && user.isEmailVerified) return { ok: false, status: 400, message: 'Verified' };
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     await Verification.create({ userId, type, code, meta: { [type]: user[type] } });
@@ -551,7 +551,7 @@ async function getSessions(userId) {
 // Revoke Session
 async function revokeSession(userId, sessionId) {
     const session = await Session.findOne({ _id: sessionId, userId });
-    if (!session) throw new AuthError('Not found', 404);
+    if (!session) return { ok: false, status: 404, message: 'Not found' };
 
     session.revoked = true;
     await session.save();
@@ -572,7 +572,7 @@ async function getConsents(userId) {
 // Revoke Consent
 async function revokeConsent(userId, type) {
     const consent = await Consent.findOne({ userId, type });
-    if (!consent) throw new AuthError('Not found', 404);
+    if (!consent) return { ok: false, status: 404, message: 'Not found' };
 
     consent.revoked = true;
     consent.revokedAt = new Date();
@@ -586,7 +586,7 @@ async function revokeConsent(userId, type) {
 // Delete Account
 async function deleteAccount(userId) {
     const user = await User.findById(userId);
-    if (!user) throw new AuthError('Not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
 
     user.isDeleted = true;
     user.accountStatus = 'deactivated';
@@ -603,7 +603,7 @@ async function deleteAccount(userId) {
 // Unlock Account
 async function unlockAccount(adminId, targetUserId) {
     const user = await User.findById(targetUserId);
-    if (!user) throw new AuthError('Not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
 
     user.lockUntil = undefined;
     user.failedLoginAttempts = 0;
@@ -618,7 +618,7 @@ async function unlockAccount(adminId, targetUserId) {
 // Bulk Update
 async function bulkUpdateUsers(userIds, action) {
     const { error, value } = bulkUpdateSchema.validate({ userIds, action });
-    if (error) throw new AuthError(error.details[0].message, 400);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const statusMap = { activate: 'active', deactivate: 'deactivated', ban: 'banned' };
     const results = await User.updateMany({ _id: { $in: userIds } }, { accountStatus: statusMap[action] });
@@ -649,10 +649,10 @@ async function createUser(adminId, data, options = {}) {
 // Admin: Update User
 async function updateUser(adminId, targetUserId, data) {
     const { error, value } = updateUserSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message, 400);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(targetUserId);
-    if (!user) throw new AuthError('Not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
 
     // Uniqueness for changes
     const or = [];
@@ -663,7 +663,7 @@ async function updateUser(adminId, targetUserId, data) {
 
     if (or.length > 0) {
         const exists = await User.findOne({ $or: or, _id: { $ne: targetUserId } });
-        if (exists) throw new AuthError('Field in use', 409);
+        if (exists) return { ok: false, status: 409, message: 'Field in use' };
     }
 
     if (value.password) value.password = await hashPassword(value.password);
@@ -679,7 +679,7 @@ async function updateUser(adminId, targetUserId, data) {
 // Admin: Delete User
 async function deleteUser(adminId, targetUserId) {
     const user = await User.findById(targetUserId);
-    if (!user || user._id.toString() === adminId) throw new AuthError('Cannot delete', 400);
+    if (!user || user._id.toString() === adminId) return { ok: false, status: 400, message: 'Cannot delete' };
 
     user.isDeleted = true;
     user.accountStatus = 'deactivated';
@@ -695,7 +695,7 @@ async function deleteUser(adminId, targetUserId) {
 // Admin: Get User By ID
 async function getUserById(adminId, targetUserId) {
     const user = await getCachedUser(targetUserId, '-password -twoFASecret', ['preferences', 'consent']);
-    if (!user) throw new AuthError('Not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
 
     await publishEvent('admin.user.viewed', { adminId, targetUserId });
 
@@ -727,10 +727,10 @@ async function getUsers(adminId, roleFilter, query = {}) {
 // Accept Consent (full impl: snapshot document, hash, immutable)
 async function acceptConsent(userId, data) {
     const { error, value } = consentSchema.validate({ ...data, userId });
-    if (error) throw new AuthError(error.details[0].message, 400);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(value.userId || userId);
-    if (!user) throw new AuthError('User not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'User not found' };
 
     // Snapshot document (immutable)
     const doc = JSON.stringify({
@@ -746,7 +746,7 @@ async function acceptConsent(userId, data) {
 
     // Check for existing (prevent duplicates)
     const existing = await Consent.findOne({ userId: user._id, type: 'terms_and_privacy', version: `${value.termsVersion}|${value.privacyVersion}` });
-    if (existing && !existing.revoked) throw new AuthError('Consent already accepted for this version', 409);
+    if (existing && !existing.revoked) return { ok: false, status: 409, message: 'Consent already accepted for this version' };
 
     const consent = new Consent({
         userId: user._id,
@@ -786,7 +786,7 @@ async function requestOtpLogin(identifier, options = {}) {
 
     await publishEvent('verification.requested', { userId: user._id, type: 'otp_login', details: { identifier }, role: user.role });
 
-    return { ok: true, status: 200, message: 'OTP sent successfully' };
+    return { ok: true, status: 200, message: 'OTP sent successfully', user, code };
 }
 
 // Verify OTP Login
@@ -795,7 +795,7 @@ async function verifyOtpLogin(identifier, code, options = {}) {
     let token = await redis.get(cacheKey);
     if (!token) {
         token = await Verification.findOne({ type: 'otp_login', code, used: false, expiresAt: { $gt: new Date() }, 'meta.identifier': identifier });
-        if (!token) throw new AuthError('Invalid OTP', 401);
+        if (!token) return { ok: false, status: 401, message: 'Invalid OTP' };
     }
 
     token.used = true;
@@ -803,6 +803,10 @@ async function verifyOtpLogin(identifier, code, options = {}) {
     await redis.del(cacheKey);
 
     const user = await User.findById(token.userId);
+    if (!user || user.accountStatus !== 'active') {
+        return { ok: false, status: 401, message: 'User not found or inactive' };
+    }
+
     const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
     user.sessions.push(session._id);
     await user.save();
@@ -810,6 +814,7 @@ async function verifyOtpLogin(identifier, code, options = {}) {
     await publishEvent('user.otp.login_completed', { userId: token.userId, role: user.role, method: 'otp' });
 
     return {
+        ok: true,
         accessToken: tokenService.signAccess({ sub: user._id.toString() }),
         refreshToken,
         user: await getCachedUser(user._id)

@@ -2,8 +2,20 @@
 require('dotenv').config();
 const app = require('./app');
 const connectDB = require('./config/db');
-const { connect: connectRabbitMQ } = require('/app/shared/rabbitmq.js');
-const redis = require('/app/shared/redis.js');
+let connectRabbitMQ, redis;
+
+try {
+    const rabbitmq = require('/app/shared/rabbitmq.js');
+    connectRabbitMQ = rabbitmq.connect;
+    redis = require('/app/shared/redis.js');
+} catch (err) {
+    console.warn('Shared dependencies not available, running in standalone mode');
+    connectRabbitMQ = async () => console.log('RabbitMQ connection skipped');
+    redis = {
+        connect: async () => console.log('Redis connection skipped'),
+        quit: async () => console.log('Redis quit skipped')
+    };
+}
 
 const PORT = process.env.PORT || 8001;
 
@@ -25,30 +37,36 @@ if (missingEnvVars.length > 0) {
 }
 
 const startServer = async () => {
-    try {
-        // Connect to MongoDB
-        await connectDB();
-        console.log('MongoDB connected');
+    let retries = 5;
+    while (retries > 0) {
+        try {
+            console.log('Attempting to connect to services...');
+            // Connect to MongoDB
+            await connectDB();
 
-        // Connect to RabbitMQ
-        await connectRabbitMQ();
-        console.log('RabbitMQ connected');
+            // Connect to RabbitMQ
+            await connectRabbitMQ()
 
-        // Connect to Redis
-        await redis.connect();
-        console.log('Redis connected');
+            // Connect to Redis
+            await redis.connect();
+            // Start Express server
+            app.listen(PORT, () => {
+                console.log(`Auth service running on port ${PORT} - Cached & Event-ready`);
+            });
 
-        // Start Express server
-        app.listen(PORT, () => {
-            console.log(`Auth service running on port ${PORT} - Cached & Event-ready`);
-        });
-    } catch (error) {
-        console.error(`Startup failed: ${error.message}`);
-        process.exit(1);
+            return; // Success - exit the retry loop
+        } catch (error) {
+            console.error(`Startup attempt failed: ${error.message}`);
+            retries--;
+            if (retries === 0) {
+                console.error('Maximum retries reached. Exiting...');
+                process.exit(1);
+            }
+            console.log(`Retrying in 5 seconds... (${retries} attempts remaining)`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
     }
-};
-
-// Handle graceful shutdown
+};// Handle graceful shutdown
 const shutdown = async () => {
     console.log('Graceful shutdown initiated...');
     try {
