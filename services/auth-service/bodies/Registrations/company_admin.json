@@ -1,0 +1,32 @@
+{
+    "firstName": "Company",
+    "lastName": "Admin",
+    "email": "company.admin@company.com",
+    "phone": "+250789123459",
+    "password": "Test@123456",
+    "role": "company_admin",
+    "dateOfBirth": "1985-01-01",
+    "gender": "male",
+    "nationalId": "COMP12345",
+    "position": "Admin",
+    "department": "management",
+    "emergencyContact": {
+        "name": "Emergency Contact",
+        "phone": "+250789123460"
+    },
+    "address": {
+        "street": "456 Company Street",
+        "city": "Kigali",
+        "state": "Kigali",
+        "postalCode": "00000",
+        "country": "Rwanda"
+    },
+    "preferences": {
+        "language": "en",
+        "notifications": {
+            "email": true,
+            "sms": true,
+            "inApp": true
+        }
+    }
+}

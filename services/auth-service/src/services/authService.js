@@ -16,15 +16,6 @@ const LoginHistory = require('../models/LoginHistory.models');
 const Preference = require('../models/Preference.models');
 const tokenService = require('./tokenService');
 
-// AuthError
-class AuthError extends Error {
-    constructor(message, status = 400) {
-        super(message);
-        this.status = status;
-        this.name = 'AuthError';
-    }
-}
-
 // Cache TTLs
 const CACHE_TTLS = {
     user: 300, // 5min
@@ -55,8 +46,9 @@ async function rateLimit(key, max = 10, window = CACHE_TTLS.rateLimit) {
     const countKey = `rate:${key}`;
     let count = await redis.get(countKey);
     count = parseInt(count || 0);
-    if (count >= max) throw new AuthError('Rate limited', 429);
+    if (count >= max) return { ok: false, status: 429, message: 'Rate limit exceeded' };
     await redis.set(countKey, (count + 1).toString(), 'EX', window);
+    return { ok: true };
 }
 
 // Enhanced publishEvent
@@ -119,24 +111,47 @@ async function setupSubscribers() {
 // Register (OTP gen + role events)
 async function register(data, options = {}) {
     await rateLimit(`register:${options.ip}`, 3);
-    const { error, value } = registerSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message, 400);
+    if (!data) return { ok: false, status: 400, message: "Request body is required" };
 
-    // Uniqueness
-    const orFields = [{ email: value.email }, { phone: value.phone }, { username: value.username }, { nationalId: value.nationalId }].filter(f => f);
-    const existing = await User.findOne({ $or: orFields });
-    if (existing && !existing.isDeleted) throw new AuthError('User exists', 409);
+    const { error, value } = registerSchema.validate(data, { abortEarly: false });
+    if (error) {
+        const message = error.details.map(detail => detail.message).join(', ');
+        return { ok: false, status: 400, message }
+    }
+
+    // Check for existing user fields one by one to give specific error messages
+    if (value.email) {
+        const existingEmail = await User.findOne({ email: value.email, isDeleted: { $ne: true } });
+        if (existingEmail) return { ok: false, status: 409, message: 'Email address is already registered' };
+    }
+    if (value.phone) {
+        const existingPhone = await User.findOne({ phone: value.phone, isDeleted: { $ne: true } });
+        if (existingPhone) return { ok: false, status: 409, message: 'Phone number is already registered' };
+    }
+    if (value.username) {
+        const existingUsername = await User.findOne({ username: value.username, isDeleted: { $ne: true } });
+        if (existingUsername) return { ok: false, status: 409, message: 'Username is already taken' };
+    }
+    if (value.nationalId) {
+        const existingNationalId = await User.findOne({ nationalId: value.nationalId, isDeleted: { $ne: true } });
+        if (existingNationalId) return { ok: false, status: 409, message: 'National ID is already registered' };
+    }
 
     // Role defaults (model enforces)
-    value.password = await hashPassword(value.password);
-    const user = new User(value);
+    // Create user first without preferences
+    const userDataWithoutPrefs = { ...value };
+    delete userDataWithoutPrefs.preferences;
+
+    const user = new User(userDataWithoutPrefs);
     await user.save();
 
-    // Preference
-    const preference = new Preference({ userId: user._id, ...value.preferences });
-    await preference.save();
-    user.preferences = preference._id;
-    await user.save();
+    // Create and link preferences if provided
+    if (value.preferences) {
+        const preference = new Preference({ userId: user._id, ...value.preferences });
+        await preference.save();
+        user.preferences = preference._id;
+        await user.save();
+    }
 
     // Consent
     if (value.consent) {
@@ -163,8 +178,8 @@ async function register(data, options = {}) {
     // Generate OTPs for verification & publish events (notification service handles sending based on role/details)
     const verificationTokens = [];
     if (value.email && !user.isEmailVerified) {
-        const secret = speakeasy.generateSecretSync();
-        const code = speakeasy.totp({ secret: secret.base32, length: 6 });
+        // Generate a 6-digit code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
         const v = await Verification.create({ userId: user._id, type: 'email', code, expiresAt: new Date(Date.now() + 15 * 60 * 1000), meta: { email: value.email } });
         verificationTokens.push({ type: 'email', code: process.env.NODE_ENV !== 'production' ? code : undefined });
 
@@ -173,8 +188,8 @@ async function register(data, options = {}) {
         await publishEvent('verification.requested', { userId: user._id, type: 'email', details: { email: value.email }, role: user.role, firstName: user.firstName, lastName: user.lastName });
     }
     if (value.phone && !user.isPhoneVerified) {
-        const secret = speakeasy.generateSecretSync();
-        const code = speakeasy.totp({ secret: secret.base32, length: 6 });
+        // Generate a 6-digit code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
         const v = await Verification.create({ userId: user._id, type: 'phone', code, expiresAt: new Date(Date.now() + 15 * 60 * 1000), meta: { phone: value.phone } });
         verificationTokens.push({ type: 'phone', code: process.env.NODE_ENV !== 'production' ? code : undefined });
 
@@ -204,54 +219,98 @@ async function register(data, options = {}) {
 
 // Login (cached, rate-limited)
 async function login(data, options = {}) {
-    await rateLimit(`login:${data.identifier || options.ip}`, 5);
-    const { error, value } = loginSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message, 400);
+    try {
+        console.log('Login attempt:', { identifier: data.identifier });
+        const rateResult = await rateLimit(`login:${data.identifier || options.ip}`, 15);
+        if (!rateResult.ok) {
+            return { status: 429, message: rateResult.message };
+        }
 
-    // Cached partial lookup, then full DB for password
-    let user = await User.findOne({ $or: [{ email: value.identifier }, { phone: value.identifier }, { username: value.identifier }] }).select('+password');
-    if (!user || user.isDeleted || user.accountStatus !== 'active') throw new AuthError('Invalid credentials', 401);
-    if (user.lockUntil && user.lockUntil > new Date()) throw new AuthError('Account locked', 423);
+        const { error, value } = loginSchema.validate(data);
+        if (error) {
+            console.log('Validation error:', error.details[0].message);
+            return { status: 400, message: error.details[0].message };
+        }
 
-    const passwordMatch = await comparePassword(value.password, user.password);
-    if (!passwordMatch) {
-        user.failedLoginAttempts += 1;
-        if (user.failedLoginAttempts >= 5) user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+        // Cached partial lookup, then full DB for password
+        console.log('Looking up user with identifier:', value.identifier);
+        let user = await User.findOne({ $or: [{ email: value.identifier }, { phone: value.identifier }, { username: value.identifier }] }).select('+password');
+        console.log('User found:', user ? 'Yes' : 'No');
+        if (user) {
+            console.log('Account status:', user.accountStatus);
+            console.log('Is deleted:', user.isDeleted);
+            console.log('Lock until:', user.lockUntil);
+            console.log('User object:', JSON.stringify(user.toObject(), null, 2));
+        }
+
+        // User not found or invalid status
+        if (!user || user.isDeleted || user.accountStatus !== 'active') {
+            return { status: 401, message: 'Invalid credentials' };
+        }
+
+        // Account locked
+        if (user.lockUntil && user.lockUntil > new Date()) {
+            return { status: 423, message: 'Account locked' };
+        }
+
+        console.log('About to compare passwords:');
+        console.log('Provided password:', value.password);
+        console.log('Stored hash:', user.password);
+        console.log('Starting password comparison...');
+        const passwordMatch = await comparePassword(value.password, user.password);
+        console.log('Password comparison complete. Result:', passwordMatch);
+        console.log('Password match details:', {
+            inputLength: value.password.length,
+            hashExists: !!user.password,
+            hashPrefix: user.password ? user.password.substring(0, 7) : null
+        });
+        if (!passwordMatch) {
+            console.log('Password mismatch - incrementing failed attempts');
+            user.failedLoginAttempts += 1;
+            if (user.failedLoginAttempts >= 5) {
+                user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+            }
+            await user.save();
+            await invalidateUserCache(user._id);
+            console.log('Failed login attempts:', user.failedLoginAttempts);
+            return { status: 401, message: 'Invalid credentials' };
+        }
+
+        // 2FA
+        let method = 'password';
+        if (user.twoFAEnabled) {
+            if (!value.otp) return { ok: false, status: 401, message: '2FA code required' };
+            const verified = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: value.otp, window: 1 });
+            if (!verified) return { ok: false, status: 401, message: 'Invalid 2FA code' };
+            method = '2fa';
+        }
+
+        user.failedLoginAttempts = 0;
+        user.lastLoginAt = new Date();
         await user.save();
         await invalidateUserCache(user._id);
-        throw new AuthError('Invalid credentials', 401);
+
+        const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
+        user.sessions.push(session._id);
+        await user.save();
+
+        const history = new LoginHistory({ userId: user._id, ip: options.ip, device: options.device, location: options.location, method, successful: true, riskScore: 0 });
+        await history.save();
+        user.loginHistory.push(history._id);
+        await user.save();
+
+        await publishEvent('user.logged_in', { userId: user._id, role: user.role, method, ip: options.ip, device: options.device });
+
+        return {
+            ok: true,
+            accessToken: tokenService.signAccess({ sub: user._id.toString() }),
+            refreshToken,
+            user: await getCachedUser(user._id, '-password')
+        };
+    } catch (error) {
+        console.error('Login error:', error);
+        return { status: 500, message: 'Internal server error' };
     }
-
-    // 2FA
-    let method = 'password';
-    if (user.twoFAEnabled) {
-        if (!value.otp) throw new AuthError('2FA required', 401);
-        const verified = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: value.otp, window: 1 });
-        if (!verified) throw new AuthError('Invalid 2FA', 401);
-        method = '2fa';
-    }
-
-    user.failedLoginAttempts = 0;
-    user.lastLoginAt = new Date();
-    await user.save();
-    await invalidateUserCache(user._id);
-
-    const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
-    user.sessions.push(session._id);
-    await user.save();
-
-    const history = new LoginHistory({ userId: user._id, ip: options.ip, device: options.device, location: options.location, method, successful: true, riskScore: 0 });
-    await history.save();
-    user.loginHistory.push(history._id);
-    await user.save();
-
-    await publishEvent('user.logged_in', { userId: user._id, role: user.role, method, ip: options.ip, device: options.device });
-
-    return {
-        accessToken: tokenService.signAccess({ sub: user._id.toString() }),
-        refreshToken,
-        user: await getCachedUser(user._id, '-password')
-    };
 }
 
 // Refresh (cached)
@@ -315,19 +374,19 @@ async function changePassword(userId, data) {
 // Verify (cached code check)
 async function verify(userId, data) {
     const { error, value } = verificationSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message, 400);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const cacheKey = `verify:${userId}:${value.type}:${value.code}`;
     let code = await redis.get(cacheKey);
     let token;
     if (!code) {
         token = await Verification.findOne({ userId, type: value.type, code: value.code, used: false, expiresAt: { $gt: new Date() } });
-        if (!token) throw new AuthError('Invalid code', 400);
+        if (!token) return { ok: false, status: 400, message: 'Invalid verification code' };
         code = token.code;
         await redis.set(cacheKey, code, 'EX', CACHE_TTLS.verifications);
     }
 
-    if (code !== value.code) throw new AuthError('Invalid code', 400);
+    if (code !== value.code) return { ok: false, status: 400, message: 'Invalid verification code' };
 
     token.used = true;
     await token.save();
@@ -401,8 +460,7 @@ async function changeEmail(userId, newEmail, currentPassword) {
     const existing = await User.findOne({ email: newEmail });
     if (existing) throw new AuthError('Email in use', 409);
 
-    const secret = speakeasy.generateSecretSync();
-    const code = speakeasy.totp({ secret: secret.base32, length: 6 });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
     await Verification.create({ userId, type: 'email_change', code, meta: { newEmail } });
 
     await redis.set(`verify:${userId}:email_change:${code}`, code, 'EX', CACHE_TTLS.verifications);
@@ -431,8 +489,7 @@ async function requestPasswordReset(identifier) {
     const user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] });
     if (!user) throw new AuthError('Not found', 404);
 
-    const secret = speakeasy.generateSecretSync();
-    const code = speakeasy.totp({ secret: secret.base32, length: 6 });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
     await Verification.create({ userId: user._id, type: 'password_reset', code, meta: { identifier } });
 
     await redis.set(`verify:${user._id}:password_reset:${code}`, code, 'EX', CACHE_TTLS.verifications);
@@ -468,8 +525,7 @@ async function resendVerification(userId, type) {
     if (!user) throw new AuthError('Not found', 404);
     if (type === 'email' && user.isEmailVerified) throw new AuthError('Verified', 400);
 
-    const secret = speakeasy.generateSecretSync();
-    const code = speakeasy.totp({ secret: secret.base32, length: 6 });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
     await Verification.create({ userId, type, code, meta: { [type]: user[type] } });
 
     await redis.set(`verify:${userId}:${type}:${code}`, code, 'EX', CACHE_TTLS.verifications);
@@ -717,19 +773,20 @@ async function acceptConsent(userId, data) {
 
 // Request OTP Login
 async function requestOtpLogin(identifier, options = {}) {
-    await rateLimit(`otp:${identifier}`, 3);
-    const user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] });
-    if (!user || user.accountStatus !== 'active') throw new AuthError('Invalid', 401);
+    const rateCheck = await rateLimit(`otp:${identifier}`, 3);
+    if (!rateCheck.ok) return rateCheck;
 
-    const secret = speakeasy.generateSecretSync();
-    const code = speakeasy.totp({ secret: secret.base32, length: 6 });
+    const user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] });
+    if (!user || user.accountStatus !== 'active') return { ok: false, status: 401, message: 'Invalid credentials' };
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
     await Verification.create({ userId: user._id, type: 'otp_login', code, meta: { identifier } });
 
     await redis.set(`verify:${user._id}:otp_login:${code}`, code, 'EX', CACHE_TTLS.verifications);
 
     await publishEvent('verification.requested', { userId: user._id, type: 'otp_login', details: { identifier }, role: user.role });
 
-    return { message: 'Sent' };
+    return { ok: true, status: 200, message: 'OTP sent successfully' };
 }
 
 // Verify OTP Login

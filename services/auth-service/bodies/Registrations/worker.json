@@ -1,0 +1,38 @@
+{
+    "firstName": "Store",
+    "lastName": "Worker",
+    "email": "store.worker@company.com",
+    "phone": "+250789123463",
+    "password": "Test@123456",
+    "role": "worker",
+    "dateOfBirth": "1992-01-01",
+    "gender": "male",
+    "nationalId": "WORK12345",
+    "position": "Sales Representative",
+    "department": "sales",
+    "companies": [
+        "company-uuid-123"
+    ],
+    "shops": [
+        "shop-uuid-456"
+    ],
+    "emergencyContact": {
+        "name": "Emergency Contact",
+        "phone": "+250789123464"
+    },
+    "address": {
+        "street": "101 Worker Street",
+        "city": "Kigali",
+        "state": "Kigali",
+        "postalCode": "00000",
+        "country": "Rwanda"
+    },
+    "preferences": {
+        "language": "en",
+        "notifications": {
+            "email": true,
+            "sms": true,
+            "inApp": true
+        }
+    }
+}

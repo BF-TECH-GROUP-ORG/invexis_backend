@@ -4,9 +4,8 @@ const Joi = require('joi');
 const baseUserSchema = Joi.object({
     firstName: Joi.string().min(2).max(30).required().trim(),
     lastName: Joi.string().min(2).max(30).required().trim(),
-    username: Joi.string().alphanum().min(3).max(30).optional(), // Req in service if no email/phone
-    email: Joi.string().email({ tlds: { allow: false } }).optional(),
-    phone: Joi.string().pattern(/^\+?[1-9]\d{1,14}$/).optional(), // Encouraged for all (SMS/analytics)
+    email: Joi.string().email({ tlds: { allow: false } }).required(),
+    phone: Joi.string().pattern(/^\+?[1-9]\d{1,14}$/).required(), // Required for all (SMS/analytics)
     profilePicture: Joi.string().uri().optional(),
     password: Joi.string().min(8).max(128).pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/).required(),
     googleId: Joi.string().optional(),
@@ -41,21 +40,21 @@ const baseUserSchema = Joi.object({
         }).optional()
     }).optional(),
     consent: Joi.object({
-        termsAccepted: Joi.boolean().truthy().required(),
-        termsVersion: Joi.string().required(),
-        privacyAccepted: Joi.boolean().truthy().required(),
-        privacyVersion: Joi.string().required(),
+        termsAccepted: Joi.boolean().truthy().optional(),
+        termsVersion: Joi.string().optional(),
+        privacyAccepted: Joi.boolean().truthy().optional(),
+        privacyVersion: Joi.string().optional(),
         nationalIdConsent: Joi.boolean().optional(),
         ip: Joi.string().ip().optional(),
         device: Joi.string().optional()
-    }).required()
+    }).optional()
 });
 
 // Register (role-conditional, strings)
 const registerSchema = baseUserSchema.keys({
     dateOfBirth: Joi.date().max('now').required(), // Req for customer; optional else
     nationalId: Joi.string().pattern(/^[A-Z0-9]{5,20}$/).optional() // Req non-customer
-}).xor('email', 'phone', 'username').custom((value, helpers) => {
+}).custom((value, helpers) => {
     // Role-specific prompts/reqs
     if (value.role === 'customer') {
         if (!value.dateOfBirth) return helpers.error('any.required', { key: 'dateOfBirth' });
@@ -66,13 +65,21 @@ const registerSchema = baseUserSchema.keys({
         value.position = undefined;
         value.emergencyContact = null;
         value.address = null;
+        value.consent = null
     } else {
         // Non-customer
         if (!value.nationalId) return helpers.error('any.required', { key: 'nationalId' });
         if (!value.dateOfBirth) return helpers.error('any.required', { key: 'dateOfBirth' });
-        if (['company_admin', 'shop_manager', 'worker'].includes(value.role)) {
+
+        // Initialize arrays for roles that need them
+        if (value.role === 'company_admin') {
+            value.companies = value.companies || []; // Allow empty array for later assignment
+            value.shops = []; // No shops for company admin
+        } else if (['shop_manager', 'worker'].includes(value.role)) {
             if (!value.companies?.length) return helpers.error('any.required', { key: 'companies' });
-            value.companies = value.companies.map(id => id.toString()); // Ensure strings
+            if (!value.shops?.length) return helpers.error('any.required', { key: 'shops' });
+            value.companies = value.companies.map(id => id.toString());
+            value.shops = value.shops.map(id => id.toString());
         }
         if (['shop_manager', 'worker'].includes(value.role)) {
             if (!value.shops?.length) return helpers.error('any.required', { key: 'shops' });

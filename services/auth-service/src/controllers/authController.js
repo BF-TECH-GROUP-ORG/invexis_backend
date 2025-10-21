@@ -5,64 +5,81 @@ const LoginHistory = require('../models/LoginHistory.models');
 const { uploadProfileImage } = require('../middleware/upload');
 
 // Register a new user
-const register = async (req, res, next) => {
-    try {
-        const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
-        const { user, verificationTokens } = await authService.register(req.body, options);
-        res.status(201).json({
-            ok: true,
-            user,
-            verificationTokens: process.env.NODE_ENV !== 'production' ? verificationTokens : []
-        });
-    } catch (err) {
-        next(err);
+const register = async (req, res) => {
+    const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
+    const result = await authService.register(req.body, options);
+
+    // If result has an error (indicated by status and message)
+    if (result.status && result.message) {
+        return res.status(result.status).json({ ok: false, message: result.message });
     }
+
+    // If successful (has user object)
+    if (result.user) {
+        return res.status(201).json({
+            ok: true,
+            user: result.user,
+            verificationTokens: process.env.NODE_ENV !== 'production' ? result.verificationTokens : []
+        });
+    }
+
+    // Fallback for unexpected response
+    res.status(500).json({ ok: false, message: 'Unexpected server error' });
 };
 
 // Login with credentials
-const login = async (req, res, next) => {
-    try {
-        const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
-        const payload = await authService.login(req.body, options);
-        res.cookie('refreshToken', payload.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
-        });
-        res.json({ ok: true, accessToken: payload.accessToken, user: payload.user });
-    } catch (err) {
-        next(err);
+const login = async (req, res) => {
+    const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
+    const result = await authService.login(req.body, options);
+
+    // If there's an error response
+    if (result.status && result.message) {
+        return res.status(result.status || 400).json({ ok: false, message: result.message });
     }
+
+    res.cookie('refreshToken', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+    });
+    res.json({ ok: true, accessToken: result.accessToken, user: result.user });
 };
 
 // Request OTP for login
-const requestOtpLogin = async (req, res, next) => {
+const requestOtpLogin = async (req, res) => {
     try {
         const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
-        const out = await authService.requestOtpLogin(req.body.identifier, options);
-        res.json({ ok: true, ...out });
+        const result = await authService.requestOtpLogin(req.body.identifier, options);
+
+        if (!result.ok) {
+            return res.status(result.status || 400).json({ ok: false, message: result.message });
+        }
+
+        res.status(200).json({ ok: true, message: 'OTP sent successfully' });
     } catch (err) {
-        next(err);
+        console.error('Error in requestOtpLogin:', err);
+        res.status(500).json({ ok: false, message: 'Internal server error' });
     }
 };
 
 // Verify OTP for login
-const verifyOtpLogin = async (req, res, next) => {
-    try {
-        const { identifier, code } = req.body;
-        const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
-        const payload = await authService.verifyOtpLogin(identifier, code, options);
-        res.cookie('refreshToken', payload.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
-        });
-        res.json({ ok: true, accessToken: payload.accessToken, user: payload.user });
-    } catch (err) {
-        next(err);
+const verifyOtpLogin = async (req, res) => {
+    const { identifier, code } = req.body;
+    const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
+    const result = await authService.verifyOtpLogin(identifier, code, options);
+
+    if (!result.ok) {
+        return res.status(result.status).json({ ok: false, message: result.message });
     }
+
+    res.cookie('refreshToken', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+    });
+    res.json({ ok: true, accessToken: result.accessToken, user: result.user });
 };
 
 // Google OAuth callback
@@ -129,14 +146,15 @@ const logout = async (req, res, next) => {
 };
 
 // Verify email/phone
-const verify = async (req, res, next) => {
-    try {
-        const userId = req.params.userId || (req.user && req.user._id);
-        const result = await authService.verify(userId, req.body);
-        res.json({ ok: true, ...result });
-    } catch (err) {
-        next(err);
+const verify = async (req, res) => {
+    const userId = req.params.userId || (req.user && req.user._id);
+    const result = await authService.verify(userId, req.body);
+
+    if (!result.ok) {
+        return res.status(result.status).json({ ok: false, message: result.message });
     }
+
+    res.json({ ok: true, verified: result.verified });
 };
 
 // Setup 2FA

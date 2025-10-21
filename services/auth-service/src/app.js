@@ -108,7 +108,11 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Global rate limit
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
+const limiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour window
+    max: 1000, // Limit each IP to 1000 requests per hour
+    message: { ok: false, message: 'Too many requests from this IP, please try again after an hour' }
+});
 app.use(limiter);
 
 // Serve static uploads for profile pictures
@@ -143,8 +147,9 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// Error handling
-app.use(authErrorHandler);
-app.use((req, res) => res.status(404).json({ ok: false, message: 'Not found' }));
+// Simple 404 handler
+app.use((req, res) => {
+    res.status(404).json({ ok: false, message: 'Route not found' });
+});
 
 module.exports = app;

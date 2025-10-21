@@ -9,8 +9,19 @@ async function hashPassword(password) {
 }
 
 async function comparePassword(password, hash) {
-    if (!password || !hash) return false;
-    return bcrypt.compare(password, hash);
+    console.log('Comparing password:', { passwordProvided: !!password, hashProvided: !!hash });
+    if (!password || !hash) {
+        console.log('Missing password or hash');
+        return false;
+    }
+    try {
+        const result = await bcrypt.compare(password, hash);
+        console.log('Password comparison result:', result);
+        return result;
+    } catch (error) {
+        console.error('Error comparing passwords:', error);
+        return false;
+    }
 }
 
 function hashToken(token) {

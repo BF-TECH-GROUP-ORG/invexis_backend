@@ -84,7 +84,8 @@ const UserSchema = new mongoose.Schema({
 
 // Pre-save: Deep role enforcement + hash
 UserSchema.pre("save", async function (next) {
-    if (this.isModified('password') && this.password) {
+    // Only hash password if it's not already hashed
+    if (this.isModified('password') && this.password && !this.password.startsWith('$2b$')) {
         this.password = await hashPassword(this.password);
     }
 
