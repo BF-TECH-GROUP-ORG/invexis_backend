@@ -68,7 +68,7 @@ const UserSchema = new mongoose.Schema({
     preferences: { type: mongoose.Schema.Types.ObjectId, ref: "Preference", default: null },
     loginHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: "LoginHistory", default: [] }],
     sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: "Session", default: [] }],
-    consent: { type: mongoose.Schema.Types.ObjectId, ref: "Consent", default: null },
+    consent: [{ type: mongoose.Schema.Types.ObjectId, ref: "Consent", default: null }],
     verificationTokens: [{ type: mongoose.Schema.Types.ObjectId, ref: "Verification", default: [] }],
 
     // Auth Mgmt (all)

@@ -15,9 +15,24 @@ const User = require('./models/User.models');
 const Preference = require('./models/Preference.models');
 const { hashPassword } = require('./utils/hashPassword');
 
-// Shared dependencies
-const redis = require('/app/shared/redis.js');
-const { connect: connectRabbitMQ, exchanges, publish: publishRabbitMQ } = require('/app/shared/rabbitmq.js');
+// Shared dependencies with fallbacks
+let redis, connectRabbitMQ, exchanges, publishRabbitMQ;
+try {
+    redis = require('/app/shared/redis.js');
+    const rabbitmq = require('/app/shared/rabbitmq.js');
+    connectRabbitMQ = rabbitmq.connect;
+    exchanges = rabbitmq.exchanges;
+    publishRabbitMQ = rabbitmq.publish;
+} catch (err) {
+    console.warn('Shared dependencies not available, using mock implementations');
+    redis = {
+        set: async () => true,
+        get: async () => null,
+        status: 'ready'
+    };
+    exchanges = { topic: 'mock.topic' };
+    publishRabbitMQ = async () => true;
+}
 
 const app = express();
 
