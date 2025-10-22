@@ -10,8 +10,8 @@ module.exports = {
       host: process.env.DEV_DB_HOST || "127.0.0.1",
       port: process.env.DEV_DB_PORT || 5432,
       database: process.env.DEV_DB_NAME || "company_service_dev",
-      user: process.env.DEV_DB_USER || "postgres",
-      password: process.env.DEV_DB_PASSWORD || "password",
+      user: process.env.DEV_DB_USER || "invexis",
+      password: process.env.DEV_DB_PASSWORD,
       ssl: process.env.DEV_DB_SSL === "true", // optional SSL
     },
     pool: {

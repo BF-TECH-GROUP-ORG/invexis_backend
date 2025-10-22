@@ -5,6 +5,8 @@ const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 // Import routes
+const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
+
 const router = require('./routes/index')
 
 
@@ -91,6 +93,7 @@ const initializeEventSystem = async () => {
     await connectRabbitMQ();
     await consumeEvents();
     await initPublishers();
+    await startOutboxDispatcher(5000);
     console.log("✅ Event system initialized");
   } catch (error) {
     console.error("❌ Failed to initialize event system:", error);

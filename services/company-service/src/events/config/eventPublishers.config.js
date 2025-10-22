@@ -9,6 +9,9 @@ module.exports = [
     events: [
       { key: "company.created", description: "A new company was registered" },
       { key: "company.updated", description: "Company profile updated" },
+      { key: "company.status.changed", description: "Company status changed" },
+      { key: "company.suspended",description:"Company suspended"},
+      { key: "company.allSuspended",description:"All users suspended from company"},
       { key: "company.deleted", description: "Company removed or deactivated" },
     ],
   },

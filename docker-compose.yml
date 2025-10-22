@@ -36,7 +36,7 @@ services:
   # ----------------------
   # PostgreSQL for company-service
   company-postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.4
     container_name: invexis-company-postgres
     restart: unless-stopped
     environment:
