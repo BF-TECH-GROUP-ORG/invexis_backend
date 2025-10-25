@@ -1,0 +1,12 @@
+{
+    "profilePicture": "https://example.com/profile.jpg",
+    "preferences": {
+        "theme": "dark",
+        "language": "en",
+        "notifications": {
+            "email": true,
+            "sms": true,
+            "inApp": true
+        }
+    }
+}

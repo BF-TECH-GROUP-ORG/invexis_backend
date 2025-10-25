@@ -1,7 +1,7 @@
 const connectDB = require('./config/db');
 const logger = require('./utils/logger');
 const { scheduleDailyReport } = require('./services/reportService');
-const PORT = 5000;
+const PORT = process.env.PORT || 8007;
 const app = require('./app');
 
 
@@ -9,7 +9,7 @@ const startServer = async () => {
   try {
     await connectDB();
     app.listen(PORT, () => logger.info(`Server running on port http://localhost:${PORT}`));
-    await scheduleDailyReport();
+    // await scheduleDailyReport();
     require('./app');
     logger.info('Server started successfully');
   } catch (error) {
