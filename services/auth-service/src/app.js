@@ -7,9 +7,11 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
 const passport = require('passport');
+// Ensure Passport strategies (Google) are loaded and registered
+require('./config/passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const path = require('path');
-const authRoutes = require('./routes/authRoutes');
+const authRoutes = require('./routes/routes');
 const { authErrorHandler } = require('./middleware/authMiddleware');
 const User = require('./models/User.models');
 const Preference = require('./models/Preference.models');
@@ -43,60 +45,6 @@ if (missingEnvVars.length > 0) {
     throw new Error(`Missing Google OAuth environment variables: ${missingEnvVars.join(', ')}`);
 }
 
-// Passport configuration
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL,
-    scope: ['profile', 'email']
-}, async (accessToken, refreshToken, profile, done) => {
-    try {
-        let user = await User.findOne({ googleId: profile.id });
-        if (!user) {
-            user = new User({
-                googleId: profile.id,
-                email: profile.emails[0].value,
-                firstName: profile.name.givenName,
-                lastName: profile.name.familyName,
-                role: 'customer',
-                password: await hashPassword(require('crypto').randomBytes(32).toString('hex'))
-            });
-            await user.save();
-            const preference = new Preference({ userId: user._id });
-            await preference.save();
-            user.preferences = preference._id;
-            await user.save();
-
-            // Publish event for external audit service
-            await publishRabbitMQ(exchanges.topic, 'auth.user.registered', {
-                userId: user._id,
-                email: user.email,
-                via: 'google'
-            }, { headers: { traceId: require('uuid').v4() } });
-
-            // Cache user
-            await redis.set(`user:${user._id}`, JSON.stringify(user.toObject({ versionKey: false })), 'EX', 300);
-        }
-        done(null, user);
-    } catch (err) {
-        done(err);
-    }
-}));
-
-// Passport serialize/deserialize
-passport.serializeUser((user, done) => {
-    done(null, user._id);
-});
-
-passport.deserializeUser(async (id, done) => {
-    try {
-        const user = await User.findById(id);
-        done(null, user || null);
-    } catch (err) {
-        done(err)
-    }
-});
-
 // Middleware
 app.use(helmet());
 app.use(cors({
@@ -122,13 +70,13 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Global rate limit
-const limiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour window
-    max: 1000, // Limit each IP to 1000 requests per hour
-    message: { ok: false, message: 'Too many requests from this IP, please try again after an hour' }
-});
-app.use(limiter);
+// // Global rate limit
+// const limiter = rateLimit({
+//     windowMs: 600 * 60 * 1000, // 1 hour window
+//     max: 1000, // Limit each IP to 1000 requests per hour
+//     message: { ok: false, message: 'Too many requests from this IP, please try again after an hour' }
+// });
+// app.use(limiter);
 
 // Serve static uploads for profile pictures
 app.use('/uploads', express.static(path.join(__dirname, '../Uploads')));

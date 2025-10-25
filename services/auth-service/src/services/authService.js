@@ -404,9 +404,15 @@ async function verify(userId, data) {
 }
 
 // Setup 2FA
-async function setup2FA(userId) {
-    const user = await User.findById(userId);
-    if (user.twoFAEnabled) return { ok: false, status: 400, message: '2FA enabled' };
+async function setup2FA(userId, data) {
+    const { error, value } = setup2FASchema.validate(data);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
+
+    const user = await User.findById(userId).select('+password');
+    if (user.twoFAEnabled) return { ok: false, status: 400, message: '2FA is already enabled' };
+
+    const passwordMatch = await comparePassword(value.password, user.password);
+    if (!passwordMatch) return { ok: false, status: 401, message: 'Invalid password' };
 
     const secret = speakeasy.generateSecret({ name: `Invexis (${user.email || user.phone})` });
     user.twoFASecret = secret.base32;
@@ -420,7 +426,7 @@ async function setup2FA(userId) {
 
 // Verify 2FA Setup
 async function verify2FASetup(userId, data) {
-    const { error, value } = twoFASchema.validate(data);
+    const { error, value } = verify2FASetupSchema.validate(data);
     if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(userId).select('+twoFASecret');
@@ -437,9 +443,22 @@ async function verify2FASetup(userId, data) {
 }
 
 // Disable 2FA
-async function disable2FA(userId, otp) {
-    const user = await User.findById(userId).select('+twoFASecret');
-    const verified = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: otp, window: 1 });
+async function disable2FA(userId, data) {
+    const { error, value } = disable2FASchema.validate(data);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
+
+    const user = await User.findById(userId).select('+password +twoFASecret');
+    if (!user.twoFAEnabled) return { ok: false, status: 400, message: '2FA is not enabled' };
+
+    const passwordMatch = await comparePassword(value.password, user.password);
+    if (!passwordMatch) return { ok: false, status: 401, message: 'Invalid password' };
+
+    const verified = speakeasy.totp.verify({
+        secret: user.twoFASecret,
+        encoding: 'base32',
+        token: value.otp,
+        window: 1
+    });
     if (!verified) return { ok: false, status: 400, message: 'Invalid code' };
 
     user.twoFAEnabled = false;
@@ -702,6 +721,11 @@ async function getUserById(adminId, targetUserId) {
     return { user };
 }
 
+// Get Current User (cached)
+async function getCurrentUser(userId) {
+    return await getCachedUser(userId, '-password -twoFASecret', ['preferences', 'consent']);
+}
+
 // Admin: Get Users (cached paginated)
 async function getUsers(adminId, roleFilter, query = {}) {
     const { page = 1, limit = 10, status } = query;
@@ -850,6 +874,7 @@ module.exports = {
     verifyOtpLogin,
     createUser,
     updateUser,
+    getCurrentUser,
     deleteUser,
     getUserById,
     getUsers,

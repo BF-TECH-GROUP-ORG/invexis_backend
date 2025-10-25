@@ -13,7 +13,12 @@ const UserSchema = new mongoose.Schema({
     googleId: { type: String, sparse: true },
 
     // Analytics/Compliance (DOB req for customer; optional else)
-    dateOfBirth: { type: Date, required: function () { return this.role === 'customer'; } }, // Analytics: age segments
+    dateOfBirth: {
+        type: Date,
+        required: function () {
+            return this.role === 'customer' && !this.googleId;  // Not required for Google OAuth users initially
+        }
+    },
     gender: { type: String, enum: ["male", "female", "other"], default: "other" },
 
     // Verification (all)
@@ -99,7 +104,7 @@ UserSchema.pre("save", async function (next) {
             this.address = null;
             this.department = null;
             this.position = null;
-            if (!this.dateOfBirth) return next(new Error("Date of birth required for customers (analytics)"));
+            if (!this.dateOfBirth && !this.googleId) return next(new Error("Date of birth required for customers (analytics)"));
             break;
         case 'super_admin':
             this.companies = [];
