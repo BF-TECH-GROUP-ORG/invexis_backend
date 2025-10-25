@@ -73,6 +73,10 @@ io.on('connection', (socket) => {
     socket.emit('connected', { userId: socket.userId, socketId: socket.id, worker: process.pid });
 });
 
+app.get('/', (req, res) => {
+    res.send('Websocket Service is mounted to gateway.');
+});
+
 // Health endpoint (cluster-aware)
 app.get('/health', async (req, res) => {
     const sharedHealth = await healthCheck();
