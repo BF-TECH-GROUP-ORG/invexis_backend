@@ -84,13 +84,47 @@ const verifyOtpLogin = async (req, res) => {
 
 // Google OAuth callback
 const googleCallback = async (req, res, next) => {
-    if (!req.user) return res.redirect('/login?error=google');
+    if (!req.user) {
+        console.error('No user object in Google callback');
+        return res.redirect('/login?error=google_user_missing');
+    }
+
     try {
-        const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
-        const { refreshToken, session } = await tokenService.createSession(req.user._id, options.device, options.ip, options.location);
+        const options = {
+            ip: req.ip,
+            device: req.get('User-Agent'),
+            location: req.location || {}
+        };
+
+        const authType = req.session.authType || 'signin';
+        const isNewUser = !req.user.lastLoginAt;
+
+        // Handle signup vs signin
+        if (authType === 'signup' && !isNewUser) {
+            return res.redirect('/login?error=account_exists');
+        }
+
+        if (authType === 'signin' && isNewUser) {
+            return res.redirect('/login?error=account_not_found');
+        }
+
+        // Create session and tokens
+        const { refreshToken, session } = await tokenService.createSession(
+            req.user._id,
+            options.device,
+            options.ip,
+            options.location
+        );
+
+        // Generate access token
+        const accessToken = tokenService.signAccess({ sub: req.user._id.toString() });
+
+        // Update user session
         req.user.sessions.push(session._id);
         req.user.lastLoginAt = new Date();
         await req.user.save();
+
+        // Record login history
         const loginHistory = new LoginHistory({
             userId: req.user._id,
             ip: options.ip,
@@ -103,32 +137,67 @@ const googleCallback = async (req, res, next) => {
         await loginHistory.save();
         req.user.loginHistory.push(loginHistory._id);
         await req.user.save();
+
+        // Set refresh token cookie
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
         });
-        res.redirect('/dashboard');
+
+        // Clear the authType from session
+        delete req.session.authType;
+
+        // Determine redirect URL and parameters
+        const redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const params = new URLSearchParams({
+            access_token: accessToken,
+            token_type: 'Bearer',
+            expires_in: 900, // 15 minutes
+            provider: 'google',
+            status: 'success',
+            is_new_user: isNewUser.toString()
+        });
+
+        // Add additional parameters for new users
+        if (isNewUser) {
+            params.append('requires_info', 'true'); // Frontend can prompt for additional info
+            params.append('redirect_to', '/complete-profile');
+        }
+
+        // Redirect with tokens
+        res.redirect(`${redirectUrl}/auth/callback?${params}`);
     } catch (err) {
+        console.error('Google callback error:', err);
         next(err);
     }
-};
-
-// Refresh access token
+};// Refresh access token
 const refresh = async (req, res, next) => {
     try {
-        const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
-        if (!refreshToken) return res.status(400).json({ ok: false, message: 'No refresh token' });
+        const refreshToken = req.cookies.refreshToken;
+        if (!refreshToken) return res.status(401).json({ ok: false, message: 'No refresh token found in cookies' });
+
         const tokens = await authService.refresh(refreshToken);
+
+        // Set the new refresh token in cookie
         res.cookie('refreshToken', tokens.refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
         });
-        res.json({ ok: true, accessToken: tokens.accessToken });
+
+        res.json({
+            ok: true,
+            accessToken: tokens.accessToken,
+            expiresIn: 900 // 15 minutes in seconds
+        });
     } catch (err) {
+        if (err.message === 'Invalid refresh token' || err.message === 'Refresh token expired') {
+            res.clearCookie('refreshToken');
+            return res.status(401).json({ ok: false, message: 'Session expired, please login again' });
+        }
         next(err);
     }
 };
@@ -160,7 +229,7 @@ const verify = async (req, res) => {
 // Setup 2FA
 const setup2FA = async (req, res, next) => {
     try {
-        const out = await authService.setup2FA(req.user._id);
+        const out = await authService.setup2FA(req.user._id, req.body);
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -180,7 +249,7 @@ const verify2FASetup = async (req, res, next) => {
 // Disable 2FA
 const disable2FA = async (req, res, next) => {
     try {
-        const out = await authService.disable2FA(req.user._id, req.body.otp);
+        const out = await authService.disable2FA(req.user._id, req.body);
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -417,6 +486,16 @@ const acceptConsent = async (req, res, next) => {
     }
 };
 
+// Get current user
+const getCurrentUser = async (req, res, next) => {
+    try {
+        const user = await authService.getCurrentUser(req.user._id);
+        res.json({ ok: true, user });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     register,
     login,
@@ -449,5 +528,6 @@ module.exports = {
     updateUser,
     deleteUser,
     getUserById,
-    acceptConsent
+    acceptConsent,
+    getCurrentUser
 };
