@@ -8,7 +8,8 @@ const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 
-const router = require("./routes/SalesRoutes");
+const salesRouter = require("./routes/SalesRoutes");
+const invoiceRouter = require("./routes/InvoiceRoutes");
 
 const app = express();
 
@@ -61,7 +62,11 @@ app.get("/", (req, res) => {
 });
 
 // API Routes
-app.use("/sales", router);
+app.use("/sales", salesRouter);
+app.use("/invoices", invoiceRouter);
+
+// Serve PDF files statically
+app.use("/invoices/pdf", express.static("storage/invoices"));
 
 // 404 handler
 app.use((req, res) => {

@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require("uuid");
 
 class Outbox {
   static table = "event_outbox";
-  static RETRY_LIMIT = 5;
+  static RETRY_LIMIT = 10;
 
   /**
    * Create a new outbox record (supports transactions)

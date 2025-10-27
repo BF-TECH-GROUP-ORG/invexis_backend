@@ -2,12 +2,12 @@
 
 module.exports = async function handlePaymentEvent(event) {
   switch (event.type) {
-    case "payment.success":
+    case "payment.subscription.success":
       console.log(`💰 Payment success: ${JSON.stringify(event.data)}`);
       // TODO: Activate or extend company subscription
       break;
 
-    case "payment.failed":
+    case "payment.subscription.failed":
       console.log(`❌ Payment failed: ${JSON.stringify(event.data)}`);
       // TODO: Send alert to company admin
       break;

@@ -1,6 +1,9 @@
-const asyncHandler = require('express-async-handler');
-const Company = require('../models/company.model');
-const { publishCompanyEvent } = require('../events/producer');
+const asyncHandler = require("express-async-handler");
+const Company = require("../models/company.model");
+const Subscription = require("../models/subscription.model");
+const { subscriptionEvents } = require("../events/eventHelpers");
+const { companyEvents } = require("../events/eventHelpers");
+const db = require("../config");
 
 /**
  * @desc    Create a new company
@@ -8,12 +11,13 @@ const { publishCompanyEvent } = require('../events/producer');
  * @access  Private (Super Admin)
  */
 const createCompany = asyncHandler(async (req, res) => {
-  const { name, domain, email, phone, country, city, tier } = req.body;
+  const { name, domain, email, phone, country, city, tier, coordinates } =
+    req.body;
 
   // Validate required fields
   if (!name) {
     res.status(400);
-    throw new Error('Company name is required');
+    throw new Error("Company name is required");
   }
 
   // Check if company with same domain or name exists
@@ -21,30 +25,48 @@ const createCompany = asyncHandler(async (req, res) => {
     const domainExists = await Company.existsByDomain(domain);
     if (domainExists) {
       res.status(400);
-      throw new Error('Company with this domain already exists');
+      throw new Error("Company with this domain already exists");
     }
   }
 
   const nameExists = await Company.existsByName(name);
   if (nameExists) {
     res.status(400);
-    throw new Error('Company with this name already exists');
+    throw new Error("Company with this name already exists");
   }
 
-  // Create company
-  const company = await Company.create({
-    name,
-    domain,
-    email,
-    phone,
-    country,
-    city,
-    tier,
-    createdBy: req.user?.id || null,
+  // Create company with transaction (atomic with outbox event)
+  const company = await db.transaction(async (trx) => {
+    const newCompany = await Company.create(
+      {
+        name,
+        domain,
+        email,
+        phone,
+        country,
+        city,
+        coordinates,
+        tier,
+        createdBy: req.user?.id || 1,
+      },
+      trx
+    );
+    const subscription = await Subscription.create(
+      {
+        company_id: newCompany.id,
+        tier: tier || "basic",
+        amount: 0, // Default free tier
+        currency: "RWF",
+        start_date: new Date(),
+        end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days trial
+      },
+      trx
+    );
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.created(newCompany, trx);
+    await subscriptionEvents.created(subscription, trx);
+    return newCompany;
   });
-
-  // Publish event
-  await publishCompanyEvent.created(company);
 
   res.status(201).json({
     success: true,
@@ -86,7 +108,7 @@ const getCompanyById = asyncHandler(async (req, res) => {
 
   if (!company) {
     res.status(404);
-    throw new Error('Company not found');
+    throw new Error("Company not found");
   }
 
   res.json({
@@ -101,13 +123,13 @@ const getCompanyById = asyncHandler(async (req, res) => {
  * @access  Public
  */
 const getCompanyByDomain = asyncHandler(async (req, res) => {
-  const { domain } = req.params;
-
+  const domain  = req.params.domain;
+  console.log(domain)
   const company = await Company.findCompanyByDomain(domain);
 
   if (!company) {
     res.status(404);
-    throw new Error('Company not found');
+    throw new Error("Company not found");
   }
 
   res.json({
@@ -128,7 +150,7 @@ const updateCompany = asyncHandler(async (req, res) => {
   const company = await Company.findCompanyById(id);
   if (!company) {
     res.status(404);
-    throw new Error('Company not found');
+    throw new Error("Company not found");
   }
 
   const updateData = {
@@ -142,10 +164,15 @@ const updateCompany = asyncHandler(async (req, res) => {
     updatedAt: new Date(),
   };
 
-  const updatedCompany = await Company.updateCompany(id, updateData);
+  // Update company with transaction (atomic with outbox event)
+  const updatedCompany = await db.transaction(async (trx) => {
+    const updated = await Company.updateCompany(id, updateData, trx);
 
-  // Publish event
-  await publishCompanyEvent.updated(updatedCompany);
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.updated(updated, trx);
+
+    return updated;
+  });
 
   res.json({
     success: true,
@@ -164,17 +191,20 @@ const deleteCompany = asyncHandler(async (req, res) => {
   const company = await Company.findCompanyById(id);
   if (!company) {
     res.status(404);
-    throw new Error('Company not found');
+    throw new Error("Company not found");
   }
 
-  await Company.deleteCompany(id, req.user?.id || null);
+  // Delete company with transaction (atomic with outbox event)
+  await db.transaction(async (trx) => {
+    await Company.deleteCompany(id, req.user?.id || null, trx);
 
-  // Publish event
-  await publishCompanyEvent.deleted(id);
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.deleted(id, trx);
+  });
 
   res.json({
     success: true,
-    message: 'Company deleted successfully',
+    message: "Company deleted successfully",
   });
 });
 
@@ -187,21 +217,24 @@ const changeCompanyStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  if (!status || !['active', 'suspended', 'deleted'].includes(status)) {
+  if (!status || !["active", "suspended", "deleted"].includes(status)) {
     res.status(400);
-    throw new Error('Invalid status. Must be active, suspended, or deleted');
+    throw new Error("Invalid status. Must be active, suspended, or deleted");
   }
 
   const company = await Company.findCompanyById(id);
   if (!company) {
     res.status(404);
-    throw new Error('Company not found');
+    throw new Error("Company not found");
   }
 
-  await Company.changeCompanyStatus(id, status, req.user?.id || null);
+  // Change status with transaction (atomic with outbox event)
+  await db.transaction(async (trx) => {
+    await Company.changeCompanyStatus(id, status, req.user?.id || null, trx);
 
-  // Publish event
-  await publishCompanyEvent.statusChanged(id, status);
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.statusChanged(id, status, trx);
+  });
 
   res.json({
     success: true,
@@ -218,21 +251,24 @@ const changeCompanyTier = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { tier } = req.body;
 
-  if (!tier || !['basic', 'premium', 'enterprise'].includes(tier)) {
+  if (!tier || !["basic", "premium", "enterprise"].includes(tier)) {
     res.status(400);
-    throw new Error('Invalid tier. Must be basic, premium, or enterprise');
+    throw new Error("Invalid tier. Must be basic, premium, or enterprise");
   }
 
   const company = await Company.findCompanyById(id);
   if (!company) {
     res.status(404);
-    throw new Error('Company not found');
+    throw new Error("Company not found");
   }
 
-  await Company.changeTier(id, tier, req.user?.id || null);
+  // Change tier with transaction (atomic with outbox event)
+  await db.transaction(async (trx) => {
+    await Company.changeTier(id, tier, req.user?.id || null, trx);
 
-  // Publish event
-  await publishCompanyEvent.tierChanged(id, tier);
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.tierChanged(id, tier, trx);
+  });
 
   res.json({
     success: true,
@@ -266,13 +302,22 @@ const reactivateCompany = asyncHandler(async (req, res) => {
   const company = await Company.findCompanyById(id);
   if (!company) {
     res.status(404);
-    throw new Error('Company not found');
+    throw new Error("Company not found");
   }
 
-  const reactivated = await Company.reactivateCompany(id, req.user?.id || null);
+  // Reactivate with transaction (atomic with outbox event)
+  const reactivated = await db.transaction(async (trx) => {
+    const result = await Company.reactivateCompany(
+      id,
+      req.user?.id || null,
+      trx
+    );
 
-  // Publish event
-  await publishCompanyEvent.statusChanged(id, 'active');
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.statusChanged(id, "active", trx);
+
+    return result;
+  });
 
   res.json({
     success: true,
@@ -292,4 +337,3 @@ module.exports = {
   getActiveCompanies,
   reactivateCompany,
 };
-

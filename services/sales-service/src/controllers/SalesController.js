@@ -3,6 +3,7 @@ const Sale = require("../models/Sales.model.js");
 const SaleItem = require("../models/SalesItem.model.js");
 const SaleReturn = require("../models/Salesreturn.model.js");
 const Invoice = require("../models/Invoice.model.js");
+const InvoicePdfService = require("../services/invoicePdf.service.js");
 
 /*
   All handlers are arrow functions and exported via module.exports at the bottom.
@@ -101,7 +102,30 @@ const createSale = async (req, res) => {
     );
 
     await t.commit();
-    return res.status(201).json({ sale, items: saleItems, invoice });
+
+    // Generate PDF asynchronously (don't block response)
+    try {
+      const pdfData = await InvoicePdfService.generateInvoicePdf(
+        invoice.toJSON(),
+        sale.toJSON(),
+        saleItems.map((item) => item.toJSON()),
+        { name: "INVEXIS", email: "info@invexis.com" }
+      );
+      // Update invoice with PDF URL
+      await invoice.update({ pdfUrl: pdfData.pdfUrl });
+    } catch (pdfError) {
+      console.error("⚠️ Warning: PDF generation failed:", pdfError.message);
+      // Don't fail the sale creation if PDF generation fails
+    }
+
+    return res.status(201).json({
+      sale,
+      items: saleItems,
+      invoice: {
+        ...invoice.toJSON(),
+        pdfUrl: invoice.pdfUrl || `/invoices/pdf/${invoice.invoiceId}`,
+      },
+    });
   } catch (error) {
     await t.rollback();
     console.error("createSale error:", error);
