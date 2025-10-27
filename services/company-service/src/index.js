@@ -1,7 +1,7 @@
 const app = require("./app");
 const { closeRabbitMQ } = require("./config/rabbitmq");
 
-const PORT = process.env.PORT || 8004;
+const PORT = process.env.PORT || 8002;
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Company Service running on port ${PORT}`);
