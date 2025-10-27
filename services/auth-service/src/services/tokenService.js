@@ -2,37 +2,23 @@ const jwt = require('jsonwebtoken');
 const { hashToken } = require('../utils/hashPassword');
 const Session = require('../models/Session.models');
 const User = require('../models/User.models');
-const amqp = require('amqplib');
-
-// let rabbitMQChannel;
-// async function setupRabbitMQ() {
-//     try {
-//         const conn = await amqp.connect(process.env.RABBITMQ_URI);
-//         rabbitMQChannel = await conn.createChannel();
-//         await rabbitMQChannel.assertQueue('auth.events', { durable: true });
-//     } catch (err) {
-//         console.error('RabbitMQ connection error:', err);
-//     }
-// }
-// setupRabbitMQ();
-
-// async function publishEvent(event, data) {
-//     if (rabbitMQChannel) {
-//         rabbitMQChannel.sendToQueue('auth.events', Buffer.from(JSON.stringify({ event, data })));
-//     }
-// }
+const redis = require('/app/shared/redis.js'); // Shared
+const { publish: publishRabbitMQ, exchanges } = require('/app/shared/rabbitmq.js');
+const { v4: uuidv4 } = require('uuid'); // npm i uuid
 
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
-const ACCESS_TTL = process.env.ACCESS_TTL;
-const REFRESH_TTL = process.env.REFRESH_TTL;
+const ACCESS_TTL = process.env.ACCESS_TTL || '15m';
+const REFRESH_TTL = process.env.REFRESH_TTL || '30d';
+const CACHE_TTLS = { session: 1800 }; // 30min
 
+// Sign/Verify (unchanged, but add issuer/audience)
 function signAccess(payload) {
-    return jwt.sign(payload, ACCESS_SECRET, { expiresIn: ACCESS_TTL });
+    return jwt.sign(payload, ACCESS_SECRET, { expiresIn: ACCESS_TTL, issuer: 'invexis-auth', audience: 'invexis-apps' });
 }
 
 function signRefresh(payload) {
-    return jwt.sign(payload, REFRESH_SECRET, { expiresIn: REFRESH_TTL });
+    return jwt.sign(payload, REFRESH_SECRET, { expiresIn: REFRESH_TTL, issuer: 'invexis-auth', audience: 'invexis-apps' });
 }
 
 async function verifyAccess(token) {
@@ -51,6 +37,7 @@ async function verifyRefresh(token) {
     }
 }
 
+// Cached createSession
 async function createSession(userId, deviceId = 'unknown', ip, location = {}) {
     const raw = require('crypto').randomBytes(64).toString('hex');
     const hashed = hashToken(raw);
@@ -62,45 +49,69 @@ async function createSession(userId, deviceId = 'unknown', ip, location = {}) {
         location
     });
     const refreshjwt = signRefresh({ sid: session._id.toString(), uid: userId.toString() });
-    // await publishEvent('session.created', { userId, sessionId: session._id });
+
+    // Cache session
+    const cacheKey = `session:${session._id}`;
+    await redis.set(cacheKey, JSON.stringify({ ...session.toObject(), raw }), 'EX', CACHE_TTLS.session);
+
+    // Event
+    await publishRabbitMQ(exchanges.topic, 'auth.session.created', { sessionId: session._id, userId, deviceId, ip }, { headers: { traceId: uuidv4() } });
+
     return { refreshToken: refreshjwt, session, raw };
 }
 
+// Cached refresh
 async function refreshTokens(refreshToken) {
     const payload = await verifyRefresh(refreshToken);
     const { sid, uid } = payload || {};
-    if (!sid || !uid) {
-        throw new Error('Invalid refresh token');
+    if (!sid || !uid) throw new Error('Invalid refresh token');
+
+    // Cache lookup first
+    const cacheKey = `session:${sid}`;
+    let session = await redis.get(cacheKey);
+    if (session) {
+        session = JSON.parse(session);
+    } else {
+        session = await Session.findById(sid);
+        if (!session) throw new Error('Session not found');
     }
-    const session = await Session.findById(sid);
-    if (!session || session.revoked) {
-        throw new Error('Session not found or revoked');
-    }
+
+    if (session.revoked) throw new Error('Session revoked');
+
     session.lastActiveAt = new Date();
-    await session.save();
+    await Session.findByIdAndUpdate(sid, { lastActiveAt: session.lastActiveAt }); // Update DB
+    await redis.set(cacheKey, JSON.stringify(session), 'EX', CACHE_TTLS.session); // Refresh cache
+
     const user = await User.findById(uid);
-    if (!user) {
-        throw new Error('User not found');
-    }
+    if (!user) throw new Error('User not found');
+
     const accessToken = signAccess({ sub: user._id.toString() });
     const newRefreshToken = signRefresh({ sid: session._id.toString(), uid: user._id.toString() });
-    // await publishEvent('token.refreshed', { sessionId: sid, userId: uid });
+
+    // Event
+    await publishRabbitMQ(exchanges.topic, 'auth.session.refreshed', { sessionId: sid, userId: uid }, { headers: { traceId: uuidv4() } });
+
     return { accessToken, refreshToken: newRefreshToken, sessionId: sid, userId: uid };
 }
 
+// Revoke with cache invalidation
 async function revokeSessionByRefresh(refreshToken) {
     try {
         const payload = await verifyRefresh(refreshToken);
         const { sid } = payload || {};
-        if (!sid) {
-            throw new Error('Invalid refresh token');
-        }
+        if (!sid) throw new Error('Invalid refresh token');
+
         const session = await Session.findByIdAndUpdate(sid, { revoked: true });
         if (session) {
             const user = await User.findById(session.userId);
             user.sessions = user.sessions.filter(s => s.toString() !== sid);
             await user.save();
-            // await publishEvent('session.revoked', { sessionId: sid });
+
+            // Invalidate cache
+            await redis.del(`session:${sid}`);
+
+            // Event
+            await publishRabbitMQ(exchanges.topic, 'auth.session.revoked', { sessionId: sid, userId: session.userId }, { headers: { traceId: uuidv4() } });
         }
         return true;
     } catch (err) {

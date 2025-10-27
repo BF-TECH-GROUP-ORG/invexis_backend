@@ -1,10 +1,12 @@
-const joi = require('joi');
 const speakeasy = require('speakeasy');
 const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
 
-// Shared Modules
-const redis = require('/app/shared/redis.js');  // Auto-connected; use get/set/del
-const { publish: publishRabbitMQ, exchanges } = require('/app/shared/rabbitmq.js');
+// Imports
+const { registerSchema, loginSchema, updateProfileSchema, updateUserSchema, changePasswordSchema, verificationSchema, consentSchema, twoFASchema, bulkUpdateSchema } = require('../utils/validation');
+const { hashPassword, comparePassword, hashToken } = require('../utils/hashPassword');
+const redis = require('/app/shared/redis.js');
+const { publish: publishRabbitMQ, exchanges, subscribe } = require('/app/shared/rabbitmq.js');
 
 const User = require('../models/User.models');
 const Session = require('../models/Session.models');
@@ -12,974 +14,869 @@ const Consent = require('../models/Consent.models');
 const Verification = require('../models/Verification.models');
 const LoginHistory = require('../models/LoginHistory.models');
 const Preference = require('../models/Preference.models');
-const { hashPassword, comparePassword, hashToken } = require('../utils/hashPassword');
 const tokenService = require('./tokenService');
 
-// Custom publishEvent using shared RabbitMQ
-async function publishEvent(event, data) {
-    try {
-        await publishRabbitMQ(exchanges.topic, `auth.${event}`, { event, data });
-        console.log(`Auth event published: ${event}`);
-    } catch (err) {
-        console.error(`Failed to publish auth event ${event}:`, err.message);
-    }
+// Cache TTLs
+const CACHE_TTLS = {
+    user: 300, // 5min
+    sessions: 60, // 1min
+    verifications: 900, // 15min
+    rateLimit: 900 // 15min
+};
+
+// Caching helpers
+async function getCachedUser(userId, select = '-password -twoFASecret', populate = []) {
+    const cacheKey = `user:${userId}`;
+    let userJson = await redis.get(cacheKey);
+    if (userJson) return JSON.parse(userJson);
+
+    const user = await User.findById(userId).select(select).populate(populate);
+    if (!user) return null;
+    userJson = user.toObject({ versionKey: false });
+    await redis.set(cacheKey, JSON.stringify(userJson), 'EX', CACHE_TTLS.user);
+    return userJson;
 }
 
-// Custom error for auth
-class AuthError extends Error {
-    constructor(message, status = 400) {
-        super(message);
-        this.status = status;
-    }
+async function invalidateUserCache(userId) {
+    await redis.del(`user:${userId}`);
+    await redis.del(`sessions:${userId}`);
 }
 
-// === Joi Schemas ===
-const registerSchema = joi.object({
-    firstName: joi.string().min(2).max(30).required(),
-    lastName: joi.string().min(2).max(30).required(),
-    username: joi.string().alphanum().min(3).max(30).required(),
-    email: joi.string().email().optional(),
-    phone: joi.string().optional(),
-    profilePicture: joi.string().optional(),
-    password: joi.string().min(8).max(128).pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/).required(),
-    role: joi.string().valid("super_admin", "company_admin", "shop_manager", "worker", "customer").required(),
-    nationalId: joi.string().alphanum().min(5).max(20).optional(),
-    dateOfBirth: joi.date().less('now').optional(),
-    gender: joi.string().valid("male", "female", "other").optional(),
-    companies: joi.array().items(joi.string()).optional(),  // Changed to array
-    shops: joi.array().items(joi.string()).optional(),    // Changed to array
-    position: joi.string().optional().allow(null, ''),
-    department: joi.string().valid("sales", "inventory_management", "inventory_operations", "sales_manager", "development", "hr", "management", "other").optional().allow(null, ''),
-    employmentStatus: joi.string().valid("active", "on_leave", "suspended", "terminated").optional(),
-    emergencyContact: joi.object({
-        name: joi.string().min(2).max(50).required(),
-        phone: joi.string().required()
-    }).optional(),
-    address: joi.object({
-        street: joi.string().max(100).optional().allow(null, ''),
-        city: joi.string().max(50).optional().allow(null, ''),
-        state: joi.string().max(50).optional().allow(null, ''),
-        postalCode: joi.string().max(20).optional().allow(null, ''),
-        country: joi.string().max(50).optional().allow(null, '')
-    }),
-    preferences: joi.object({
-        theme: joi.string().valid("light", "dark", "system").optional(),
-        language: joi.string().optional(),
-        notifications: joi.object({
-            email: joi.boolean().optional(),
-            sms: joi.boolean().optional(),
-            inApp: joi.boolean().optional()
-        })
-    }).optional(),
-    consent: joi.object({
-        termsAccepted: joi.boolean().required().valid(true),
-        termsVersion: joi.string().required(),
-        privacyAccepted: joi.boolean().required().valid(true),
-        privacyVersion: joi.string().required(),
-        nationalIdConsent: joi.boolean().optional(),
-        ip: joi.string().ip().optional(),
-        device: joi.string().optional()
-    }).optional()
-}).xor('email', 'phone', 'username').custom((value, helpers) => {
-    if (value.role !== 'customer') {
-        if (!value.nationalId) return helpers.error('any.required', { key: 'nationalId' });
-        if (!value.dateOfBirth) return helpers.error('any.required', { key: 'dateOfBirth' });
-    }
-    if (['company_admin', 'shop_manager', 'worker'].includes(value.role)) {
-        if (!value.companies || value.companies.length === 0) return helpers.error('any.required', { key: 'companies' });
-    }
-    if (['shop_manager', 'worker'].includes(value.role)) {
-        if (!value.shops || value.shops.length === 0) return helpers.error('any.required', { key: 'shops' });
-    }
-    if (value.role === 'worker' && !value.department) {
-        return helpers.error('any.required', { key: 'department' });
-    }
-    if (value.preferences?.notifications?.sms && !value.phone) {
-        return helpers.error('any.required', { key: 'phone' });
-    }
-    return value;
-});
-
-const loginSchema = joi.object({
-    identifier: joi.string().required(),
-    password: joi.string().min(8).required(),
-    otp: joi.string().optional()
-});
-
-const verificationSchema = joi.object({
-    type: joi.string().valid('email', 'phone').required(),
-    code: joi.string().length(6).required(),
-});
-
-const changeEmailSchema = joi.object({
-    newEmail: joi.string().email().required(),
-});
-
-const passwordResetSchema = joi.object({
-    emailOrPhone: joi.string().required(),
-});
-
-const passwordChangeSchema = joi.object({
-    oldPassword: joi.string().required(),
-    newPassword: joi.string().min(8).max(128).pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/).required(),
-});
-
-const otpLoginSchema = joi.object({
-    identifier: joi.string().required(),
-});
-
-const otpVerifySchema = joi.object({
-    identifier: joi.string().required(),
-    code: joi.string().length(6).required(),
-});
-
-const revokeConsentSchema = joi.object({
-    type: joi.string().valid('terms_and_privacy_sbapshop').required(),
-});
-
-const bulkUpdateSchema = joi.object({
-    userIds: joi.array().items(joi.string()).required(),
-    action: joi.string().valid('activate', 'deactivate').required(),
-});
-
-const complianceSchema = joi.object({
-    termsVersion: joi.string().required(),
-    privacyVersion: joi.string().required(),
-});
-
-const updateUserSchema = joi.object({
-    firstName: joi.string().min(2).max(30).optional(),
-    lastName: joi.string().min(2).max(30).optional(),
-    username: joi.string().alphanum().min(3).max(30).optional(),
-    email: joi.string().email().optional(),
-    phone: joi.string().pattern(/^\+\d{10,15}$/).optional(),
-    role: joi.string().valid("super_admin", "company_admin", "shop_manager", "worker", "customer").optional(),
-    nationalId: joi.string().alphanum().min(5).max(20).optional(),
-    dateOfBirth: joi.date().less('now').optional(),
-    gender: joi.string().valid("male", "female", "other").optional(),
-    companies: joi.array().items(joi.string()).optional(),  // Changed to array
-    shops: joi.array().items(joi.string()).optional(),    // Changed to array
-    position: joi.string().optional().allow(null, ''),
-    department: joi.string().valid("sales", "inventory_management", "inventory_operations", "sales_manager", "development", "hr", "management", "other").optional().allow(null, ''),
-    employmentStatus: joi.string().valid("active", "on_leave", "suspended", "terminated").optional(),
-    accountStatus: joi.string().valid("active", "deactivated", "banned").optional(),
-    address: joi.object({
-        street: joi.string().max(100).optional().allow(null, ''),
-        city: joi.string().max(50).optional().allow(null, ''),
-        state: joi.string().max(50).optional().allow(null, ''),
-        postalCode: joi.string().max(20).optional().allow(null, ''),
-        country: joi.string().max(50).optional().allow(null, '')
-    }).optional()
-}).custom((value, helpers) => {
-    if (value.role && value.role !== 'customer') {
-        if (value.nationalId === undefined || value.nationalId === null) return helpers.error('any.required', { key: 'nationalId (required for non-customers)' });
-        if (value.dateOfBirth === undefined || value.dateOfBirth === null) return helpers.error('any.required', { key: 'dateOfBirth (required for non-customers)' });
-    }
-    if (value.role && ['company_admin', 'shop_manager', 'worker'].includes(value.role)) {
-        if (value.companies && value.companies.length === 0) return helpers.error('any.required', { key: 'companies' });
-    }
-    if (value.role && ['shop_manager', 'worker'].includes(value.role)) {
-        if (value.shops && value.shops.length === 0) return helpers.error('any.required', { key: 'shops' });
-    }
-    if (value.role === 'worker' && value.department === undefined) {
-        return helpers.error('any.required', { key: 'department' });
-    }
-    return value;
-});
-
-// Generate numeric code
-function generateNumericCode(digits = 6) {
-    const min = 10 ** (digits - 1);
-    const max = 10 ** digits - 1;
-    return String(Math.floor(Math.random() * (max - min + 1)) + min);
+async function rateLimit(key, max = 10, window = CACHE_TTLS.rateLimit) {
+    const countKey = `rate:${key}`;
+    let count = await redis.get(countKey);
+    count = parseInt(count || 0);
+    if (count >= max) return { ok: false, status: 429, message: 'Rate limit exceeded' };
+    await redis.set(countKey, (count + 1).toString(), 'EX', window);
+    return { ok: true };
 }
 
-// Redis rate limit helpers (using shared Redis module)
-async function checkRateLimit(userId) {
-    const rateLimitKey = `rate_limit:${userId}`;
-    const lockoutKey = `lockout:${userId}`;
-    const lockout = await redis.get(lockoutKey);
-    const attempts = await redis.get(rateLimitKey);
-    if (lockout) {
-        await publishEvent('login.locked', { userId });
-        throw new AuthError('Too many attempts. Try again later.', 429);
-    }
-    const count = parseInt(attempts || '0');
-    if (count >= 5) {
-        await redis.set(lockoutKey, 'locked', 'EX', 5 * 60);  // 5 min lockout
-        await publishEvent('login.locked', { userId });
-        throw new AuthError('Too many failed attempts. Account locked temporarily.', 429);
-    }
-    return count;
+// Enhanced publishEvent
+async function publishEvent(event, data, metadata = {}) {
+    const routingKey = `auth.${event}`;
+    const payload = { event, data, timestamp: new Date().toISOString(), service: 'auth-service' };
+    const traceId = uuidv4();
+    const success = await publishRabbitMQ(exchanges.topic, routingKey, payload, { headers: { traceId, ...metadata } });
+    if (success) console.debug(`Event emitted: ${event} [trace: ${traceId}]`);
+    else console.warn(`Event queued for retry: ${event}`);
 }
 
-async function incrementRateLimit(userId) {
-    const rateLimitKey = `rate_limit:${userId}`;
-    const current = await redis.get(rateLimitKey);
-    const newCount = (parseInt(current || '0') + 1).toString();
-    await redis.set(rateLimitKey, newCount, 'EX', 5 * 60);  // 5 min window
-}
-
-async function resetRateLimit(userId) {
-    const rateLimitKey = `rate_limit:${userId}`;
-    const lockoutKey = `lockout:${userId}`;
-    await redis.del(rateLimitKey);
-    await redis.del(lockoutKey);
-}
-
-async function register(data, options = {}) {
-    const { ip, device, location, sendVerification = true } = options;
-    const { error, value } = registerSchema.validate(data);
-    if (error) throw new AuthError(`Validation error: ${error.details.map(x => x.message).join(', ')}`);
-
-    const or = [];
-    if (value.email) or.push({ email: value.email });
-    if (value.phone) or.push({ phone: value.phone });
-    if (value.username) or.push({ username: value.username });
-    if (value.nationalId) or.push({ nationalId: value.nationalId });
-
-    if (or.length) {
-        const exists = await User.findOne({ $or: or });
-        if (exists) throw new AuthError('User with provided email, phone, username, or national ID already exists', 409);
-    }
-
-    const hashedPassword = await hashPassword(value.password);
-
-    const user = new User({
-        firstName: value.firstName,
-        lastName: value.lastName,
-        username: value.username,
-        email: value.email,
-        phone: value.phone,
-        profilePicture: value.profilePicture || null,
-        password: hashedPassword,
-        role: value.role,
-        nationalId: value.nationalId,
-        dateOfBirth: value.dateOfBirth,
-        gender: value.gender,
-        companyId: value.companyId || [],
-        shopId: value.shopId || [],
-        position: value.position,
-        department: value.department,
-        employmentStatus: value.employmentStatus || 'active',
-        emergencyContact: value.emergencyContact,
-        address: value.address,
-        loginHistory: [],
-        sessions: [],
-        verificationTokens: [],
-        consent: null,
-        preferences: null,
-        lastLoginAt: null,
-        failedLoginAttempts: 0,
-        lockUntil: null,
-        accountStatus: 'active',
-        dateJoined: new Date()
-    });
-    await user.save();
-
-    const preference = new Preference({
-        userId: user._id,
-        theme: value.preferences?.theme || 'system',
-        language: value.preferences?.language || 'en',
-        notifications: value.preferences?.notifications || { email: true, sms: false, inApp: true }
-    });
-    await preference.save();
-    user.preferences = preference._id;
-    await user.save();
-
-    const doc = JSON.stringify({
-        termsVersion: value.consent.termsVersion,
-        privacyVersion: value.consent.privacyVersion,
-        consentGiven: {
-            termsAccepted: !!value.consent.termsAccepted,
-            privacyAccepted: !!value.consent.privacyAccepted,
-            nationalIdConsent: !!value.consent.nationalIdConsent
+// Setup subscribers for external updates (call once on startup)
+async function setupSubscribers() {
+    // Company updates from external service
+    await subscribe(
+        { queue: 'auth_company_updates', exchange: exchanges.topic, pattern: 'company.user.*' },
+        async (content, routingKey) => {
+            const { event, data: { userId, companyId, action } } = content;
+            if (!['company.user.assigned', 'company.user.removed'].includes(event)) return;
+            const user = await User.findById(userId);
+            if (!user) return console.warn(`User ${userId} not found for company update`);
+            if (action === 'assigned' && !user.companies.includes(companyId)) {
+                user.companies.push(companyId);
+            } else if (action === 'removed') {
+                user.companies = user.companies.filter(id => id !== companyId);
+            }
+            await user.save();
+            await invalidateUserCache(userId);
+            await publishEvent('auth.user.tenancy.updated', { userId, companyId, action: 'company' });
+            console.log(`Updated company for user ${userId}: ${action} ${companyId}`);
         }
-    });
-    const documentHash = crypto.createHash('sha256').update(doc).digest('hex');
-    const consent = new Consent({
-        userId: user._id,
-        type: 'terms_and_privacy_sbapshop',
-        version: value.consent.termsVersion + '|' + value.consent.privacyVersion,
-        document: doc,
-        documentHash,
-        acceptedAt: new Date(),
-        ip: value.consent.ip || ip,
-        device: value.consent.device || device,
-        location
-    });
-    await consent.save();
-    user.consent = consent._id;
-    await user.save();
+    );
 
-    const verifications = [];
+    // Shop updates from external service
+    await subscribe(
+        { queue: 'auth_shop_updates', exchange: exchanges.topic, pattern: 'shop.user.*' },
+        async (content, routingKey) => {
+            const { event, data: { userId, shopId, action } } = content;
+            if (!['shop.user.assigned', 'shop.user.removed'].includes(event)) return;
+            const user = await User.findById(userId);
+            if (!user) return console.warn(`User ${userId} not found for shop update`);
+            if (action === 'assigned' && !user.shops.includes(shopId)) {
+                user.shops.push(shopId);
+            } else if (action === 'removed') {
+                user.shops = user.shops.filter(id => id !== shopId);
+            }
+            await user.save();
+            await invalidateUserCache(userId);
+            await publishEvent('auth.user.tenancy.updated', { userId, shopId, action: 'shop' });
+            console.log(`Updated shop for user ${userId}: ${action} ${shopId}`);
+        }
+    );
+
+    console.log('AuthService: Subscribers set up for external tenancy updates');
+}
+
+// === Core Functions ===
+
+// Register (OTP gen + role events)
+async function register(data, options = {}) {
+    await rateLimit(`register:${options.ip}`, 3);
+    if (!data) return { ok: false, status: 400, message: "Request body is required" };
+
+    const { error, value } = registerSchema.validate(data, { abortEarly: false });
+    if (error) {
+        const message = error.details.map(detail => detail.message).join(', ');
+        return { ok: false, status: 400, message }
+    }
+
+    // Check for existing user fields one by one to give specific error messages
     if (value.email) {
-        const code = generateNumericCode(6);
-        const verification = new Verification({ userId: user._id, type: 'email', code });
-        await verification.save();
-        verifications.push(verification);
-        user.verificationTokens.push(verification._id);
+        const existingEmail = await User.findOne({ email: value.email, isDeleted: { $ne: true } });
+        if (existingEmail) return { ok: false, status: 409, message: 'Email address is already registered' };
     }
     if (value.phone) {
-        const code = generateNumericCode(6);
-        const verification = new Verification({ userId: user._id, type: 'phone', code });
-        await verification.save();
-        verifications.push(verification);
-        user.verificationTokens.push(verification._id);
+        const existingPhone = await User.findOne({ phone: value.phone, isDeleted: { $ne: true } });
+        if (existingPhone) return { ok: false, status: 409, message: 'Phone number is already registered' };
     }
+    if (value.username) {
+        const existingUsername = await User.findOne({ username: value.username, isDeleted: { $ne: true } });
+        if (existingUsername) return { ok: false, status: 409, message: 'Username is already taken' };
+    }
+    if (value.nationalId) {
+        const existingNationalId = await User.findOne({ nationalId: value.nationalId, isDeleted: { $ne: true } });
+        if (existingNationalId) return { ok: false, status: 409, message: 'National ID is already registered' };
+    }
+
+    // Role defaults (model enforces)
+    // Create user first without preferences
+    const userDataWithoutPrefs = { ...value };
+    delete userDataWithoutPrefs.preferences;
+
+    const user = new User(userDataWithoutPrefs);
     await user.save();
 
-    if (sendVerification && verifications.length) {
-        for (const v of verifications) {
-            await publishEvent('verification.code.generated', { userId: user._id, type: v.type, code: v.code });
-            console.log('something')
-        }
+    // Create and link preferences if provided
+    if (value.preferences) {
+        const preference = new Preference({ userId: user._id, ...value.preferences });
+        await preference.save();
+        user.preferences = preference._id;
+        await user.save();
     }
 
-    const loginHistory = new LoginHistory({
-        userId: user._id,
-        ip,
-        device,
-        location,
-        method: 'password',
-        successful: true
-    });
-    await loginHistory.save();
-    user.loginHistory.push(loginHistory._id);
-    await user.save();
-
-    await publishEvent('user.registered', { userId: user._id, email: user.email, phone: user.phone, username: user.username });
-    return { user, verificationTokens: process.env.NODE_ENV !== 'production' ? verifications : [] };
-}
-
-async function login(credentials, options = {}) {
-    const { ip, device, location } = options;
-    const { error, value } = loginSchema.validate(credentials);
-    if (error) throw new AuthError(error.details[0].message);
-
-    const { identifier, password, otp } = value;
-    const or = [{ email: identifier }, { phone: identifier }, { username: identifier }, { nationalId: identifier }];
-
-    const user = await User.findOne({ $or: or }).select('+password +twoFASecret');
-    if (!user || user.accountStatus !== 'active') {
-        await publishEvent('login.failed', { identifier, ip, device, method: 'password' });
-        throw new AuthError('User not found or inactive', 401);
-    }
-
-    const attempts = await checkRateLimit(user._id.toString());
-    let authenticated = false;
-    let loginMethod = 'password';
-    if (password) {
-        authenticated = await comparePassword(password, user.password);
-    }
-
-    if (!authenticated) {
-        await incrementRateLimit(user._id.toString());
-        const loginHistory = new LoginHistory({
+    // Consent
+    if (value.consent) {
+        const doc = JSON.stringify({ termsVersion: value.consent.termsVersion, privacyVersion: value.consent.privacyVersion, consentGiven: { termsAccepted: value.consent.termsAccepted, privacyAccepted: value.consent.privacyAccepted, nationalIdConsent: value.consent.nationalIdConsent } });
+        const documentHash = crypto.createHash('sha256').update(doc).digest('hex');
+        const consent = new Consent({
             userId: user._id,
-            ip,
-            device,
-            location,
-            method: loginMethod,
-            successful: false
+            type: 'terms_and_privacy',
+            version: `${value.consent.termsVersion}|${value.consent.privacyVersion}`,
+            document: doc,
+            documentHash,
+            acceptedAt: new Date(),
+            ip: value.consent.ip || options.ip,
+            device: value.consent.device || options.device,
+            location: options.location || {}
         });
-        await loginHistory.save();
-        user.loginHistory.push(loginHistory._id);
+        await consent.save();
+        user.consent = consent._id;
         await user.save();
-        await publishEvent('login.failed', { userId: user._id, ip, device, method: loginMethod });
-        throw new AuthError('Invalid credentials', 401);
+
+        await publishEvent('user.consent.accepted', { userId: user._id, consentId: consent._id, version: consent.version });
     }
 
-    if (user.twoFAEnabled && !otp) {
-        throw new AuthError('2FA code required', 401);
+    // Generate OTPs for verification & publish events (notification service handles sending based on role/details)
+    const verificationTokens = [];
+    if (value.email && !user.isEmailVerified) {
+        // Generate a 6-digit code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const v = await Verification.create({ userId: user._id, type: 'email', code, expiresAt: new Date(Date.now() + 15 * 60 * 1000), meta: { email: value.email } });
+        verificationTokens.push({ type: 'email', code: process.env.NODE_ENV !== 'production' ? code : undefined });
+
+        await redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications);
+
+        await publishEvent('verification.requested', { userId: user._id, type: 'email', details: { email: value.email }, role: user.role, firstName: user.firstName, lastName: user.lastName });
     }
-    if (user.twoFAEnabled && otp) {
-        const ok = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: otp, window: 1 });
-        if (!ok) {
-            await incrementRateLimit(user._id.toString());
-            const loginHistory = new LoginHistory({
-                userId: user._id,
-                ip,
-                device,
-                location,
-                method: '2FA',
-                successful: false
-            });
-            await loginHistory.save();
-            user.loginHistory.push(loginHistory._id);
-            await user.save();
-            await publishEvent('2fa.failed', { userId: user._id, ip, device });
-            throw new AuthError('Invalid 2FA code', 401);
+    if (value.phone && !user.isPhoneVerified) {
+        // Generate a 6-digit code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const v = await Verification.create({ userId: user._id, type: 'phone', code, expiresAt: new Date(Date.now() + 15 * 60 * 1000), meta: { phone: value.phone } });
+        verificationTokens.push({ type: 'phone', code: process.env.NODE_ENV !== 'production' ? code : undefined });
+
+        await redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications);
+
+        await publishEvent('verification.requested', { userId: user._id, type: 'phone', details: { phone: value.phone }, role: user.role, firstName: user.firstName, lastName: user.lastName });
+    }
+
+    // Role-specific events
+    await publishEvent('user.registered', { userId: user._id, role: user.role, email: user.email, phone: user.phone, firstName: user.firstName, lastName: user.lastName });
+    if (user.role === 'customer') {
+        await publishEvent('customer.registered', { userId: user._id, firstName: user.firstName, lastName: user.lastName, phone: user.phone, email: user.email }); // Notification: OTP/welcome
+    } else {
+        await publishEvent('internal.user.registered', { userId: user._id, role: user.role, department: user.department, companies: user.companies, shops: user.shops }); // HR/audit
+    }
+
+    // Tenancy event if assigned
+    if (user.companies.length > 0 || user.shops.length > 0) {
+        await publishEvent('auth.user.tenancy.assigned', { userId: user._id, companies: user.companies, shops: user.shops });
+    }
+
+    // Cache
+    await redis.set(`user:${user._id}`, JSON.stringify(user.toObject({ versionKey: false })), 'EX', CACHE_TTLS.user);
+
+    return { user: user.toObject({ versionKey: false, transform: doc => { delete doc.password; return doc; } }), verificationTokens };
+}
+
+// Login (cached, rate-limited)
+async function login(data, options = {}) {
+    try {
+        console.log('Login attempt:', { identifier: data.identifier });
+        const rateResult = await rateLimit(`login:${data.identifier || options.ip}`, 15);
+        if (!rateResult.ok) {
+            return { status: 429, message: rateResult.message };
         }
-        loginMethod = '2FA';
-    }
 
-    await resetRateLimit(user._id.toString());
-    user.lastLoginAt = new Date();
-    await user.save();
+        const { error, value } = loginSchema.validate(data);
+        if (error) {
+            console.log('Validation error:', error.details[0].message);
+            return { status: 400, message: error.details[0].message };
+        }
 
-    const { refreshToken, session } = await tokenService.createSession(user._id, device, ip, location);
-    user.sessions.push(session._id);
-    await user.save();
+        // Cached partial lookup, then full DB for password
+        console.log('Looking up user with identifier:', value.identifier);
+        let user = await User.findOne({ $or: [{ email: value.identifier }, { phone: value.identifier }, { username: value.identifier }] }).select('+password');
+        console.log('User found:', user ? 'Yes' : 'No');
+        if (user) {
+            console.log('Account status:', user.accountStatus);
+            console.log('Is deleted:', user.isDeleted);
+            console.log('Lock until:', user.lockUntil);
+            console.log('User object:', JSON.stringify(user.toObject(), null, 2));
+        }
 
-    const loginHistory = new LoginHistory({
-        userId: user._id,
-        ip,
-        device,
-        location,
-        method: loginMethod,
-        successful: true
-    });
-    await loginHistory.save();
-    user.loginHistory.push(loginHistory._id);
-    await user.save();
+        // User not found or invalid status
+        if (!user || user.isDeleted || user.accountStatus !== 'active') {
+            return { status: 401, message: 'Invalid credentials' };
+        }
 
-    await publishEvent('login.success', { userId: user._id, ip, device, method: loginMethod });
-    return { accessToken: tokenService.signAccess({ sub: user._id.toString() }), refreshToken, user: user.toJSON() };
-}
+        // Account locked
+        if (user.lockUntil && user.lockUntil > new Date()) {
+            return { status: 423, message: 'Account locked' };
+        }
 
-async function requestOtpLogin(identifier, options = {}) {
-    const { ip, device, location } = options;
-    const { error } = otpLoginSchema.validate({ identifier });
-    if (error) throw new AuthError(error.details[0].message);
+        console.log('About to compare passwords:');
+        console.log('Provided password:', value.password);
+        console.log('Stored hash:', user.password);
+        console.log('Starting password comparison...');
+        const passwordMatch = await comparePassword(value.password, user.password);
+        console.log('Password comparison complete. Result:', passwordMatch);
+        console.log('Password match details:', {
+            inputLength: value.password.length,
+            hashExists: !!user.password,
+            hashPrefix: user.password ? user.password.substring(0, 7) : null
+        });
+        if (!passwordMatch) {
+            console.log('Password mismatch - incrementing failed attempts');
+            user.failedLoginAttempts += 1;
+            if (user.failedLoginAttempts >= 5) {
+                user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+            }
+            await user.save();
+            await invalidateUserCache(user._id);
+            console.log('Failed login attempts:', user.failedLoginAttempts);
+            return { status: 401, message: 'Invalid credentials' };
+        }
 
-    const or = [{ email: identifier }, { phone: identifier }];
-    const user = await User.findOne({ $or }).select('+accountStatus');
-    if (!user || user.accountStatus !== 'active') {
-        await publishEvent('otp_login.requested.invalid', { identifier, ip, device });
-        throw new AuthError('User not found or inactive', 404);
-    }
+        // 2FA
+        let method = 'password';
+        if (user.twoFAEnabled) {
+            if (!value.otp) return { ok: false, status: 401, message: '2FA code required' };
+            const verified = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: value.otp, window: 1 });
+            if (!verified) return { ok: false, status: 401, message: 'Invalid 2FA code' };
+            method = '2fa';
+        }
 
-    const code = generateNumericCode(6);
-    const verification = new Verification({ userId: user._id, type: 'otp_login', code });
-    await verification.save();
-    user.verificationTokens.push(verification._id);
-    await user.save();
-
-    await publishEvent('otp_login.requested', { userId: user._id, identifier, code });
-    return { message: 'OTP sent' };
-}
-
-async function verifyOtpLogin(identifier, code, options = {}) {
-    const { ip, device, location } = options;
-    const { error } = otpVerifySchema.validate({ identifier, code });
-    if (error) throw new AuthError(error.details[0].message);
-
-    const or = [{ email: identifier }, { phone: identifier }];
-    const user = await User.findOne({ $or }).select('+accountStatus');
-    if (!user || user.accountStatus !== 'active') throw new AuthError('User not found or inactive', 404);
-
-    const v = await Verification.findOne({ userId: user._id, type: 'otp_login', code, used: false });
-    if (!v || v.expiresAt < new Date()) {
-        await publishEvent('otp_login.failed', { userId: user._id, ip, device });
-        throw new AuthError('Invalid or expired OTP', 400);
-    }
-    v.used = true;
-    await v.save();
-
-    await resetRateLimit(user._id.toString());
-    user.lastLoginAt = new Date();
-    await user.save();
-
-    const { refreshToken, session } = await tokenService.createSession(user._id, device, ip, location);
-    user.sessions.push(session._id);
-    await user.save();
-
-    const loginHistory = new LoginHistory({ userId: user._id, ip, device, location, method: 'otp_login', successful: true });
-    await loginHistory.save();
-    user.loginHistory.push(loginHistory._id);
-    await user.save();
-
-    await publishEvent('login.success', { userId: user._id, ip, device, method: 'otp_login' });
-    return { accessToken: tokenService.signAccess({ sub: user._id.toString() }), refreshToken, user: user.toJSON() };
-}
-
-async function refresh(refreshToken) {
-    const tokens = await tokenService.refreshTokens(refreshToken);
-    await publishEvent('token.refreshed', { sessionId: tokens.sessionId, userId: tokens.userId });
-    return tokens;
-}
-
-async function logout(userId, refreshToken) {
-    await tokenService.revokeSessionByRefresh(refreshToken);
-    if (userId) {
-        await publishEvent('logout.success', { userId });
-    }
-    return true;
-}
-
-async function verify(userId, payload) {
-    const { error, value } = verificationSchema.validate(payload);
-    if (error) throw new AuthError(error.details[0].message);
-
-    const { type, code } = value;
-    const token = await Verification.findOne({ userId, type, code, used: false });
-    if (!token || token.expiresAt < new Date()) throw new AuthError('Invalid or expired code', 400);
-    token.used = true;
-    await token.save();
-
-    const user = await User.findById(userId);
-    if (!user) throw new AuthError('User not found', 404);
-    if (type === 'email') user.isEmailVerified = true;
-    if (type === 'phone') user.isPhoneVerified = true;
-    await user.save();
-    await publishEvent('verification.success', { userId, type });
-    return { verified: type, user: user.toJSON() };
-}
-
-async function setup2FA(userId) {
-    const user = await User.findById(userId).select('+twoFASecret');
-    if (!user) throw new AuthError('User not found', 404);
-    if (user.twoFAEnabled) throw new AuthError('2FA already enabled', 400);
-
-    const secret = speakeasy.generateSecret({ length: 20 });
-    const code = generateNumericCode(6);
-    const verification = new Verification({ userId, type: '2FA_setup', code });
-    await verification.save();
-    user.verificationTokens.push(verification._id);
-    user.twoFASecret = secret.base32;
-    await user.save();
-
-    await publishEvent('2fa.setup.initiated', { userId, code });
-    return { secret: secret.base32, otpauth_url: secret.otpauth_url };
-}
-
-async function verify2FASetup(userId, otp) {
-    const user = await User.findById(userId).select('+twoFASecret');
-    if (!user) throw new AuthError('User not found', 404);
-    const token = await Verification.findOne({ userId, type: '2FA_setup', used: false });
-    if (!token || token.expiresAt < new Date()) throw new AuthError('Invalid or expired 2FA setup token', 400);
-
-    if (token.code === otp || speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: otp, window: 1 })) {
-        token.used = true;
-        await token.save();
-        user.twoFAEnabled = true;
+        user.failedLoginAttempts = 0;
+        user.lastLoginAt = new Date();
         await user.save();
-        // await publishEvent('2fa.enabled', { userId });
-        return { message: '2FA enabled' };
+        await invalidateUserCache(user._id);
+
+        const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
+        user.sessions.push(session._id);
+        await user.save();
+
+        const history = new LoginHistory({ userId: user._id, ip: options.ip, device: options.device, location: options.location, method, successful: true, riskScore: 0 });
+        await history.save();
+        user.loginHistory.push(history._id);
+        await user.save();
+
+        await publishEvent('user.logged_in', { userId: user._id, role: user.role, method, ip: options.ip, device: options.device });
+
+        return {
+            ok: true,
+            accessToken: tokenService.signAccess({ sub: user._id.toString() }),
+            refreshToken,
+            user: await getCachedUser(user._id, '-password')
+        };
+    } catch (error) {
+        console.error('Login error:', error);
+        return { status: 500, message: 'Internal server error' };
     }
-    await publishEvent('2fa.setup.failed', { userId });
-    throw new AuthError('Invalid 2FA code', 400);
 }
 
-async function disable2FA(userId, password) {
-    const user = await User.findById(userId).select('+password +twoFASecret');
-    if (!user.twoFAEnabled) throw new AuthError('2FA not enabled', 400);
-    if (!(await comparePassword(password, user.password))) throw new AuthError('Invalid password', 401);
-
-    user.twoFASecret = null;
-    user.twoFAEnabled = false;
-    await user.save();
-    await publishEvent('2fa.disabled', { userId });
-    return { message: '2FA disabled' };
+// Refresh (cached)
+async function refresh(refreshToken) {
+    const { accessToken, refreshToken: newRefresh, sessionId, userId } = await tokenService.refreshTokens(refreshToken);
+    await publishEvent('auth.session.refreshed', { sessionId, userId });
+    return { accessToken, refreshToken: newRefresh };
 }
 
-async function changeEmail(userId, data, options = {}) {
-    const { error, value } = changeEmailSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message);
+// Logout
+async function logout(userId, refreshToken) {
+    if (refreshToken) await tokenService.revokeSessionByRefresh(refreshToken);
+    if (userId) {
+        await publishEvent('user.logged_out', { userId });
+    }
+    return { message: 'Logged out' };
+}
+
+// Update Profile (invalidate cache)
+async function updateProfile(userId, data, profilePictureUrl = null) {
+    const { error, value } = updateProfileSchema.validate(data);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(userId);
-    if (user.email === value.newEmail) throw new AuthError('Email unchanged', 400);
+    if (!user) return { ok: false, status: 404, message: 'User not found' };
 
-    const exists = await User.findOne({ email: value.newEmail });
-    if (exists) throw new AuthError('Email already in use', 409);
-
-    const code = generateNumericCode(6);
-    const verification = new Verification({ userId, type: 'email_change', code, meta: { newEmail: value.newEmail } });
-    await verification.save();
-    user.verificationTokens.push(verification._id);
-    await user.save();
-
-    await publishEvent('email.change.requested', { userId, newEmail: value.newEmail, code });
-    return { message: 'Verification code sent to new email' };
-}
-
-async function confirmChangeEmail(userId, payload) {
-    const { error, value } = verificationSchema.validate(payload);
-    if (error) throw new AuthError(error.details[0].message);
-
-    const { code } = value;
-    const token = await Verification.findOne({ userId, type: 'email_change', code, used: false });
-    if (!token || token.expiresAt < new Date()) throw new AuthError('Invalid or expired code', 400);
-
-    const user = await User.findById(userId);
-    user.email = token.meta.newEmail;
-    user.isEmailVerified = false;
-    token.used = true;
-    await token.save();
-    await user.save();
-
-    await publishEvent('email.changed', { userId, newEmail: user.email });
-    return { message: 'Email changed successfully' };
-}
-
-async function requestPasswordReset(data) {
-    const { error, value } = passwordResetSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message);
-
-    const or = [{ email: value.emailOrPhone }, { phone: value.emailOrPhone }];
-    const user = await User.findOne({ $or });
-    if (!user) {
-        await publishEvent('password.reset.requested.invalid', { emailOrPhone: value.emailOrPhone });
-        throw new AuthError('User not found', 404);
+    if (profilePictureUrl) value.profilePicture = profilePictureUrl;
+    if (value.preferences) {
+        let pref = await Preference.findOne({ userId });
+        if (!pref) pref = new Preference({ userId });
+        Object.assign(pref, value.preferences);
+        await pref.save();
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const hashed = hashToken(resetToken);
-    const verification = new Verification({
-        userId: user._id,
-        type: 'password_reset',
-        code: hashed
-    });
-    await verification.save();
-    user.verificationTokens.push(verification._id);
+    Object.assign(user, value);
     await user.save();
+    await invalidateUserCache(userId);
 
-    await publishEvent('password.reset.requested', { userId: user._id, resetToken });
-    return { message: 'Reset instructions sent' };
+    await publishEvent('user.profile.updated', { userId, role: user.role });
+
+    return { user: await getCachedUser(userId) };
 }
 
-async function confirmPasswordReset(token, newPassword) {
-    const { error } = passwordChangeSchema.validate({ newPassword });
-    if (error) throw new AuthError(error.details[0].message);
-
-    const hashedToken = hashToken(token);
-    const v = await Verification.findOne({ type: 'password_reset', code: hashedToken, used: false });
-    if (!v || v.expiresAt < new Date()) throw new AuthError('Invalid or expired reset token', 400);
-
-    const user = await User.findById(v.userId);
-    user.password = await hashPassword(newPassword);
-    v.used = true;
-    await v.save();
-    await user.save();
-
-    await publishEvent('password.reset.success', { userId: user._id });
-    return { message: 'Password reset successfully' };
-}
-
-async function changePassword(userId, data, options = {}) {
-    const { error, value } = passwordChangeSchema.validate(data);
-    if (error) throw new AuthError(error.details[0].message);
+// Change Password (invalidate)
+async function changePassword(userId, data) {
+    const { error, value } = changePasswordSchema.validate(data);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(userId).select('+password');
-    if (!(await comparePassword(value.oldPassword, user.password))) throw new AuthError('Invalid old password', 401);
+    if (!await comparePassword(value.oldPassword, user.password)) return { ok: false, status: 401, message: 'Old password wrong' };
 
     user.password = await hashPassword(value.newPassword);
     await user.save();
-    await publishEvent('password.changed', { userId });
-    return { message: 'Password changed successfully' };
+    await invalidateUserCache(userId);
+
+    await publishEvent('user.password.changed', { userId });
+
+    return { message: 'password is successfully Changed', user: await getCachedUser(userId) };
 }
 
-async function deleteAccount(userId) {
+// Verify (cached code check)
+async function verify(userId, data) {
+    const { error, value } = verificationSchema.validate(data);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
+
+    const cacheKey = `verify:${userId}:${value.type}:${value.code}`;
+    let code = await redis.get(cacheKey);
+    let token;
+    if (!code) {
+        token = await Verification.findOne({ userId, type: value.type, code: value.code, used: false, expiresAt: { $gt: new Date() } });
+        if (!token) return { ok: false, status: 400, message: 'Invalid verification code' };
+        code = token.code;
+        await redis.set(cacheKey, code, 'EX', CACHE_TTLS.verifications);
+    }
+
+    if (code !== value.code) return { ok: false, status: 400, message: 'Invalid verification code' };
+
+    token.used = true;
+    await token.save();
+    await redis.del(cacheKey);
+
     const user = await User.findById(userId);
-    if (!user) throw new AuthError('User not found', 404);
+    if (value.type === 'email') user.isEmailVerified = true;
+    if (value.type === 'phone') user.isPhoneVerified = true;
+    await user.save();
+    await invalidateUserCache(userId);
 
-    await Session.deleteMany({ userId });
-    await Consent.deleteMany({ userId });
-    await Verification.deleteMany({ userId });
-    await LoginHistory.deleteMany({ userId });
-    await Preference.deleteMany({ userId });
-    await resetRateLimit(userId.toString());
+    await publishEvent(`user.verification.${value.type}_completed`, { userId, role: user.role });
 
-    await user.deleteOne();
-    await publishEvent('user.deleted', { userId });
-    return { message: 'Account deleted' };
+    return { verified: true };
 }
 
-async function revokeConsent(userId, type) {
-    const { error } = revokeConsentSchema.validate({ type });
-    if (error) throw new AuthError(error.details[0].message);
+// Setup 2FA
+async function setup2FA(userId, data) {
+    const { error, value } = setup2FASchema.validate(data);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
-    const consent = await Consent.findOne({ userId, type, revoked: false });
-    if (!consent) throw new AuthError('Consent not found', 404);
+    const user = await User.findById(userId).select('+password');
+    if (user.twoFAEnabled) return { ok: false, status: 400, message: '2FA is already enabled' };
+
+    const passwordMatch = await comparePassword(value.password, user.password);
+    if (!passwordMatch) return { ok: false, status: 401, message: 'Invalid password' };
+
+    const secret = speakeasy.generateSecret({ name: `Invexis (${user.email || user.phone})` });
+    user.twoFASecret = secret.base32;
+    await user.save();
+    await invalidateUserCache(userId);
+
+    await publishEvent('user.2fa.setup_requested', { userId });
+
+    return { secret: secret.ascii, qr: secret.otpauth_url };
+}
+
+// Verify 2FA Setup
+async function verify2FASetup(userId, data) {
+    const { error, value } = verify2FASetupSchema.validate(data);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
+
+    const user = await User.findById(userId).select('+twoFASecret');
+    const verified = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: value.otp, window: 1 });
+    if (!verified) return { ok: false, status: 400, message: 'Invalid code' };
+
+    user.twoFAEnabled = true;
+    await user.save();
+    await invalidateUserCache(userId);
+
+    await publishEvent('user.2fa.enabled', { userId });
+
+    return { enabled: true };
+}
+
+// Disable 2FA
+async function disable2FA(userId, data) {
+    const { error, value } = disable2FASchema.validate(data);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
+
+    const user = await User.findById(userId).select('+password +twoFASecret');
+    if (!user.twoFAEnabled) return { ok: false, status: 400, message: '2FA is not enabled' };
+
+    const passwordMatch = await comparePassword(value.password, user.password);
+    if (!passwordMatch) return { ok: false, status: 401, message: 'Invalid password' };
+
+    const verified = speakeasy.totp.verify({
+        secret: user.twoFASecret,
+        encoding: 'base32',
+        token: value.otp,
+        window: 1
+    });
+    if (!verified) return { ok: false, status: 400, message: 'Invalid code' };
+
+    user.twoFAEnabled = false;
+    user.twoFASecret = undefined;
+    await user.save();
+    await invalidateUserCache(userId);
+
+    await publishEvent('user.2fa.disabled', { userId });
+
+    return { disabled: true };
+}
+
+// Change Email
+async function changeEmail(userId, newEmail, currentPassword) {
+    const user = await User.findById(userId).select('+password');
+    if (!await comparePassword(currentPassword, user.password)) return { ok: false, status: 401, message: 'Password wrong' };
+
+    const existing = await User.findOne({ email: newEmail });
+    if (existing) return { ok: false, status: 409, message: 'Email in use' };
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await Verification.create({ userId, type: 'email_change', code, meta: { newEmail } });
+
+    await redis.set(`verify:${userId}:email_change:${code}`, code, 'EX', CACHE_TTLS.verifications);
+
+    await publishEvent('verification.requested', { userId, type: 'email_change', details: { newEmail }, role: user.role });
+
+    return { message: 'Code sent' };
+}
+
+// Confirm Change Email
+async function confirmChangeEmail(userId, data) {
+    const result = await verify(userId, { ...data, type: 'email_change' });
+    const user = await User.findById(userId);
+    user.email = data.meta?.newEmail || user.email;
+    user.isEmailVerified = true;
+    await user.save();
+    await invalidateUserCache(userId);
+
+    await publishEvent('user.email.changed', { userId, newEmail: user.email });
+
+    return result;
+}
+
+// Request Password Reset
+async function requestPasswordReset(identifier) {
+    const user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] });
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await Verification.create({ userId: user._id, type: 'password_reset', code, meta: { identifier } });
+
+    await redis.set(`verify:${user._id}:password_reset:${code}`, code, 'EX', CACHE_TTLS.verifications);
+
+    await publishEvent('verification.requested', { userId: user._id, type: 'password_reset', details: { identifier } });
+
+    return { message: 'request initialized and code is sent', code, user: await getCachedUser(user._id) };
+}
+
+// Confirm Password Reset
+async function confirmPasswordReset(identifier, code, newPassword) {
+    const token = await Verification.findOne({ type: 'password_reset', code, used: false, expiresAt: { $gt: new Date() }, 'meta.identifier': identifier });
+    if (!token) return { ok: false, status: 400, message: 'Invalid code' };
+
+    token.used = true;
+    await token.save();
+    await redis.del(`verify:${token.userId}:password_reset:${code}`);
+
+    const user = await User.findById(token.userId);
+    user.password = await hashPassword(newPassword);
+    user.failedLoginAttempts = 0;
+    await user.save();
+    await invalidateUserCache(user._id);
+
+    await publishEvent('user.password.reset_completed', { userId: token.userId });
+
+    return { message: 'password is successfully reset', user };
+}
+
+// Resend Verification
+async function resendVerification(userId, type) {
+    const user = await getCachedUser(userId);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
+    if (type === 'email' && user.isEmailVerified) return { ok: false, status: 400, message: 'Verified' };
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await Verification.create({ userId, type, code, meta: { [type]: user[type] } });
+
+    await redis.set(`verify:${userId}:${type}:${code}`, code, 'EX', CACHE_TTLS.verifications);
+
+    await publishEvent('verification.requested', { userId, type, details: { [type]: user[type] }, role: user.role });
+
+    return { message: 'Resent' };
+}
+
+// Get Sessions (cached)
+async function getSessions(userId) {
+    const cacheKey = `sessions:${userId}`;
+    let sessionsJson = await redis.get(cacheKey);
+    if (sessionsJson) return { sessions: JSON.parse(sessionsJson) };
+
+    const sessions = await Session.find({ userId }).sort({ lastActiveAt: -1 }).map(s => s.toObject({ versionKey: false }));
+    sessionsJson = JSON.stringify(sessions);
+    await redis.set(cacheKey, sessionsJson, 'EX', CACHE_TTLS.sessions);
+
+    return { sessions };
+}
+
+// Revoke Session
+async function revokeSession(userId, sessionId) {
+    const session = await Session.findOne({ _id: sessionId, userId });
+    if (!session) return { ok: false, status: 404, message: 'Not found' };
+
+    session.revoked = true;
+    await session.save();
+    await redis.del(`session:${sessionId}`);
+    await redis.del(`sessions:${userId}`);
+
+    await publishEvent('auth.session.revoked', { userId, sessionId });
+
+    return { message: 'Revoked' };
+}
+
+// Get Consents
+async function getConsents(userId) {
+    const consents = await Consent.find({ userId }).sort({ acceptedAt: -1 });
+    return { consents: consents.map(c => c.toObject({ versionKey: false })) };
+}
+
+// Revoke Consent
+async function revokeConsent(userId, type) {
+    const consent = await Consent.findOne({ userId, type });
+    if (!consent) return { ok: false, status: 404, message: 'Not found' };
+
     consent.revoked = true;
     consent.revokedAt = new Date();
     await consent.save();
-    await publishEvent('consent.revoked', { userId, type });
-    return { message: 'Consent revoked' };
+
+    await publishEvent('user.consent.revoked', { userId, type });
+
+    return { message: 'Revoked' };
 }
 
-async function unlockAccount(userId) {
+// Delete Account
+async function deleteAccount(userId) {
     const user = await User.findById(userId);
-    if (!user) throw new AuthError('User not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
+
+    user.isDeleted = true;
+    user.accountStatus = 'deactivated';
+    user.deletedAt = new Date();
+    await user.save();
+    await invalidateUserCache(userId);
+    await Session.updateMany({ userId }, { revoked: true });
+
+    await publishEvent('user.account.deleted', { userId, role: user.role });
+
+    return { message: 'Deleted' };
+}
+
+// Unlock Account
+async function unlockAccount(adminId, targetUserId) {
+    const user = await User.findById(targetUserId);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
+
+    user.lockUntil = undefined;
     user.failedLoginAttempts = 0;
-    user.lockUntil = null;
     await user.save();
-    await resetRateLimit(userId.toString());
-    await publishEvent('admin.account.unlocked', { targetUserId: userId });
-    return { message: 'Account unlocked' };
+    await invalidateUserCache(targetUserId);
+
+    await publishEvent('admin.account.unlocked', { adminId, userId: targetUserId });
+
+    return { message: 'Unlocked' };
 }
 
+// Bulk Update
 async function bulkUpdateUsers(userIds, action) {
-    const { error } = bulkUpdateSchema.validate({ userIds, action });
-    if (error) throw new AuthError(error.details[0].message);
+    const { error, value } = bulkUpdateSchema.validate({ userIds, action });
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
-    const status = action === 'activate' ? 'active' : 'deactivated';
-    const result = await User.updateMany({ _id: { $in: userIds }, accountStatus: { $ne: status } }, { accountStatus: status });
-    await publishEvent('admin.users.bulk_updated', { targetUserIds: userIds, action });
-    return { updated: result.modifiedCount };
+    const statusMap = { activate: 'active', deactivate: 'deactivated', ban: 'banned' };
+    const results = await User.updateMany({ _id: { $in: userIds } }, { accountStatus: statusMap[action] });
+    userIds.forEach(id => invalidateUserCache(id));
+
+    await publishEvent('admin.users.bulk_updated', { action, count: results.modifiedCount, userIds });
+
+    return { updated: results.modifiedCount };
 }
 
+// Check Compliance
 async function checkConsentCompliance(termsVersion, privacyVersion) {
-    const { error } = complianceSchema.validate({ termsVersion, privacyVersion });
-    if (error) throw new AuthError(error.details[0].message);
+    const users = await User.find({ consent: { $exists: true } }).populate('consent');
+    const compliant = users.filter(u => !u.consent.revoked && u.consent.version.includes(termsVersion) && u.consent.version.includes(privacyVersion));
+    await publishEvent('admin.consent.compliance_checked', { termsVersion, privacyVersion, compliantCount: compliant.length, total: users.length });
 
-    const users = await User.find({}).populate('consent');
-    const requiredVersion = `${termsVersion}|${privacyVersion}`;
-    const nonCompliant = users.filter(u => !u.consent || u.consent.version !== requiredVersion);
-    await publishEvent('admin.consent.compliance_checked', { nonCompliantUserIds: nonCompliant.map(u => u._id) });
-    return { nonCompliant: nonCompliant.length, userIds: nonCompliant.map(u => u._id) };
+    return { compliantCount: compliant.length, total: users.length };
 }
 
-async function getSessions(userId) {
-    const sessions = await Session.find({ userId }).sort({ lastActiveAt: -1 });
-    return { sessions: sessions.map(s => ({ id: s._id, device: s.deviceId, ip: s.ip, lastActiveAt: s.lastActiveAt, revoked: s.revoked })) };
-}
-
-async function revokeSession(userId, sessionId) {
-    const session = await Session.findOne({ userId, _id: sessionId });
-    if (!session) throw new AuthError('Session not found', 404);
-    session.revoked = true;
-    await session.save();
-    const user = await User.findById(userId);
-    user.sessions = user.sessions.filter(s => s.toString() !== sessionId);
-    await user.save();
-    await publishEvent('session.revoked', { userId, sessionId });
-    return { message: 'Session revoked' };
-}
-
-async function getConsents(userId) {
-    const consents = await Consent.find({ userId }).sort({ acceptedAt: -1 });
-    return { consents };
-}
-
-async function updateProfile(userId, data, profilePictureUrl = null) {
-    const schema = joi.object({
-        firstName: joi.string().min(2).max(30).optional(),
-        lastName: joi.string().min(2).max(30).optional(),
-        gender: joi.string().valid("male", "female", "other").optional(),
-        address: joi.object({
-            street: joi.string().max(100).optional().allow(null, ''),
-            city: joi.string().max(50).optional().allow(null, ''),
-            state: joi.string().max(50).optional().allow(null, ''),
-            postalCode: joi.string().max(20).optional().allow(null, ''),
-            country: joi.string().max(50).optional().allow(null, '')
-        }).optional()
-    });
-    const { error, value } = schema.validate(data);
-    if (error) throw new AuthError(error.details[0].message);
-
-    if (profilePictureUrl) value.profilePicture = profilePictureUrl;
-
-    const user = await User.findByIdAndUpdate(userId, value, { new: true });
-    await publishEvent('profile.updated', { userId });
-    return { user: user.toJSON() };
-}
-
-async function resendVerification(userId, type) {
-    const user = await User.findById(userId);
-    if (type === 'email' && user.email) {
-        const code = generateNumericCode(6);
-        const verification = new Verification({ userId, type, code });
-        await verification.save();
-        user.verificationTokens.push(verification._id);
-        await user.save();
-        await publishEvent('verification.resend', { userId, type, code });
-        return { message: 'Code resent' };
-    }
-    if (type === 'phone' && user.phone) {
-        const code = generateNumericCode(6);
-        const verification = new Verification({ userId, type, code });
-        await verification.save();
-        user.verificationTokens.push(verification._id);
-        await user.save();
-        await publishEvent('verification.resend', { userId, type, code });
-        return { message: 'Code resent' };
-    }
-    throw new AuthError('Invalid type or contact', 400);
-}
-
-async function getUsers(adminId, role, query = {}) {
-    const allowedRoles = role === 'super_admin' ? ['super_admin', 'company_admin', 'shop_manager', 'worker', 'customer'] : ['shop_manager', 'worker', 'customer'];
-    const filter = { role: { $in: allowedRoles }, ...query };
-    const users = await User.find(filter).select('-password -twoFASecret');
-    await publishEvent('admin.users.listed', { userId: adminId, role });
-    return { users: users.map(u => u.toJSON()) };
-}
-
+// Admin: Create User
 async function createUser(adminId, data, options = {}) {
-    const { ip, device, location } = options;
-    const { error, value } = registerSchema.validate(data);
-    if (error) throw new AuthError(`Validation error: ${error.details.map(x => x.message).join(', ')}`);
+    const out = await register(data, options);
+    await publishEvent('admin.user.created', { adminId, newUserId: out.user._id, role: out.user.role });
 
-    const or = [];
-    if (value.email) or.push({ email: value.email });
-    if (value.phone) or.push({ phone: value.phone });
-    if (value.username) or.push({ username: value.username });
-    if (value.nationalId) or.push({ nationalId: value.nationalId });
-
-    if (or.length) {
-        const exists = await User.findOne({ $or: or });
-        if (exists) throw new AuthError('User with provided email, phone, username, or national ID already exists', 409);
-    }
-
-    const hashedPassword = await hashPassword(value.password);
-    const user = new User({
-        firstName: value.firstName,
-        lastName: value.lastName,
-        username: value.username,
-        email: value.email,
-        phone: value.phone,
-        password: hashedPassword,
-        role: value.role,
-        nationalId: value.nationalId,
-        dateOfBirth: value.dateOfBirth,
-        gender: value.gender,
-        companyId: value.companyId,
-        shopId: value.shopId,
-        position: value.position,
-        department: value.department,
-        employmentStatus: value.employmentStatus || 'active',
-        emergencyContact: value.emergencyContact,
-        address: value.address,
-        accountStatus: 'active',
-        dateJoined: new Date()
-    });
-    await user.save();
-
-    const preference = new Preference({
-        userId: user._id,
-        theme: value.preferences?.theme || 'system',
-        language: value.preferences?.language || 'en',
-        notifications: value.preferences?.notifications || { email: true, sms: false, inApp: true }
-    });
-    await preference.save();
-    user.preferences = preference._id;
-
-    const doc = JSON.stringify({
-        termsVersion: value.consent.termsVersion,
-        privacyVersion: value.consent.privacyVersion,
-        consentGiven: {
-            termsAccepted: !!value.consent.termsAccepted,
-            privacyAccepted: !!value.consent.privacyAccepted,
-            nationalIdConsent: !!value.consent.nationalIdConsent
-        }
-    });
-    const documentHash = crypto.createHash('sha256').update(doc).digest('hex');
-    const consent = new Consent({
-        userId: user._id,
-        type: 'terms_and_privacy_sbapshop',
-        version: value.consent.termsVersion + '|' + value.consent.privacyVersion,
-        document: doc,
-        documentHash,
-        acceptedAt: new Date(),
-        ip: value.consent.ip || ip,
-        device: value.consent.device || device,
-        location
-    });
-    await consent.save();
-    user.consent = consent._id;
-    await user.save();
-
-    await publishEvent('admin.user.created', { userId: adminId, newUserId: user._id });
-    return { user: user.toJSON() };
+    return out;
 }
 
+// Admin: Update User
 async function updateUser(adminId, targetUserId, data) {
     const { error, value } = updateUserSchema.validate(data);
-    if (error) throw new AuthError(`Validation error: ${error.details.map(x => x.message).join(', ')}`);
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(targetUserId);
-    if (!user) throw new AuthError('User not found', 404);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
 
+    // Uniqueness for changes
     const or = [];
     if (value.email && value.email !== user.email) or.push({ email: value.email });
     if (value.phone && value.phone !== user.phone) or.push({ phone: value.phone });
     if (value.username && value.username !== user.username) or.push({ username: value.username });
     if (value.nationalId && value.nationalId !== user.nationalId) or.push({ nationalId: value.nationalId });
 
-    if (or.length) {
+    if (or.length > 0) {
         const exists = await User.findOne({ $or: or, _id: { $ne: targetUserId } });
-        if (exists) throw new AuthError('Email, phone, username, or national ID already in use', 409);
+        if (exists) return { ok: false, status: 409, message: 'Field in use' };
     }
 
+    if (value.password) value.password = await hashPassword(value.password);
     Object.assign(user, value);
     await user.save();
-    // await publishEvent('admin.user.updated', { userId: adminId, targetUserId });
-    return { user: user.toJSON() };
+    await invalidateUserCache(targetUserId);
+
+    await publishEvent('admin.user.updated', { adminId, targetUserId, changes: Object.keys(value) });
+
+    return { user: await getCachedUser(targetUserId) };
 }
 
+// Admin: Delete User
 async function deleteUser(adminId, targetUserId) {
     const user = await User.findById(targetUserId);
-    if (!user) throw new AuthError('User not found', 404);
-    if (user._id.toString() === adminId.toString()) throw new AuthError('Cannot delete self', 400);
+    if (!user || user._id.toString() === adminId) return { ok: false, status: 400, message: 'Cannot delete' };
+
     user.isDeleted = true;
+    user.accountStatus = 'deactivated';
+    user.deletedAt = new Date();
     await user.save();
-    // await publishEvent('admin.user.deleted', { userId: adminId, targetUserId });
-    return { message: 'User deleted' };
+    await invalidateUserCache(targetUserId);
+
+    await publishEvent('admin.user.deleted', { adminId, targetUserId });
+
+    return { message: 'Deleted' };
 }
 
+// Admin: Get User By ID
 async function getUserById(adminId, targetUserId) {
-    const user = await User.findById(targetUserId).select('-password -twoFASecret');
-    if (!user) throw new AuthError('User not found', 404);
-    // await publishEvent('admin.user.viewed', { userId: adminId, targetUserId });
-    return { user: user.toJSON() };
+    const user = await getCachedUser(targetUserId, '-password -twoFASecret', ['preferences', 'consent']);
+    if (!user) return { ok: false, status: 404, message: 'Not found' };
+
+    await publishEvent('admin.user.viewed', { adminId, targetUserId });
+
+    return { user };
 }
 
+// Get Current User (cached)
+async function getCurrentUser(userId) {
+    return await getCachedUser(userId, '-password -twoFASecret', ['preferences', 'consent']);
+}
 
-async function acceptConsent(adminId, data) {
-    const schema = joi.object({
-        userId: joi.string().required(),
-        termsVersion: joi.string().required(),
-        privacyVersion: joi.string().required(),
-        termsAccepted: joi.boolean().required().valid(true),
-        privacyAccepted: joi.boolean().required().valid(true),
-        nationalIdConsent: joi.boolean().optional(),
-        ip: joi.string().ip().optional(),
-        device: joi.string().optional()
-    });
-    const { error, value } = schema.validate(data);
-    if (error) throw new AuthError(error.details[0].message);
+// Admin: Get Users (cached paginated)
+async function getUsers(adminId, roleFilter, query = {}) {
+    const { page = 1, limit = 10, status } = query;
+    const skip = (page - 1) * limit;
+    const cacheKey = `users:${roleFilter}:${status || 'active'}:${page}:${limit}`;
+    let usersJson = await redis.get(cacheKey);
+    if (usersJson) return JSON.parse(usersJson);
 
-    const user = await User.findById(value.userId);
-    if (!user) throw new AuthError('User not found', 404);
+    const filter = { accountStatus: status || 'active' };
+    if (roleFilter !== 'super_admin') filter.role = { $ne: 'super_admin' };
+    const [users, total] = await Promise.all([
+        User.find(filter).select('-password -twoFASecret').populate('preferences consent').limit(limit).skip(skip).sort({ createdAt: -1 }),
+        User.countDocuments(filter)
+    ]);
+    const result = { users: users.map(u => u.toObject({ versionKey: false })), total, page, limit };
+    await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTLS.sessions * 10);
 
+    await publishEvent('admin.users.listed', { adminId, count: users.length, filter });
+
+    return result;
+}
+
+// Accept Consent (full impl: snapshot document, hash, immutable)
+async function acceptConsent(userId, data) {
+    const { error, value } = consentSchema.validate({ ...data, userId });
+    if (error) return { ok: false, status: 400, message: error.details[0].message };
+
+    const user = await User.findById(value.userId || userId);
+    if (!user) return { ok: false, status: 404, message: 'User not found' };
+
+    // Snapshot document (immutable)
     const doc = JSON.stringify({
         termsVersion: value.termsVersion,
         privacyVersion: value.privacyVersion,
         consentGiven: {
-            termsAccepted: !!value.termsAccepted,
-            privacyAccepted: !!value.privacyAccepted,
-            nationalIdConsent: !!value.nationalIdConsent
+            termsAccepted: value.termsAccepted,
+            privacyAccepted: value.privacyAccepted,
+            nationalIdConsent: value.nationalIdConsent
         }
     });
     const documentHash = crypto.createHash('sha256').update(doc).digest('hex');
+
+    // Check for existing (prevent duplicates)
+    const existing = await Consent.findOne({ userId: user._id, type: 'terms_and_privacy', version: `${value.termsVersion}|${value.privacyVersion}` });
+    if (existing && !existing.revoked) return { ok: false, status: 409, message: 'Consent already accepted for this version' };
+
     const consent = new Consent({
         userId: user._id,
-        type: 'terms_and_privacy_sbapshop',
-        version: value.termsVersion + '|' + value.privacyVersion,
+        type: 'terms_and_privacy',
+        version: `${value.termsVersion}|${value.privacyVersion}`,
         document: doc,
         documentHash,
         acceptedAt: new Date(),
         ip: value.ip || '',
         device: value.device || '',
-        location: {}  // Can enhance with geolocation if needed
+        location: {}
     });
     await consent.save();
 
-    user.consent = consent._id;  // Override previous consent reference
+    // Link to user (override if newer version)
+    user.consent = consent._id;
+    await user.save();
+    await invalidateUserCache(user._id);
+
+    await publishEvent('user.consent.accepted', { userId: user._id, consentId: consent._id, version: consent.version, role: user.role });
+
+    return { message: 'Consent accepted', consentId: consent._id };
+}
+
+// Request OTP Login
+async function requestOtpLogin(identifier, options = {}) {
+    const rateCheck = await rateLimit(`otp:${identifier}`, 3);
+    if (!rateCheck.ok) return rateCheck;
+
+    const user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] });
+    if (!user || user.accountStatus !== 'active') return { ok: false, status: 401, message: 'Invalid credentials' };
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await Verification.create({ userId: user._id, type: 'otp_login', code, meta: { identifier } });
+
+    await redis.set(`verify:${user._id}:otp_login:${code}`, code, 'EX', CACHE_TTLS.verifications);
+
+    await publishEvent('verification.requested', { userId: user._id, type: 'otp_login', details: { identifier }, role: user.role });
+
+    return { ok: true, status: 200, message: 'OTP sent successfully', user, code };
+}
+
+// Verify OTP Login
+async function verifyOtpLogin(identifier, code, options = {}) {
+    const cacheKey = `verify:*:otp_login:${code}`;
+    let token = await redis.get(cacheKey);
+    if (!token) {
+        token = await Verification.findOne({ type: 'otp_login', code, used: false, expiresAt: { $gt: new Date() }, 'meta.identifier': identifier });
+        if (!token) return { ok: false, status: 401, message: 'Invalid OTP' };
+    }
+
+    token.used = true;
+    await token.save();
+    await redis.del(cacheKey);
+
+    const user = await User.findById(token.userId);
+    if (!user || user.accountStatus !== 'active') {
+        return { ok: false, status: 401, message: 'User not found or inactive' };
+    }
+
+    const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
+    user.sessions.push(session._id);
     await user.save();
 
-    // await publishEvent('admin.consent.updated', { adminId, userId: user._id, consentId: consent._id });
-    return { message: 'Consent updated' };
+    await publishEvent('user.otp.login_completed', { userId: token.userId, role: user.role, method: 'otp' });
+
+    return {
+        ok: true,
+        accessToken: tokenService.signAccess({ sub: user._id.toString() }),
+        refreshToken,
+        user: await getCachedUser(user._id)
+    };
 }
 
 module.exports = {
-    register, login, refresh, logout, verify, setup2FA, verify2FASetup,
-    disable2FA, changeEmail, confirmChangeEmail, requestPasswordReset,
-    confirmPasswordReset, changePassword, getSessions, revokeSession,
-    getConsents, updateProfile, resendVerification,
-    requestOtpLogin, verifyOtpLogin, deleteAccount, revokeConsent,
-    unlockAccount, bulkUpdateUsers, checkConsentCompliance,
-    getUsers, createUser, updateUser, deleteUser, getUserById, acceptConsent
+    setupSubscribers,
+    register,
+    login,
+    refresh,
+    logout,
+    updateProfile,
+    changePassword,
+    verify,
+    setup2FA,
+    verify2FASetup,
+    disable2FA,
+    changeEmail,
+    confirmChangeEmail,
+    requestPasswordReset,
+    confirmPasswordReset,
+    resendVerification,
+    getSessions,
+    revokeSession,
+    getConsents,
+    revokeConsent,
+    deleteAccount,
+    unlockAccount,
+    bulkUpdateUsers,
+    checkConsentCompliance,
+    requestOtpLogin,
+    verifyOtpLogin,
+    createUser,
+    updateUser,
+    getCurrentUser,
+    deleteUser,
+    getUserById,
+    getUsers,
+    acceptConsent
 };
