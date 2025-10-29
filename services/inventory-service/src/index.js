@@ -4,8 +4,8 @@ const connectDB = require('./config/db');
 const logger = require('./utils/logger');
 const { shutdownRabbitMQ } = require('./services/reportService'); // Fixed import
 const { scheduleDailyReport } = require('./services/reportService');
-const PORT = 5000;
-const app = require('./app');
+
+
 
 
 let connectRabbitMQ, redis;

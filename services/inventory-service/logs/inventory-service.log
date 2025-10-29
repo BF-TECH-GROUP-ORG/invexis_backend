@@ -332,3 +332,18 @@
 {"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 12:08:46"}
 {"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 12:09:10"}
 {"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 12:09:11"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 17:13:57"}
+{"level":"info","message":"Inventory Service running on port 8007","timestamp":"2025-10-29 17:13:57"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:13:58"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 17:15:08"}
+{"level":"info","message":"Inventory Service running on port 8007","timestamp":"2025-10-29 17:15:08"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:15:09"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 17:15:09"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 17:15:50"}
+{"level":"info","message":"Inventory Service running on port 8007","timestamp":"2025-10-29 17:15:50"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:15:51"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 17:15:52"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 17:28:05"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:28:07"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 17:28:07"}
+{"level":"error","message":"Error: Invalid category selection\n    at model.<anonymous> (/app/src/models/Product.js:207:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)","timestamp":"2025-10-29 17:35:14"}

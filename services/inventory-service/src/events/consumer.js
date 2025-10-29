@@ -3,8 +3,8 @@
  * Handles registration of consumers and event routing
  */
 
-const { logger } = require("../utils/app");
-const eventConsumersConfig = require("./config/eventConsumers.config");
+const { logger } = require('../utils/logger');
+const eventConsumersConfig = require('./config/eventConsumers.config');
 
 let channel = null;
 
@@ -16,18 +16,14 @@ async function registerConsumers(ch) {
     channel = ch;
 
     // Declare topic exchange
-    await channel.assertExchange("events_topic", "topic", { durable: true });
+    await channel.assertExchange('events_topic', 'topic', { durable: true });
 
     // Register each consumer
     for (const [consumerName, config] of Object.entries(eventConsumersConfig)) {
       await registerConsumer(consumerName, config);
     }
 
-    logger.info(
-      `✅ Event consumers registered (${
-        Object.keys(eventConsumersConfig).length
-      } consumers)`
-    );
+    logger.info(`✅ Event consumers registered (${Object.keys(eventConsumersConfig).length} consumers)`);
   } catch (error) {
     logger.error(`❌ Failed to register consumers: ${error.message}`);
     throw error;
@@ -52,7 +48,7 @@ async function registerConsumer(name, config) {
       if (msg) {
         try {
           const content = JSON.parse(msg.content.toString());
-          logger.info(`📥 Event received: ${content.type || "unknown"}`);
+          logger.info(`📥 Event received: ${content.type || 'unknown'}`);
 
           // Call handler
           await handler(content);
@@ -81,7 +77,7 @@ async function closeConnection() {
   try {
     if (channel) {
       await channel.close();
-      logger.info("✅ Consumer channel closed");
+      logger.info('✅ Consumer channel closed');
     }
   } catch (error) {
     logger.error(`❌ Error closing consumer: ${error.message}`);
@@ -91,5 +87,6 @@ async function closeConnection() {
 module.exports = {
   registerConsumers,
   registerConsumer,
-  closeConnection,
+  closeConnection
 };
+

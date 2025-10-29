@@ -3,8 +3,8 @@
  * Handles initialization of publishers and event emission
  */
 
-const { logger } = require("../utils/app");
-const eventPublishersConfig = require("./config/eventPublishers.config");
+const { logger } = require('../utils/logger');
+const eventPublishersConfig = require('./config/eventPublishers.config');
 
 let channel = null;
 let connection = null;
@@ -18,13 +18,9 @@ async function initPublishers(ch, conn) {
     connection = conn;
 
     // Declare topic exchange
-    await channel.assertExchange("events_topic", "topic", { durable: true });
+    await channel.assertExchange('events_topic', 'topic', { durable: true });
 
-    logger.info(
-      `✅ Event publishers initialized (${
-        Object.keys(eventPublishersConfig).length
-      } events)`
-    );
+    logger.info(`✅ Event publishers initialized (${Object.keys(eventPublishersConfig).length} events)`);
   } catch (error) {
     logger.error(`❌ Failed to initialize publishers: ${error.message}`);
     throw error;
@@ -37,15 +33,15 @@ async function initPublishers(ch, conn) {
 async function emit(routingKey, payload) {
   try {
     if (!channel) {
-      throw new Error("Channel not initialized");
+      throw new Error('Channel not initialized');
     }
 
     const message = JSON.stringify(payload);
     const published = channel.publish(
-      "events_topic",
+      'events_topic',
       routingKey,
       Buffer.from(message),
-      { persistent: true, contentType: "application/json" }
+      { persistent: true, contentType: 'application/json' }
     );
 
     if (published) {
@@ -75,11 +71,11 @@ async function closeConnection() {
   try {
     if (channel) {
       await channel.close();
-      logger.info("✅ Channel closed");
+      logger.info('✅ Channel closed');
     }
     if (connection) {
       await connection.close();
-      logger.info("✅ Connection closed");
+      logger.info('✅ Connection closed');
     }
   } catch (error) {
     logger.error(`❌ Error closing connection: ${error.message}`);
@@ -90,5 +86,6 @@ module.exports = {
   initPublishers,
   emit,
   getChannel,
-  closeConnection,
+  closeConnection
 };
+
