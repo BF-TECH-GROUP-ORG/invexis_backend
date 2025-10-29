@@ -58,7 +58,7 @@ services:
 
   # PostgreSQL for shop-service
   shop-postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.4
     container_name: invexis-shop-postgres
     restart: unless-stopped
     environment:
@@ -125,19 +125,11 @@ services:
       start_period: 90s
     networks:
       - invexis-network
-<<<<<<< HEAD
     deploy:
       replicas: 1
   # ----------------------
   # Single MongoDB for all services
   # ----------------------
-=======
-
-  # ======================
-  # Single MongoDB Service - All databases in one container
-  # ======================
-
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
   mongodb:
     image: mongo:6.0
     container_name: mongodb
@@ -146,14 +138,6 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: invexispass
     ports:
-<<<<<<< HEAD
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    healthcheck:
-      test: [ "CMD", "mongo", "--eval", "db.adminCommand('ping')" ]
-      interval: 15s
-=======
       - "27018:27017" # host:container
     volumes:
       - mongodb_data:/data/db
@@ -162,7 +146,6 @@ services:
         - "CMD-SHELL"
         - "mongosh --username root --password invexispass --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")' || exit 1"
       interval: 10s
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       timeout: 5s
       retries: 3
       start_period: 10s
@@ -178,13 +161,6 @@ services:
     container_name: invexis-sales-mysql
     restart: unless-stopped
     environment:
-<<<<<<< HEAD
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: salesdb
-=======
-      MYSQL_ROOT_PASSWORD: rootpass # set a strong password in real deployments
-      MYSQL_DATABASE: salesdb # will be created automatically
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       MYSQL_USER: invexis
       MYSQL_PASSWORD: invexispass
     ports:
@@ -295,9 +271,6 @@ services:
       websocket-service:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -305,7 +278,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8000/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -338,9 +310,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -348,7 +317,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8001/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -381,9 +349,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -391,7 +356,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8004/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -424,9 +388,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4009/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -434,7 +395,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:9001/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -507,9 +467,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3005/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -517,7 +474,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:9000/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -550,9 +506,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8009/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -560,7 +513,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8009/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -593,9 +545,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3007/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -603,7 +552,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8006/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -635,9 +583,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3008/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -645,7 +590,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8008/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -680,9 +624,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3009/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -690,7 +631,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8002/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -722,9 +662,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3010/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -732,7 +669,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8003/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -764,9 +700,6 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-<<<<<<< HEAD
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3011/health" ]
-=======
       test:
         - "CMD"
         - "wget"
@@ -774,7 +707,6 @@ services:
         - "--tries=1"
         - "--spider"
         - "http://localhost:8005/health"
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
       interval: 15s
       timeout: 10s
       retries: 3
@@ -824,11 +756,7 @@ services:
       - "traefik.http.services.websocket-service.loadbalancer.server.port=9002"
       - "traefik.http.routers.websocket-service.entrypoints=web"
 
-<<<<<<< HEAD
-# ----------------------
-=======
 # ======================
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
 # Volumes
 # ======================
 volumes:
