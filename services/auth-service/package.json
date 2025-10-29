@@ -23,11 +23,7 @@
     "express-validator": "^7.2.1",
     "geoip-lite": "^1.4.10",
     "helmet": "^8.1.0",
-<<<<<<< HEAD
-    "ioredis": "^5.8.1",
-=======
     "ioredis": "^5.8.2",
->>>>>>> c1a79b2722fb191f738c2bdfe7a29ab54adafd49
     "joi": "^18.0.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.2",
