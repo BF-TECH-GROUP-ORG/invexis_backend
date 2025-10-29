@@ -10,7 +10,7 @@ const SaleReturn = sequelize.define(
     reason: { type: DataTypes.STRING },
     refundAmount: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
     status: {
-      type: DataTypes.ENUM("initiated", "processed", "rejected"),
+      type: DataTypes.ENUM("initiated", "partially_returned","fully_returned" ,"rejected"),
       defaultValue: "initiated",
     },
   },

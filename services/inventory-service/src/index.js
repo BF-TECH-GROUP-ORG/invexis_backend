@@ -5,6 +5,9 @@ const logger = require('./utils/logger');
 const { shutdownRabbitMQ } = require('./services/reportService'); // Fixed import
 const { scheduleDailyReport } = require('./services/reportService');
 
+
+
+
 let connectRabbitMQ, redis;
 
 try {

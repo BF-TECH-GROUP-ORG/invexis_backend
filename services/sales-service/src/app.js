@@ -10,6 +10,7 @@ const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 
 const salesRouter = require("./routes/SalesRoutes");
 const invoiceRouter = require("./routes/InvoiceRoutes");
+const PORT = process.env.PORT || 9000;
 
 const app = express();
 
@@ -96,7 +97,7 @@ const initializeDatabase = async () => {
     console.log("✅ Database connection established");
 
     // Sync models (create tables if they don't exist)
-    await sequelize.sync({ alter: false });
+    await sequelize.sync({ alter: true });
     console.log("✅ Database models synchronized");
   } catch (error) {
     console.error("❌ Failed to connect to database:", error);
@@ -110,7 +111,7 @@ const initializeEventSystem = async () => {
     await connectRabbitMQ();
     await consumeEvents();
     await initPublishers();
-    await startOutboxDispatcher(5000); // Process outbox every 5 seconds
+    await startOutboxDispatcher(1000); // Process outbox every 5 seconds
     console.log("✅ Event system initialized");
   } catch (error) {
     console.error("❌ Failed to initialize event system:", error);
@@ -124,6 +125,11 @@ const initialize = async () => {
   await initializeEventSystem();
 };
 
-initialize();
 
+app.listen(PORT, () => {
+  initialize()
+  console.log(`🚀 Sales Service running on port ${PORT}`);
+  console.log(`📍 Health check: http://localhost:${PORT}/health`);
+  console.log(`📍 API endpoint: http://localhost:${PORT}/sales`);
+});
 module.exports = app;

@@ -16,7 +16,7 @@ const Outbox = sequelize.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
-    eventType: {
+    type: {
       type: DataTypes.STRING,
       allowNull: false,
       field: "event_type",

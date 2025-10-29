@@ -58,7 +58,7 @@ services:
 
   # PostgreSQL for shop-service
   shop-postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.4
     container_name: invexis-shop-postgres
     restart: unless-stopped
     environment:
@@ -125,11 +125,11 @@ services:
       start_period: 90s
     networks:
       - invexis-network
-
-  # ======================
-  # Single MongoDB Service - All databases in one container
-  # ======================
-
+    deploy:
+      replicas: 1
+  # ----------------------
+  # Single MongoDB for all services
+  # ----------------------
   mongodb:
     image: mongo:6.0
     container_name: mongodb
@@ -161,8 +161,6 @@ services:
     container_name: invexis-sales-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass # set a strong password in real deployments
-      MYSQL_DATABASE: salesdb # will be created automatically
       MYSQL_USER: invexis
       MYSQL_PASSWORD: invexispass
     ports:

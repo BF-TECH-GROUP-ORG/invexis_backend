@@ -4,7 +4,7 @@ const cors = require('cors');
 const errorMiddleware = require('./middleware/error');
 const router = require('./routes/index')
 const app = express();
-
+const logger=require('./utils/logger');
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
@@ -22,10 +22,5 @@ app.get("/health", (req, res) => {
 // Error handling
 app.use(errorMiddleware);
 
-// Start server
-const PORT = process.env.PORT || 8004;
-app.listen(PORT, () => {
-  logger.info(`Inventory Service running on port ${PORT}`);
-});
 
 module.exports = app;

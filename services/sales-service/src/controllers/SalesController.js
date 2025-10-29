@@ -1,10 +1,17 @@
-const { Op } = require("sequelize");
-const Sale = require("../models/Sales.model.js");
-const SaleItem = require("../models/SalesItem.model.js");
-const SaleReturn = require("../models/Salesreturn.model.js");
-const Invoice = require("../models/Invoice.model.js");
+const { Op, DataTypes } = require("sequelize");
 const InvoicePdfService = require("../services/invoicePdf.service.js");
-
+const {
+  saleEvents,
+  invoiceEvents,
+  returnEvents,
+} = require("../events/eventHelpers");
+const {
+  Sale,
+  SalesItem,
+  SalesReturn,
+  Invoice,
+  SalesReturnItem,
+} = require("../models/index.model");
 /*
   All handlers are arrow functions and exported via module.exports at the bottom.
 */
@@ -63,7 +70,7 @@ const createSale = async (req, res) => {
         totalAmount,
         paymentMethod,
         status: "initiated",
-        paymentStatus: "PENDING",
+        paymentStatus: "pending",
       },
       { transaction: t }
     );
@@ -83,7 +90,7 @@ const createSale = async (req, res) => {
         (i.tax || 0),
     }));
 
-    const saleItems = await SaleItem.bulkCreate(saleItemsPayload, {
+    const saleItems = await SalesItem.bulkCreate(saleItemsPayload, {
       transaction: t,
     });
 
@@ -100,6 +107,10 @@ const createSale = async (req, res) => {
       },
       { transaction: t }
     );
+
+    // Create outbox events within transaction (will be published by dispatcher)
+    await saleEvents.created(sale, t);
+    await invoiceEvents.created(invoice, sale, t);
 
     await t.commit();
 
@@ -140,8 +151,8 @@ const getSale = async (req, res) => {
     const { id } = req.params;
     const sale = await Sale.findByPk(id, {
       include: [
-        { model: SaleItem, as: "items" },
-        { model: SaleReturn, as: "returns" },
+        { model: SalesItem, as: "items" },
+        { model: SalesReturn, as: "returns" },
         { model: Invoice, as: "invoice" },
       ],
     });
@@ -201,7 +212,6 @@ const createReturn = async (req, res) => {
   const t = await Sale.sequelize.transaction();
   try {
     const { saleId, reason, items = [], refundAmount = 0 } = req.body;
-
     if (!saleId) {
       await t.rollback();
       return res.status(400).json({ message: "saleId is required" });
@@ -214,12 +224,12 @@ const createReturn = async (req, res) => {
     }
 
     // Create SaleReturn record
-    const saleReturn = await SaleReturn.create(
+    const saleReturn = await SalesReturn.create(
       {
-        saleId,
+        saleId: sale.saleId,
         reason,
         refundAmount,
-        status: "PENDING",
+        status: "initiated",
       },
       { transaction: t }
     );
@@ -232,25 +242,42 @@ const createReturn = async (req, res) => {
         quantity: it.quantity,
         refundAmount: it.refundAmount || 0,
       }));
-      (await SaleReturn.bulkCreate)
-        ? await SaleReturn.bulkCreate(payload, { transaction: t }) // defensive: if model supports
+      (await SalesReturnItem.bulkCreate)
+        ? await SalesReturnItem.bulkCreate(payload, { transaction: t }) // defensive: if model supports
         : null;
-      // Note: in your models you probably have SalesReturnItem model — adjust accordingly.
     }
 
     // Update Sale paymentStatus if full refund (simple heuristic)
     if (refundAmount >= Number(sale.totalAmount || 0)) {
-      await sale.update({ paymentStatus: "REFUNDED" }, { transaction: t });
+      await sale.update(
+        { paymentStatus: "partially_returned" },
+        { transaction: t }
+      );
     }
 
+    // Create outbox events within transaction (will be published by dispatcher)
+    await returnEvents.created(saleReturn, sale, t);
+
+    // Request inventory service to confirm return and update status to fully_returned
+    // Inventory service will listen for this event and confirm items are returned
+    await returnEvents.requestInventoryConfirmation(
+      saleReturn.id,
+      saleReturn.saleId,
+      sale.companyId,
+      items, // Pass items to inventory for confirmation
+      t
+    );
+
     await t.commit();
-    return res.status(201).json({ saleReturn, updatedSale: sale });
+    return res.status(201).json({
+      saleReturn,
+      updatedSale: sale,
+      message: "Return initiated. Awaiting inventory confirmation.",
+    });
   } catch (error) {
     await t.rollback();
     console.error("createReturn error:", error);
-    return res
-      .status(500)
-      .json({ error: error.message || "Failed to create return" });
+    return res.status(500).json({ error: error || "Failed to create return" });
   }
 };
 
@@ -261,7 +288,7 @@ const listSales = async (req, res) => {
     const sales = await Sale.findAll({
       where,
       include: [
-        { model: SaleItem, as: "items" },
+        { model: SalesItem, as: "items" },
         { model: Invoice, as: "invoice" },
       ],
       order: [["createdAt", "DESC"]],
@@ -279,7 +306,7 @@ const getCustomerPurchases = async (req, res) => {
     const sales = await Sale.findAll({
       where: { customerId },
       include: [
-        { model: SaleItem, as: "items" },
+        { model: SalesItem, as: "items" },
         { model: Invoice, as: "invoice" },
       ],
       order: [["createdAt", "DESC"]],
@@ -366,21 +393,27 @@ const topSellingProducts = async (req, res) => {
   try {
     const { companyId, limit = 5 } = req.query;
 
-    const products = await SaleItem.findAll({
+    const products = await SalesItem.findAll({
       include: [
-        { model: Sale, as: "sale", where: companyId ? { companyId } : {} },
+        {
+          model: Sale,
+          as: "sale",
+          where: companyId ? { companyId } : {},
+          attributes: [], // Don't select any columns from Sale to avoid GROUP BY issues
+        },
       ],
       attributes: [
         "productId",
         "productName",
         [
-          SaleItem.sequelize.fn("SUM", SaleItem.sequelize.col("quantity")),
+          SalesItem.sequelize.fn("SUM", SalesItem.sequelize.col("quantity")),
           "totalSold",
         ],
       ],
       group: ["productId", "productName"],
-      order: [[SaleItem.sequelize.literal("totalSold"), "DESC"]],
+      order: [[SalesItem.sequelize.literal("totalSold"), "DESC"]],
       limit: parseInt(limit),
+      raw: true, // Return plain objects instead of model instances
     });
 
     return res.json(products);
