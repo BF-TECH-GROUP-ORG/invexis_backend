@@ -1,4 +1,5 @@
 // models/Order.js
+const mongoose = require('mongoose');
 const OrderItemSchema = new mongoose.Schema({
     productId: { type: String, required: true },
     quantity: { type: Number, required: true },
@@ -24,10 +25,10 @@ const PaymentMetadataSchema = new mongoose.Schema({
 }, { _id: false });
 
 const OrderSchema = new mongoose.Schema({
-    orderId: { type: String, required: true, unique: true, index: true }, // ecommerce-generated id
-    userId: { type: String, required: true, index: true },
-    companyId: { type: String, required: true, index: true },
-    shopId: { type: String, index: true },
+    orderId: { type: String, required: true, unique: true }, // ecommerce-generated id
+    userId: { type: String, required: true },
+    companyId: { type: String, required: true },
+    shopId: { type: String },
 
     items: { type: [OrderItemSchema], required: true },
 
@@ -37,7 +38,7 @@ const OrderSchema = new mongoose.Schema({
     totalAmount: { type: Number, required: true },
     currency: { type: String, required: true },
 
-    status: { type: String, enum: ['pending', 'confirmed', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded'], default: 'pending', index: true },
+    status: { type: String, enum: ['pending', 'confirmed', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded'], default: 'pending' },
     paymentStatus: { type: String, enum: ['unpaid', 'processing', 'paid', 'failed', 'refunded'], default: 'unpaid' },
 
     payment: PaymentMetadataSchema,
@@ -57,8 +58,8 @@ const OrderSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Indexes
-OrderSchema.index({ companyId: 1, shopId: 1, status: 1 });
-OrderSchema.index({ userId: 1 });
-OrderSchema.index({ orderId: 1 });
+// OrderSchema.index({ companyId: 1, shopId: 1, status: 1 });
+// OrderSchema.index({ userId: 1 });
+// OrderSchema.index({ orderId: 1 });
 
 module.exports = mongoose.model('Order', OrderSchema);

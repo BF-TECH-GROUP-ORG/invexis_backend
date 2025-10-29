@@ -1,6 +1,7 @@
 // models/Wishlist.js
+const mongoose = require('mongoose');
 const WishlistSchema = new mongoose.Schema({
-    userId: { type: String, required: true, index: true },
+    userId: { type: String, required: true },
     companyId: { type: String, required: true },
     shopId: { type: String },
 
@@ -9,6 +10,6 @@ const WishlistSchema = new mongoose.Schema({
     isDeleted: { type: Boolean, default: false }
 }, { timestamps: true });
 
-WishlistSchema.index({ userId: 1, companyId: 1 });
+// WishlistSchema.index({ userId: 1, companyId: 1 });
 
 module.exports = mongoose.model('Wishlist', WishlistSchema);

@@ -1,81 +1,177 @@
+// models/Category.js (Unchanged, but ensuring alignment with Product stats)
 const mongoose = require('mongoose');
-const { Schema } = mongoose;
 
-const categorySchema = new Schema({
-  companyId: { type: String, required: true, index: true },
-  name: { type: String, required: true, trim: true }, // e.g., "Fashion"
-  subcategory: { type: String, trim: true }, // e.g., "Mens", "Womens", "Child Fashion"
-  types: [{ type: String, trim: true }], // e.g., ["Clothes", "Shoes", "Hats"]
-  level: { type: Number, required: true, min: 1, max: 3 },
-  isActive: { type: Boolean, default: true },
-  createdAt: { type: Date, default: Date.now, index: true },
-  updatedAt: { type: Date, default: Date.now }
+const categorySchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Category name is required'],
+    trim: true,
+    maxLength: [100, 'Category name cannot exceed 100 characters'],
+    minLength: [2, 'Category name must be at least 2 characters'],
+  },
+  slug: {
+    type: String,
+    unique: true,
+    lowercase: true,
+    index: true,
+  },
+  description: {
+    type: String,
+    maxLength: [500, 'Description cannot exceed 500 characters'],
+  },
+  level: {
+    type: Number,
+    required: true,
+    enum: [1, 2, 3],
+    index: true,
+  },
+  parentCategory: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    default: null,
+    index: true,
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true,
+  },
+  sortOrder: {
+    type: Number,
+    default: 0,
+  },
+  image: {
+    url: String,
+    alt: String,
+  },
+  seo: {
+    metaTitle: {
+      type: String,
+      maxLength: [60, 'Meta title cannot exceed 60 characters'],
+    },
+    metaDescription: {
+      type: String,
+      maxLength: [160, 'Meta description cannot exceed 160 characters'],
+    },
+    keywords: [String],
+  },
+  attributes: [{
+    name: String,
+    type: {
+      type: String,
+      enum: ['text', 'number', 'select', 'multiselect', 'boolean'],
+      default: 'text',
+    },
+    required: {
+      type: Boolean,
+      default: false,
+    },
+    options: [String], // for select/multiselect types
+  }],
+  statistics: {
+    totalProducts: {
+      type: Number,
+      default: 0,
+    },
+    totalSubcategories: {
+      type: Number,
+      default: 0,
+    },
+  },
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
+});
+
+// Virtual for subcategories
+categorySchema.virtual('subcategories', {
+  ref: 'Category',
+  localField: '_id',
+  foreignField: 'parentCategory',
+});
+
+// Virtual for products count
+categorySchema.virtual('products', {
+  ref: 'Product',
+  localField: '_id',
+  foreignField: 'category',
+  count: true,
 });
 
 // Indexes for performance
-categorySchema.index({ companyId: 1, name: 1, subcategory: 1 }, { unique: true });
+categorySchema.index({ name: 'text', description: 'text' });
+categorySchema.index({ level: 1, parentCategory: 1 });
+categorySchema.index({ isActive: 1, sortOrder: 1 });
 
-// Pre-save validation
-categorySchema.pre('save', async function (next) {
-  this.updatedAt = new Date();
-
-  // Validate level and subcategory
-  if (this.level > 1 && !this.subcategory) {
-    return next(new Error(`Subcategory is required for level ${this.level} categories`));
+// Middleware to generate slug
+categorySchema.pre('save', function(next) {
+  if (this.isModified('name')) {
+    this.slug = this.name
+      .toLowerCase()
+      .replace(/[^a-zA-Z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
   }
-
-  if (this.level === 1 && this.subcategory) {
-    return next(new Error('Level 1 categories cannot have a subcategory'));
-  }
-
-  // Ensure types are non-empty strings if provided
-  if (this.types && this.types.length > 0) {
-    for (const type of this.types) {
-      if (!type || typeof type !== 'string' || type.trim() === '') {
-        return next(new Error('Types must be non-empty strings'));
-      }
-    }
-  }
-
   next();
 });
 
-// Method to get full category path
-categorySchema.methods.getFullPath = async function () {
-  let path = this.subcategory ? `${this.name} > ${this.subcategory}` : this.name;
-  if (this.types && this.types.length > 0) {
-    path += ` [${this.types.join(', ')}]`;
+// Middleware to validate parent category level
+categorySchema.pre('save', async function(next) {
+  if (this.parentCategory) {
+    const parent = await this.constructor.findById(this.parentCategory);
+    if (!parent) {
+      return next(new Error('Parent category not found'));
+    }
+    if (parent.level >= 3) {
+      return next(new Error('Cannot create subcategory under level 3 category'));
+    }
+    if (this.level !== parent.level + 1) {
+      return next(new Error('Invalid category level hierarchy'));
+    }
+  } else if (this.level !== 1) {
+    return next(new Error('Root categories must be level 1'));
   }
-  return path;
+  next();
+});
+
+// Static method to get category tree
+categorySchema.statics.getCategoryTree = async function(parentId = null, level = 1) {
+  const categories = await this.find({
+    parentCategory: parentId,
+    level: level,
+    isActive: true,
+  }).sort({ sortOrder: 1, name: 1 });
+
+  const categoryTree = [];
+  for (let category of categories) {
+    const categoryObj = category.toObject();
+    if (level < 3) {
+      categoryObj.children = await this.getCategoryTree(category._id, level + 1);
+    }
+    categoryTree.push(categoryObj);
+  }
+  return categoryTree;
 };
 
-// Static method to get category tree (grouped by level)
-categorySchema.statics.getCategoryTree = async function (companyId) {
-  const categories = await this.find({ companyId, isActive: true }).sort({ name: 1, level: 1 });
-  const tree = {
-    level1: categories.filter(cat => cat.level === 1).map(cat => ({
-      _id: cat._id,
-      name: cat.name,
-      subcategory: cat.subcategory,
-      types: cat.types,
-      level: cat.level
-    })),
-    level2: categories.filter(cat => cat.level === 2).map(cat => ({
-      _id: cat._id,
-      name: cat.name,
-      subcategory: cat.subcategory,
-      types: cat.types,
-      level: cat.level
-    })),
-    level3: categories.filter(cat => cat.level === 3).map(cat => ({
-      _id: cat._id,
-      name: cat.name,
-      subcategory: cat.subcategory,
-      types: cat.types,
-      level: cat.level
-    }))
-  };
-  return tree;
+// Static method to get category path
+categorySchema.statics.getCategoryPath = async function(categoryId) {
+  const category = await this.findById(categoryId);
+  if (!category) return [];
+  
+  const path = [category];
+  let currentCategory = category;
+  
+  while (currentCategory.parentCategory) {
+    currentCategory = await this.findById(currentCategory.parentCategory);
+    if (currentCategory) {
+      path.unshift(currentCategory);
+    } else {
+      break;
+    }
+  }
+  
+  return path;
 };
 
 module.exports = mongoose.model('Category', categorySchema);

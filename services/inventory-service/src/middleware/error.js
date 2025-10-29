@@ -1,4 +1,4 @@
-const { logger } = require('../utils/logger');
+const logger = require('../utils/logger');
 
 const errorMiddleware = (err, req, res, next) => {
   logger.error(err.stack);
