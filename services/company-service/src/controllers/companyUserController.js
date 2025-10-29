@@ -175,7 +175,7 @@ const suspendUser = asyncHandler(async (req, res) => {
   const suspended = await CompanyUser.suspend(
     companyId,
     userId,
-    req.user?.id || null
+    req.user?.id
   );
 
   // Publish event
@@ -214,6 +214,19 @@ const removeUserFromCompany = asyncHandler(async (req, res) => {
   });
 });
 
+const suspendAllUsersFromCompany=asyncHandler(async(req,res)=>{
+  const { companyId } = req.params;
+  const users = await CompanyUser.findByCompany(companyId);
+  for (const user of users) {
+    await CompanyUser.suspend(companyId, user.user_id, req.user?.id);
+  }
+  await publishCompanyUserEvent.allSuspended(companyId);
+  res.json({
+    success: true,
+    message: 'All users suspended from company successfully',
+  });
+})
+
 module.exports = {
   assignUserToCompany,
   getUsersByCompany,
@@ -222,5 +235,6 @@ module.exports = {
   updateUserRole,
   suspendUser,
   removeUserFromCompany,
+  suspendAllUsersFromCompany
 };
 

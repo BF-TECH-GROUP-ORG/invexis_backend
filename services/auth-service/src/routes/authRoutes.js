@@ -45,7 +45,7 @@ router.post('/refresh', csrfProtection, checkTokenBlacklist, authCtrl.refresh); 
 router.post('/logout', requireAuth, csrfProtection, checkTokenBlacklist, deviceFingerprint, authCtrl.logout);
 // router.get('/me', requireAuth, checkTokenBlacklist, authCtrl.getMe); // Updated to use middleware
 router.put('/me', requireAuth, csrfProtection, checkTokenBlacklist, deviceFingerprint, authCtrl.updateProfile);
-router.put('/me/profile-picture', requireAuth, csrfProtection, uploadProfileImage, checkTokenBlacklist, authCtrl.updateProfilePicture);
+// router.put('/me/profile-picture', requireAuth, csrfProtection, uploadProfileImage, checkTokenBlacklist, authCtrl.updateProfilePicture);
 router.delete('/me', requireAuth, csrfProtection, checkTokenBlacklist, enforce2FA, auditLog('account_delete'), authCtrl.deleteAccount);
 router.post('/me/verify/resend/:type', requireAuth, csrfProtection, checkTokenBlacklist, authCtrl.resendVerification);
 router.post('/me/email/change', requireAuth, csrfProtection, checkTokenBlacklist, enforce2FA, auditLog('email_change'), authCtrl.changeEmail);

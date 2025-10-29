@@ -1,0 +1,28 @@
+{
+    "firstName": "Admin",
+    "lastName": "Super",
+    "email": "super.admin@invexis.com",
+    "phone": "+250789123457",
+    "password": "Test@123456",
+    "role": "super_admin",
+    "nationalId": "ABC12345",
+    "emergencyContact": {
+        "name": "Emergency Contact",
+        "phone": "+250789123458"
+    },
+    "address": {
+        "street": "123 Admin Street",
+        "city": "Kigali",
+        "state": "Kigali",
+        "postalCode": "00000",
+        "country": "Rwanda"
+    },
+    "preferences": {
+        "language": "en",
+        "notifications": {
+            "email": true,
+            "sms": true,
+            "inApp": true
+        }
+    }
+}

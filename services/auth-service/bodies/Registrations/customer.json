@@ -1,0 +1,19 @@
+{
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john.doe@example.com",
+    "phone": "+250789123456",
+    "password": "Test@123456",
+    "role": "customer",
+    "dateOfBirth": "1990-01-01",
+    "gender": "male",
+    "preferences": {
+        "language": "en",
+        "notifications": {
+            "email": true,
+            "sms": true,
+            "inApp": true
+        },
+        "theme": "system"
+    }
+}

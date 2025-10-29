@@ -1,6 +1,8 @@
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3005;
-app.get('/', (req, res) => res.send('Hello from sales-service!'));
-app.get('/health', (req, res) => res.sendStatus(200));
-app.listen(PORT, () => console.log(`sales-service running on port ${PORT}`));
+const app = require("./app");
+const PORT = process.env.PORT || 8005;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Sales Service running on port ${PORT}`);
+  console.log(`📍 Health check: http://localhost:${PORT}/health`);
+  console.log(`📍 API endpoint: http://localhost:${PORT}/sales`);
+});
