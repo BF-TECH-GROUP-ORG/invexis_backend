@@ -35,7 +35,7 @@ const startServer = async () => {
             await redis.connect();
             // Start Express server
             app.listen(PORT, () => {
-                console.log(`Auth service running on port ${PORT} - Cached & Event-ready`);
+                console.log(`Ecommerce service running on port ${PORT} - Cached & Event-ready`);
             });
 
             return; // Success - exit the retry loop

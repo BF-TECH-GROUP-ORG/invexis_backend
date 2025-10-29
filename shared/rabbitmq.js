@@ -327,6 +327,15 @@ class RabbitMQ {
             console.error('RabbitMQ: Close error', err.message);
         }
     }
+
+    // ADDED: Direct consume without binding
+    async consume(queueName, handler) {
+        if (!this.isConnected) await this.connect();
+        await this.createQueue(queueName);
+        const tag = `direct-${Date.now()}`;
+        return this.channel.consume(queueName, handler, { noAck: false, consumerTag: tag });
+    }
+
 }
 
 // Singleton instance
@@ -338,6 +347,7 @@ module.exports = {
     connect: () => rabbitmq.connect(),
     publish: (exchange, routingKey, payload, metadata) => rabbitmq.publish(exchange, routingKey, payload, metadata),
     subscribe: (queueConfig, messageHandler) => rabbitmq.subscribe(queueConfig, messageHandler),
+    consume: (q, h) => rabbitmq.consume(q, h), // ADDED
     exchanges: rabbitmq.exchanges,
     queues: rabbitmq.queues,
     healthCheck: () => rabbitmq.healthCheck(),

@@ -1,143 +1,101 @@
+/**
+ * reportService.js
+ * Listen to company events → Generate inventory report → Emit report
+ */
+
 const logger = require('../utils/logger');
 const rabbitmq = require('/app/shared/rabbitmq.js');
 const redis = require('/app/shared/redis.js');
-const { getDailyReport, getInventorySummary, getAlertSummary } = require('../controllers/reportController');
+const { getInventorySummary } = require('../controllers/reportController');
 
-// Cache TTLs
-const CACHE_TTLS = {
-  report: 3600 // 1 hour for report data
-};
+const EVENT_QUEUE = 'company-events';
+const REPORT_QUEUE = 'report-queue';
+const CACHE_TTL = 3600;
 
-let channelWrapper = null;
+let isReady = false;
 
-// Caching helpers
-async function getCachedReport(type, companyId) {
-  const cacheKey = `report:${type}:${companyId}`;
-  let reportJson = await redis.get(cacheKey);
-  if (reportJson) {
-    logger.info(`Cache hit for report ${type} for company ${companyId}`);
-    return JSON.parse(reportJson);
+async function getCachedReport(companyId) {
+  const key = `inventory-report:${companyId}`;
+  const data = await redis.get(key);
+  if (data) {
+    logger.info(`Cache hit for company ${companyId}`);
+    return JSON.parse(data);
   }
   return null;
 }
 
-async function cacheReport(type, companyId, report) {
-  const cacheKey = `report:${type}:${companyId}`;
-  await redis.set(cacheKey, JSON.stringify(report), 'EX', CACHE_TTLS.report);
-  logger.info(`Cached report ${type} for company ${companyId}`);
+async function cacheReport(companyId, report) {
+  const key = `inventory-report:${companyId}`;
+  await redis.set(key, JSON.stringify(report), 'EX', CACHE_TTL);
+  logger.info(`Cached report for company ${companyId}`);
 }
 
-async function invalidateReportCache(type, companyId) {
-  const cacheKey = `report:${type}:${companyId}`;
-  await redis.del(cacheKey);
-  logger.info(`Invalidated cache for report ${type} for company ${companyId}`);
-}
-
-// Initialize RabbitMQ connection with retry logic
 const initializeRabbitMQ = async () => {
+  if (isReady) return;
+
   let retries = 5;
-  while (retries > 0) {
+  while (retries-- > 0) {
     try {
-      logger.info('Attempting to connect to RabbitMQ...');
-      const connection = rabbitmq.connect( {
-        reconnectTimeInSeconds: 5
-      });
+      logger.info('Connecting to RabbitMQ...');
+      await rabbitmq.connect();
+      isReady = true;
+      logger.info('RabbitMQ connected');
 
-      channelWrapper = connection.createChannel({
-        json: true,
-        setup: async channel => {
-          await channel.assertQueue('report-queue', { durable: true });
-          channel.consume('report-queue', async (msg) => {
-            try {
-              const { type, companyId } = JSON.parse(msg.content.toString());
-              logger.info(`Processing report ${type} for company ${companyId}`);
+      // Use consume() — no binding, no ACCESS_REFUSED
+      await rabbitmq.consume(EVENT_QUEUE, async (msg) => {
+        if (!msg) return;
 
-              // Check cache first
-              let report = await getCachedReport(type, companyId);
-              if (!report) {
-                switch (type) {
-                  case 'daily':
-                    report = await getDailyReport({ user: { companyId } });
-                    break;
-                  case 'inventory_summary':
-                    report = await getInventorySummary({ user: { companyId } });
-                    break;
-                  case 'alert_summary':
-                    report = await getAlertSummary({ user: { companyId } });
-                    break;
-                  default:
-                    throw new Error('Unknown report type');
-                }
-                await cacheReport(type, companyId, report);
-              }
+        try {
+          const { companyId } = JSON.parse(msg.content.toString());
+          if (!companyId) {
+            logger.warn('Missing companyId');
+            rabbitmq.channel.ack(msg);
+            return;
+          }
 
-              // e.g., save to DB or email (handled in reportController)
-              logger.info(`Report ${type} generated for ${companyId}: ${JSON.stringify(report)}`);
-              channel.ack(msg);
-            } catch (error) {
-              logger.error('Error processing report queue: %s', error.message);
-              channel.nack(msg, false, true); // Requeue on failure
-            }
-          }, { noAck: false });
-          logger.info('RabbitMQ channel initialized for report queue');
+          logger.info(`Processing report for company ${companyId}`);
+
+          let report = await getCachedReport(companyId);
+          if (!report) {
+            report = await getInventorySummary({ user: { companyId } });
+            await cacheReport(companyId, report);
+          }
+
+          const ok = await rabbitmq.publish('', REPORT_QUEUE, {
+            companyId,
+            type: 'inventory_summary',
+            report
+          });
+
+          logger[ok ? 'info' : 'error'](`Report ${ok ? 'sent' : 'failed'}`);
+
+          rabbitmq.channel.ack(msg);
+        } catch (err) {
+          logger.error(`Error: ${err.message}`);
+          rabbitmq.channel.nack(msg, false, false);
         }
       });
 
-      await channelWrapper.waitForConnect();
-      logger.info('RabbitMQ connection established');
-      return; // Success - exit retry loop
-    } catch (error) {
-      logger.error(`RabbitMQ connection attempt failed: ${error.message}`);
-      retries--;
-      if (retries === 0) {
-        logger.error('Maximum RabbitMQ connection retries reached. Exiting...');
-        throw new Error('Failed to initialize RabbitMQ');
-      }
-      logger.info(`Retrying RabbitMQ connection in 5 seconds... (${retries} attempts remaining)`);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      logger.info('Report generator is ACTIVE');
+      return;
+    } catch (err) {
+      logger.error(`Init failed: ${err.message}`);
+      isReady = false;
+      if (retries === 0) throw err;
+      await new Promise(r => setTimeout(r, 5000));
     }
   }
 };
 
-// Graceful shutdown for RabbitMQ
-const shutdownRabbitMQ = async () => {
-  if (channelWrapper) {
-    try {
-      logger.info('Closing RabbitMQ channel...');
-      await channelWrapper.close();
-      logger.info('RabbitMQ channel closed');
-    } catch (error) {
-      logger.error(`Error closing RabbitMQ channel: ${error.message}`);
-    }
-  }
+const triggerReport = async (companyId) => {
+  if (!isReady) await initializeRabbitMQ();
+  await rabbitmq.publish('', EVENT_QUEUE, { companyId });
+  logger.info(`Triggered report for ${companyId}`);
 };
 
-// Initialize on module load (optional, depending on your use case)
-initializeRabbitMQ().catch(error => {
-  logger.error('Failed to initialize RabbitMQ on startup: %s', error.message);
+initializeRabbitMQ().catch(err => {
+  logger.error('Startup failed:', err.message);
+  process.exit(1);
 });
 
-// Schedule report functions
-const scheduleDailyReport = async (companyId) => {
-  try {
-    if (!channelWrapper) await initializeRabbitMQ();
-    await channelWrapper.sendToQueue('report-queue', { type: 'daily', companyId });
-    logger.info(`Daily report task queued for company ${companyId}`);
-  } catch (error) {
-    logger.error('Error in daily report scheduler: %s', error.message);
-    throw error;
-  }
-};
-
-const scheduleInventorySummary = async (companyId) => {
-  try {
-    if (!channelWrapper) await initializeRabbitMQ();
-    await channelWrapper.sendToQueue('report-queue', { type: 'inventory_summary', companyId });
-    logger.info(`Inventory summary report task queued for company ${companyId}`);
-  } catch (error) {
-    logger.error('Error in inventory summary scheduler: %s', error.message);
-    throw error;
-  }
-};
-
-module.exports = { scheduleDailyReport, scheduleInventorySummary, initializeRabbitMQ, shutdownRabbitMQ };
+module.exports = { triggerReport, initializeRabbitMQ };

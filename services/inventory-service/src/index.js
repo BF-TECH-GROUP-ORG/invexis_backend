@@ -1,15 +1,15 @@
 require('dotenv').config();
 const app = require('./app');
 const connectDB = require('./config/db');
-const logger = require('./utils/logger'); // Added for consistent logging
-const { shutdownRabbitMQ } = require('./services/reportService'); // Import shutdownRabbitMQ
+const logger = require('./utils/logger');
+const { shutdownRabbitMQ } = require('./services/reportService'); // Fixed import
 const { scheduleDailyReport } = require('./services/reportService');
 
 let connectRabbitMQ, redis;
 
 try {
     const rabbitmq = require('/app/shared/rabbitmq.js');
-    connectRabbitMQ = rabbitmq.connect;
+    connectRabbitMQ = rabbitmq.connect; // <-- CORRECT: get connect function
     redis = require('/app/shared/redis.js');
 } catch (err) {
     console.warn('Shared dependencies not available, running in standalone mode');
@@ -27,22 +27,29 @@ const startServer = async () => {
     while (retries > 0) {
         try {
             console.log('Attempting to connect to services...');
+
             // Connect to MongoDB
             await connectDB();
+            console.log('MongoDB connected');
 
-            // Connect to RabbitMQ
-            await connectRabbitMQ()
+            // Connect to RabbitMQ (shared client)
+            await connectRabbitMQ(); // <-- CORRECT: await connect()
+            console.log('RabbitMQ connected (shared)');
 
-            await scheduleDailyReport();
+            // Schedule daily report (test trigger)
+            // Remove or comment out in prod if not needed on startup
+            // await scheduleDailyReport(1);
 
             // Connect to Redis
             await redis.connect();
+            console.log('Redis connected');
+
             // Start Express server
             app.listen(PORT, () => {
-                console.log(`Auth service running on port ${PORT} - Cached & Event-ready`);
+                console.log(`Report service running on port ${PORT} - Ready`);
             });
 
-            return; // Success - exit the retry loop
+            return; // Success
         } catch (error) {
             console.error(`Startup attempt failed: ${error.message}`);
             retries--;
@@ -51,24 +58,21 @@ const startServer = async () => {
                 process.exit(1);
             }
             console.log(`Retrying in 5 seconds... (${retries} attempts remaining)`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            await new Promise(r => setTimeout(r, 5000));
         }
     }
 };
 
-// Handle graceful shutdown
+// === GRACEFUL SHUTDOWN ===
 const shutdown = async () => {
     logger.info('Graceful shutdown initiated...');
     try {
-        // Close Redis connection
         await redis.quit();
         logger.info('Redis connection closed');
 
-        // Close RabbitMQ connection
         await shutdownRabbitMQ();
         logger.info('RabbitMQ connection closed');
 
-        logger.info('Shutting down server');
         process.exit(0);
     } catch (error) {
         logger.error(`Shutdown error: ${error.message}`);
@@ -76,9 +80,9 @@ const shutdown = async () => {
     }
 };
 
-// Start the server
+// === START SERVER ===
 startServer();
 
-// Listen for termination signals
+// === HANDLE TERMINATION ===
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

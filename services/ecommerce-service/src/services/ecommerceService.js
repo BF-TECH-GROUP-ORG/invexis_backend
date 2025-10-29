@@ -2,15 +2,15 @@ const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const redis = require('/app/shared/redis.js');
 const { publish: publishRabbitMQ, exchanges, subscribe } = require('/app/shared/rabbitmq.js');
-const { logger } = require('../utils/logger');
+const { logger } = require('../utils/app');
 
 // Imports (Mongoose models, excluding Product)
 const Cart = require('../models/Cart.models');
 const Order = require('../models/Order.models');
-const Promotion = require('../models/Promotion.models');
+const Promotion = require('../models/Promition.models');
 const Review = require('../models/Review.models');
 const Wishlist = require('../models/Wishlist.models');
-const Banner = require('../models/Banner.models');
+const Banner = require('../models/FeaturedBanner.models');
 
 // Imports (Validation schemas)
 const {
@@ -20,7 +20,7 @@ const {
   reviewSchema,
   wishlistSchema,
   bannerSchema
-} = require('../utils/validation');
+} = require('../utils/app');
 
 // Cache TTLs
 const CACHE_TTLS = {
