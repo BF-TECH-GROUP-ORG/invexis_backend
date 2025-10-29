@@ -4,8 +4,8 @@
  */
 exports.up = function (knex) {
     return knex.schema.createTable('company_roles', (table) => {
-        table.increments('id').primary();
-        table.integer('company_id').unsigned().notNullable()
+        table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
+        table.uuid('company_id').unsigned().notNullable()
             .references('id').inTable('companies')
             .onDelete('CASCADE');
         table.string('name').notNullable(); // e.g., "Sales ReadOnly"

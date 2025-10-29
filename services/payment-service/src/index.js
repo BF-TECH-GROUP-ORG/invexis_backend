@@ -6,7 +6,7 @@ const { connect: connectRabbitMQ } = require('/app/shared/rabbitmq');
 const redis = require('/app/shared/redis');
 const morgan = require('morgan');
 const app = express();
-const PORT = process.env.PORT || 8009;
+const PORT = process.env.PORT || 8006;
 
 app.use(express.json());
 app.use('/payment', paymentRoutes);
