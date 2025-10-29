@@ -60,7 +60,7 @@ services:
 
   # PostgreSQL for shop-service
   shop-postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.4
     container_name: invexis-shop-postgres
     restart: unless-stopped
     environment:

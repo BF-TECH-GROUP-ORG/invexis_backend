@@ -1,14 +1,14 @@
 "use strict";
 
-const { OutboxService } = require("../models/Outbox.model");
-const { publish } = require("/app/shared/rabbitmq");
-
+const Outbox = require("../models/Outbox.model");
+const { emit } = require("../events/producer");
 /**
  * Process a batch of pending outbox events
+ * Reads events from outbox table and publishes them via producer.emit()
  */
 async function processOutboxBatch() {
   try {
-    const pendingEvents = await OutboxService.findPending(50);
+    const pendingEvents = await Outbox.OutboxService.fetchBatch(50);
 
     if (pendingEvents.length === 0) {
       return;
@@ -18,12 +18,16 @@ async function processOutboxBatch() {
 
     for (const event of pendingEvents) {
       try {
-        // Publish to RabbitMQ
-        await publish(event.exchange, event.routingKey, event.payload);
-        
+        // Parse payload and publish via producer.emit()
+        const payload =
+          typeof event.payload === "string"
+            ? JSON.parse(event.payload)
+            : event.payload;
+        await emit(event.routingKey, payload);
+
         // Mark as sent
-        await OutboxService.markAsSent(event.id);
-        
+        await Outbox.OutboxService.markAsSent(event.id);
+
         console.log(
           `📤 Published ${event.routingKey} from outbox → OK (ID: ${event.id})`
         );
@@ -32,9 +36,9 @@ async function processOutboxBatch() {
           `❌ Failed to publish outbox event ${event.id}:`,
           error.message
         );
-        
+
         // Mark as failed and increment retry count
-        await OutboxService.markAsFailed(event.id, error);
+        await Outbox.OutboxService.markAsFailed(event.id, error);
       }
     }
   } catch (error) {
@@ -47,9 +51,9 @@ async function processOutboxBatch() {
  */
 async function resetStaleEvents() {
   try {
-    await OutboxService.resetStaleProcessing(5);
+    await Outbox.OutboxService.resetStaleProcessing(0.2);
   } catch (error) {
-    console.error("❌ Error resetting stale events:", error.message);
+    console.error("❌ Error resetting stale events:", error);
   }
 }
 
@@ -74,24 +78,8 @@ async function startOutboxDispatcher(intervalMs = 5000) {
   }, 60000);
 }
 
-/**
- * Get outbox statistics
- */
-async function getOutboxStats() {
-  try {
-    const stats = await OutboxService.getStats();
-    console.log("📊 Outbox Stats:", stats);
-    return stats;
-  } catch (error) {
-    console.error("❌ Error getting outbox stats:", error.message);
-    return null;
-  }
-}
-
 module.exports = {
   startOutboxDispatcher,
   processOutboxBatch,
   resetStaleEvents,
-  getOutboxStats,
 };
-

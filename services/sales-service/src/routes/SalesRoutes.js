@@ -3,9 +3,7 @@ const router = express.Router();
 const salesController = require("../controllers/SalesController");
 
 // Create sale
-router.get("/", (req, res) => {
-  res.json({message:"sales service is routed to gateway"})
-})
+
 router.post("/", salesController.createSale);
 
 // Returns

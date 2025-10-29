@@ -6,6 +6,7 @@
 
 const { exchanges } = require("/app/shared/rabbitmq");
 const handleInventoryEvent = require("../handlers/inventoryEvent.handler");
+const handleInventoryReturnEvent = require("../handlers/inventoryReturnEvent.handler");
 const handlePaymentEvent = require("../handlers/paymentEvent.handler");
 const handleShopEvent = require("../handlers/shopEvent.handler");
 const handleCustomerEvent = require("../handlers/customerEvent.handler");
@@ -43,5 +44,14 @@ module.exports = [
     pattern: "customer.#",
     handler: handleCustomerEvent,
     description: "Handles customer lifecycle events from shop-service",
+  },
+  {
+    name: "inventoryReturnEvents",
+    queue: "sales_inventory_return_events_queue",
+    exchange: exchanges.topic,
+    pattern: "inventory.return.#",
+    handler: handleInventoryReturnEvent,
+    description:
+      "Handles inventory return confirmation events from inventory-service",
   },
 ];

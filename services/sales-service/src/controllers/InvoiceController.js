@@ -1,6 +1,6 @@
 const Invoice = require("../models/Invoice.model");
 const Sale = require("../models/Sales.model");
-const SaleItem = require("../models/SaleItem.model");
+const SaleItem = require("../models/SalesItem.model");
 const InvoicePdfService = require("../services/invoicePdf.service");
 const fs = require("fs");
 const path = require("path");
