@@ -6,7 +6,7 @@
 
 const Outbox = require('../models/Outbox');
 const { emit } = require('../events/producer');
-const { logger } = require('../utils/logger');
+const logger = require('../utils/logger');
 
 let dispatcherInterval = null;
 

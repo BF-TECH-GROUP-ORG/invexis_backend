@@ -4,9 +4,9 @@
  * Used by consumer.js to register consumers
  */
 
-module.exports = {
-  // Inventory Service Events (5)
-  inventory: {
+module.exports = [
+  {
+    name: 'inventory',
     queue: 'ecommerce_inventory_events',
     exchange: 'events_topic',
     pattern: 'inventory.#',
@@ -19,9 +19,8 @@ module.exports = {
       'inventory.out.of.stock'
     ]
   },
-
-  // Shop Service Events (2)
-  shop: {
+  {
+    name: 'shop',
     queue: 'ecommerce_shop_events',
     exchange: 'events_topic',
     pattern: 'shop.#',
@@ -31,9 +30,8 @@ module.exports = {
       'shop.deleted'
     ]
   },
-
-  // Company Service Events (1)
-  company: {
+  {
+    name: 'company',
     queue: 'ecommerce_company_events',
     exchange: 'events_topic',
     pattern: 'company.#',
@@ -42,5 +40,5 @@ module.exports = {
       'company.deleted'
     ]
   }
-};
+];
 
