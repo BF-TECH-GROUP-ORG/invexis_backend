@@ -1,94 +1,27 @@
-/**
- * Event Producer - Publishes events to RabbitMQ
- * Handles initialization of publishers and event emission
- */
+"use strict";
 
-const { logger } = require("../utils/app");
-const eventPublishersConfig = require("./config/eventPublishers.config");
+const registerPublishers = require("../utils/events/registerPublisher");
+const publisherConfigs = require("./config/eventPublishers.config");
 
-let channel = null;
-let connection = null;
+let publishEvent = null;
 
-/**
- * Initialize publishers for all configured events
- */
-async function initPublishers(ch, conn) {
-  try {
-    channel = ch;
-    connection = conn;
-
-    // Declare topic exchange
-    await channel.assertExchange("events_topic", "topic", { durable: true });
-
-    logger.info(
-      `✅ Event publishers initialized (${
-        Object.keys(eventPublishersConfig).length
-      } events)`
-    );
-  } catch (error) {
-    logger.error(`❌ Failed to initialize publishers: ${error.message}`);
-    throw error;
-  }
-}
+const initPublishers = async () => {
+  publishEvent = await registerPublishers(publisherConfigs);
+};
 
 /**
  * Emit event to RabbitMQ
+ * Used by outbox dispatcher to publish events
+ * @param {string} routingKey - Event routing key (e.g., "company.created")
+ * @param {object} payload - Event payload
+ * @param {object} metadata - Optional metadata
  */
-async function emit(routingKey, payload) {
-  try {
-    if (!channel) {
-      throw new Error("Channel not initialized");
-    }
-
-    const message = JSON.stringify(payload);
-    const published = channel.publish(
-      "events_topic",
-      routingKey,
-      Buffer.from(message),
-      { persistent: true, contentType: "application/json" }
-    );
-
-    if (published) {
-      logger.info(`📤 Event published: ${routingKey}`);
-      return true;
-    } else {
-      logger.warn(`⚠️ Event queued for retry: ${routingKey}`);
-      return false;
-    }
-  } catch (error) {
-    logger.error(`❌ Failed to emit event ${routingKey}: ${error.message}`);
-    throw error;
-  }
-}
-
-/**
- * Get channel (for testing/debugging)
- */
-function getChannel() {
-  return channel;
-}
-
-/**
- * Close connection
- */
-async function closeConnection() {
-  try {
-    if (channel) {
-      await channel.close();
-      logger.info("✅ Channel closed");
-    }
-    if (connection) {
-      await connection.close();
-      logger.info("✅ Connection closed");
-    }
-  } catch (error) {
-    logger.error(`❌ Error closing connection: ${error.message}`);
-  }
-}
+const emit = async (routingKey, payload = {}, metadata = {}) => {
+  if (!publishEvent) throw new Error("Publishers not initialized");
+  await publishEvent(routingKey, payload, metadata);
+};
 
 module.exports = {
   initPublishers,
   emit,
-  getChannel,
-  closeConnection,
 };

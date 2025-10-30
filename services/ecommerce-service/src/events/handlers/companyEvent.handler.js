@@ -4,12 +4,12 @@
  * Manages company-level ecommerce cleanup
  */
 
-const Cart = require('../../models/Cart');
-const Order = require('../../models/Order');
-const Review = require('../../models/Review');
-const Promotion = require('../../models/Promotion');
-const Wishlist = require('../../models/Wishlist');
-const Banner = require('../../models/Banner');
+const Cart = require('../../models/Cart.models');
+const Order = require('../../models/Order.models');
+const Review = require('../../models/Review.models');
+const Promotion = require('../../models/Promition.models');
+const Wishlist = require('../../models/Wishlist.models');
+const Banner = require('../../models/FeaturedBanner.models');
 const redis = require('/app/shared/redis.js');
 const { logger } = require('../../utils/app');
 
