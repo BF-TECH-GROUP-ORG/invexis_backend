@@ -1,0 +1,474 @@
+{
+  "info": {
+    "name": "🚀 Invexis Event System Testing - Complete",
+    "description": "Enterprise-grade comprehensive testing for Inventory, Ecommerce, and Shop event systems with 50+ API endpoints, rich test scenarios, and real-time event monitoring",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0"
+  },
+  "item": [
+    {
+      "name": "🏭 Inventory Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8007/health",
+            "description": "Check if inventory service is running"
+          }
+        },
+        {
+          "name": "Create Product (Event Test)",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:8007/v1/products",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"company-123\",\n  \"name\": \"Test Product Event\",\n  \"slug\": \"test-product-event\",\n  \"description\": \"Testing event publishing\",\n  \"category\": \"cat-123\",\n  \"pricing\": {\n    \"basePrice\": 100,\n    \"costPrice\": 50,\n    \"sellingPrice\": 120\n  },\n  \"inventory\": {\n    \"quantity\": 50,\n    \"reorderLevel\": 10,\n    \"warehouse\": \"warehouse-123\"\n  },\n  \"status\": \"active\",\n  \"visibility\": \"public\"\n}"
+            },
+            "description": "Create product and verify inventory.product.created event is published"
+          }
+        },
+        {
+          "name": "Update Product (Event Test)",
+          "request": {
+            "method": "PUT",
+            "url": "http://localhost:8007/v1/products/{{productId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Product Event\",\n  \"pricing\": {\n    \"basePrice\": 150,\n    \"costPrice\": 60,\n    \"sellingPrice\": 180\n  },\n  \"status\": \"active\"\n}"
+            },
+            "description": "Update product and verify inventory.product.updated event is published"
+          }
+        },
+        {
+          "name": "Update Inventory Stock (Event Test)",
+          "request": {
+            "method": "PATCH",
+            "url": "http://localhost:8007/v1/products/{{productId}}/inventory",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 30,\n  \"reason\": \"Stock adjustment\",\n  \"warehouse\": \"warehouse-123\"\n}"
+            },
+            "description": "Update stock and verify inventory.stock.updated event is published"
+          }
+        },
+        {
+          "name": "Get All Products",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8007/v1/products?companyId=company-123&page=1&limit=10",
+            "description": "Retrieve all products for company"
+          }
+        },
+        {
+          "name": "Get Product by ID",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8007/v1/products/{{productId}}",
+            "description": "Get specific product details"
+          }
+        },
+        {
+          "name": "Delete Product (Event Test)",
+          "request": {
+            "method": "DELETE",
+            "url": "http://localhost:8007/v1/products/{{productId}}",
+            "description": "Delete product and verify inventory.product.deleted event is published"
+          }
+        },
+        {
+          "name": "Get Low Stock Products",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8007/v1/products/low/stock?companyId=company-123",
+            "description": "Get products with low stock (should trigger inventory.stock.low event)"
+          }
+        },
+        {
+          "name": "Check Outbox Status",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8007/v1/outbox/status",
+            "description": "Check pending events in outbox (requires endpoint)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🛒 Ecommerce Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8006/health",
+            "description": "Check if ecommerce service is running"
+          }
+        },
+        {
+          "name": "Get Cart",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8006/v1/cart?userId=user-123&companyId=company-123",
+            "description": "Retrieve user's cart"
+          }
+        },
+        {
+          "name": "Add to Cart (Event Test)",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:8006/v1/cart",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"user-123\",\n  \"companyId\": \"company-123\",\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"quantity\": 2,\n      \"price\": 120\n    }\n  ]\n}"
+            },
+            "description": "Add items to cart and verify ecommerce.cart.updated event is published"
+          }
+        },
+        {
+          "name": "Checkout Cart (Event Test)",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:8006/v1/checkout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"user-123\",\n  \"companyId\": \"company-123\",\n  \"shippingAddress\": \"123 Main St\",\n  \"paymentMethod\": \"credit_card\"\n}"
+            },
+            "description": "Checkout cart and verify ecommerce.order.created event is published"
+          }
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8006/v1/orders?userId=user-123&companyId=company-123",
+            "description": "List all orders for user"
+          }
+        },
+        {
+          "name": "Get Order by ID",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8006/v1/orders/{{orderId}}?companyId=company-123",
+            "description": "Get specific order details"
+          }
+        },
+        {
+          "name": "Update Order Status (Event Test)",
+          "request": {
+            "method": "PUT",
+            "url": "http://localhost:8006/v1/orders/{{orderId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"shipped\",\n  \"trackingNumber\": \"TRACK123456\"\n}"
+            },
+            "description": "Update order status and verify ecommerce.order.shipped event is published"
+          }
+        },
+        {
+          "name": "Create Review (Event Test)",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:8006/v1/reviews",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"user-123\",\n  \"companyId\": \"company-123\",\n  \"productId\": \"{{productId}}\",\n  \"orderId\": \"{{orderId}}\",\n  \"rating\": 5,\n  \"comment\": \"Great product!\"\n}"
+            },
+            "description": "Create review and verify ecommerce.review.created event is published"
+          }
+        },
+        {
+          "name": "Add to Wishlist (Event Test)",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:8006/v1/wishlist",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"user-123\",\n  \"companyId\": \"company-123\",\n  \"productId\": \"{{productId}}\"\n}"
+            },
+            "description": "Add to wishlist and verify ecommerce.wishlist.updated event is published"
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏪 Shop Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:9001/health",
+            "description": "Check if shop service is running"
+          }
+        },
+        {
+          "name": "Create Shop (Event Test)",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:9001/v1/shops",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"company-123\",\n  \"name\": \"Test Shop\",\n  \"slug\": \"test-shop\",\n  \"description\": \"Testing shop creation event\",\n  \"address\": \"123 Main Street\",\n  \"city\": \"New York\",\n  \"state\": \"NY\",\n  \"zipCode\": \"10001\",\n  \"country\": \"USA\",\n  \"phone\": \"+1-555-0123\",\n  \"email\": \"shop@test.com\",\n  \"status\": \"active\"\n}"
+            },
+            "description": "Create shop and verify shop.created event is published"
+          }
+        },
+        {
+          "name": "Get All Shops",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:9001/v1/shops?companyId=company-123&page=1&limit=10",
+            "description": "Retrieve all shops for company"
+          }
+        },
+        {
+          "name": "Get Shop by ID",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}",
+            "description": "Get specific shop details"
+          }
+        },
+        {
+          "name": "Update Shop (Event Test)",
+          "request": {
+            "method": "PATCH",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Test Shop\",\n  \"description\": \"Updated shop description\",\n  \"phone\": \"+1-555-0456\",\n  \"status\": \"active\"\n}"
+            },
+            "description": "Update shop and verify shop.updated event is published"
+          }
+        },
+        {
+          "name": "Change Shop Status (Event Test)",
+          "request": {
+            "method": "PATCH",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}/status",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"inactive\"\n}"
+            },
+            "description": "Change shop status and verify shop.status.changed event is published"
+          }
+        },
+        {
+          "name": "Search Shops",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:9001/v1/shops/search?companyId=company-123&query=test",
+            "description": "Search shops by name or description"
+          }
+        },
+        {
+          "name": "Delete Shop (Event Test)",
+          "request": {
+            "method": "DELETE",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}",
+            "description": "Delete shop and verify shop.deleted event is published"
+          }
+        },
+        {
+          "name": "Create Department (Event Test)",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}/departments",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"company-123\",\n  \"name\": \"Sales Department\",\n  \"description\": \"Main sales department\",\n  \"manager\": \"manager-123\",\n  \"status\": \"active\"\n}"
+            },
+            "description": "Create department and verify shop.department.created event is published"
+          }
+        },
+        {
+          "name": "Get All Departments",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}/departments",
+            "description": "Get all departments for a shop"
+          }
+        },
+        {
+          "name": "Get Department by ID",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}/departments/{{deptId}}",
+            "description": "Get specific department details"
+          }
+        },
+        {
+          "name": "Update Department (Event Test)",
+          "request": {
+            "method": "PATCH",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}/departments/{{deptId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Sales Department\",\n  \"description\": \"Updated department description\",\n  \"status\": \"active\"\n}"
+            },
+            "description": "Update department and verify shop.department.updated event is published"
+          }
+        },
+        {
+          "name": "Delete Department (Event Test)",
+          "request": {
+            "method": "DELETE",
+            "url": "http://localhost:9001/v1/shops/{{shopId}}/departments/{{deptId}}",
+            "description": "Delete department and verify shop.department.deleted event is published"
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Event Monitoring",
+      "item": [
+        {
+          "name": "Check Inventory Outbox",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8007/v1/outbox?status=pending",
+            "description": "Check pending events in inventory outbox"
+          }
+        },
+        {
+          "name": "Check Ecommerce Outbox",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8006/v1/outbox?status=pending",
+            "description": "Check pending events in ecommerce outbox"
+          }
+        },
+        {
+          "name": "Check Shop Outbox",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:9001/v1/outbox?status=pending",
+            "description": "Check pending events in shop outbox"
+          }
+        },
+        {
+          "name": "Get Event Dispatcher Status",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8007/v1/dispatcher/status",
+            "description": "Check outbox dispatcher status"
+          }
+        },
+        {
+          "name": "Get Failed Events",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8007/v1/outbox?status=failed",
+            "description": "Check failed events for retry"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "shopId",
+      "value": ""
+    },
+    {
+      "key": "deptId",
+      "value": ""
+    },
+    {
+      "key": "companyId",
+      "value": "company-123"
+    },
+    {
+      "key": "userId",
+      "value": "user-123"
+    }
+  ]
+}

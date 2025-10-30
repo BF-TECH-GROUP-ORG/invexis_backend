@@ -347,3 +347,28 @@
 {"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:28:07"}
 {"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 17:28:07"}
 {"level":"error","message":"Error: Invalid category selection\n    at model.<anonymous> (/app/src/models/Product.js:207:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)","timestamp":"2025-10-29 17:35:14"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 17:56:48"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:56:49"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 17:56:49"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 17:57:16"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:57:17"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 17:57:18"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 17:57:42"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:57:44"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 17:57:45"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-29 17:58:02"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-29 17:58:03"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-29 17:58:03"}
+{"level":"error","message":"ValidationError: Product validation failed: category: Cast to ObjectId failed for value \"cat-123\" (type string) at path \"category\" because of \"BSONError\", brand: Path `brand` is required., description.short: Short description is required, sku: Path `sku` is required., asin: Path `asin` is required.\n    at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3358:32)\n    at model.$set (/app/node_modules/mongoose/lib/document.js:1480:12)\n    at model.$set (/app/node_modules/mongoose/lib/document.js:1132:16)\n    at model.Document (/app/node_modules/mongoose/lib/document.js:178:12)\n    at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)\n    at new model (/app/node_modules/mongoose/lib/model.js:4834:15)\n    at /app/src/controllers/productController.js:178:19\n    at asyncUtilWrap (/app/node_modules/express-async-handler/index.js:3:20)\n    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)\n    at next (/app/node_modules/express/lib/router/route.js:149:13)","timestamp":"2025-10-29 19:18:10"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-30 16:23:41"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-30 16:23:43"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-30 16:23:44"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-30 16:52:02"}
+{"level":"info","message":"RabbitMQ connected","timestamp":"2025-10-30 16:52:03"}
+{"level":"info","message":"Report generator is ACTIVE","timestamp":"2025-10-30 16:52:03"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-30 16:53:22"}
+{"level":"info","message":"Connecting to RabbitMQ...","timestamp":"2025-10-30 16:56:52"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-10-30 17:38:38"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-10-30 17:38:38"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-10-30 17:38:59"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-10-30 17:38:59"}
