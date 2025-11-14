@@ -1,6 +1,6 @@
 // src/config/queue.js
 const Queue = require('bull');
-const redis = require('./redis');
+const redis = require('/app/shared/redis');
 const logger = require('../utils/logger');
 
 const notificationQueue = new Queue('notification delivery', {

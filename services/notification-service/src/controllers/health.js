@@ -1,6 +1,6 @@
 // src/controllers/health.js
 const express = require('express');
-const { healthCheck } = require('../config/rabbitmq');
+const { healthCheck } = require('/app/shared/rabbitmq');
 const router = express.Router();
 
 router.get('/health', async (req, res) => {

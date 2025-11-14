@@ -1,65 +1,121 @@
 // src/queue/workers.js
-const Notification = require('../models/Notification');
-const { getPreferences } = require('../services/preferenceService');
-const { sendEmail } = require('../channels/email');
-const { sendSMS } = require('../channels/sms');
-const { sendPush } = require('../channels/push');
-const { sendInApp } = require('../channels/inapp');
-const logger = require('../utils/logger');
+const Notification = require("../models/Notification");
+const { getPreferences } = require("../services/preferenceService");
+const { sendEmail } = require("../channels/email");
+const { sendSMS } = require("../channels/sms");
+const { sendPush } = require("../channels/push");
+const {
+  publishNotificationToWebSocket,
+} = require("../services/websocketPublisher");
+const { checkUserRateLimit } = require("../utils/rateLimiter");
+const logger = require("../utils/logger");
 
 const deliverNotification = async ({ notificationId }) => {
-    const notification = await Notification.findById(notificationId);
-    if (!notification) {
-        throw new Error('Notification not found');
-    }
+  const notification = await Notification.findById(notificationId);
+  if (!notification) {
+    throw new Error("Notification not found");
+  }
 
-    const userId = notification.userId.toString();
-    const companyId = notification.companyId.toString();
-    const prefs = await getPreferences(userId, companyId);
+  const userId = notification.userId.toString();
+  const companyId = notification.companyId.toString();
 
-    let successes = 0;
-    const results = [];
-
-    // Email
-    if (notification.channels.email && prefs.email) {
-        // Assume email in payload
-        const success = await sendEmail(notification, notification.payload.email);
-        results.push({ channel: 'email', success });
-        if (success) successes++;
-    }
-
-    // SMS
-    if (notification.channels.sms && prefs.sms) {
-        const success = await sendSMS(notification, notification.payload.phone);
-        results.push({ channel: 'sms', success });
-        if (success) successes++;
-    }
-
-    // Push
-    if (notification.channels.push && prefs.push) {
-        const success = await sendPush(notification, notification.payload.fcmToken);
-        results.push({ channel: 'push', success });
-        if (success) successes++;
-    }
-
-    // In-App
-    if (notification.channels.inApp && prefs.inApp) {
-        const success = await sendInApp(notification, userId);
-        results.push({ channel: 'inApp', success });
-        if (success) successes++;
-    }
-
-    // Update status
-    notification.status = successes === results.length ? 'sent' : 'failed';
+  // Check user rate limit
+  const userRateLimitOk = await checkUserRateLimit(userId);
+  if (!userRateLimitOk) {
+    logger.warn(`User rate limit exceeded for user ${userId}`);
+    notification.status = "failed";
     await notification.save();
+    throw new Error("User rate limit exceeded");
+  }
 
-    logger.info(`Delivery for ${notificationId}: ${successes}/${results.length} successful`);
+  const prefs = await getPreferences(userId, companyId);
 
-    if (notification.status === 'failed') {
-        throw new Error(`Delivery failed for ${results.length - successes} channels`);
+  let successes = 0;
+  const results = [];
+
+  // Email
+  if (
+    notification.channels.email &&
+    prefs.email &&
+    notification.payload.email
+  ) {
+    const result = await sendEmail(
+      notification,
+      notification.payload.email,
+      userId,
+      companyId
+    );
+    results.push({ channel: "email", ...result });
+    if (result.success) successes++;
+  }
+
+  // SMS
+  if (notification.channels.sms && prefs.sms && notification.payload.phone) {
+    const result = await sendSMS(
+      notification,
+      notification.payload.phone,
+      userId,
+      companyId
+    );
+    results.push({ channel: "sms", ...result });
+    if (result.success) successes++;
+  }
+
+  // Push
+  if (
+    notification.channels.push &&
+    prefs.push &&
+    notification.payload.fcmToken
+  ) {
+    const result = await sendPush(
+      notification,
+      notification.payload.fcmToken,
+      userId,
+      companyId
+    );
+    results.push({ channel: "push", ...result });
+    if (result.success) successes++;
+  }
+
+  // In-App (via WebSocket service)
+  if (notification.channels.inApp && prefs.inApp) {
+    const result = await publishNotificationToWebSocket(notification, userId);
+    results.push({ channel: "inApp", ...result });
+    if (result.success) successes++;
+  }
+
+  // Update status
+  const totalChannels = results.length;
+  if (totalChannels === 0) {
+    notification.status = "failed";
+    logger.warn(`No channels enabled for notification ${notificationId}`);
+  } else {
+    notification.status =
+      successes === totalChannels ? "sent" : successes > 0 ? "sent" : "failed";
+  }
+
+  await notification.save();
+
+  logger.info(
+    `✅ Delivery for ${notificationId}: ${successes}/${totalChannels} successful`
+  );
+
+  // Log detailed results
+  results.forEach((result) => {
+    if (result.rateLimited) {
+      logger.warn(`⚠️  ${result.channel} rate limited`);
+    } else if (result.circuitBreakerOpen) {
+      logger.warn(`⚠️  ${result.channel} circuit breaker open`);
+    } else if (!result.success) {
+      logger.error(`❌ ${result.channel} failed: ${result.error}`);
     }
+  });
 
-    return results;
+  if (notification.status === "failed" && successes === 0) {
+    throw new Error(`Delivery failed for all ${totalChannels} channels`);
+  }
+
+  return results;
 };
 
 module.exports = { deliverNotification };

@@ -144,7 +144,7 @@ services:
     healthcheck:
       test:
         - "CMD-SHELL"
-        - "mongosh --username root --password invexispass --authenticationDatabase admin --eval 'db.adminCommand(\"ping\")' || exit 1"
+        - 'mongosh --username root --password invexispass --authenticationDatabase admin --eval ''db.adminCommand("ping")'' || exit 1'
       interval: 10s
       timeout: 5s
       retries: 3
@@ -161,17 +161,26 @@ services:
     container_name: invexis-sales-mysql
     restart: unless-stopped
     environment:
+      MYSQL_ROOT_PASSWORD: root
       MYSQL_USER: invexis
       MYSQL_PASSWORD: invexispass
+      MYSQL_DATABASE: salesdb
     ports:
       - "3306:3306"
     volumes:
       - sales_mysql_data:/var/lib/mysql
-    command: [ "--log-error-verbosity=3", "--innodb-flush-method=fsync", "--skip-log-bin", "--innodb-buffer-pool-size=128M", "--bind-address=0.0.0.0" ]
+    command:
+      [
+        "--log-error-verbosity=3",
+        "--innodb-flush-method=fsync",
+        "--skip-log-bin",
+        "--innodb-buffer-pool-size=128M",
+        "--bind-address=0.0.0.0",
+      ]
     healthcheck:
       test:
         - "CMD-SHELL"
-        - "mysqladmin ping -h localhost -u root -prootpass || exit 1"
+        - "mysqladmin ping -h localhost -u root -proot || exit 1"
       interval: 10s
       timeout: 5s
       retries: 5
@@ -577,6 +586,8 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/notification-service:/app
+      - ./services/notification-service/invexis-b7713-firebase-adminsdk-fbsvc-82c17263cc.json:/app/invexis-b7713-firebase-adminsdk-fbsvc-82c17263cc.json
     depends_on:
       redis:
         condition: service_healthy
@@ -731,6 +742,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/websocket-service:/app
     depends_on:
       rabbitmq:
         condition: service_healthy

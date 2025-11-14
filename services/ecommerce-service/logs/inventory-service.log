@@ -1,2 +1,97 @@
 {"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-10-30 17:52:26"}
 {"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-10-30 17:52:26"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-02 12:24:51"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-02 12:24:51"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-03 21:58:00"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-03 21:58:00"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-05 11:22:49"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-05 11:22:49"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-06 19:00:09"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-06 19:00:09"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:14:35"}
+{"level":"error","message":"❌ Error processing outbox: Connection pool for mongodb:27017 was cleared because another operation failed with: \"getaddrinfo EAI_AGAIN mongodb\"","timestamp":"2025-11-06 19:19:34"}
+{"level":"error","message":"❌ Error processing outbox: Connection pool for mongodb:27017 was cleared because another operation failed with: \"getaddrinfo EAI_AGAIN mongodb\"","timestamp":"2025-11-06 19:19:40"}
+{"level":"error","message":"❌ Error processing outbox: Connection pool for mongodb:27017 was cleared because another operation failed with: \"getaddrinfo EAI_AGAIN mongodb\"","timestamp":"2025-11-06 19:19:42"}
+{"level":"error","message":"❌ Error processing outbox: Connection pool for mongodb:27017 was cleared because another operation failed with: \"getaddrinfo EAI_AGAIN mongodb\"","timestamp":"2025-11-06 19:19:46"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:19:48"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:20:01"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:20:36"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:20:41"}
+{"level":"error","message":"❌ Error processing outbox: Connection to mongodb:27017 interrupted due to server monitor timeout","timestamp":"2025-11-06 19:20:50"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 69781ms (connectTimeoutMS: 30000)","timestamp":"2025-11-06 19:21:07"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 69781ms (connectTimeoutMS: 30000)","timestamp":"2025-11-06 19:21:15"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 69781ms (connectTimeoutMS: 30000)","timestamp":"2025-11-06 19:21:19"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:21:29"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:21:36"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:21:44"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:21:46"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:21:55"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:22:12"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 48167ms (connectTimeoutMS: 30000)","timestamp":"2025-11-06 19:22:28"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 48167ms (connectTimeoutMS: 30000)","timestamp":"2025-11-06 19:22:37"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 48167ms (connectTimeoutMS: 30000)","timestamp":"2025-11-06 19:22:42"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:22:56"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:22:58"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:23:05"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:23:20"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 19:23:32"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:00:25"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:00:36"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 45762ms (connectTimeoutMS: 30000)","timestamp":"2025-11-06 21:00:51"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 45762ms (connectTimeoutMS: 30000)","timestamp":"2025-11-06 21:01:03"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:08"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:08"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:12"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:13"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:14"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:15"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:17"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:17"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:18"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:19"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:20"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:21"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:22"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:01:23"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:18"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:21"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:27"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:32"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:35"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:35"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:42"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:42"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:42"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:46"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:47"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:49"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:49"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:50"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:54"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:55"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:56"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:03:57"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:04:06"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:04:12"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:04:14"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:04:15"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:04:32"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:04:54"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:04:59"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:15"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:19"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:23"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:26"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:28"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:28"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:28"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:29"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-06 21:05:30"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-06 21:23:47"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-06 21:23:47"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-06 21:43:20"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-06 21:43:20"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-07 15:11:36"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-07 15:11:37"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-07 22:12:16"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-07 22:12:16"}
