@@ -430,3 +430,16 @@
 {"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 08:20:00"}
 {"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 08:20:01"}
 {"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 08:20:11"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:01:22"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:01:39"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:01:45"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:01:49"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:01:54"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:01:54"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:01:56"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:04:54"}
+{"level":"error","message":"❌ Error processing outbox: connection <monitor> to 172.18.0.21:27017 closed","timestamp":"2025-11-17 09:05:01"}
+{"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 09:05:07"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 143857ms (connectTimeoutMS: 30000)","timestamp":"2025-11-17 09:12:28"}
+{"level":"error","message":"❌ Error processing outbox: Socket 'connect' timed out after 238932ms (connectTimeoutMS: 30000)","timestamp":"2025-11-17 09:12:28"}
+{"level":"error","message":"❌ Error processing outbox: Connection to mongodb:27017 interrupted due to server monitor timeout","timestamp":"2025-11-17 09:12:30"}
