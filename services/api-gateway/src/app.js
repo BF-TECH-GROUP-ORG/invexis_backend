@@ -34,7 +34,7 @@ app.use(cors({
 
 app.set('trust proxy', 1);  // From reference
 
-app.use(express.json({ limit: '10mb' }));  // Parse JSON bodies
+app.use(express.json({ limit: '190mb' }));  // Parse JSON bodies
 
 // Use custom routes (e.g., /api/user/:userId)
 app.use('/', routes);
@@ -54,7 +54,7 @@ app.use('/api/notification', notificationProxy);
 app.use('/api/analytics', analyticsProxy);
 app.use('/api/audit', auditProxy);
 app.use('/api/debt', debtProxy);
-app.use('/api/websocket', websocketProxy); 
+app.use('/api/websocket', websocketProxy);
 
 app.get('/', (req, res) => {
     res.send('API Gateway is running...');
