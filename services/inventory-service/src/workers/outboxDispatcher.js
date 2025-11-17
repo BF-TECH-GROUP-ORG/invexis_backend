@@ -15,7 +15,7 @@ let dispatcherInterval = null;
  */
 async function startOutboxDispatcher(intervalMs = 1000) {
   try {
-    logger.info(`🚀 Starting outbox dispatcher (interval: ${intervalMs}ms)`);
+    console.log(`🚀 Starting outbox dispatcher (interval: ${intervalMs}ms)`);
 
     dispatcherInterval = setInterval(async () => {
       try {
@@ -25,7 +25,7 @@ async function startOutboxDispatcher(intervalMs = 1000) {
       }
     }, intervalMs);
 
-    logger.info('✅ Outbox dispatcher started');
+    console.log('✅ Outbox dispatcher started');
   } catch (error) {
     logger.error(`❌ Failed to start outbox dispatcher: ${error.message}`);
     throw error;
@@ -52,7 +52,7 @@ async function stopOutboxDispatcher() {
 async function processOutbox() {
   try {
     // Reset stale processing events (older than 12 minutes)
-    await Outbox.resetStaleProcessing(0.2);
+    await Outbox.resetStaleProcessing(10);
 
     // Fetch pending events
     const pendingEvents = await Outbox.OutboxService.fetchBatch(50);

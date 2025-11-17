@@ -91,7 +91,7 @@ const initializeEventSystem = async () => {
     await connectRabbitMQ();
     await consumeEvents();
     await initPublishers();
-    await startOutboxDispatcher(1000); // Process outbox every 1 second
+    await startOutboxDispatcher(10000); // Process outbox every 10 second
     console.log("✅ Event system initialized");
   } catch (error) {
     console.error("❌ Failed to initialize event system:", error);
