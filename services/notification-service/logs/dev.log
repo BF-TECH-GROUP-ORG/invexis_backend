@@ -158,3 +158,20 @@
 {"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-13T21:10:44.927Z"}
 {"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-13T21:10:46.090Z"}
 {"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-13T21:10:46.099Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-14T12:10:16.090Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-14T12:10:16.255Z"}
+{"address":"172.18.0.21","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.21:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.21:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-14T12:10:16.845Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-14T12:39:05.439Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-14T12:39:05.504Z"}
+{"address":"172.18.0.12","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.12:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.12:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-14T12:39:05.549Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-17T07:00:36.226Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-17T07:00:36.406Z"}
+{"address":"172.18.0.9","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.9:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.9:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-17T07:00:37.061Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-17T07:09:04.813Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-17T07:09:04.849Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-17T07:09:06.671Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-17T07:09:06.704Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-17T07:09:09.826Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-17T07:09:09.890Z"}
+{"companyId":"79ca6d03-e1f1-44f5-91dd-7fdf965b99cd","createdAt":"2025-11-09T11:17:37.601Z","domain":"techhub-rw-1.com","level":"info","message":"🏢 Processing company event: company.created","name":"TechHub Rwanda Ltd","tier":"premium","timestamp":"2025-11-17T07:09:11.021Z","traceId":"d236412c-ae3f-4c9d-a8cb-2e954884295d","trace_id":"8823af57-c7fa-4498-8fc3-97d0fbd6f955"}
+{"level":"warn","message":"⚠️ Company created event missing required fields","timestamp":"2025-11-17T07:09:11.023Z"}

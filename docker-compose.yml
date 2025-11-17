@@ -297,9 +297,15 @@ services:
       replicas: 1 # Scale for load balancing via Traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api-gateway.rule=Host(`api-gateway.local`)"
+      # Main API Gateway - handles all /api/* routes
+      - "traefik.http.routers.api-gateway.rule=(Host(`api-gateway.local`) || Host(`localhost`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api-gateway.priority=100"
       - "traefik.http.services.api-gateway.loadbalancer.server.port=8000"
       - "traefik.http.routers.api-gateway.entrypoints=web"
+      # Health check endpoint
+      - "traefik.http.routers.api-gateway-health.rule=PathPrefix(`/health`)"
+      - "traefik.http.routers.api-gateway-health.priority=100"
+      - "traefik.http.routers.api-gateway-health.entrypoints=web"
 
   auth-service:
     build: ./services/auth-service
@@ -335,10 +341,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.auth-service.rule=Host(`auth.local`)"
-      - "traefik.http.services.auth-service.loadbalancer.server.port=8001"
-      - "traefik.http.routers.auth-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   company-service:
     build: ./services/company-service
@@ -374,10 +378,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.company-service.rule=Host(`company.local`)"
-      - "traefik.http.services.company-service.loadbalancer.server.port=8004"
-      - "traefik.http.routers.company-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   shop-service:
     build: ./services/shop-service
@@ -413,10 +415,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.shop-service.rule=Host(`shop.local`)"
-      - "traefik.http.services.shop-service.loadbalancer.server.port=9001"
-      - "traefik.http.routers.shop-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   inventory-service:
     build: ./services/inventory-service
@@ -452,10 +452,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.inventory-service.rule=Host(`inventory.local`)"
-      - "traefik.http.services.inventory-service.loadbalancer.server.port=8007"
-      - "traefik.http.routers.inventory-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   sales-service:
     build: ./services/sales-service
@@ -492,10 +490,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.sales-service.rule=Host(`sales.local`)"
-      - "traefik.http.services.sales-service.loadbalancer.server.port=9000"
-      - "traefik.http.routers.sales-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   payment-service:
     build: ./services/payment-service
@@ -531,10 +527,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.payment-service.rule=Host(`payment.local`)"
-      - "traefik.http.services.payment-service.loadbalancer.server.port=8009"
-      - "traefik.http.routers.payment-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   ecommerce-service:
     build: ./services/ecommerce-service
@@ -570,10 +564,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.ecommerce-service.rule=Host(`ecommerce.local`)"
-      - "traefik.http.services.ecommerce-service.loadbalancer.server.port=8006"
-      - "traefik.http.routers.ecommerce-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   notification-service:
     build: ./services/notification-service
@@ -610,10 +602,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.notification-service.rule=Host(`notification.local`)"
-      - "traefik.http.services.notification-service.loadbalancer.server.port=8008"
-      - "traefik.http.routers.notification-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   analytics-service:
     build: ./services/analytics-service
@@ -651,10 +641,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.analytics-service.rule=Host(`analytics.local`)"
-      - "traefik.http.services.analytics-service.loadbalancer.server.port=8002"
-      - "traefik.http.routers.analytics-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   audit-service:
     build: ./services/audit-service
@@ -689,10 +677,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.audit-service.rule=Host(`audit.local`)"
-      - "traefik.http.services.audit-service.loadbalancer.server.port=8003"
-      - "traefik.http.routers.audit-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   debt-service:
     build: ./services/debt-service
@@ -727,10 +713,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.debt-service.rule=Host(`debt.local`)"
-      - "traefik.http.services.debt-service.loadbalancer.server.port=8005"
-      - "traefik.http.routers.debt-service.entrypoints=web"
+      # Disabled - access via API Gateway only
+      - "traefik.enable=false"
 
   websocket-service:
     build: ./services/websocket-service
@@ -763,10 +747,8 @@ services:
     deploy:
       replicas: 1
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.websocket-service.rule=Host(`websocket.local`)"
-      - "traefik.http.services.websocket-service.loadbalancer.server.port=9002"
-      - "traefik.http.routers.websocket-service.entrypoints=web"
+      # Disabled - access via API Gateway only (WebSocket upgrade supported)
+      - "traefik.enable=false"
 
 # ======================
 # Volumes
