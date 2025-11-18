@@ -388,3 +388,11 @@
 {"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 08:20:14"}
 {"level":"error","message":"❌ Error processing outbox: getaddrinfo EAI_AGAIN mongodb","timestamp":"2025-11-17 08:20:14"}
 >>>>>>> 8cf31da7ba5a2625cee87d3bff8a8bac5ed3c3d3
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-17 08:57:14"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-17 08:57:14"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-17 09:30:27"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-17 09:30:27"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-17 12:32:27"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-17 12:32:27"}
+{"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-18 07:51:16"}
+{"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-18 07:51:16"}

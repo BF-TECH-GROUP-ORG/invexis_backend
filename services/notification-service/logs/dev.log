@@ -175,3 +175,18 @@
 {"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-17T07:09:09.890Z"}
 {"companyId":"79ca6d03-e1f1-44f5-91dd-7fdf965b99cd","createdAt":"2025-11-09T11:17:37.601Z","domain":"techhub-rw-1.com","level":"info","message":"🏢 Processing company event: company.created","name":"TechHub Rwanda Ltd","tier":"premium","timestamp":"2025-11-17T07:09:11.021Z","traceId":"d236412c-ae3f-4c9d-a8cb-2e954884295d","trace_id":"8823af57-c7fa-4498-8fc3-97d0fbd6f955"}
 {"level":"warn","message":"⚠️ Company created event missing required fields","timestamp":"2025-11-17T07:09:11.023Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-17T12:32:26.452Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-17T12:32:26.552Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-17T12:32:27.109Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-17T12:32:27.113Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-17T12:32:27.899Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-17T12:32:27.922Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T06:38:42.093Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T06:38:42.142Z"}
+{"address":"172.18.0.23","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.23:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.23:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-18T06:38:42.319Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T07:51:16.386Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T07:51:16.394Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-18T07:51:16.565Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T07:51:16.567Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T07:51:16.976Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T07:51:16.982Z"}

@@ -38,43 +38,17 @@ app.use(
   })
 );
 
-<<<<<<< HEAD
-app.use(express.json({ limit: '190mb' }));  // Parse JSON bodies
-=======
 // Trust proxy (for rate limiting behind reverse proxy)
 app.set("trust proxy", 1);
->>>>>>> 8cf31da7ba5a2625cee87d3bff8a8bac5ed3c3d3
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-<<<<<<< HEAD
-// Global limiter
-app.use(limiter);
-
-// Proxy Routes (with auth where needed, like reference)
-app.use('/api/auth', authLimiter, authProxy);
-app.use('/api/company', companyProxy);
-app.use('/api/shop', shopProxy);
-app.use('/api/inventory', inventoryProxy);
-app.use('/api/sales', salesProxy);
-app.use('/api/payment', paymentProxy);
-app.use('/api/ecommerce', ecommerceProxy);
-app.use('/api/notification', notificationProxy);
-app.use('/api/analytics', analyticsProxy);
-app.use('/api/audit', auditProxy);
-app.use('/api/debt', debtProxy);
-app.use('/api/websocket', websocketProxy);
-
-app.get('/', (req, res) => {
-    res.send('API Gateway is running...');
-=======
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);
   next();
->>>>>>> 8cf31da7ba5a2625cee87d3bff8a8bac5ed3c3d3
 });
 
 // Health check and custom routes (no auth required)

@@ -1,10 +1,83 @@
-const express = require("express");
-const app = express();
-const PORT = process.env.PORT || 8010;
-app.get("/", (req, res) => res.send("Hello from audit-service!"));
-const router = require('./routes/audit')
+require('dotenv').config();
+const app = require('./app');
+const connectDB = require('./config/db');
 
-app.use('/audit', router)
+let connectRabbitMQ, redis;
+try {
+    const rabbitmq = require('/app/shared/rabbitmq.js');
+    connectRabbitMQ = rabbitmq.connect;
+    redis = require('/app/shared/redis.js');
+} catch (err) {
+    // Log the original error to help debug missing-module or execution errors when requiring shared files inside Docker
+    console.warn('Shared dependencies not available, falling back to standalone mode. Require error:');
+    console.warn(err && err.message ? err.message : err);
+    // Provide no-op fallbacks so the service can still start for local/dev scenarios
+    connectRabbitMQ = async () => console.log('RabbitMQ connection skipped');
+    redis = {
+        connect: async () => console.log('Redis connection skipped'),
+        quit: async () => console.log('Redis quit skipped')
+    };
+}
 
-app.listen(PORT, () => console.log(`audit-service running on port ${PORT}`));
-app.get("/health", (req, res) => res.sendStatus(200));
+const PORT = process.env.PORT || 8005;
+
+// Validate critical environment variables
+const requiredEnvVars = [
+    'MONGO_URI'
+];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+    console.error(`Missing environment variables: ${missingEnvVars.join(', ')}`);
+    process.exit(1);
+}
+
+const startServer = async () => {
+    let retries = 5;
+    while (retries > 0) {
+        try {
+            console.log('Attempting to connect to services...');
+            // Connect to MongoDB
+            await connectDB();
+
+            // Connect to RabbitMQ
+            await connectRabbitMQ();
+
+            // Connect to Redis
+            await redis.connect();
+
+            // Start Express server
+            app.listen(PORT, () => {
+                console.log(`audit-service running on port ${PORT} - Cached & Event-ready`);
+            });
+
+            return; // Success
+        } catch (error) {
+            console.error(`Startup attempt failed: ${error.message}`);
+            retries--;
+            if (retries === 0) {
+                console.error('Maximum retries reached. Exiting...');
+                process.exit(1);
+            }
+            console.log(`Retrying in 5 seconds... (${retries} attempts remaining)`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+    }
+};
+
+const shutdown = async () => {
+    console.log('Graceful shutdown initiated...');
+    try {
+        await redis.quit();
+        console.log('Redis connection closed');
+        console.log('Shutting down server');
+        process.exit(0);
+    } catch (error) {
+        console.error(`Shutdown error: ${error.message}`);
+        process.exit(1);
+    }
+};
+
+startServer();
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

@@ -617,6 +617,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/analytics-service:/app
     depends_on:
       analytics-postgres:
         condition: service_healthy
@@ -655,6 +656,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/audit-service:/app
     depends_on:
       mongodb:
         condition: service_healthy
@@ -691,6 +693,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/debt-service:/app
     depends_on:
       mongodb:
         condition: service_healthy
