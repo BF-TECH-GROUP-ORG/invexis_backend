@@ -4,6 +4,7 @@ const Subscription = require("../models/subscription.model");
 const { subscriptionEvents } = require("../events/eventHelpers");
 const { companyEvents } = require("../events/eventHelpers");
 const db = require("../config");
+const { VALID_TIERS, normalizeTier } = require("../constants/tiers");
 
 /**
  * @desc    Create a new company
@@ -11,13 +12,28 @@ const db = require("../config");
  * @access  Private (Super Admin)
  */
 const createCompany = asyncHandler(async (req, res) => {
-  const { name, domain, email, phone, country, city, tier, coordinates } =
+  const { name, domain, email, phone, country, city, tier, coordinates, category_ids } =
     req.body;
 
   // Validate required fields
   if (!name) {
     res.status(400);
     throw new Error("Company name is required");
+  }
+
+  // Validate tier if provided
+  if (tier) {
+    const normalizedTier = normalizeTier(tier);
+    if (!normalizedTier) {
+      res.status(400);
+      throw new Error(`Invalid tier. Must be one of: ${VALID_TIERS.join(", ")}`);
+    }
+  }
+
+  // Validate category_ids if provided
+  if (category_ids && !Array.isArray(category_ids)) {
+    res.status(400);
+    throw new Error("category_ids must be an array");
   }
 
   // Check if company with same domain or name exists
@@ -47,6 +63,7 @@ const createCompany = asyncHandler(async (req, res) => {
         city,
         coordinates,
         tier,
+        category_ids: category_ids || [],
         createdBy: req.user?.id || "651f2c80c6b9b5a7cdfe1909",
       },
       trx
@@ -54,7 +71,7 @@ const createCompany = asyncHandler(async (req, res) => {
     const subscription = await Subscription.create(
       {
         company_id: newCompany.id,
-        tier: tier || "basic",
+        tier: normalizeTier(tier) || "Basic",
         amount: 0, // Default free tier
         currency: "RWF",
         start_date: new Date(),
@@ -145,12 +162,18 @@ const getCompanyByDomain = asyncHandler(async (req, res) => {
  */
 const updateCompany = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { name, domain, email, phone, country, city } = req.body;
+  const { name, domain, email, phone, country, city, category_ids } = req.body;
 
   const company = await Company.findCompanyById(id);
   if (!company) {
     res.status(404);
     throw new Error("Company not found");
+  }
+
+  // Validate category_ids if provided
+  if (category_ids !== undefined && !Array.isArray(category_ids)) {
+    res.status(400);
+    throw new Error("category_ids must be an array");
   }
 
   const updateData = {
@@ -160,6 +183,7 @@ const updateCompany = asyncHandler(async (req, res) => {
     ...(phone && { phone }),
     ...(country && { country }),
     ...(city && { city }),
+    ...(category_ids !== undefined && { category_ids }),
     updatedBy: req.user?.id || null,
     updatedAt: new Date(),
   };
@@ -251,9 +275,11 @@ const changeCompanyTier = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { tier } = req.body;
 
-  if (!tier || !["basic", "premium", "enterprise"].includes(tier)) {
+  // Normalize and validate tier
+  const normalizedTier = normalizeTier(tier);
+  if (!normalizedTier) {
     res.status(400);
-    throw new Error("Invalid tier. Must be basic, premium, or enterprise");
+    throw new Error(`Invalid tier. Must be one of: ${VALID_TIERS.join(", ")}`);
   }
 
   const company = await Company.findCompanyById(id);
@@ -264,15 +290,15 @@ const changeCompanyTier = asyncHandler(async (req, res) => {
 
   // Change tier with transaction (atomic with outbox event)
   await db.transaction(async (trx) => {
-    await Company.changeTier(id, tier, req.user?.id || null, trx);
+    await Company.changeTier(id, normalizedTier, req.user?.id || null, trx);
 
     // Create outbox event within transaction (will be published by dispatcher)
-    await companyEvents.tierChanged(id, tier, trx);
+    await companyEvents.tierChanged(id, normalizedTier, trx);
   });
 
   res.json({
     success: true,
-    message: `Company tier changed to ${tier}`,
+    message: `Company tier changed to ${normalizedTier}`,
   });
 });
 
@@ -325,6 +351,164 @@ const reactivateCompany = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Get companies by category IDs (any match)
+ * @route   GET /api/companies/categories
+ * @access  Private
+ */
+const getCompaniesByCategories = asyncHandler(async (req, res) => {
+  const { category_ids, status, tier, limit = 50, offset = 0 } = req.query;
+
+  if (!category_ids) {
+    res.status(400);
+    throw new Error("category_ids query parameter is required");
+  }
+
+  // Parse category_ids (can be comma-separated string or array)
+  const categoryArray = Array.isArray(category_ids)
+    ? category_ids
+    : category_ids.split(",").map((id) => id.trim());
+
+  const companies = await Company.findCompaniesByCategories(categoryArray, {
+    status,
+    tier,
+    limit: parseInt(limit),
+    offset: parseInt(offset),
+  });
+
+  res.json({
+    success: true,
+    count: companies.length,
+    data: companies,
+  });
+});
+
+/**
+ * @desc    Add categories to a company
+ * @route   POST /api/companies/:id/categories
+ * @access  Private (Company Admin or Super Admin)
+ */
+const addCompanyCategories = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { category_ids } = req.body;
+
+  if (!category_ids || !Array.isArray(category_ids) || category_ids.length === 0) {
+    res.status(400);
+    throw new Error("category_ids must be a non-empty array");
+  }
+
+  const company = await Company.findCompanyById(id);
+  if (!company) {
+    res.status(404);
+    throw new Error("Company not found");
+  }
+
+  // Add categories with transaction (atomic with outbox event)
+  const updatedCompany = await db.transaction(async (trx) => {
+    const updated = await Company.addCategories(
+      id,
+      category_ids,
+      req.user?.id || null,
+      trx
+    );
+
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.updated(updated, trx);
+
+    return updated;
+  });
+
+  res.json({
+    success: true,
+    message: "Categories added successfully",
+    data: updatedCompany,
+  });
+});
+
+/**
+ * @desc    Remove categories from a company
+ * @route   DELETE /api/companies/:id/categories
+ * @access  Private (Company Admin or Super Admin)
+ */
+const removeCompanyCategories = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { category_ids } = req.body;
+
+  if (!category_ids || !Array.isArray(category_ids) || category_ids.length === 0) {
+    res.status(400);
+    throw new Error("category_ids must be a non-empty array");
+  }
+
+  const company = await Company.findCompanyById(id);
+  if (!company) {
+    res.status(404);
+    throw new Error("Company not found");
+  }
+
+  // Remove categories with transaction (atomic with outbox event)
+  const updatedCompany = await db.transaction(async (trx) => {
+    const updated = await Company.removeCategories(
+      id,
+      category_ids,
+      req.user?.id || null,
+      trx
+    );
+
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.updated(updated, trx);
+
+    return updated;
+  });
+
+  res.json({
+    success: true,
+    message: "Categories removed successfully",
+    data: updatedCompany,
+  });
+});
+
+/**
+ * @desc    Set (replace) categories for a company
+ * @route   PUT /api/companies/:id/categories
+ * @access  Private (Company Admin or Super Admin)
+ */
+const setCompanyCategories = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { category_ids } = req.body;
+
+  if (!Array.isArray(category_ids)) {
+    res.status(400);
+    throw new Error("category_ids must be an array");
+  }
+
+  const company = await Company.findCompanyById(id);
+  if (!company) {
+    res.status(404);
+    throw new Error("Company not found");
+  }
+
+  // Set categories with transaction (atomic with outbox event)
+  const updatedCompany = await db.transaction(async (trx) => {
+    const updated = await Company.setCategories(
+      id,
+      category_ids,
+      req.user?.id || null,
+      trx
+    );
+
+    // Create outbox event within transaction (will be published by dispatcher)
+    await companyEvents.updated(updated, trx);
+
+    return updated;
+  });
+
+  res.json({
+    success: true,
+    message: "Categories updated successfully",
+    data: updatedCompany,
+  });
+});
+
 module.exports = {
   createCompany,
   getAllCompanies,
@@ -336,4 +520,8 @@ module.exports = {
   changeCompanyTier,
   getActiveCompanies,
   reactivateCompany,
+  getCompaniesByCategories,
+  addCompanyCategories,
+  removeCompanyCategories,
+  setCompanyCategories,
 };
