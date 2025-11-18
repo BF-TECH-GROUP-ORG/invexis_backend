@@ -11,6 +11,7 @@ const handleProductEvent = require("../handlers/productEvent.handler");
 const handleSaleEvent = require("../handlers/saleEvent.handler");
 const handlePaymentEvent = require("../handlers/paymentEvent.handler");
 const handleAuthEvent = require("../handlers/authEvent.handler");
+const handleDebtEvent = require("../handlers/debtEvent.handler");
 
 module.exports = [
   {
@@ -60,6 +61,14 @@ module.exports = [
     pattern: "payment.#",
     handler: handlePaymentEvent,
     description: "Handles payment and billing events",
+  },
+  {
+    name: "debtEvents",
+    queue: "notification_debt_events",
+    exchange: exchanges.topic,
+    pattern: "debt.#",
+    handler: handleDebtEvent,
+    description: "Handles debt lifecycle and reminder events",
   },
   {
     name: "subscriptionEvents",

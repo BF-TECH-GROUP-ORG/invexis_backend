@@ -433,3 +433,47 @@
 {"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T07:58:17.717Z"}
 {"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T07:58:17.976Z"}
 {"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T07:58:17.980Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T10:56:07.596Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T10:56:07.608Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-18T10:56:07.768Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T10:56:07.770Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T10:56:07.968Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T10:56:07.975Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T10:56:41.253Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T10:56:41.261Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-18T10:56:41.447Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T10:56:41.449Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T10:56:41.693Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T10:56:41.698Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T10:57:01.773Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T10:57:01.786Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-18T10:57:02.017Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T10:57:02.018Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T10:57:02.313Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T10:57:02.319Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T10:57:40.127Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T10:57:40.133Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-18T10:57:40.368Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T10:57:40.372Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T10:57:40.681Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T10:57:40.688Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T11:01:26.494Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T11:01:26.502Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-18T11:01:26.702Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T11:01:26.704Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T11:01:26.982Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T11:01:26.987Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T11:02:01.890Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T11:02:01.897Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-18T11:02:02.091Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T11:02:02.095Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T11:02:02.357Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T11:02:02.365Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T11:14:40.361Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T11:14:40.369Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-18T11:14:40.514Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-18T11:14:40.515Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-18T11:14:40.733Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T11:14:40.737Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T12:10:34.525Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T12:10:34.546Z"}
