@@ -3,3 +3,4 @@
 .vscode
 /services/**/logs/
 services/websocket-service/node_modules/
+services/**/node_modules/
