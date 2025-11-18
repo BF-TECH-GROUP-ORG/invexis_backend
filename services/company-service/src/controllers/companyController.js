@@ -47,7 +47,7 @@ const createCompany = asyncHandler(async (req, res) => {
         city,
         coordinates,
         tier,
-        createdBy: req.user?.id || 1,
+        createdBy: req.user?.id || "651f2c80c6b9b5a7cdfe1909",
       },
       trx
     );

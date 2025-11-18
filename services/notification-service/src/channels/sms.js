@@ -3,7 +3,7 @@ const client = require("../config/sms");
 const logger = require("../utils/logger");
 const DeliveryLog = require("../models/DeliveryLog");
 const { checkRateLimit } = require("../utils/rateLimiter");
-const { createSMSCircuitBreaker } = require("../utils/circuitBreaker");
+const { createSmsCircuitBreaker } = require("../utils/circuitBreaker");
 
 /**
  * Core SMS sending function (wrapped by circuit breaker)
@@ -12,20 +12,45 @@ const sendSMSCore = async (notification, phoneNumber, userId, companyId) => {
   const startTime = Date.now();
 
   try {
-    const message = await client.messages.create({
-      body: `${notification.title}: ${notification.body.substring(0, 160)}`,
+    // Get SMS-specific compiled content or fallback to legacy fields
+    const smsContent = notification.getContentForChannel('sms');
+
+    let messageBody;
+
+    if (smsContent) {
+      messageBody = smsContent.message;
+    } else {
+      // Fallback to legacy fields with length limit
+      const title = notification.title || '';
+      const body = notification.body || '';
+      const combined = title ? `${title}: ${body}` : body;
+      messageBody = combined.length > 160 ? combined.substring(0, 157) + '...' : combined;
+      logger.warn(`No SMS template found for notification ${notification._id}, using legacy fields`);
+    }
+
+    const messageOptions = {
+      body: messageBody,
       from: process.env.TWILIO_PHONE_NUMBER,
       to: phoneNumber,
-    });
+    };
 
+    // Add Unicode support if specified in template
+    if (smsContent?.allowUnicode === false) {
+      // Force ASCII encoding by removing non-ASCII characters
+      messageOptions.body = messageBody.replace(/[^\x00-\x7F]/g, '');
+    }
+
+    const message = await client.messages.create(messageOptions);
     const responseTime = Date.now() - startTime;
-    logger.info(`✅ SMS sent to ${phoneNumber} in ${responseTime}ms`);
+
+    logger.info(`✅ SMS sent to ${phoneNumber} in ${responseTime}ms (${messageBody.length} chars)`);
 
     return {
       success: true,
       providerId: message.sid,
       responseTime,
       recipient: phoneNumber,
+      messageLength: messageBody.length
     };
   } catch (error) {
     const responseTime = Date.now() - startTime;

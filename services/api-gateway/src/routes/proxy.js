@@ -134,7 +134,7 @@ routes.get("/health/all", async (req, res) => {
  * No path rewrite needed - auth service handles /auth routes internally
  */
 const authProxy = createServiceProxy("AUTH", services.AUTH_SERVICE, {
-  pathRewrite: { "^/api/auth": "" },
+  pathRewrite: { "^/api/auth": "/auth" },
 });
 
 /**

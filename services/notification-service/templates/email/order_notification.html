@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Order Confirmation - {{orderId}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #1f2937;
+      background-color: #f3f4f6;
+      padding: 20px 0;
+    }
+    .email-wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+    .header {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .content p {
+      margin: 0 0 16px;
+      color: #4b5563;
+      font-size: 16px;
+    }
+    .content p:last-child {
+      margin-bottom: 0;
+    }
+    .greeting {
+      color: #1f2937;
+      font-size: 18px;
+      font-weight: 500;
+    }
+    .order-id {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #f0fdf4;
+      color: #166534;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      margin: 16px 0;
+    }
+    .order-items {
+      margin: 24px 0;
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .order-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .order-item:last-child {
+      border-bottom: none;
+    }
+    .item-name {
+      color: #1f2937;
+      font-weight: 500;
+    }
+    .item-price {
+      color: #059669;
+      font-weight: 600;
+    }
+    .order-total {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 2px solid #10b981;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .order-total .label {
+      color: #1f2937;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .order-total .amount {
+      color: #10b981;
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .btn {
+      display: inline-block;
+      margin: 24px 0;
+      padding: 14px 32px;
+      background: #10b981;
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      transition: background 0.3s ease;
+    }
+    .btn:hover {
+      background: #059669;
+    }
+    .btn-wrapper {
+      text-align: center;
+      margin: 32px 0;
+    }
+    .footer {
+      padding: 30px;
+      background: #f9fafb;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+    }
+    .footer p {
+      margin: 8px 0;
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .footer a {
+      color: #10b981;
+      text-decoration: none;
+    }
+    .divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="header">
+      <h1>✅ Order Confirmed!</h1>
+    </div>
+    
+    <div class="content">
+      <p class="greeting">Hi {{userName}},</p>
+      
+      <p>
+        Thank you for your order! We've received your purchase and it's being processed.
+      </p>
+      
+      <div style="text-align: center;">
+        <span class="order-id">Order #{{orderId}}</span>
+      </div>
+      
+      <div class="order-items">
+        <h3 style="margin: 0 0 16px; color: #1f2937; font-size: 16px;">Order Summary</h3>
+        
+        {{#each orderItems}}
+        <div class="order-item">
+          <div class="item-name">{{this.name}} × {{this.quantity}}</div>
+          <div class="item-price">{{this.lineTotal}}</div>
+        </div>
+        {{/each}}
+        
+        <div class="order-total">
+          <span class="label">Total</span>
+          <span class="amount">{{orderTotal}}</span>
+        </div>
+      </div>
+      
+      <div class="btn-wrapper">
+        <a href="{{actionUrl}}" class="btn">View Order Details</a>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <p>
+        We'll send you another email when your order ships. If you have any questions, 
+        feel free to contact us at 
+        <a href="mailto:{{supportEmail}}" style="color: #10b981; text-decoration: none;">{{supportEmail}}</a>
+      </p>
+    </div>
+    
+    <div class="footer">
+      <p><strong>The {{companyName}} Team</strong></p>
+      <p>© {{currentYear}} {{companyName}}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

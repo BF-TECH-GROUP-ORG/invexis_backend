@@ -1,0 +1,9 @@
+{
+  "title": "Order {{orderId}} — {{status}}",
+  "body": "{{orderSummary}} — Total: {{orderTotal}}",
+  "data": {
+    "action": "open_order",
+    "orderId": "{{orderId}}",
+    "url": "{{actionUrl}}"
+  }
+}

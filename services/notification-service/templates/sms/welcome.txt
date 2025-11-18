@@ -1,0 +1,1 @@
+Welcome to {{companyName}}, {{userName}}! Verify: {{actionUrl}} — Need help? {{supportEmail}}
