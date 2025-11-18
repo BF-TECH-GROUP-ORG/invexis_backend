@@ -143,7 +143,7 @@ const authProxy = createServiceProxy("AUTH", services.AUTH_SERVICE, {
  * Exposes: /companies, /roles, /company-users, /subscriptions
  */
 const companyProxy = createServiceProxy("COMPANY", services.COMPANY_SERVICE, {
-  pathRewrite: { "^/api/company": "" },
+  pathRewrite: { "^/api/company": "/company" },
 });
 
 /**
@@ -152,7 +152,7 @@ const companyProxy = createServiceProxy("COMPANY", services.COMPANY_SERVICE, {
  * Exposes: / (shop CRUD), /:shopId/departments
  */
 const shopProxy = createServiceProxy("SHOP", services.SHOP_SERVICE, {
-  pathRewrite: { "^/api/shop": "" },
+  pathRewrite: { "^/api/shop": "/shop" },
 });
 
 /**
@@ -164,7 +164,7 @@ const inventoryProxy = createServiceProxy(
   "INVENTORY",
   services.INVENTORY_SERVICE,
   {
-    pathRewrite: { "^/api/inventory": "" },
+    pathRewrite: { "^/api/inventory": "/inventory" },
   }
 );
 
@@ -174,7 +174,7 @@ const inventoryProxy = createServiceProxy(
  * Exposes: /sales, /invoices
  */
 const salesProxy = createServiceProxy("SALES", services.SALES_SERVICE, {
-  pathRewrite: { "^/api/sales": "" },
+  pathRewrite: { "^/api/sales": "/sales" },
 });
 
 /**
@@ -182,7 +182,7 @@ const salesProxy = createServiceProxy("SALES", services.SALES_SERVICE, {
  * Routes: /api/payment/* → http://payment-service:8009/*
  */
 const paymentProxy = createServiceProxy("PAYMENT", services.PAYMENT_SERVICE, {
-  pathRewrite: { "^/api/payment": "" },
+  pathRewrite: { "^/api/payment": "/payment" },
 });
 
 /**
@@ -194,7 +194,7 @@ const ecommerceProxy = createServiceProxy(
   "ECOMMERCE",
   services.ECOMMERCE_SERVICE,
   {
-    pathRewrite: { "^/api/ecommerce": "" },
+    pathRewrite: { "^/api/ecommerce": "/ecommerce" },
   }
 );
 
@@ -206,7 +206,7 @@ const notificationProxy = createServiceProxy(
   "NOTIFICATION",
   services.NOTIFICATION_SERVICE,
   {
-    pathRewrite: { "^/api/notification": "" },
+    pathRewrite: { "^/api/notification": "/notification" },
   }
 );
 
@@ -218,7 +218,7 @@ const analyticsProxy = createServiceProxy(
   "ANALYTICS",
   services.ANALYTICS_SERVICE,
   {
-    pathRewrite: { "^/api/analytics": "" },
+    pathRewrite: { "^/api/analytics": "/analytics" },
   }
 );
 
