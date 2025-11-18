@@ -10,6 +10,12 @@ const {
   changeCompanyTier,
   getActiveCompanies,
   reactivateCompany,
+  getCompaniesByCategories,
+  addCompanyCategories,
+  removeCompanyCategories,
+  setCompanyCategories,
+  uploadCompanyVerificationDocs,
+  reviewCompanyVerification,
 } = require('../controllers/companyController');
 
 const router = express.Router();
@@ -21,12 +27,23 @@ router.get('/domain/:domain', getCompanyByDomain);
 router.post('/', createCompany);
 router.get('/', getAllCompanies);
 router.get('/active', getActiveCompanies);
+router.get('/categories', getCompaniesByCategories);
 router.get('/:id', getCompanyById);
 router.put('/:id', updateCompany);
 router.delete('/:id', deleteCompany);
 router.patch('/:id/status', changeCompanyStatus);
 router.patch('/:id/tier', changeCompanyTier);
+
+// Verification routes
+router.post('/:id/verification-docs', uploadCompanyVerificationDocs);
+router.patch('/:id/verification', reviewCompanyVerification);
+
 router.patch('/:id/reactivate', reactivateCompany);
+
+// Category management routes
+router.post('/:id/categories', addCompanyCategories);
+router.put('/:id/categories', setCompanyCategories);
+router.delete('/:id/categories', removeCompanyCategories);
 
 module.exports = router;
 

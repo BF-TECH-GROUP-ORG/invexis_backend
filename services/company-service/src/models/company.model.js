@@ -1,5 +1,6 @@
 const db = require("../config");
 const { v4: uuidv4 } = require("uuid");
+const { TIERS, normalizeTier } = require("../constants/tiers");
 
 class Company {
   static table = "companies";
@@ -12,8 +13,16 @@ class Company {
     this.country = data.country || null;
     this.city = data.city || null;
     this.coordinates = data.coordinates || null;
-    this.tier = data.tier || "basic";
-    this.status = data.status || "active";
+    this.tier = normalizeTier(data.tier) || TIERS.BASIC;
+    this.category_ids = data.category_ids || [];
+    this.status = data.status || "pending_verification";
+    this.metadata =
+      data.metadata || {
+        verification: {
+          status: "pending",
+          documents: [],
+        },
+      };
     this.createdBy = data.createdBy || null;
     this.updatedBy = data.updatedBy || null;
     this.createdAt = new Date();
@@ -84,10 +93,135 @@ class Company {
       .andWhereNot({ status: "deleted" })
       .select("*");
   }
+
+  /**
+   * Find companies that have at least one of the specified category IDs
+   * Uses PostgreSQL array overlap operator (@>)
+   * @param {Array<string>} categoryIds - Array of category IDs to search for
+   * @param {Object} options - Additional query options (status, tier, limit, offset)
+   * @returns {Promise<Array>} - Array of companies
+   */
+  static async findCompaniesByCategories(categoryIds, options = {}) {
+    const { status, tier, limit = 50, offset = 0 } = options;
+
+    let query = db(this.table)
+      .select("*")
+      .whereRaw("category_ids && ARRAY[?]::text[]", [categoryIds])
+      .limit(limit)
+      .offset(offset);
+
+    if (status) query = query.where({ status });
+    if (tier) query = query.where({ tier });
+
+    return query;
+  }
+
+  /**
+   * Find companies that have ALL of the specified category IDs
+   * Uses PostgreSQL array contains operator (@>)
+   * @param {Array<string>} categoryIds - Array of category IDs that must all be present
+   * @param {Object} options - Additional query options (status, tier, limit, offset)
+   * @returns {Promise<Array>} - Array of companies
+   */
+  static async findCompaniesByAllCategories(categoryIds, options = {}) {
+    const { status, tier, limit = 50, offset = 0 } = options;
+
+    let query = db(this.table)
+      .select("*")
+      .whereRaw("category_ids @> ARRAY[?]::text[]", [categoryIds])
+      .limit(limit)
+      .offset(offset);
+
+    if (status) query = query.where({ status });
+    if (tier) query = query.where({ tier });
+
+    return query;
+  }
+
+  /**
+   * Add category IDs to a company
+   * @param {string} id - Company ID
+   * @param {Array<string>} categoryIds - Category IDs to add
+   * @param {string} actor - User ID performing the action
+   * @returns {Promise<Object>} - Updated company
+   */
+  static async addCategories(id, categoryIds, actor) {
+    await db(this.table)
+      .where("id", id)
+      .update({
+        category_ids: db.raw("array_cat(category_ids, ARRAY[?]::text[])", [categoryIds]),
+        updatedAt: new Date(),
+        updatedBy: actor,
+      });
+    return this.findCompanyById(id);
+  }
+
+  /**
+   * Remove category IDs from a company
+   * @param {string} id - Company ID
+   * @param {Array<string>} categoryIds - Category IDs to remove
+   * @param {string} actor - User ID performing the action
+   * @returns {Promise<Object>} - Updated company
+   */
+  static async removeCategories(id, categoryIds, actor) {
+    await db(this.table)
+      .where("id", id)
+      .update({
+        category_ids: db.raw(
+          "ARRAY(SELECT unnest(category_ids) EXCEPT SELECT unnest(ARRAY[?]::text[]))",
+          [categoryIds]
+        ),
+        updatedAt: new Date(),
+        updatedBy: actor,
+      });
+    return this.findCompanyById(id);
+  }
+
+  /**
+   * Set (replace) category IDs for a company
+   * @param {string} id - Company ID
+   * @param {Array<string>} categoryIds - New category IDs
+   * @param {string} actor - User ID performing the action
+   * @returns {Promise<Object>} - Updated company
+   */
+  static async setCategories(id, categoryIds, actor) {
+    await db(this.table)
+      .where("id", id)
+      .update({
+        category_ids: categoryIds,
+        updatedAt: new Date(),
+        updatedBy: actor,
+      });
+    return this.findCompanyById(id);
+  }
+
   toPublicJSON() {
-    const { id, name, domain, email, phone, country, city, tier, status } =
-      this;
-    return { id, name, domain, email, phone, country, city, tier, status };
+    const {
+      id,
+      name,
+      domain,
+      email,
+      phone,
+      country,
+      city,
+      tier,
+      status,
+      category_ids,
+      metadata,
+    } = this;
+    return {
+      id,
+      name,
+      domain,
+      email,
+      phone,
+      country,
+      city,
+      tier,
+      status,
+      category_ids,
+      metadata,
+    };
   }
 }
 
