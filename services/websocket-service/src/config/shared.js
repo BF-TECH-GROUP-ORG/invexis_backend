@@ -1,97 +1,67 @@
 // websocket-service/src/config/shared.js
 const logger = require('../utils/logger');
 
-let connectRabbitMQ, redis, rabbitmq;
+let redis, rabbitmq;
 
 // Try to load shared dependencies
 try {
-    rabbitmq = require('/app/shared/rabbitmq.js');
-    connectRabbitMQ = rabbitmq.connect;
-    redis = require('/app/shared/redis.js');
+  rabbitmq = require('/app/shared/rabbitmq.js');
+  redis = require('/app/shared/redis.js');
 } catch (err) {
-    logger.warn('Shared dependencies not available, running in standalone mode');
-    connectRabbitMQ = async () => null;
-    redis = {
-        connect: async () => null,
-        quit: async () => null,
-        isConnected: false,
-        set: async () => null,
-        get: async () => null
-    };
+  logger.warn('Shared dependencies not available, running in standalone mode');
+
+  // Stub RabbitMQ client for local/test environments
+  rabbitmq = {
+    connect: async () => null,
+    healthCheck: async () => true,
+    subscribe: async () => null,
+    exchanges: {
+      topic: 'amq.topic',
+      dlx: 'amq.dlx',
+    },
+  };
+
+  // Stub Redis client
+  redis = {
+    connect: async () => null,
+    disconnect: async () => null,
+    isConnected: false,
+    set: async () => null,
+    get: async () => null,
+    setex: async () => null,
+    exists: async () => 0,
+    incr: async () => 1,
+    expire: async () => null,
+    sadd: async () => null,
+    srem: async () => null,
+    scard: async () => 0,
+    smembers: async () => [],
+    keys: async () => [],
+    del: async () => null,
+  };
 }
-
-/**
- * Initialize shared services with retries
- */
-const initShared = async () => {
-    try {
-        // Connect to Redis if available
-        if (redis && typeof redis.connect === 'function') {
-            await redis.connect();
-            console.log('redis connected');
-        }
-
-        // Connect to RabbitMQ if available
-        if (connectRabbitMQ) {
-            await connectRabbitMQ();
-            const result = await rabbitmq.healthCheck();
-            if (result) {
-                console.log('rabbitmq connected');
-            } else {
-                throw new Error('RabbitMQ health check failed');
-            }
-        }
-    } catch (err) {
-        logger.error('Failed to initialize shared services:', err);
-        throw err;
-    }
-};
 
 /**
  * Health check for monitoring
  */
 const healthCheck = async () => {
-    const health = {
-        redis: { status: 'unknown' },
-        rabbitmq: { status: 'unknown' }
-    };
+  const health = {
+    redis: { status: redis?.isConnected ? 'ok' : 'disconnected' },
+    rabbitmq: { status: 'ok' }
+  };
 
-    // Check Redis
-    try {
-        health.redis.status = redis && redis.isConnected ? 'ok' : 'error';
-    } catch (err) {
-        health.redis.status = 'error';
-        health.redis.error = err.message;
+  try {
+    if (rabbitmq?.healthCheck) {
+      const result = await rabbitmq.healthCheck();
+      health.rabbitmq.status = result ? 'ok' : 'error';
     }
+  } catch (err) {
+    logger.error('RabbitMQ health check failed:', err);
+    health.rabbitmq.status = 'error';
+    health.rabbitmq.error = err.message;
+  }
 
-    // Check RabbitMQ (assuming connected if we got this far)
-    try {
-        health.rabbitmq.status = 'ok';
-    } catch (err) {
-        health.rabbitmq.status = 'error';
-        health.rabbitmq.error = err.message;
-    }
-
-    return health;
+  return health;
 };
 
-/**
- * Cleanup connections
- */
-const cleanup = async () => {
-    logger.info('Cleaning up shared connections...');
-
-    try {
-        // Close Redis
-        if (redis && typeof redis.quit === 'function') {
-            await redis.quit();
-            logger.info('Redis connection closed');
-        }
-
-        logger.info('Shared cleanup completed');
-    } catch (err) {
-        logger.error('Error during cleanup:', err);
-    }
-};
-
-module.exports = { redis, rabbitmq: { connect: connectRabbitMQ }, initShared, healthCheck, cleanup };
+module.exports = { redis, rabbitmq, healthCheck };
