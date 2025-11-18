@@ -62,6 +62,16 @@ const DebtSchema = new mongoose.Schema({
     // Soft delete support
     isDeleted: { type: Boolean, default: false },
 
+    deletedAt: { type: Date },
+
+    // Track reminders sent to avoid duplicates: [{ type: 'upcoming_7'|'overdue_3'|'final', date: Date, meta: {} }]
+    reminderHistory: [
+        {
+            type: { type: String },
+            date: { type: Date, default: Date.now },
+            meta: { type: Object }
+        }
+    ],
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

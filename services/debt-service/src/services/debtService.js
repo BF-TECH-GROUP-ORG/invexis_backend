@@ -107,7 +107,7 @@ async function recordRepayment(payload) {
             }
         }
 
-    const debt = await debtRepo.findById(debtId, companyId);
+        const debt = await debtRepo.findById(debtId, companyId);
         if (!debt) throw new Error('Debt not found');
 
         // Fast path: create repayment in-memory + enqueue for persistence
@@ -333,6 +333,117 @@ async function customerAnalytics({ companyId, customerId }) {
     return result;
 }
 
+async function updateDebt({ companyId, debtId, updates }) {
+    const perf = require('../utils/perf');
+    return perf.measureAsync('updateDebt', async () => {
+        // Find the existing debt
+        const existingDebt = await debtRepo.findById(debtId, companyId);
+        if (!existingDebt) throw new Error('Debt not found or access denied');
+        if (existingDebt.isDeleted) throw new Error('Cannot update deleted debt');
+
+        // Allow updates to: dueDate, shareLevel, consentRef, items (with recalculation), amountPaidNow (with recalculation)
+        const allowedFields = ['dueDate', 'shareLevel', 'consentRef', 'items', 'amountPaidNow'];
+        const updateDoc = {};
+
+        for (const field of allowedFields) {
+            if (field in updates) {
+                updateDoc[field] = updates[field];
+            }
+        }
+
+        // If items or amountPaidNow changed, recalculate balance and status
+        if ('items' in updateDoc || 'amountPaidNow' in updateDoc) {
+            const newItems = updateDoc.items || existingDebt.items;
+            const newAmountPaidNow = 'amountPaidNow' in updateDoc ? updateDoc.amountPaidNow : existingDebt.amountPaidNow;
+            const newTotalAmount = newItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+
+            updateDoc.totalAmount = newTotalAmount;
+            updateDoc.balance = newTotalAmount - newAmountPaidNow;
+            updateDoc.status = await computeStatus(newTotalAmount, newAmountPaidNow);
+
+            // Track balance change in history
+            if (!updateDoc.balanceHistory) {
+                updateDoc.balanceHistory = existingDebt.balanceHistory || [];
+            }
+            updateDoc.balanceHistory.push({ date: new Date(), balance: updateDoc.balance });
+        }
+
+        // Update in MongoDB
+        const updated = await Debt.findOneAndUpdate(
+            { _id: debtId, companyId, isDeleted: false },
+            updateDoc,
+            { new: true, lean: true }
+        );
+
+        if (!updated) throw new Error('Failed to update debt');
+
+        // Fire-and-forget: invalidate cache and emit event
+        Promise.all([
+            (async () => {
+                try {
+                    const redis = getRedis();
+                    if (redis && redis.del) {
+                        await redis.del(`company:${companyId}:debts`);
+                        await redis.del(`shop:${updated.shopId}:debts`);
+                        await redis.del(`customer:${updated.customerId}:debts`);
+                    }
+                } catch (e) { }
+            })(),
+            (async () => {
+                try {
+                    if (global && typeof global.rabbitmqPublish === 'function') {
+                        await global.rabbitmqPublish('debt.updated', { debtId: updated._id, companyId, changes: Object.keys(updateDoc) });
+                    }
+                } catch (e) { /* swallow */ }
+            })()
+        ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
+
+        return updated;
+    });
+}
+
+async function softDeleteDebt({ companyId, debtId }) {
+    const perf = require('../utils/perf');
+    return perf.measureAsync('softDeleteDebt', async () => {
+        // Find the debt
+        const debt = await debtRepo.findById(debtId, companyId);
+        if (!debt) throw new Error('Debt not found or access denied');
+        if (debt.isDeleted) throw new Error('Debt already deleted');
+
+        // Soft delete: set isDeleted flag
+        const deleted = await Debt.findOneAndUpdate(
+            { _id: debtId, companyId, isDeleted: false },
+            { isDeleted: true, deletedAt: new Date() },
+            { new: true, lean: true }
+        );
+
+        if (!deleted) throw new Error('Failed to delete debt');
+
+        // Fire-and-forget: invalidate cache and emit event
+        Promise.all([
+            (async () => {
+                try {
+                    const redis = getRedis();
+                    if (redis && redis.del) {
+                        await redis.del(`company:${companyId}:debts`);
+                        await redis.del(`shop:${deleted.shopId}:debts`);
+                        await redis.del(`customer:${deleted.customerId}:debts`);
+                    }
+                } catch (e) { }
+            })(),
+            (async () => {
+                try {
+                    if (global && typeof global.rabbitmqPublish === 'function') {
+                        await global.rabbitmqPublish('debt.deleted', { debtId: deleted._id, companyId });
+                    }
+                } catch (e) { /* swallow */ }
+            })()
+        ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
+
+        return { message: 'Debt soft-deleted successfully', debtId: deleted._id };
+    });
+}
+
 module.exports = {
     createDebt,
     recordRepayment,
@@ -341,5 +452,7 @@ module.exports = {
     companyAnalytics,
     shopAnalytics,
     customerAnalytics,
-    crossCompanyCustomerDebts
+    crossCompanyCustomerDebts,
+    updateDebt,
+    softDeleteDebt
 };

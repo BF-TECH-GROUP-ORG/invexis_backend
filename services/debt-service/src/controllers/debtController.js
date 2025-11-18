@@ -129,6 +129,36 @@ async function crossCompanyCustomerDebts(req, res) {
     }
 }
 
+async function updateDebt(req, res) {
+    try {
+        const companyId = req.body.companyId || req.headers['x-company-id'];
+        const debtId = req.params.debtId;
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        if (!debtId) return res.status(400).json({ error: 'debtId required' });
+
+        const result = await debtService.updateDebt({ companyId, debtId, updates: req.body });
+        res.json({ debt: result });
+    } catch (err) {
+        console.error(err);
+        res.status(err.message.includes('not found') ? 404 : 400).json({ error: err.message });
+    }
+}
+
+async function softDeleteDebt(req, res) {
+    try {
+        const companyId = req.query.companyId || req.headers['x-company-id'];
+        const debtId = req.params.debtId;
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        if (!debtId) return res.status(400).json({ error: 'debtId required' });
+
+        const result = await debtService.softDeleteDebt({ companyId, debtId });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(err.message.includes('not found') ? 404 : 400).json({ error: err.message });
+    }
+}
+
 module.exports = {
     createDebt,
     recordRepayment,
@@ -140,5 +170,7 @@ module.exports = {
     shopAnalytics,
     customerAnalytics
     ,
-    crossCompanyCustomerDebts
+    crossCompanyCustomerDebts,
+    updateDebt,
+    softDeleteDebt
 };

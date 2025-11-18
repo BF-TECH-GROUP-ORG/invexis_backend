@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const debtRepo = require('../repositories/debtRepository');
 const eventRepo = require('../repositories/eventRepository');
+const reminderWorker = require('../workers/reminderWorker');
 
 // hourly overdue check
 function startOverdueCron() {
@@ -41,6 +42,8 @@ function startMonthlySummaryCron() {
 function start() {
     startOverdueCron();
     startMonthlySummaryCron();
+    // start reminder cron
+    try { reminderWorker.startDailyCron(); } catch (e) { console.warn('Failed to start reminder cron', e && e.message ? e.message : e); }
 }
 
 module.exports = { start };
