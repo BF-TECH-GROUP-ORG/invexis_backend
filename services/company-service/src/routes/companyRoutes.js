@@ -14,6 +14,8 @@ const {
   addCompanyCategories,
   removeCompanyCategories,
   setCompanyCategories,
+  uploadCompanyVerificationDocs,
+  reviewCompanyVerification,
 } = require('../controllers/companyController');
 
 const router = express.Router();
@@ -31,6 +33,11 @@ router.put('/:id', updateCompany);
 router.delete('/:id', deleteCompany);
 router.patch('/:id/status', changeCompanyStatus);
 router.patch('/:id/tier', changeCompanyTier);
+
+// Verification routes
+router.post('/:id/verification-docs', uploadCompanyVerificationDocs);
+router.patch('/:id/verification', reviewCompanyVerification);
+
 router.patch('/:id/reactivate', reactivateCompany);
 
 // Category management routes

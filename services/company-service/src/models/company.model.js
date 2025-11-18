@@ -15,7 +15,14 @@ class Company {
     this.coordinates = data.coordinates || null;
     this.tier = normalizeTier(data.tier) || TIERS.BASIC;
     this.category_ids = data.category_ids || [];
-    this.status = data.status || "active";
+    this.status = data.status || "pending_verification";
+    this.metadata =
+      data.metadata || {
+        verification: {
+          status: "pending",
+          documents: [],
+        },
+      };
     this.createdBy = data.createdBy || null;
     this.updatedBy = data.updatedBy || null;
     this.createdAt = new Date();
@@ -189,9 +196,32 @@ class Company {
   }
 
   toPublicJSON() {
-    const { id, name, domain, email, phone, country, city, tier, status, category_ids } =
-      this;
-    return { id, name, domain, email, phone, country, city, tier, status, category_ids };
+    const {
+      id,
+      name,
+      domain,
+      email,
+      phone,
+      country,
+      city,
+      tier,
+      status,
+      category_ids,
+      metadata,
+    } = this;
+    return {
+      id,
+      name,
+      domain,
+      email,
+      phone,
+      country,
+      city,
+      tier,
+      status,
+      category_ids,
+      metadata,
+    };
   }
 }
 

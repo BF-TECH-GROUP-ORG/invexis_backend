@@ -241,15 +241,35 @@ const changeCompanyStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  if (!status || !["active", "suspended", "deleted"].includes(status)) {
+  const allowedStatuses = ["pending_verification", "active", "suspended", "deleted"];
+  if (!status || !allowedStatuses.includes(status)) {
     res.status(400);
-    throw new Error("Invalid status. Must be active, suspended, or deleted");
+    throw new Error(`Invalid status. Must be one of: ${allowedStatuses.join(", ")}`);
   }
 
   const company = await Company.findCompanyById(id);
   if (!company) {
     res.status(404);
     throw new Error("Company not found");
+  }
+
+  // Enforce verification approval before allowing active status
+  if (status === "active") {
+    let metadata = company.metadata || {};
+    if (typeof metadata === "string") {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch (err) {
+        metadata = {};
+      }
+    }
+    const verification = metadata.verification;
+    if (!verification || verification.status !== "approved") {
+      res.status(400);
+      throw new Error(
+        "Company cannot be set to active until verification documents are approved"
+      );
+    }
   }
 
   // Change status with transaction (atomic with outbox event)
@@ -329,6 +349,23 @@ const reactivateCompany = asyncHandler(async (req, res) => {
   if (!company) {
     res.status(404);
     throw new Error("Company not found");
+  }
+
+  // Prevent reactivating company without approved verification
+  let metadata = company.metadata || {};
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch (err) {
+      metadata = {};
+    }
+  }
+  const verification = metadata.verification;
+  if (!verification || verification.status !== "approved") {
+    res.status(400);
+    throw new Error(
+      "Company cannot be reactivated as active until verification documents are approved"
+    );
   }
 
   // Reactivate with transaction (atomic with outbox event)
@@ -509,6 +546,164 @@ const setCompanyCategories = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Upload or attach verification documents for a company
+ * @route   POST /api/companies/:id/verification-docs
+ * @access  Private (Company Admin or Super Admin)
+ */
+const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { documents } = req.body;
+
+  if (!documents || !Array.isArray(documents) || documents.length === 0) {
+    res.status(400);
+    throw new Error("documents must be a non-empty array");
+  }
+
+  const company = await Company.findCompanyById(id);
+  if (!company) {
+    res.status(404);
+    throw new Error("Company not found");
+  }
+
+  const userId = req.user?.id || null;
+
+  let metadata = company.metadata || {};
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch (err) {
+      metadata = {};
+    }
+  }
+
+  const existingVerification = metadata.verification || {};
+  const existingDocs = Array.isArray(existingVerification.documents)
+    ? existingVerification.documents
+    : [];
+
+  const nowIso = new Date().toISOString();
+
+  const newDocs = documents.map((doc, index) => ({
+    id: doc.id || `doc_${Date.now()}_${index}`,
+    type: doc.type || null,
+    name: doc.name || null,
+    url: doc.url || null,
+    notes: doc.notes || null,
+    uploadedAt: doc.uploadedAt || nowIso,
+    uploadedBy: doc.uploadedBy || userId,
+  }));
+
+  metadata.verification = {
+    ...existingVerification,
+    status: "pending",
+    documents: [...existingDocs, ...newDocs],
+  };
+
+  const updatedCompany = await db.transaction(async (trx) => {
+    await trx("companies")
+      .where({ id })
+      .update({
+        metadata,
+        updatedBy: userId,
+        updatedAt: new Date(),
+      });
+
+    const fresh = await trx("companies").where({ id }).first();
+
+    await companyEvents.updated(fresh, trx);
+
+    return fresh;
+  });
+
+  res.json({
+    success: true,
+    message: "Verification documents uploaded successfully",
+    data: updatedCompany,
+  });
+});
+
+/**
+ * @desc    Review verification documents for a company (approve/reject)
+ * @route   PATCH /api/companies/:id/verification
+ * @access  Private (Super Admin)
+ */
+const reviewCompanyVerification = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { decision, reviewNotes } = req.body;
+
+  if (!decision || !["approved", "rejected"].includes(decision)) {
+    res.status(400);
+    throw new Error("decision must be 'approved' or 'rejected'");
+  }
+
+  const company = await Company.findCompanyById(id);
+  if (!company) {
+    res.status(404);
+    throw new Error("Company not found");
+  }
+
+  let metadata = company.metadata || {};
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch (err) {
+      metadata = {};
+    }
+  }
+
+  const existingVerification = metadata.verification || {};
+  const docs = Array.isArray(existingVerification.documents)
+    ? existingVerification.documents
+    : [];
+
+  if (docs.length === 0) {
+    res.status(400);
+    throw new Error("Cannot review verification: no documents uploaded");
+  }
+
+  const userId = req.user?.id || null;
+  const nowIso = new Date().toISOString();
+
+  const verificationStatus = decision === "approved" ? "approved" : "rejected";
+  const companyStatus = decision === "approved" ? "active" : "pending_verification";
+
+  metadata.verification = {
+    ...existingVerification,
+    status: verificationStatus,
+    reviewedBy: userId,
+    reviewedAt: nowIso,
+    reviewNotes: reviewNotes || existingVerification.reviewNotes || null,
+  };
+
+  const updatedCompany = await db.transaction(async (trx) => {
+    await trx("companies")
+      .where({ id })
+      .update({
+        metadata,
+        status: companyStatus,
+        updatedBy: userId,
+        updatedAt: new Date(),
+      });
+
+    const fresh = await trx("companies").where({ id }).first();
+
+    await companyEvents.statusChanged(id, companyStatus, trx);
+    await companyEvents.updated(fresh, trx);
+
+    return fresh;
+  });
+
+  res.json({
+    success: true,
+    message:
+      decision === "approved"
+        ? "Company verification approved and company activated"
+        : "Company verification rejected",
+    data: updatedCompany,
+  });
+});
+
 module.exports = {
   createCompany,
   getAllCompanies,
@@ -524,4 +719,6 @@ module.exports = {
   addCompanyCategories,
   removeCompanyCategories,
   setCompanyCategories,
+  uploadCompanyVerificationDocs,
+  reviewCompanyVerification,
 };
