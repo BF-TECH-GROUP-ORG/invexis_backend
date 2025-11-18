@@ -235,7 +235,7 @@ const auditProxy = createServiceProxy("AUDIT", services.AUDIT_SERVICE, {
  * Routes: /api/debt/* → http://debt-service:8005/*
  */
 const debtProxy = createServiceProxy("DEBT", services.DEBT_SERVICE, {
-  pathRewrite: { "^/api/debt": "" },
+  pathRewrite: { "^/api/debt": "/debt" },
 });
 
 /**
