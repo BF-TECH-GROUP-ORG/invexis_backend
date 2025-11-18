@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Welcome to {{companyName}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #1f2937;
+      background-color: #f3f4f6;
+      padding: 20px 0;
+    }
+    .email-wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .content p {
+      margin: 0 0 16px;
+      color: #4b5563;
+      font-size: 16px;
+    }
+    .content p:last-child {
+      margin-bottom: 0;
+    }
+    .greeting {
+      color: #1f2937;
+      font-size: 18px;
+      font-weight: 500;
+    }
+    .btn {
+      display: inline-block;
+      margin: 24px 0;
+      padding: 14px 32px;
+      background: #667eea;
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      transition: background 0.3s ease;
+    }
+    .btn:hover {
+      background: #5568d3;
+    }
+    .btn-wrapper {
+      text-align: center;
+      margin: 32px 0;
+    }
+    .link-fallback {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #6b7280;
+      word-break: break-all;
+    }
+    .link-fallback a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    .footer {
+      padding: 30px;
+      background: #f9fafb;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+    }
+    .footer p {
+      margin: 8px 0;
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    .divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="header">
+      <h1>Welcome to {{companyName}}! 🎉</h1>
+    </div>
+
+    <div class="content">
+      <p class="greeting">Hi {{userName}},</p>
+
+      <p>
+        We're thrilled to have you join <strong>{{companyName}}</strong>!
+        Your account has been created successfully.
+      </p>
+
+      <p>
+        To get started and unlock all features, please verify your email address
+        by clicking the button below:
+      </p>
+
+      <div class="btn-wrapper">
+        <a href="{{actionUrl}}" class="btn">Verify Email Address</a>
+      </div>
+
+      <div class="link-fallback">
+        <strong>Button not working?</strong> Copy and paste this link into your browser:<br>
+        <a href="{{actionUrl}}">{{actionUrl}}</a>
+      </div>
+
+      <div class="divider"></div>
+
+      <p>
+        If you have any questions or need assistance, feel free to reach out to our support team at
+        <a href="mailto:{{supportEmail}}" style="color: #667eea; text-decoration: none;">{{supportEmail}}</a>
+      </p>
+    </div>
+
+    <div class="footer">
+      <p><strong>The {{companyName}} Team</strong></p>
+      <p>© {{currentYear}} {{companyName}}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

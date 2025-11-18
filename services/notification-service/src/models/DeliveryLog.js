@@ -21,7 +21,7 @@ const deliveryLogSchema = new mongoose.Schema(
       index: true,
     },
     companyId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       required: true,
       index: true,
     },

@@ -50,7 +50,7 @@ module.exports = async function handleCompanyEvent(event, routingKey) {
  */
 async function handleCompanyCreated(data) {
   const { companyId, name, adminId } = data;
-
+  console.log(data)
   if (!companyId || !adminId) {
     logger.warn("⚠️ Company created event missing required fields");
     return;
@@ -66,6 +66,7 @@ async function handleCompanyCreated(data) {
       title: "Welcome to Invexis",
       body: `Welcome ${name}! Your account is ready. Start managing your inventory and sales.`,
       scope: "personal",
+      templateName: "welcome_company",
       channels: { email: true, push: true, inApp: true },
       payload: {
         email: data.email,

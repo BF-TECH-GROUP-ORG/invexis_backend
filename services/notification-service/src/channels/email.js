@@ -12,23 +12,54 @@ const sendEmailCore = async (notification, userEmail, userId, companyId) => {
   const startTime = Date.now();
 
   try {
+    // Get email-specific compiled content or fallback to legacy fields
+    const emailContent = notification.getContentForChannel('email');
+
+    let subject, html, text;
+
+    if (emailContent) {
+      subject = emailContent.subject;
+      html = emailContent.html;
+      text = emailContent.text;
+    } else {
+      // Fallback to legacy fields
+      subject = notification.title;
+      html = notification.body;
+      text = notification.body.replace(/<[^>]*>/g, ''); // Strip HTML
+      logger.warn(`No email template found for notification ${notification._id}, using legacy fields`);
+    }
+
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: userEmail,
-      subject: notification.title,
-      html: notification.body,
+      subject: subject,
+      html: html,
+      text: text, // Always include text version for better deliverability
     };
+
+    // Add priority if specified
+    if (emailContent?.priority && emailContent.priority !== 'normal') {
+      mailOptions.priority = emailContent.priority;
+      if (emailContent.priority === 'high') {
+        mailOptions.headers = {
+          'X-Priority': '1',
+          'X-MSMail-Priority': 'High',
+          'Importance': 'high'
+        };
+      }
+    }
 
     const info = await transporter.sendMail(mailOptions);
     const responseTime = Date.now() - startTime;
 
-    logger.info(`✅ Email sent to ${userEmail} in ${responseTime}ms`);
+    logger.info(`✅ Email sent to ${userEmail} in ${responseTime}ms (Subject: ${subject})`);
 
     return {
       success: true,
       providerId: info.messageId,
       responseTime,
       recipient: userEmail,
+      subject: subject
     };
   } catch (error) {
     const responseTime = Date.now() - startTime;

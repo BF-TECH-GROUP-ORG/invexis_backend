@@ -8,15 +8,37 @@ const logger = require("../utils/logger");
  */
 async function publishNotificationToWebSocket(notification, userId) {
   try {
-    const eventData = {
-      data: {
+    // Get in-app specific compiled content or fallback to legacy fields
+    const inAppContent = notification.getContentForChannel('inApp');
+
+    let notificationData;
+
+    if (inAppContent) {
+      notificationData = {
+        id: notification._id,
+        title: inAppContent.title,
+        body: inAppContent.body,
+        type: notification.type || "info",
+        timestamp: new Date(),
+        payload: inAppContent.data || notification.payload,
+        actionUrl: inAppContent.actionUrl,
+        imageUrl: inAppContent.imageUrl,
+      };
+    } else {
+      // Fallback to legacy fields
+      notificationData = {
         id: notification._id,
         title: notification.title,
         body: notification.body,
         type: notification.type || "info",
         timestamp: new Date(),
         payload: notification.payload,
-      },
+      };
+      logger.warn(`No in-app template found for notification ${notification._id}, using legacy fields`);
+    }
+
+    const eventData = {
+      data: notificationData,
       rooms: [], // Can add company rooms if needed
       targetUserIds: [userId],
     };
@@ -25,7 +47,7 @@ async function publishNotificationToWebSocket(notification, userId) {
     await emit("realtime.notification", eventData);
 
     logger.info(
-      `📡 Published notification to WebSocket service for user ${userId}`
+      `📡 Published in-app notification to WebSocket service for user ${userId} (Title: ${notificationData.title})`
     );
     return { success: true };
   } catch (error) {

@@ -12,26 +12,82 @@ const sendPushCore = async (notification, fcmToken, userId, companyId) => {
   const startTime = Date.now();
 
   try {
-    const message = {
-      notification: {
-        title: notification.title,
-        body: notification.body,
-      },
-      data: {
-        notificationId: notification._id.toString(),
-        ...notification.payload,
-      },
-      token: fcmToken,
-    };
+    // Get push-specific compiled content or fallback to legacy fields
+    const pushContent = notification.getContentForChannel('push');
 
-    const response = await messaging.send(message);
+    let messagePayload;
+
+    if (pushContent) {
+      // Use compiled push template content
+      messagePayload = {
+        notification: {
+          title: pushContent.title,
+          body: pushContent.body,
+        },
+        data: {
+          notificationId: notification._id.toString(),
+          ...(pushContent.data || {}),
+          ...notification.payload, // Merge with original payload
+        },
+        token: fcmToken,
+      };
+
+      // Add push-specific options
+      if (pushContent.sound && pushContent.sound !== 'default') {
+        messagePayload.notification.sound = pushContent.sound;
+      }
+
+      if (pushContent.badge) {
+        messagePayload.notification.badge = pushContent.badge.toString();
+      }
+
+      // Set priority
+      if (pushContent.priority === 'high') {
+        messagePayload.android = {
+          priority: 'high',
+        };
+        messagePayload.apns = {
+          headers: {
+            'apns-priority': '10',
+          },
+        };
+      }
+
+      // Add category for iOS
+      if (pushContent.category) {
+        messagePayload.apns = {
+          ...messagePayload.apns,
+          payload: {
+            aps: {
+              category: pushContent.category,
+            },
+          },
+        };
+      }
+    } else {
+      // Fallback to legacy fields
+      messagePayload = {
+        notification: {
+          title: notification.title,
+          body: notification.body,
+        },
+        data: {
+          notificationId: notification._id.toString(),
+          ...notification.payload,
+        },
+        token: fcmToken,
+      };
+      logger.warn(`No push template found for notification ${notification._id}, using legacy fields`);
+    }
+
+    const response = await messaging.send(messagePayload);
     const responseTime = Date.now() - startTime;
 
     logger.info(
       `✅ Push sent to token ${fcmToken.substring(
         0,
         10
-      )}... in ${responseTime}ms`
+      )}... in ${responseTime}ms (Title: ${messagePayload.notification.title})`
     );
 
     return {
@@ -39,6 +95,7 @@ const sendPushCore = async (notification, fcmToken, userId, companyId) => {
       providerId: response, // Firebase message ID
       responseTime,
       recipient: fcmToken,
+      title: messagePayload.notification.title
     };
   } catch (error) {
     const responseTime = Date.now() - startTime;
