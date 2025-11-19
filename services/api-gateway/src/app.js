@@ -78,7 +78,10 @@ app.use("/api/analytics", analyticsProxy);
 app.use("/api/audit", auditProxy);
 app.use("/api/debt", debtProxy);
 
-// WebSocket service (special handling for WS upgrade)
+// Socket.IO specific routes (add these before other websocket routes)
+app.use("/socket.io", websocketProxy);
+
+// General websocket routes
 app.use("/api/websocket", websocketProxy);
 
 // Root endpoint

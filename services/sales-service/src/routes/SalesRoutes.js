@@ -15,7 +15,7 @@ router.post("/return", salesController.createReturn);
 // Reports & trends (specific routes first)
 router.get("/reports/sales", salesController.salesReport);
 router.get(
-  "/reports/sales/customer/:customerId",
+  "/reports/sales/customer/:knownUserId",
   salesController.customerSalesReport
 );
  
@@ -24,7 +24,7 @@ router.get("/trends/top-products", salesController.topSellingProducts);
 router.get("/trends/revenue", salesController.revenueTrend);
 
 // Track purchases by customer (specific route)
-router.get("/customer/:customerId", salesController.getCustomerPurchases);
+router.get("/customer/:knownUserId", salesController.getCustomerPurchases);
 
 // List all sales (company scoped)
 router.get("/", salesController.listSales);

@@ -247,8 +247,20 @@ const websocketProxy = createServiceProxy(
   "WEBSOCKET",
   services.WEBSOCKET_SERVICE,
   {
-    pathRewrite: { "^/api/websocket": "" },
+    pathRewrite: { "^/api/websocket": "" }, // Remove the prefix completely
     ws: true, // Enable WebSocket support
+    changeOrigin: true,
+    // Add specific handling for Socket.IO
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`🔀 [WEBSOCKET] ${req.method} ${req.originalUrl} → ${services.WEBSOCKET_SERVICE}${req.url}`);
+      
+      // Forward user info if available
+      if (req.user) {
+        proxyReq.setHeader("X-User-Id", req.user.id);
+        proxyReq.setHeader("X-User-Email", req.user.email);
+        proxyReq.setHeader("X-User-Role", req.user.role);
+      }
+    }
   }
 );
 

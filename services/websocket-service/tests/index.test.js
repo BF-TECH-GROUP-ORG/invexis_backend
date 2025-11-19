@@ -1,6 +1,17 @@
 // websocket-service/tests/index.test.js
 const request = require('supertest');
 const io = require('socket.io-client');
+const jwt = require('jsonwebtoken');
+
+// Mock JWT before requiring index
+jest.mock('jsonwebtoken', () => ({
+  verify: jest.fn((token) => {
+    if (token === 'mock-token') {
+      return { id: 'test-user', email: 'test@example.com', role: 'user' };
+    }
+    throw new Error('Invalid token');
+  }),
+}));
 
 // Mock shared and cluster BEFORE requiring index
 jest.mock('../src/config/shared', () => ({
