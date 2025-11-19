@@ -10,6 +10,7 @@ const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 
 const salesRouter = require("./routes/SalesRoutes");
 const invoiceRouter = require("./routes/InvoiceRoutes");
+const knownUserRouter = require("./routes/KnownUserRoutes");
 const PORT = process.env.PORT || 9000;
 
 const app = express();
@@ -57,12 +58,15 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     endpoints: {
       sales: "/sales",
+      knownUsers: "/known-users",
+      invoices: "/invoices",
       health: "/health",
     },
   });
 });
 
 // API Routes
+app.use("/known-users", knownUserRouter);
 app.use("/sales", salesRouter);
 app.use("/invoices", invoiceRouter);
 
@@ -130,6 +134,7 @@ app.listen(PORT, () => {
   initialize()
   console.log(`🚀 Sales Service running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
-  console.log(`📍 API endpoint: http://localhost:${PORT}/sales`);
+  console.log(`📍 Sales endpoint: http://localhost:${PORT}/sales`);
+  console.log(`📍 KnownUsers endpoint: http://localhost:${PORT}/known-users`);
 });
 module.exports = app;

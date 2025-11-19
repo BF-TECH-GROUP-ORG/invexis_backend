@@ -39,7 +39,7 @@ const io = new Server(server, {
 // Initialize handlers
 initializeHandlers(io);
 
-// Auth middleware
+// Auth middleware - Authenticate all socket connections
 io.use(authenticateSocket);
 
 // Socket handlers
