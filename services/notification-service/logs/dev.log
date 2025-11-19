@@ -477,3 +477,9 @@
 {"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-18T11:14:40.737Z"}
 {"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-18T12:10:34.525Z"}
 {"level":"info","message":"✅ Database connected","timestamp":"2025-11-18T12:10:34.546Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-19T08:51:52.839Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-19T08:51:52.854Z"}
+{"address":"172.18.0.2","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.2:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.2:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-19T08:51:52.951Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-19T15:10:33.788Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-19T15:10:33.804Z"}
+{"address":"172.18.0.22","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.22:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.22:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-19T15:10:33.866Z"}

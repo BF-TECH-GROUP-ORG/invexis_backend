@@ -41,6 +41,14 @@ const startServer = async () => {
             // Connect to RabbitMQ
             await connectRabbitMQ();
 
+            // Start any internal subscriptions (e.g. listen for sale.debt.request)
+            try {
+                const subscriberService = require('./services/subscriberService');
+                if (subscriberService && typeof subscriberService.start === 'function') {
+                    subscriberService.start().catch(e => console.warn('subscriberService start error', e && e.message ? e.message : e));
+                }
+            } catch (e) { console.warn('No subscriberService available', e && e.message ? e.message : e); }
+
             // Connect to Redis
             await redis.connect();
 

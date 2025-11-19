@@ -10,6 +10,10 @@ const reviewController = require('../controllers/reviewController');
 const wishlistController = require('../controllers/wishlistController');
 const featuredBannerController = require('../controllers/featureBannerController');
 
+router.get("/", (req, res) => {
+  res.json({ message: "E-commerce Service is running." });
+});
+
 // Cart routes
 router.get('/cart', cartController.getCart);
 router.post('/cart', cartController.addOrUpdateCart); // strict: full cart create/update
