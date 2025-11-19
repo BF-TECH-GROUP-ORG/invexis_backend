@@ -18,7 +18,7 @@ router.get(
   "/reports/sales/customer/:knownUserId",
   salesController.customerSalesReport
 );
- 
+
 // Trends
 router.get("/trends/top-products", salesController.topSellingProducts);
 router.get("/trends/revenue", salesController.revenueTrend);
@@ -34,4 +34,4 @@ router.get("/:id", salesController.getSale);
 router.put("/:id", salesController.updateSale);
 router.delete("/:id", salesController.deleteSale);
 
-module.exports = router;
+module.exports = router

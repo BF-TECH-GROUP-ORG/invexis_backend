@@ -5,6 +5,7 @@
 // queue. If Redis is unavailable the store falls back to an in-memory queue.
 
 const { v4: uuidv4 } = require('uuid');
+const mongoose = require('mongoose');
 
 function getRedis() {
     if (global && global.redisClient) return global.redisClient;
@@ -22,7 +23,8 @@ class InMemoryStore {
 
     // Create a debt in memory and enqueue for persistence (Redis if available)
     createDebt(debt) {
-        const id = debt._id || uuidv4();
+        // prefer Mongo ObjectId strings for compatibility with Mongoose schemas
+        const id = debt._id || new mongoose.Types.ObjectId().toString();
         const now = new Date();
         const doc = Object.assign({ _id: id, createdAt: now, updatedAt: now }, debt);
         this.debts.set(id.toString(), doc);
@@ -41,7 +43,8 @@ class InMemoryStore {
 
     // Record repayment in memory and enqueue
     createRepayment(repayment) {
-        const id = repayment._id || uuidv4();
+        // prefer Mongo ObjectId strings for compatibility with Mongoose schemas
+        const id = repayment._id || new mongoose.Types.ObjectId().toString();
         const now = new Date();
         const doc = Object.assign({ _id: id, createdAt: now, paidAt: repayment.paidAt || now }, repayment);
         this.repayments.set(id.toString(), doc);
