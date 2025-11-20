@@ -3,7 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 const sequelize = require("./config/db");
-
+const cors=require('cors')
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
@@ -20,21 +20,7 @@ app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
 // CORS middleware
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
+app.use(cors());
 
 // Request logging middleware
 app.use((req, res, next) => {

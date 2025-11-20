@@ -26,7 +26,12 @@ router.patch("/company/:companyId/deactivate", deactivateSubscription);
 
 // Subscription features
 router.get("/company/:companyId/features", getSubscriptionFeatures);
-router.post("/company/:companyId/check-feature", checkFeatureAccess);
+const subscriptionMiddleware = require("../../../../shared/middlewares/subscription/subscription");
+router.post(
+  "/company/:companyId/check-feature",
+  subscriptionMiddleware("ecommerce", "productBrowsing"),
+  checkFeatureAccess
+);
 router.get("/company/:companyId/enabled-features", getEnabledFeatures);
 router.get("/company/:companyId/disabled-features", getDisabledFeatures);
 router.get("/company/:companyId/upgrade-suggestions", getUpgradeSuggestions);

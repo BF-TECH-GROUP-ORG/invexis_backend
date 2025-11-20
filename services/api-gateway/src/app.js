@@ -20,8 +20,19 @@ const {
   authenticateToken,
 } = require("./routes/proxy");
 const { limiter, authLimiter } = require("./utils/rateLimiter");
+const { connect } = require("/app/shared/redis.js");
+const { initSubscriptionEventConsumer, createCacheInvalidationEndpoint } = require("./events/subscriptionEventConsumer");
+const {
+  checkSubscriptionStatus,
+  checkSubscriptionTier,
+  checkFeatureAccess,
+  checkRateLimits,
+} = require("./middleware");
 
 const app = express();
+
+// Initialize Redis for subscription/rate limit caching
+connect();
 
 // Security middleware
 app.use(helmet()); // Set security HTTP headers
@@ -33,7 +44,7 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With","ngrok-skip-browser-warning"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With","ngrok-skip-browser-warning","Access-Control-Allow-Origin"],
     credentials: true,
   })
 );
@@ -54,17 +65,25 @@ app.use((req, res, next) => {
 // Health check and custom routes (no auth required)
 app.use("/", routes);
 
+// Register cache invalidation endpoints
+createCacheInvalidationEndpoint(app);
+
 // Global rate limiter (applied to all proxied routes)
 app.use("/api", limiter);
 
 /**
- * Service Proxies
- * Auth is handled by individual services based on their requirements
- * Gateway forwards the Authorization header to services
+ * Service Proxies with Subscription & Access Control
+ * 
+ * Protection Stack:
+ * 1. authenticateToken - JWT validation
+ * 2. checkSubscriptionStatus - Company has active subscription
+ * 3. checkFeatureAccess - Feature enabled for tier
+ * 4. checkRateLimits - Within tier rate limits
  */
 
-// Auth service (public + protected routes, has its own rate limiting)
-app.use("/api/auth", authLimiter, authProxy);
+ /**
+these routes will be applied when uncommented during freemium implementation
+ * app.use("/api/auth", authLimiter, authProxy);
 
 // Protected services (require authentication - enforced by services themselves)
 app.use("/api/company", companyProxy);
@@ -83,6 +102,157 @@ app.use("/socket.io", websocketProxy);
 
 // General websocket routes
 app.use("/api/websocket", websocketProxy);
+
+*/
+// Auth service (public routes, no subscription check needed)
+app.use("/api/auth", authLimiter, authProxy);
+
+// ============================================================================
+// COMPANY SERVICE - /api/company/*
+// ============================================================================
+// Features: Company management, roles, subscriptions
+// Protection: All operations require active subscription
+app.use("/api/company",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  checkFeatureAccess("staffManagement", "manageRoles"),
+  companyProxy
+);
+
+// ============================================================================
+// SHOP SERVICE - /api/shop/*
+// ============================================================================
+// Features: Single shop (basic), multi-shop (mid+)
+// Protection: Multi-shop requires mid tier minimum
+app.use("/api/shop",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  shopProxy  // Shop service applies tier checks internally
+);
+
+// ============================================================================
+// INVENTORY SERVICE - /api/inventory/*
+// ============================================================================
+// Features: Stock in/out, reporting (all tiers)
+// Protection: Basic subscription + feature access
+app.use("/api/inventory",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  checkFeatureAccess("inventory", "stockInOut"),
+  inventoryProxy
+);
+
+// ============================================================================
+// SALES SERVICE - /api/sales/*
+// ============================================================================
+// Routes:
+// - POST /receipts          (basic+) - checkFeatureAccess('sales', 'receipts')
+// - POST /invoices          (pro)    - checkFeatureAccess('sales', 'invoicing')
+// - GET  /reports           (basic+) - checkFeatureAccess('sales', 'internalSales')
+// Protection: Subscription + tier-based feature access
+app.use("/api/sales",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  salesProxy  // Sales service applies feature checks per endpoint
+);
+
+// ============================================================================
+// PAYMENT SERVICE - /api/payment/*
+// ============================================================================
+// Routes:
+// - POST /process           (basic+) - Internal payments
+// - POST /ecommerce/pay     (pro)    - E-commerce payments
+// Protection: Basic (internal), Pro (e-commerce)
+app.use("/api/payment",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  paymentProxy  // Payment service applies tier checks
+);
+
+// ============================================================================
+// ECOMMERCE SERVICE - /api/ecommerce/*
+// ============================================================================
+// Routes:
+// - GET  /products          (pro) - checkFeatureAccess('ecommerce', 'browse')
+// - GET  /search            (pro) - checkFeatureAccess('ecommerce', 'search')
+// - POST /checkout          (pro) - checkFeatureAccess('ecommerce', 'checkout')
+// Protection: Pro tier only
+app.use("/api/ecommerce",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  checkSubscriptionTier('pro'),
+  checkFeatureAccess("ecommerce", "browse"),
+  ecommerceProxy
+);
+
+// ============================================================================
+// NOTIFICATION SERVICE - /api/notification/*
+// ============================================================================
+// Features: In-app, email, SMS (all tiers)
+// Protection: Basic subscription
+app.use("/api/notification",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  notificationProxy  // Handles tier-specific limits
+);
+
+// ============================================================================
+// ANALYTICS SERVICE - /api/analytics/*
+// ============================================================================
+// Routes:
+// - GET  /summary           (basic+) - checkFeatureAccess('analytics', 'basicSummary')
+// - GET  /dashboard         (pro)    - checkFeatureAccess('analytics', 'fullDashboards')
+// Protection: Subscription + feature-based
+app.use("/api/analytics",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  analyticsProxy  // Handles feature checks per endpoint
+);
+
+// ============================================================================
+// AUDIT SERVICE - /api/audit/*
+// ============================================================================
+// Features: Audit logs (all tiers)
+// Protection: Basic subscription
+app.use("/api/audit",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  auditProxy
+);
+
+// ============================================================================
+// DEBT SERVICE - /api/debt/*
+// ============================================================================
+// Routes:
+// - POST /record            (mid+) - checkFeatureAccess('debt', 'record')
+// - GET  /track             (mid+) - checkFeatureAccess('debt', 'track')
+// - GET  /reports           (mid+) - checkFeatureAccess('debt', 'reports')
+// Protection: Mid tier minimum
+app.use("/api/debt",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  checkSubscriptionTier('mid'),
+  checkFeatureAccess("debt", "record"),
+  debtProxy
+);
+
+// ============================================================================
+// WEBSOCKET SERVICE - /api/websocket/* and /socket.io/*
+// ============================================================================
+// Features: Real-time updates (all tiers)
+// Protection: Basic subscription
+app.use("/api/websocket",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  websocketProxy
+);
+
+// Socket.IO specific routes (add these before other websocket routes)
+app.use("/socket.io",
+  authenticateToken,
+  checkSubscriptionStatus(),
+  websocketProxy
+);
 
 // Root endpoint
 app.get("/", (req, res) => {
@@ -128,6 +298,15 @@ app.use((err, req, res, next) => {
     error: err.message || "Internal Server Error",
     timestamp: new Date().toISOString(),
   });
+});
+
+// Initialize subscription event consumer (async)
+setImmediate(async () => {
+  try {
+    await initSubscriptionEventConsumer();
+  } catch (error) {
+    console.error("⚠️ Event consumer initialization failed:", error.message);
+  }
 });
 
 module.exports = app;

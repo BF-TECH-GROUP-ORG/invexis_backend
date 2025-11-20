@@ -31,7 +31,7 @@ const KnownUser = sequelize.define(
     },
     customerEmail: {
       type: DataTypes.STRING(255),
-      allowNull: false,
+      allowNull: true,
       comment: "Customer email - mandatory",
     },
     customerAddress: {

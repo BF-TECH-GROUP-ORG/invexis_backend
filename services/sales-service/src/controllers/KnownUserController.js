@@ -16,10 +16,10 @@ const createKnownUser = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!companyId || !customerName || !customerPhone || !customerEmail) {
+    if (!customerName || !customerPhone) {
       return res.status(400).json({
         message:
-          "Missing required fields: companyId, customerName, customerPhone, customerEmail",
+          "Missing required fields: customerName, customerPhone",
       });
     }
 
