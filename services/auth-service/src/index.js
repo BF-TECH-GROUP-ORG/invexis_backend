@@ -4,6 +4,7 @@ const app = require('./app');
 const connectDB = require('./config/db');
 let connectRabbitMQ, redis;
 
+
 try {
     const rabbitmq = require('/app/shared/rabbitmq.js');
     connectRabbitMQ = rabbitmq.connect;

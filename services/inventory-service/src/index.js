@@ -1,21 +1,38 @@
-const connectDB = require('./config/db');
-const logger = require('./utils/logger');
-const { scheduleDailyReport } = require('./services/reportService');
+const { app, initialize } = require("./app");
+const { close: closeRabbitMQ } = require("/app/shared/rabbitmq");
+
 const PORT = process.env.PORT || 8007;
-const app = require('./app');
 
+const server = app.listen(PORT, () => {
+  initialize();
+  console.log(`🚀 Inventory Service running on port ${PORT}`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`📍 Health check: http://localhost:${PORT}/health`);
+});
 
-const startServer = async () => {
-  try {
-    await connectDB();
-    app.listen(PORT, () => logger.info(`Server running on port http://localhost:${PORT}`));
-    // await scheduleDailyReport();
-    require('./app');
-    logger.info('Server started successfully');
-  } catch (error) {
-    logger.error('Failed to start server: %s', error.message);
+// Graceful shutdown
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+  server.close(async () => {
+    console.log("HTTP server closed");
+
+    try {
+      await closeRabbitMQ();
+      console.log("RabbitMQ connection closed");
+    } catch (error) {
+      console.error("Error closing RabbitMQ:", error);
+    }
+
+    process.exit(0);
+  });
+
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    console.error("Forced shutdown after timeout");
     process.exit(1);
-  }
+  }, 10000);
 };
 
-startServer();
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

@@ -169,9 +169,27 @@ const consentSchema = Joi.object({
     device: Joi.string().optional()
 });
 
-// 2FA (unchanged)
-const twoFASchema = Joi.object({
+// 2FA Validation Schemas
+const setup2FASchema = Joi.object({
+    password: Joi.string().min(8).required().messages({
+        'string.min': 'Password must be at least 8 characters',
+        'any.required': 'Current password is required to setup 2FA'
+    })
+});
+
+const verify2FASetupSchema = Joi.object({
+    otp: Joi.string().length(6).required().messages({
+        'string.length': 'OTP must be 6 digits',
+        'any.required': 'OTP is required to verify 2FA setup'
+    })
+});
+
+const disable2FASchema = Joi.object({
+    password: Joi.string().min(8).required(),
     otp: Joi.string().length(6).required()
+}).messages({
+    'string.min': 'Password must be at least 8 characters',
+    'any.required': 'Both password and OTP are required to disable 2FA'
 });
 
 // Bulk update (unchanged)
@@ -188,6 +206,8 @@ module.exports = {
     changePasswordSchema,
     verificationSchema,
     consentSchema,
-    twoFASchema,
+    setup2FASchema,
+    verify2FASetupSchema,
+    disable2FASchema,
     bulkUpdateSchema
 };

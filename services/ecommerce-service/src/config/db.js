@@ -9,7 +9,7 @@ const connectDB = async () => {
             heartbeatFrequencyMS: 10000,
             maxPoolSize: 10,
         });
-        logger.info(`MongoDB connected: ${conn.connection.host}`);
+        console.log(`MongoDB connected: ${conn.connection.host}`);
     } catch (error) {
         logger.error('MongoDB connection error:', error);
         process.exit(1);

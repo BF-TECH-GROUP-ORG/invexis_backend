@@ -12,12 +12,14 @@
   "dependencies": {
     "amqplib": "^0.10.9",
     "axios": "^1.12.2",
+    "connect-redis": "^9.0.0",
     "crypto": "^1.0.1",
     "diagnostics_channel": "^1.1.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-session": "^1.18.2",
     "http2": "^3.3.6",
-    "ioredis": "^5.8.1",
+    "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
     "uuid": "^13.0.0"
   }

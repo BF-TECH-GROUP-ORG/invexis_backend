@@ -34,7 +34,7 @@ services:
   # ----------------------
   # PostgreSQL for company-service
   company-postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.4
     container_name: invexis-company-postgres
     restart: unless-stopped
     environment:
@@ -46,7 +46,7 @@ services:
     volumes:
       - company_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U invexis -d companydb" ]
+      test: ["CMD-SHELL", "pg_isready -U invexis -d companydb"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -58,7 +58,7 @@ services:
 
   # PostgreSQL for shop-service
   shop-postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.4
     container_name: invexis-shop-postgres
     restart: unless-stopped
     environment:
@@ -70,7 +70,7 @@ services:
     volumes:
       - shop_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U invexis -d shopdb" ]
+      test: ["CMD-SHELL", "pg_isready -U invexis -d shopdb"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -94,7 +94,7 @@ services:
     volumes:
       - payment_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U invexis -d paymentdb" ]
+      test: ["CMD-SHELL", "pg_isready -U invexis -d paymentdb"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -118,18 +118,18 @@ services:
     volumes:
       - analytics_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U invexis -d analyticsdb" ]
+      test: ["CMD-SHELL", "pg_isready -U invexis -d analyticsdb"]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 90s
     networks:
       - invexis-network
-
-  # ======================
-  # Single MongoDB Service - All databases in one container
-  # ======================
-
+    deploy:
+      replicas: 1
+  # ----------------------
+  # Single MongoDB for all services
+  # ----------------------
   mongodb:
     image: mongo:6.0
     container_name: mongodb
@@ -161,8 +161,6 @@ services:
     container_name: invexis-sales-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass # set a strong password in real deployments
-      MYSQL_DATABASE: salesdb # will be created automatically
       MYSQL_USER: invexis
       MYSQL_PASSWORD: invexispass
     ports:
@@ -197,7 +195,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -222,7 +220,7 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: [ "CMD", "rabbitmqctl", "status" ]
+      test: ["CMD", "rabbitmqctl", "status"]
       interval: 20s
       timeout: 15s
       retries: 10
@@ -246,6 +244,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/api-gateway:/app
     depends_on:
       auth-service:
         condition: service_healthy
@@ -304,6 +303,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/auth-service:/app
     depends_on:
       mongodb:
         condition: service_healthy
@@ -381,6 +381,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/shop-service:/app
     depends_on:
       shop-postgres:
         condition: service_healthy
@@ -460,7 +461,6 @@ services:
       - ./shared:/app/shared
       - ./services/sales-service/uploads:/app/uploads
       - ./services/sales-service:/app
-      - sales_service_node_modules:/app/node_modules
     depends_on:
       sales-mysql:
         condition: service_healthy
@@ -499,6 +499,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/payment-service:/app
     depends_on:
       payment-postgres:
         condition: service_healthy
@@ -537,6 +538,7 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
+      - ./services/ecommerce-service:/app
     depends_on:
       mongodb:
         condition: service_healthy
