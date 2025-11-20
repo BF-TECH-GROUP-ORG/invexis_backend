@@ -89,7 +89,7 @@
 // };
 
 
-const { listReviews, getReview, createReview, approveReview, deleteReview } = require('../services/ecommerceService');
+const { listReviews, getReview, createReview, approveReview, deleteReview } = require('../services/reviewService');
 const { reviewSchema } = require('../utils/app');
 
 exports.listReviews = async (req, res) => {

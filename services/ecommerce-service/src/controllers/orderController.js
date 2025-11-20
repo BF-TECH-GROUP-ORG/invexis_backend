@@ -92,7 +92,7 @@
 
 
 
-const { listOrders, getOrder, createOrder, updateOrder } = require('../services/ecommerceService');
+const { listOrders, getOrder, createOrder, updateOrder } = require('../services/orderService');
 const { orderSchema } = require('../utils/app');
 
 exports.listOrders = async (req, res) => {

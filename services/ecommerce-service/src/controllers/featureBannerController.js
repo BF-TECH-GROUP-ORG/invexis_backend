@@ -284,7 +284,7 @@
 // };
 
 
-const { createBanner, getBanners, getBannerById, updateBanner, deleteBanner, toggleActive } = require('../services/ecommerceService');
+const { createBanner, getBanners, getBannerById, updateBanner, deleteBanner, toggleActive } = require('../services/bannerService');
 const { bannerSchema } = require('../utils/app');
 
 exports.createBanner = async (req, res) => {

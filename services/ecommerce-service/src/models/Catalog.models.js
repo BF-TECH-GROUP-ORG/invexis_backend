@@ -1,68 +1,69 @@
 // models/CatalogProduct.js
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const LocalizedString = new mongoose.Schema({
-    en: String,
-    fr: String,
-    es: String,
-    // add languages as needed
-}, { _id: false });
+const CatalogProductSchema = new mongoose.Schema(
+    {
+        productId: { type: String, required: true, index: true }, // Inventory product ID
+        companyId: { type: String, required: true, index: true },
 
-const ImageSchema = new mongoose.Schema({
-    url: { type: String, required: true },
-    alt: { type: LocalizedString, default: {} },
-    width: Number,
-    height: Number,
-}, { _id: false });
+        // Basic info snapshots for display
+        name: { type: String, required: true },
+        slug: { type: String, required: true },
+        shortDescription: { type: String },
+        price: { type: Number, required: true },
+        currency: { type: String, default: "USD" },
+        salePrice: { type: Number },
+        featured: { type: Boolean, default: false },
+        images: [{ url: String, alt: String, isPrimary: Boolean, sortOrder: Number }],
 
-const CatalogProductSchema = new mongoose.Schema({
-    // references (IDs from other services)
-    productId: { type: String, required: true }, // inventory-service id
-    companyId: { type: String, required: true },
-    shopId: { type: String },
+        // Product visibility and status
+        status: {
+            type: String,
+            enum: ["active", "inactive", "archived"],
+            default: "active",
+            index: true,
+        },
+        visibility: {
+            type: String,
+            enum: ["public", "private", "unlisted"],
+            default: "public",
+            index: true,
+        },
 
-    // localized content
-    title: { type: LocalizedString, required: true },
-    shortDescription: { type: LocalizedString },
-    longDescription: { type: LocalizedString },
+        // Categorization (copied from inventory)
+        categoryId: { type: String },
+        subcategoryId: { type: String },
+        subSubcategoryId: { type: String },
 
-    // media & SEO
-    images: { type: [ImageSchema], default: [] },
-    seo: {
-        slug: { type: String },
-        metaTitle: { type: LocalizedString },
-        metaDescription: { type: LocalizedString }
+        // Inventory snapshot
+        stockQty: { type: Number, default: 0 },
+        availability: {
+            type: String,
+            enum: ["in_stock", "out_of_stock", "low_stock", "backorder", "scheduled"],
+            default: "in_stock",
+        },
+
+        // Promotions & featured banners
+        relatedPromotionIds: [{ type: String }],
+        relatedBannerIds: [{ type: String }],
+
+        metadata: { type: mongoose.Schema.Types.Mixed }, // Any additional info
+
+        // Auditing
+        createdBy: { type: String },
+        updatedBy: { type: String },
     },
+    { timestamps: true }
+);
 
-    // pricing snapshot (ecommerce-specific); inventoryService is the source of truth for base price
-    price: { type: Number, required: true },
-    currency: { type: String, required: true, default: 'USD' }, // ISO 4217
-    compareAtPrice: Number, // optional sale price original
+// Index for fast queries
+CatalogProductSchema.index({ companyId: 1, status: 1, visibility: 1 });
+CatalogProductSchema.index({ productId: 1 });
+CatalogProductSchema.index({ featured: 1, price: 1 });
 
-    tags: [String],
-    featured: { type: Boolean, default: false },
+// Methods
+CatalogProductSchema.methods.isAvailable = function () {
+    return this.status === "active" && this.visibility === "public" && this.stockQty > 0;
+};
 
-    // visibility & lifecycle
-    visibility: { type: String, enum: ['public', 'private', 'unlisted'], default: 'public' },
-    status: { type: String, enum: ['active', 'inactive', 'archived'], default: 'active' },
-
-    // security & audit
-    createdBy: { type: String }, // auth-service user id
-    updatedBy: { type: String },
-    isDeleted: { type: Boolean, default: false },
-    deletedAt: { type: Date, default: null },
-
-    // region & localization defaults
-    defaultLocale: { type: String, default: 'en' },
-    defaultCurrency: { type: String, default: 'USD' },
-
-    // extensible metadata (for feature flags, vendor info, compliance)
-    metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
-}, { timestamps: true });
-
-// Indexes
-// CatalogProductSchema.index({ companyId: 1, shopId: 1, status: 1 });
-// CatalogProductSchema.index({ 'seo.slug': 1 }, { unique: false, sparse: true });
-// CatalogProductSchema.index({ tags: 1 });
-
-module.exports = mongoose.model('CatalogProduct', CatalogProductSchema);
+module.exports = mongoose.model("CatalogProduct", CatalogProductSchema);

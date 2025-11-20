@@ -98,7 +98,7 @@
 // };
 
 
-const { listPromotions, getPromotion, createPromotion, updatePromotion, deletePromotion } = require('../services/ecommerceService');
+const { listPromotions, getPromotion, createPromotion, updatePromotion, deletePromotion } = require('../services/promotionService');
 const { promotionSchema } = require('../utils/app');
 
 exports.listPromotions = async (req, res) => {

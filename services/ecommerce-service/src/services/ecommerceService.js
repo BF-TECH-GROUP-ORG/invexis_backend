@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
-const redis = require('/app/shared/redis.js');
+const redis = require('/app/shared/redis');
 const { publish: publishRabbitMQ, exchanges, subscribe } = require('/app/shared/rabbitmq.js');
 const { logger } = require('../utils/app');
 

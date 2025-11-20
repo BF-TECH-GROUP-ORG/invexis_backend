@@ -6,6 +6,12 @@ const DebtSchema = new mongoose.Schema({
     companyId: { type: mongoose.Types.ObjectId, required: true },
     shopId: { type: mongoose.Types.ObjectId, required: true },
     customerId: { type: mongoose.Types.ObjectId, required: true },
+    // Embedded customer object for convenience in front-end (id, name, phone)
+    customer: {
+        id: { type: mongoose.Types.ObjectId },
+        name: { type: String },
+        phone: { type: String }
+    },
 
     // Hashed customer identifier for cross-company visibility (do NOT store raw phone/NID)
     hashedCustomerId: { type: String, index: true },
@@ -18,6 +24,7 @@ const DebtSchema = new mongoose.Schema({
     items: [
         {
             itemId: { type: mongoose.Types.ObjectId, required: true },
+            itemName: { type: String, required: true },
             quantity: { type: Number, required: true },
             unitPrice: { type: Number, required: true },
             totalPrice: { type: Number, required: true }
@@ -50,6 +57,22 @@ const DebtSchema = new mongoose.Schema({
 
     // Embedded repayment references for fast reads
     repayments: [{ type: mongoose.Types.ObjectId, ref: 'Repayment' }],
+
+    // Audit: who created/updated the debt (store id + human name)
+    createdBy: {
+        id: { type: mongoose.Types.ObjectId },
+        name: { type: String }
+    },
+    updatedBy: {
+        id: { type: mongoose.Types.ObjectId },
+        name: { type: String }
+    },
+    cancelledAt: { type: Date },
+    cancelReason: { type: String },
+    cancelledBy: {
+        id: { type: mongoose.Types.ObjectId },
+        name: { type: String }
+    },
 
     // Track balance over time (simple denormalized history)
     balanceHistory: [

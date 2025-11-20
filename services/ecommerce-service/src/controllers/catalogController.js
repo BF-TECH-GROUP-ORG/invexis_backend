@@ -119,7 +119,7 @@
 
 
 
-const { listProducts, getProduct, createProduct, updateProduct, deleteProduct } = require('../services/ecommerceService');
+const { search: listProducts, findByProductId: getProduct, create: createProduct, update: updateProduct, } = require('../services/catalogService');
 const { productSchema } = require('../utils/app');
 
 exports.listProducts = async (req, res) => {

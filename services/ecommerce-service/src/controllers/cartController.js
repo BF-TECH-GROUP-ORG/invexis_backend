@@ -98,7 +98,7 @@
 
 
 
-const { getCart, addOrUpdateCart, removeFromCart, checkoutCart } = require('../services/ecommerceService');
+const { getCart, addOrUpdateCart, removeFromCart, checkoutCart } = require('../services/cartService');
 const { cartSchema } = require('../utils/app');
 
 exports.getCart = async (req, res) => {

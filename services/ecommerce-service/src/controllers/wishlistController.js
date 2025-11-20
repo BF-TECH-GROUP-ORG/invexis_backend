@@ -69,7 +69,7 @@
 // };
 
 
-const { getWishlist, addOrUpdateWishlist, removeFromWishlist } = require('../services/ecommerceService');
+const { getWishlist, addOrUpdateWishlist, removeFromWishlist } = require('../services/wishlistService');
 const { wishlistSchema } = require('../utils/app');
 
 exports.getWishlist = async (req, res) => {

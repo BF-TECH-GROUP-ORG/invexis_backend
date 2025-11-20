@@ -26,20 +26,23 @@ async function seedAllModels(req, res) {
         const shopId = oid();
         const customerId = oid();
         const hashedCustomerId = 'h_demo_123';
+        const demoCustomer = { id: customerId, name: 'Demo Customer', phone: '0700000000' };
         const debt1 = await Debt.create({
             companyId, shopId, customerId,
+            customer: demoCustomer,
             hashedCustomerId,
             salesId: oid(), salesStaffId: oid(),
-            items: [{ itemId: oid(), quantity: 2, unitPrice: 50, totalPrice: 100 }],
+            items: [{ itemId: oid(), itemName: 'Demo Product A', quantity: 2, unitPrice: 50, totalPrice: 100 }],
             totalAmount: 100, amountPaidNow: 50, balance: 50,
             status: 'PARTIALLY_PAID', dueDate: new Date(), shareLevel: 'FULL',
             balanceHistory: [{ date: new Date(), balance: 50 }]
         });
         const debt2 = await Debt.create({
             companyId, shopId, customerId,
+            customer: demoCustomer,
             hashedCustomerId,
             salesId: oid(), salesStaffId: oid(),
-            items: [{ itemId: oid(), quantity: 1, unitPrice: 200, totalPrice: 200 }],
+            items: [{ itemId: oid(), itemName: 'Demo Product B', quantity: 1, unitPrice: 200, totalPrice: 200 }],
             totalAmount: 200, amountPaidNow: 0, balance: 200,
             status: 'UNPAID', dueDate: new Date(), shareLevel: 'PARTIAL',
             balanceHistory: [{ date: new Date(), balance: 200 }]
@@ -47,9 +50,9 @@ async function seedAllModels(req, res) {
 
         // Seed repayments
         const repayment1 = await Repayment.create({
-            companyId, shopId, customerId, debtId: debt1._id,
+            companyId, shopId, customerId, customer: demoCustomer, debtId: debt1._id,
             paymentId: oid(), amountPaid: 50, paymentMethod: 'CASH',
-            paymentReference: 'SEED-REF-1', paidAt: new Date()
+            paymentReference: 'SEED-REF-1', paidAt: new Date(), createdBy: { id: oid(), name: 'Seeder' }
         });
 
         // Seed summaries
