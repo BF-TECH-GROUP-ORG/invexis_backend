@@ -119,30 +119,54 @@ const createCategory = asyncHandler(async (req, res) => {
     });
   }
 
-  const newImage = req.body.images ? { url: req.body.images[0].url, alt: req.body.images[0].altText } : undefined;
-  delete req.body.images;
-
-  const category = new Category(req.body);
-  if (newImage) {
-    category.image = newImage;
-  }
-  await category.save();
-
-  // Update parent category's subcategory count
-  if (category.parentCategory) {
-    validateMongoId(category.parentCategory);
-    await Category.findByIdAndUpdate(
-      category.parentCategory,
-      { $inc: { 'statistics.totalSubcategories': 1 } }
-    );
+  let categoriesData;
+  
+  // Handle both single object and array
+  if (Array.isArray(req.body)) {
+    categoriesData = req.body;
+  } else {
+    categoriesData = [req.body];
   }
 
-  res.status(201).json({
-    success: true,
-    message: 'Category created successfully',
-    data: category
-  });
+  const createdCategories = [];
+  const failedCategories = [];
+
+  // Process each category
+  for (let categoryData of categoriesData) {
+    try {
+      // Handle image field (already provided in correct format)
+      const category = new Category(categoryData);
+      await category.save();
+      createdCategories.push(category);
+
+      // Update parent category's subcategory count
+      if (category.parentCategory) {
+        validateMongoId(category.parentCategory);
+        await Category.findByIdAndUpdate(
+          category.parentCategory,
+          { $inc: { 'statistics.totalSubcategories': 1 } }
+        );
+      }
+    } catch (error) {
+      failedCategories.push({
+        data: categoryData.name || 'Unknown',
+        error: error.message
+      });
+    }
+  }
+
+  const response = {
+    success: createdCategories.length > 0,
+    message: `Successfully created ${createdCategories.length} categories${failedCategories.length > 0 ? `, ${failedCategories.length} failed` : ''}`,
+    data: {
+      created: createdCategories,
+      failed: failedCategories
+    }
+  };
+
+  res.status(createdCategories.length > 0 ? 201 : 400).json(response);
 });
+
 
 const updateCategory = asyncHandler(async (req, res) => {
   const { id } = req.params;

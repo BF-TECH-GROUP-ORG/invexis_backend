@@ -160,56 +160,97 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
 
 
 const createProduct = asyncHandler(async (req, res) => {
-  // Check validation errors
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation errors',
-      errors: errors.array()
-    });
+  // Check validation errors (for bulk, we'll validate each individually)
+  if (!Array.isArray(req.body)) {
+    // For single, validate as before
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
   }
 
-  const newImages = req.body.images || [];
-  const newVideos = req.body.videos || [];
-  delete req.body.images;
-  delete req.body.videos;
-
-  const product = new Product(req.body);
-
-  // Add audit trail entry
-  product.auditTrail.push({
-    action: 'create',
-    changedBy: req.user?.id || 'system',
-    newValue: req.body
-  });
-
-  product.images = newImages.map((img, index) => ({
-    url: img.url,
-    alt: img.altText,
-    isPrimary: index === 0,
-    sortOrder: index
-  }));
-
-  product.videoUrls = newVideos.map(v => v.url);
-
-  await product.save();
-
-  // Update category product counts
-  if (product.category) {
-    validateMongoId(product.category);
-    await Category.findByIdAndUpdate(
-      product.category,
-      { $inc: { 'statistics.totalProducts': 1 } }
-    );
+  let productsData;
+  if (Array.isArray(req.body)) {
+    productsData = req.body;
+  } else {
+    productsData = [req.body];
   }
 
-  res.status(201).json({
-    success: true,
-    message: 'Product created successfully',
-    data: product
-  });
+  const createdProducts = [];
+  const failedProducts = [];
+
+  for (let productData of productsData) {
+    try {
+      // Individual validation for bulk items
+      const itemErrors = validationResult({ body: productData });
+      if (!itemErrors.isEmpty()) {
+        failedProducts.push({
+          data: productData.name || 'Unknown',
+          errors: itemErrors.array()
+        });
+        continue;
+      }
+
+      const newImages = productData.images || [];
+      const newVideos = productData.videos || [];
+      delete productData.images;
+      delete productData.videos;
+
+      const product = new Product(productData);
+
+      // Add audit trail entry
+      product.auditTrail.push({
+        action: 'create',
+        changedBy: req.user?.id || 'system',
+        newValue: productData
+      });
+
+      product.images = newImages.map((img, index) => ({
+        url: img.url,
+        alt: img.altText,
+        isPrimary: index === 0,
+        sortOrder: index
+      }));
+
+      product.videoUrls = newVideos.map(v => v.url);
+
+      await product.save();
+
+      createdProducts.push(product);
+
+      // Update category product counts
+      if (product.category) {
+        validateMongoId(product.category);
+        await Category.findByIdAndUpdate(
+          product.category,
+          { $inc: { 'statistics.totalProducts': 1 } }
+        );
+      }
+    } catch (error) {
+      failedProducts.push({
+        data: productData.name || 'Unknown',
+        error: error.message
+      });
+    }
+  }
+
+  const response = {
+    success: createdProducts.length > 0,
+    message: `Successfully created ${createdProducts.length} products${failedProducts.length > 0 ? `, ${failedProducts.length} failed` : ''}`,
+    data: {
+      created: createdProducts,
+      failed: failedProducts
+    }
+  };
+
+  res.status(createdProducts.length > 0 ? 201 : 400).json(response);
 });
+
+
 
 const updateProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
