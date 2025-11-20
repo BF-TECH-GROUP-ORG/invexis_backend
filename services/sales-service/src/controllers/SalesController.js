@@ -27,33 +27,66 @@ const createSale = async (req, res) => {
       soldBy,
       saleType,
       knownUserId,
+      customerId,
+      customerName,
+      customerPhone,
+      customerEmail,
+      customerAddress,
       items = [],
       paymentMethod,
     } = req.body;
 
     // Basic validation
-    if (!companyId || !shopId || !soldBy || !knownUserId || !items.length) {
+    if (!companyId || !shopId || !soldBy || !items.length) {
       await t.rollback();
       return res.status(400).json({
         message:
-          "Missing required fields: companyId, shopId, soldBy, knownUserId, items",
+          "Missing required fields: companyId, shopId, soldBy, items",
       });
     }
 
-    // Verify KnownUser exists and belongs to the company
-    const knownUser = await KnownUser.findByPk(knownUserId, { transaction: t });
-    if (!knownUser) {
-      await t.rollback();
-      return res.status(404).json({
-        message: "KnownUser not found",
-      });
-    }
+    // Handle KnownUser: either use provided knownUserId or create from customer data
+    let finalKnownUserId = knownUserId;
 
-    if (knownUser.companyId !== companyId) {
-      await t.rollback();
-      return res.status(403).json({
-        message: "KnownUser does not belong to this company",
-      });
+    if (!knownUserId) {
+      // If no knownUserId provided, create/find from customer data
+      if (!customerName || !customerPhone || !customerEmail) {
+        await t.rollback();
+        return res.status(400).json({
+          message:
+            "Either knownUserId or customer data (name, phone, email) must be provided",
+        });
+      }
+
+      // Create or find KnownUser using the service (will find if exists, create if not)
+      const knownUser = await knownUserService.findOrCreateKnownUser(
+        {
+          companyId,
+          customerId,
+          customerName,
+          customerPhone,
+          customerEmail,
+          customerAddress,
+        },
+        t
+      );
+      finalKnownUserId = knownUser.knownUserId;
+    } else {
+      // If knownUserId provided, verify it exists and belongs to the company
+      const knownUser = await KnownUser.findByPk(knownUserId, { transaction: t });
+      if (!knownUser) {
+        await t.rollback();
+        return res.status(404).json({
+          message: "KnownUser not found",
+        });
+      }
+
+      if (knownUser.companyId !== companyId) {
+        await t.rollback();
+        return res.status(403).json({
+          message: "KnownUser does not belong to this company",
+        });
+      }
     }
 
     // Calculate totals
@@ -76,7 +109,7 @@ const createSale = async (req, res) => {
         shopId,
         soldBy,
         saleType,
-        knownUserId,
+        knownUserId: finalKnownUserId,
         subTotal,
         discountTotal,
         taxTotal,
