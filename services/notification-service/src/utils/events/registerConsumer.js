@@ -19,7 +19,18 @@ const registerConsumers = async (consumerConfigs) => {
         },
         async (event, routingKey) => {
           console.log(`📥 [${config.name}] Received: ${routingKey}`);
-          await config.handler(event, routingKey);
+          // Normalize incoming message shape so handlers can expect { type, data }
+          // Some publishers send a wrapped object { type, data } (company-service style),
+          // while others (legacy debt-service) publish raw payloads. Normalize both.
+          const normalized = (event && event.type && ("data" in event))
+            ? event
+            : { type: routingKey, data: event };
+          try {
+            await config.handler(normalized, routingKey);
+          } catch (err) {
+            // Re-throw to allow subscribe() to handle retries/DLQ logic
+            throw err;
+          }
         }
       );
 

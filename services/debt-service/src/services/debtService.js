@@ -33,7 +33,9 @@ async function createDebt(payload) {
             items = [],
             totalAmount,
             amountPaidNow = 0,
-            dueDate
+            dueDate,
+            consentRef,
+            shareLevel = 'NONE'
         } = payload;
 
         const balance = Number(totalAmount) - Number(amountPaidNow);
@@ -55,12 +57,16 @@ async function createDebt(payload) {
             balance,
             status,
             dueDate,
+            consentRef,
+            shareLevel,
             balanceHistory: [{ date: new Date(), balance }]
         };
 
         // Fast path: write to in-memory store + Redis-backed queue and return immediately
         const inMemoryStore = require('../utils/inMemoryStore');
         const saved = inMemoryStore.createDebt(debtDoc);
+
+        // NOTE: KnownCustomer upsert removed (handled in sales service).
 
         // Fire-and-forget: enqueue summaries, events, publish immediate (best-effort), invalidate cache
         Promise.all([
@@ -71,6 +77,33 @@ async function createDebt(payload) {
             // enqueue outbox event (persisted by persister)
             (async () => {
                 try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_CREATED', payload: { debtId: saved._id, companyId, shopId, customerId } }); } catch (e) { /* swallow */ }
+            })(),
+            // cross-company summary upsert (persisted by persister)
+            (async () => {
+                try { inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onCreate', data: { hashedCustomerId, amount: balance, companyId, shareLevel, createdAt: saved.createdAt || new Date() } }); } catch (e) { }
+            })(),
+            // Publish cross-company notification for hashed customers when allowed by shareLevel/consent
+            (async () => {
+                try {
+                    if (hashedCustomerId && (shareLevel === 'PARTIAL' || shareLevel === 'FULL')) {
+                        const payload = {
+                            type: 'CUSTOMER_OWES_DEBT',
+                            hashedCustomerId,
+                            debtId: saved._id,
+                            companyId,
+                            shopId,
+                            totalAmount,
+                            balance,
+                            dueDate,
+                            shareLevel,
+                            consentRef,
+                            createdAt: saved.createdAt || new Date()
+                        };
+                        if (global && typeof global.rabbitmqPublish === 'function') {
+                            await global.rabbitmqPublish('customer.debt.alert', payload);
+                        }
+                    }
+                } catch (e) { /* swallow */ }
             })(),
             (async () => {
                 try {
@@ -83,6 +116,14 @@ async function createDebt(payload) {
                 try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); } catch (e) { }
             })()
         ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
+
+        // Invalidate cross-company lookup cache for this hashedCustomerId (if present)
+        try {
+            if (hashedCustomerId) {
+                const redis = getRedis();
+                if (redis && redis.del) await redis.del(`debt:lookup:${hashedCustomerId}`);
+            }
+        } catch (e) { }
 
         return saved;
     });
@@ -151,8 +192,41 @@ async function recordRepayment(payload) {
                         if (debt.status === 'PAID') {
                             try { await global.rabbitmqPublish('debt.fully_paid', { debtId: debt._id, companyId }); } catch (e) { }
                             try { await global.rabbitmqPublish('debt.status.updated', { debtId: debt._id, status: 'PAID', companyId }); } catch (e) { }
+                            // Notify other companies that the customer is now cleared (if sharing allowed)
+                            try {
+                                if (debt.hashedCustomerId && (debt.shareLevel === 'PARTIAL' || debt.shareLevel === 'FULL')) {
+                                    const notify = {
+                                        type: 'CUSTOMER_DEBT_CLEARED',
+                                        hashedCustomerId: debt.hashedCustomerId,
+                                        debtId: debt._id,
+                                        companyId,
+                                        shopId: debt.shopId,
+                                        paidAmount: amountPaid,
+                                        status: 'PAID',
+                                        timestamp: new Date()
+                                    };
+                                    await global.rabbitmqPublish('customer.debt.alert', notify);
+                                }
+                            } catch (e) { }
                         } else {
                             try { await global.rabbitmqPublish('debt.status.updated', { debtId: debt._id, status: debt.status, companyId }); } catch (e) { }
+                            // Notify other companies about repayment/progress (partial payment) if sharing allowed
+                            try {
+                                if (debt.hashedCustomerId && (debt.shareLevel === 'PARTIAL' || debt.shareLevel === 'FULL')) {
+                                    const notify = {
+                                        type: 'CUSTOMER_DEBT_UPDATED',
+                                        hashedCustomerId: debt.hashedCustomerId,
+                                        debtId: debt._id,
+                                        companyId,
+                                        shopId: debt.shopId,
+                                        totalAmount: debt.totalAmount,
+                                        balance: debt.balance,
+                                        status: debt.status,
+                                        timestamp: new Date()
+                                    };
+                                    await global.rabbitmqPublish('customer.debt.alert', notify);
+                                }
+                            } catch (e) { }
                         }
                     }
                 } catch (e) { }
@@ -170,6 +244,16 @@ async function recordRepayment(payload) {
                 }
             })()
         ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
+
+        // Invalidate cross-company lookup cache for this hashedCustomerId (if present)
+        try {
+            if (debt && debt.hashedCustomerId) {
+                const redis = getRedis();
+                if (redis && redis.del) await redis.del(`debt:lookup:${debt.hashedCustomerId}`);
+                // also enqueue cross-company repayment summary update
+                try { inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onRepayment', data: { hashedCustomerId: debt.hashedCustomerId, amountPaid, companyId, debtId: debt._id, createdAt: new Date() } }); } catch (e) { }
+            }
+        } catch (e) { }
 
         return result;
     });
@@ -222,15 +306,14 @@ async function getDebtWithRepayments({ companyId, debtId }) {
     return plain;
 }
 
-async function listDebts({ companyId, shopId, customerId, status, page = 1, limit = 50 }) {
-    const filter = { companyId, isDeleted: false };
-    if (shopId) filter.shopId = shopId;
+async function listDebts({ customerId, status, page = 1, limit = 50 }) {
+    const filter = { isDeleted: false };
     if (customerId) filter.customerId = customerId;
     if (status) filter.status = status;
 
     // Try cache first (list queries benefit from short-term caching)
     const redis = getRedis();
-    const cacheKey = `debts:list:${JSON.stringify({ companyId, shopId, customerId, status, page, limit })}`;
+    const cacheKey = `debts:list:${JSON.stringify({ customerId, status, page, limit })}`;
     try {
         if (redis && redis.get) {
             const cached = await redis.get(cacheKey);
@@ -245,6 +328,30 @@ async function listDebts({ companyId, shopId, customerId, status, page = 1, limi
     ]);
     const result = { items, total, page, limit };
     // Cache for 30s
+    try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(result), 'EX', 30); } catch (e) { }
+    return result;
+}
+
+// List all debts across all companies (no company filter) - for admin/maintenance use
+async function listAllDebts({ status, page = 1, limit = 50 } = {}) {
+    const filter = { isDeleted: false };
+    if (status) filter.status = status;
+
+    const redis = getRedis();
+    const cacheKey = `debts:list:all:${JSON.stringify({ status, page, limit })}`;
+    try {
+        if (redis && redis.get) {
+            const cached = await redis.get(cacheKey);
+            if (cached) return JSON.parse(cached);
+        }
+    } catch (e) { }
+
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+        debtRepo.listDebts(filter, { skip, limit, lean: true }),
+        debtRepo.countDebts(filter)
+    ]);
+    const result = { items, total, page, limit };
     try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(result), 'EX', 30); } catch (e) { }
     return result;
 }
@@ -444,6 +551,96 @@ async function softDeleteDebt({ companyId, debtId }) {
     });
 }
 
+// Mark a debt as paid (creates a repayment for the remaining balance if needed)
+async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', paymentReference, paymentId }) {
+    const perf = require('../utils/perf');
+    return perf.measureAsync('markDebtPaid', async () => {
+        const debt = await debtRepo.findById(debtId, companyId);
+        if (!debt) throw new Error('Debt not found');
+        if (debt.status === 'PAID') return { message: 'Debt already paid', debt };
+
+        const remaining = Number(debt.totalAmount) - Number(debt.amountPaidNow || 0);
+        const inMemoryStore = require('../utils/inMemoryStore');
+        let repayment = null;
+        if (remaining > 0) {
+            repayment = inMemoryStore.createRepayment({
+                companyId,
+                shopId: debt.shopId,
+                customerId: debt.customerId,
+                debtId: debt._id,
+                paymentId: paymentId || new mongoose.Types.ObjectId(),
+                amountPaid: remaining,
+                paymentMethod,
+                paymentReference
+            });
+
+            // update debt in-memory
+            debt.amountPaidNow = Number(debt.amountPaidNow || 0) + Number(remaining);
+            debt.balance = Number(debt.totalAmount) - Number(debt.amountPaidNow);
+            debt.status = await computeStatus(debt.totalAmount, debt.amountPaidNow);
+            debt.repayments = debt.repayments || [];
+            debt.repayments.push(repayment._id);
+            debt.balanceHistory = debt.balanceHistory || [];
+            debt.balanceHistory.push({ date: new Date(), balance: debt.balance });
+            debt.updatedAt = new Date();
+            inMemoryStore.createDebt(debt);
+        } else {
+            // nothing to pay but set status to PAID
+            debt.status = 'PAID';
+            debt.updatedAt = new Date();
+            inMemoryStore.createDebt(debt);
+        }
+
+        // Fire-and-forget background tasks
+        Promise.all([
+            (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_MARKED_PAID', payload: { debtId: debt._id, companyId, repaymentId: repayment ? repayment._id : null } }); } catch (e) { } })(),
+            (async () => { try { inMemoryStore.enqueueSummary({ type: 'company', op: 'onRepayment', data: { companyId, amountPaid: remaining } }); } catch (e) { } })(),
+            (async () => { try { inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onRepayment', data: { hashedCustomerId: debt.hashedCustomerId, amountPaid: remaining, companyId, debtId: debt._id, createdAt: new Date() } }); } catch (e) { } })(),
+            (async () => { try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); if (debt.hashedCustomerId) await redis.del(`debt:lookup:${debt.hashedCustomerId}`); } catch (e) { } })(),
+            (async () => {
+                try {
+                    if (global && typeof global.rabbitmqPublish === 'function') {
+                        await global.rabbitmqPublish('debt.fully_paid', { debtId: debt._id, companyId });
+                        await global.rabbitmqPublish('debt.status.updated', { debtId: debt._id, status: 'PAID', companyId });
+                    }
+                } catch (e) { }
+            })()
+        ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
+
+        return { debt, repayment };
+    });
+}
+
+// Cancel a debt: mark status CANCELLED and treat remaining balance as written-off (update summaries)
+async function cancelDebt({ companyId, debtId, reason = null }) {
+    const perf = require('../utils/perf');
+    return perf.measureAsync('cancelDebt', async () => {
+        const debt = await debtRepo.findById(debtId, companyId);
+        if (!debt) throw new Error('Debt not found');
+        if (debt.status === 'CANCELLED') return { message: 'Debt already cancelled', debt };
+
+        const writeOffAmount = Number(debt.balance || 0);
+        debt.status = 'CANCELLED';
+        debt.cancelledAt = new Date();
+        debt.cancelReason = reason;
+        debt.updatedAt = new Date();
+        const inMemoryStore = require('../utils/inMemoryStore');
+        inMemoryStore.createDebt(debt);
+
+        // Fire-and-forget: enqueue events and adjust summaries (treat as repayment for summary adjustment)
+        Promise.all([
+            (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_CANCELLED', payload: { debtId: debt._id, companyId, reason } }); } catch (e) { } })(),
+            (async () => { try { if (writeOffAmount > 0) inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onRepayment', data: { hashedCustomerId: debt.hashedCustomerId, amountPaid: writeOffAmount, companyId, debtId: debt._id, createdAt: new Date() } }); } catch (e) { } })(),
+            (async () => { try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); if (debt.hashedCustomerId) await redis.del(`debt:lookup:${debt.hashedCustomerId}`); } catch (e) { } })(),
+            (async () => {
+                try { if (global && typeof global.rabbitmqPublish === 'function') await global.rabbitmqPublish('debt.cancelled', { debtId: debt._id, companyId, reason }); } catch (e) { }
+            })()
+        ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
+
+        return { debt };
+    });
+}
+
 module.exports = {
     createDebt,
     recordRepayment,
@@ -455,4 +652,8 @@ module.exports = {
     crossCompanyCustomerDebts,
     updateDebt,
     softDeleteDebt
+    ,
+    markDebtPaid,
+    cancelDebt,
+    listAllDebts
 };

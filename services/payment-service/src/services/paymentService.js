@@ -2,8 +2,8 @@
 require('dotenv').config();
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
-const redis = require('../..//shared/redis') || require('../shared/redis');
-const rabbitmq = require('../../shared/rabbitmq') || require('../shared/rabbitmq');
+const redis = require('/app/shared/redis') || require('/app/shared/redis');
+const rabbitmq = require('/app/shared/rabbitmq') || require('/app/shared/rabbitmq');
 
 const {
     MTN_BASE_URL,

@@ -1,11 +1,42 @@
 const express = require("express");
 const router = express.Router();
 const invoiceController = require("../controllers/InvoiceController");
+const {
+  checkSubscriptionActive,
+  checkFeatureAccess,
+  checkRateLimits,
+} = require("/app/shared/middlewares/subscription");
 
 /**
  * Invoice Management Routes
  * Base path: /invoices
  */
+
+// Apply rate limiting
+router.use(
+  checkRateLimits({
+    limits: { basic: 50, mid: 200, pro: 1000 },
+    windowMs: 60000,
+    companyIdSource: "query",
+    companyIdField: "company_id",
+  })
+);
+
+// Apply subscription validation for all invoice operations
+router.use(
+  checkSubscriptionActive({
+    companyIdSource: "query",
+    companyIdField: "company_id",
+  })
+);
+
+// Invoicing is a Pro-only feature
+router.use(
+  checkFeatureAccess("sales", "invoicing", {
+    companyIdSource: "query",
+    companyIdField: "company_id",
+  })
+);
 
 // Get invoice by ID
 router.get("/:invoiceId", invoiceController.getInvoice);

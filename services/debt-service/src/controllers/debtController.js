@@ -6,6 +6,15 @@ async function createDebt(req, res) {
         const companyId = req.body.companyId || req.headers['x-company-id'];
         if (!companyId) return res.status(400).json({ error: 'companyId required' });
 
+        // Validate hashedCustomerId format if provided (sales-service should produce the hash)
+        const { hashedCustomerId } = req.body || {};
+        if (hashedCustomerId) {
+            const { isValidHashedCustomerId } = require('../utils/hashedId');
+            if (!isValidHashedCustomerId(hashedCustomerId)) {
+                return res.status(400).json({ error: 'malformed hashedCustomerId' });
+            }
+        }
+
         const payload = { ...req.body, companyId };
         const debt = await debtService.createDebt(payload);
         res.status(201).json({ debt });
@@ -58,7 +67,7 @@ async function listCompanyDebts(req, res) {
 async function listShopDebts(req, res) {
     try {
         const shopId = req.params.shopId;
-        const companyId = req.query.companyId || req.headers['x-company-id'];
+        const companyId = req.body.companyId || req.headers['x-company-id'];
         if (!companyId) return res.status(400).json({ error: 'companyId required' });
         const result = await debtService.listDebts({ companyId, shopId });
         res.json(result);
@@ -71,10 +80,96 @@ async function listShopDebts(req, res) {
 async function listCustomerDebts(req, res) {
     try {
         const customerId = req.params.customerId;
-        const companyId = req.query.companyId || req.headers['x-company-id'];
-        if (!companyId) return res.status(400).json({ error: 'companyId required' });
-        const result = await debtService.listDebts({ companyId, customerId });
+        const result = await debtService.listDebts({ customerId });
         res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+async function listAllDebts(req, res) {
+    try {
+        const { status, page, limit } = req.query;
+        const result = await debtService.listAllDebts({ status, page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// Internal lookup used by sales-service: returns aggregated cross-company summary for a hashedCustomerId
+async function internalLookup(req, res) {
+    try {
+        const hashedCustomerId = req.body.hashedCustomerId || req.query.hashedCustomerId;
+        const requestingCompanyId = req.headers['x-company-id'];
+        if (!hashedCustomerId) return res.status(400).json({ error: 'hashedCustomerId required' });
+
+        const { isValidHashedCustomerId } = require('../utils/hashedId');
+        if (!isValidHashedCustomerId(hashedCustomerId)) return res.status(400).json({ error: 'malformed hashedCustomerId' });
+
+        // Try cache first
+        const getRedis = () => {
+            if (global && global.redisClient) return global.redisClient;
+            try { return require('/app/shared/redis.js'); } catch (e) { try { return require('../shared/redis'); } catch (e2) { return null; } }
+        };
+        const redis = getRedis();
+        const cacheKey = `debt:lookup:${hashedCustomerId}`;
+        try {
+            if (redis && redis.get) {
+                const cached = await redis.get(cacheKey);
+                if (cached) return res.json(JSON.parse(cached));
+            }
+        } catch (e) { /* swallow cache errors */ }
+
+        const crossRepo = require('../repositories/crossCompanyRepository');
+        const summary = await crossRepo.findByHashedCustomerId(hashedCustomerId);
+        if (!summary) {
+            const out = { exists: false, hashedCustomerId, lastUpdated: new Date() };
+            try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(out), 'EX', 30); } catch (e) { }
+            return res.json(out);
+        }
+
+        // determine whether details may be shown (basic policy: NONE -> no detail; PARTIAL/FULL -> allow limited detail)
+        const detailAllowed = summary.worstShareLevel && summary.worstShareLevel !== 'NONE';
+
+        // Mirror the SALE_DEBT_RESPONSE payload shape so events and HTTP lookup are consistent
+        const out = {
+            success: true,
+            exists: true,
+            hashedCustomerId: summary.hashedCustomerId,
+            totalOutstanding: summary.totalOutstanding || 0,
+            numActiveDebts: summary.numActiveDebts || 0,
+            largestDebt: summary.largestDebt || 0,
+            worstShareLevel: summary.worstShareLevel || 'NONE',
+            riskScore: summary.riskScore || 0,
+            riskLabel: summary.riskLabel || 'GOOD',
+            numCompaniesWithDebt: summary.numCompaniesWithDebt || (Array.isArray(summary.companies) ? summary.companies.length : 0),
+            detailAllowed,
+            lastUpdated: summary.lastUpdated || new Date(),
+            correlationId: null
+        };
+
+        try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(out), 'EX', 30); } catch (e) { }
+        // Emit a lookup event so sales-service (or other interested consumers) can be notified of POS lookups.
+        try {
+            const inMemoryStore = require('../utils/inMemoryStore');
+            const ev = {
+                eventType: 'CROSS_COMPANY_LOOKUP',
+                payload: {
+                    hashedCustomerId,
+                    requestingCompanyId: requestingCompanyId || null,
+                    detailAllowed: !!detailAllowed,
+                    exists: out.exists,
+                    ts: new Date()
+                }
+            };
+            // fire-and-forget enqueue; persister will persist and outbox worker will publish
+            inMemoryStore.enqueueEvent(ev);
+        } catch (e) { /* swallow event errors - lookup still returns result */ }
+
+        return res.json(out);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
@@ -129,6 +224,9 @@ async function crossCompanyCustomerDebts(req, res) {
     }
 }
 
+// New endpoint: query by raw identifier (phone/NID/etc) — server will hash, look up known customers and cross-company debts
+// (removed) lookup by raw identifier — handled in sales service
+
 async function updateDebt(req, res) {
     try {
         const companyId = req.body.companyId || req.headers['x-company-id'];
@@ -159,6 +257,39 @@ async function softDeleteDebt(req, res) {
     }
 }
 
+// Mark debt as paid: create repayment for remaining amount (if any) and mark debt PAID
+async function markDebtPaid(req, res) {
+    try {
+        const companyId = req.body.companyId || req.headers['x-company-id'];
+        const debtId = req.params.debtId;
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        if (!debtId) return res.status(400).json({ error: 'debtId required' });
+
+        const result = await require('../services/debtService').markDebtPaid({ companyId, debtId, paymentMethod: req.body.paymentMethod, paymentReference: req.body.paymentReference, paymentId: req.body.paymentId });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// Cancel a debt (set status to CANCELLED, keep record for audit)
+async function cancelDebt(req, res) {
+    try {
+        const companyId = req.body.companyId || req.headers['x-company-id'];
+        const debtId = req.params.debtId;
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        if (!debtId) return res.status(400).json({ error: 'debtId required' });
+
+        const reason = req.body.reason || null;
+        const result = await require('../services/debtService').cancelDebt({ companyId, debtId, reason });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
 module.exports = {
     createDebt,
     recordRepayment,
@@ -173,4 +304,11 @@ module.exports = {
     crossCompanyCustomerDebts,
     updateDebt,
     softDeleteDebt
+    ,
+    listAllDebts
+    ,
+    internalLookup
+    ,
+    markDebtPaid,
+    cancelDebt
 };

@@ -6,7 +6,7 @@ const summaryRepo = require('../repositories/summaryRepository');
 const perf = require('../utils/perf');
 const metrics = require('../utils/metrics');
 
-function getRedis() { if (global && global.redisClient) return global.redisClient; try { return require('/app/shared/redis.js'); } catch (e) { try { return require('../shared/redis'); } catch (e2) { return null; } } }
+function getRedis() { if (global && global.redisClient) return global.redisClient; try { return require('/app/shared/redis.js'); } catch (e) { try { return require('/aapp/shared/redis'); } catch (e2) { return null; } } }
 // DO NOT cache redis at module load; call getRedis() at runtime to pick up global.redisClient
 const WRITE_QUEUE_KEY = 'write_queue';
 const BRPOP_TIMEOUT = 5; // 5 second timeout for BRPOP blocking
@@ -78,6 +78,11 @@ async function persistBatch(limit = 200) {
                             } else if (type === 'company') {
                                 if (op === 'onCreate') await summaryRepo.upsertCompanyOnCreate(data);
                                 else if (op === 'onRepayment') await summaryRepo.updateCompanyOnRepayment(data);
+                            } else if (type === 'cross_company') {
+                                // cross-company summary updates
+                                const crossRepo = require('../repositories/crossCompanyRepository');
+                                if (op === 'onCreate') await crossRepo.upsertOnDebtCreate(data);
+                                else if (op === 'onRepayment') await crossRepo.updateOnRepayment(data);
                             }
                             metrics.recordPersisted('summary');
                         } catch (e) {

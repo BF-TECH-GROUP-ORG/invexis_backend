@@ -6,6 +6,9 @@ router.get('/', (req, res) => {
     res.json({ message: 'Debt service is running' });
 });
 
+// GET /debt/all -> list all debts across companies (no company/shop filter)
+router.get('/all', ctrl.listAllDebts);
+
 // POST /debt/create -> create a debt
 router.post('/create', ctrl.createDebt);
 
@@ -23,9 +26,17 @@ router.get('/customer/:customerId/debts', ctrl.listCustomerDebts);
 
 // Cross-company customer lookup by hashed id
 router.get('/customer/hashed/:hashedId/debts', ctrl.crossCompanyCustomerDebts);
+// Internal lookup for sales-service (no local internal auth middleware; shared middleware will be used by deployment)
+router.post('/internal/lookup', ctrl.internalLookup);
 
 // GET single debt
 router.get('/:companyId/debt/:debtId', ctrl.getDebt);
+
+// Mark debt as paid (creates repayment for remaining amount and marks PAID)
+router.post('/:debtId/mark-paid', ctrl.markDebtPaid);
+
+// Cancel a debt (mark as CANCELLED)
+router.post('/:debtId/cancel', ctrl.cancelDebt);
 
 // PATCH update debt
 router.patch('/:debtId', ctrl.updateDebt);
@@ -40,9 +51,12 @@ router.post('/:debtId/remind', reminderCtrl.triggerDebtReminder);
 // POST /debt/company/:companyId/remind -> trigger manual reminders for company (batch)
 router.post('/company/:companyId/remind', reminderCtrl.triggerCompanyReminders);
 
-// Analytics
-router.get('/analytics/company/:companyId', ctrl.companyAnalytics);
-router.get('/analytics/shop/:shopId', ctrl.shopAnalytics);
-router.get('/analytics/customer/:customerId', ctrl.customerAnalytics);
+
+const analytics = require('../controllers/analyticsController');
+
+router.get('/analytics/company/:companyId', analytics.companyAnalytics);
+router.get('/analytics/shop/:shopId', analytics.shopAnalytics);
+router.get('/analytics/customer/:customerId', analytics.customerAnalytics);
+router.get('/analytics/company/:companyId/aging', analytics.agingBuckets);
 
 module.exports = router;

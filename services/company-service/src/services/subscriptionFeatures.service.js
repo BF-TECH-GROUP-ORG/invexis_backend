@@ -2,7 +2,7 @@
 
 const Subscription = require("../models/subscription.model");
 const Company = require("../models/company.model");
-const { getTierConfig, isFeatureEnabled } = require("../config/tierFeatures.config");
+const { getTierConfig, isFeatureEnabled } = require("/app/shared/tierFeatures.config");
 
 /**
  * Subscription Features Service
