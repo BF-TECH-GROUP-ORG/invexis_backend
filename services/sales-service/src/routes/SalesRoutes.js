@@ -55,20 +55,9 @@ router.get(
   salesController.customerSalesReport
 );
 
-// Trends - Pro tier only for advanced analytics
-router.get(
-  "/trends/top-products",
-  checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
-  checkSubscriptionTier("pro"),
-  salesController.topSellingProducts
-);
-
-router.get(
-  "/trends/revenue",
-  checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
-  checkSubscriptionTier("pro"),
-  salesController.revenueTrend
-);
+// Trends
+router.get("/trends/top-products", salesController.topSellingProducts);
+router.get("/trends/revenue", salesController.revenueTrend);
 
 // Track purchases by customer (specific route)
 router.get(
@@ -103,4 +92,4 @@ router.delete(
   salesController.deleteSale
 );
 
-module.exports = router;
+module.exports = router

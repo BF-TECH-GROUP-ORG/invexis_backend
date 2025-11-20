@@ -1,0 +1,1 @@
+{"level":"error","message":"❌ Error processing outbox: Connection to mongodb:27017 interrupted due to server monitor timeout","timestamp":"2025-11-19 11:19:50"}
