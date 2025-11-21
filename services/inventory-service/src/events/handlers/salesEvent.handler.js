@@ -12,21 +12,28 @@ const { logger } = require('../../utils/logger');
  */
 async function handleOrderCreated(data) {
   try {
-    const { orderId, companyId, items } = data;
+    console.log(`📦 Processing order created with data:`, JSON.stringify(data, null, 2));
+
+    const { orderId, saleId, companyId, items } = data;
 
     if (!items || !Array.isArray(items)) {
-      logger.warn(`⚠️ Invalid items in order created event: ${orderId}`);
+      console.warn(`⚠️ Invalid items in order created event. Items:`, items);
       return;
     }
 
-    logger.info(`📦 Processing order created: ${orderId}`);
+    console.log(`📦 Processing order created: ${orderId || saleId} with ${items.length} items`);
 
     for (const item of items) {
       const { productId, quantity } = item;
 
+      if (!productId) {
+        console.warn(`⚠️ Item missing productId:`, item);
+        continue;
+      }
+
       const product = await Product.findById(productId);
       if (!product) {
-        logger.warn(`⚠️ Product not found: ${productId}`);
+        console.warn(`⚠️ Product not found: ${productId}`);
         continue;
       }
 
@@ -36,12 +43,12 @@ async function handleOrderCreated(data) {
 
       await product.save();
 
-      logger.info(
+      console.log(
         `✅ Inventory reduced for product ${productId}: ${oldQuantity} → ${product.inventory.quantity}`
       );
     }
   } catch (error) {
-    logger.error(`❌ Error handling order created: ${error.message}`);
+    console.error(`❌ Error handling order created:`, error);
     throw error;
   }
 }
@@ -129,29 +136,50 @@ async function handleReturnConfirmed(data) {
  */
 module.exports = async function handleSalesEvent(event) {
   try {
-    const { type, data } = event;
+    // Log raw event to understand structure
+    console.log('🔍 RAW EVENT RECEIVED:', JSON.stringify(event, null, 2));
 
-    logger.info(`💳 Processing sales event: ${type}`);
+    // Check if event is defined
+    if (!event) {
+      console.error('❌ Event is undefined or null');
+      return;
+    }
+
+    const { type, payload, data } = event;
+    const eventData = payload || data;
+
+    console.log(`💳 Processing sales event: ${type}`);
+    console.log(`💳 Event data:`, JSON.stringify(eventData, null, 2));
+
+    if (!type) {
+      console.error('❌ Event type is missing');
+      return;
+    }
+
+    if (!eventData) {
+      console.error('❌ Event data/payload is missing');
+      return;
+    }
 
     switch (type) {
-      case 'sales.order.created':
-        await handleOrderCreated(data);
+      case 'sale.created':
+        await handleOrderCreated(eventData);
         break;
 
-      case 'sales.order.cancelled':
-        await handleOrderCancelled(data);
+      case 'sale.canceled':
+      case 'sale.cancelled':
+        await handleOrderCancelled(eventData);
         break;
 
-      case 'sales.return.confirmed':
-        await handleReturnConfirmed(data);
+      case 'sale.return.confirmed':
+        await handleReturnConfirmed(eventData);
         break;
 
       default:
-        logger.warn(`⚠️ Unhandled sales event type: ${type}`);
+        console.warn(`⚠️ Unhandled sales event type: ${type}`);
     }
-  } catch (error) {
-    logger.error(`❌ Error handling sales event: ${error.message}`);
-    throw error;
+  } catch (err) {
+    console.error(`❌ Error handling sales event:`, err);
+    throw err;
   }
 };
-

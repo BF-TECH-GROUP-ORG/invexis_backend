@@ -15,20 +15,16 @@ const dispatchEvent = async (eventPayload) => {
 
     const { event, data: payload, recipients, companyId, templateName, channels } = eventPayload;
 
-    // Validate that templates exist for all enabled channels
-    const templateValidation = await Template.validateTemplatesExist(templateName, channels);
-    if (!templateValidation.isValid) {
-        logger.warn(`Missing templates for ${templateName}:`, templateValidation.missingChannels);
-        // Continue with available templates, missing ones will use defaults
-    }
+    // Template validation skipped (using local registry)
+    // const templateValidation = await Template.validateTemplatesExist(templateName, channels);
 
     // Compile templates for all enabled channels
     const compiledContent = await compileTemplatesForChannels(templateName, payload, channels);
 
     // Get legacy title and body for backward compatibility
     const legacyContent = compiledContent.inApp || compiledContent.email ||
-                         Object.values(compiledContent)[0] ||
-                         { title: "Notification", body: "You have a new notification." };
+        Object.values(compiledContent)[0] ||
+        { title: "Notification", body: "You have a new notification." };
 
     // Create notification for each recipient (personalized if needed)
     const jobs = [];
@@ -85,8 +81,8 @@ const dispatchBroadcastEvent = async (eventPayload) => {
 
     // Get legacy content
     const legacyContent = compiledContent.inApp || compiledContent.email ||
-                         Object.values(compiledContent)[0] ||
-                         { title: "Notification", body: "You have a new notification." };
+        Object.values(compiledContent)[0] ||
+        { title: "Notification", body: "You have a new notification." };
 
     // Create broadcast notification
     const notification = new Notification({

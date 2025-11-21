@@ -11,7 +11,7 @@ const saleEvents = {
   /**
    * Create outbox event for sale creation
    */
-  async created(sale, trx = null) {
+  async created(sale, items = [], trx = null) {
     return await Outbox.create(
       {
         type: "sale.created",
@@ -26,6 +26,12 @@ const saleEvents = {
           totalAmount: sale.totalAmount,
           status: sale.status,
           paymentStatus: sale.paymentStatus,
+          items: items.map(item => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.total
+          })),
           createdAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
