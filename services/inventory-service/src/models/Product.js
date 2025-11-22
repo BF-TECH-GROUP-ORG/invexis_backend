@@ -71,24 +71,7 @@ const ProductAuditSchema = new mongoose.Schema({
   newValue: Schema.Types.Mixed,
 });
 
-// New: Per-warehouse inventory sub-schema
-const WarehouseInventorySchema = new mongoose.Schema({
-  warehouseId: {
-    type: Schema.Types.ObjectId,
-    ref: "Warehouse",
-    required: true,
-  },
-  quantity: {
-    type: Number,
-    default: 0,
-    min: [0, "Quantity cannot be negative"],
-  },
-  lowStockThreshold: {
-    type: Number,
-    default: 10,
-    min: [0, "Low stock threshold cannot be negative"],
-  },
-});
+// NOTE: Warehouse support removed. Inventory is tracked at product level and via shopAvailability.
 
 // Shop availability sub-schema (for multi-location retail)
 const ShopAvailabilitySchema = new mongoose.Schema({
@@ -108,6 +91,7 @@ const ShopAvailabilitySchema = new mongoose.Schema({
 const productSchema = new Schema(
   {
     companyId: { type: String, required: true, index: true },
+    shopId: { type: String, index: true },
     asin: { type: String, required: true, unique: true, index: true },
     sku: {
       type: String,
@@ -170,14 +154,9 @@ const productSchema = new Schema(
       currency: {
         type: String,
         default: "USD",
-        enum: ["USD", "EUR", "GBP", "INR"],
+        enum: ["USD", "EUR", "GBP", "FRW"],
       },
-      taxRate: {
-        type: Number,
-        default: 0,
-        min: [0, "Tax rate cannot be negative"],
-        max: [100, "Tax rate cannot exceed 100%"],
-      },
+      // taxRate removed - taxes are handled externally
     },
     inventory: {
       trackQuantity: { type: Boolean, default: true },
@@ -192,7 +171,7 @@ const productSchema = new Schema(
         min: [0, "Low stock threshold cannot be negative"],
       },
       allowBackorder: { type: Boolean, default: false },
-      perWarehouse: [WarehouseInventorySchema], // New: Breakdown by warehouse
+      // perWarehouse removed — inventory is tracked at product level and via shopAvailability
     },
     // Shop availability for multi-location retail
     shopAvailability: [ShopAvailabilitySchema],
@@ -343,14 +322,7 @@ productSchema.pre("save", function (next) {
     this.availability = "in_stock";
   }
 
-  // Aggregate total quantity from perWarehouse ONLY if perWarehouse has entries
-  if (this.inventory.perWarehouse && this.inventory.perWarehouse.length > 0) {
-    this.inventory.quantity = this.inventory.perWarehouse.reduce(
-      (total, wh) => total + wh.quantity,
-      0
-    );
-  }
-  // Else, keep the manually set quantity (for single-warehouse or non-warehouse updates)
+  // Warehouse/perWarehouse support removed — keep manually set inventory.quantity
 
   next();
 });
@@ -478,27 +450,19 @@ productSchema.statics.getOldUnboughtProducts = async function (
 
 // Instance method: Get inventory for a specific shop
 productSchema.methods.getShopInventory = function (shopId) {
-  const shopWarehouse = this.inventory.perWarehouse.find(
-    (wh) => wh.warehouseId.toString() === shopId
-  );
-
   const shopAvail = this.shopAvailability.find((sa) => sa.shopId === shopId);
+
+  // Shop-level inventory now uses the product's total inventory as we removed per-warehouse tracking.
+  const quantity = this.inventory.quantity;
 
   return {
     shopId,
     enabled: shopAvail?.enabled || false,
-    quantity: shopWarehouse?.quantity || 0,
-    lowStockThreshold:
-      shopWarehouse?.lowStockThreshold || this.inventory.lowStockThreshold,
+    quantity: quantity || 0,
+    lowStockThreshold: this.inventory.lowStockThreshold,
     customPrice: shopAvail?.customPrice || null,
-    effectivePrice:
-      shopAvail?.customPrice ||
-      this.pricing.salePrice ||
-      this.pricing.basePrice,
-    stockStatus: this._getStockStatusForQuantity(
-      shopWarehouse?.quantity || 0,
-      shopWarehouse?.lowStockThreshold || this.inventory.lowStockThreshold
-    ),
+    effectivePrice: shopAvail?.customPrice || this.pricing.salePrice || this.pricing.basePrice,
+    stockStatus: this._getStockStatusForQuantity(quantity || 0, this.inventory.lowStockThreshold),
   };
 };
 
@@ -565,21 +529,11 @@ productSchema.statics.addShopToProduct = async function (
 };
 
 // Static method: Remove shop from product availability
-productSchema.statics.removeShopFromProduct = async function (
-  productId,
-  shopId
-) {
+productSchema.statics.removeShopFromProduct = async function (productId, shopId) {
   const product = await this.findById(productId);
   if (!product) throw new Error("Product not found");
 
-  product.shopAvailability = product.shopAvailability.filter(
-    (sa) => sa.shopId !== shopId
-  );
-
-  // Also remove from perWarehouse if exists
-  product.inventory.perWarehouse = product.inventory.perWarehouse.filter(
-    (wh) => wh.warehouseId.toString() !== shopId
-  );
+  product.shopAvailability = product.shopAvailability.filter((sa) => sa.shopId !== shopId);
 
   await product.save();
   return product;

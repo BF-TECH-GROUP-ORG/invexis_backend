@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const Address = require('../schemas/Address');
-const Timeline = require('../schemas/Timeline');
+const Address = require('./schemas/Address');
+const Timeline = require('./schemas/Timeline');
 
 const DeliverySchema = new mongoose.Schema({
     orderId: { type: String, required: true, index: true },

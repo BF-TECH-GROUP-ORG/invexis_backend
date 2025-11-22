@@ -1,4 +1,4 @@
-const Promotion = require('../models/Promition.models');
+const Promotion = require('../models/Promotion.models');
 
 class PromotionRepository {
     async findById(id) {

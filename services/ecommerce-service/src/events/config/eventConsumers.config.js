@@ -4,7 +4,20 @@
  * Used by consumer.js to register consumers
  */
 
+const handleProductEvent = require('../consumers/productConsumer');
 module.exports = [
+  {
+    name: 'Product CRUD Consumer',
+    queue: 'ecommerce.catalog.sync',
+    exchange: 'events_topic',
+    pattern: 'inventory.product.*',
+    handler: handleProductEvent,
+    events: [
+      'inventory.product.created',
+      'inventory.product.updated',
+      'inventory.product.deleted'
+    ]
+  },
   {
     name: 'inventory',
     queue: 'ecommerce_inventory_events',

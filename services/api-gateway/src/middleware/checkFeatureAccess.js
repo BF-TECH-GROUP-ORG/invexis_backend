@@ -13,7 +13,7 @@
  */
 
 const asyncHandler = require("express-async-handler");
-const { isFeatureEnabled } = require("/app/shared/tierFeature.config");
+const { isFeatureEnabled } = require("/app/shared/tierFeatures.config");
 const { getRedisClient } = require("../utils/redis");
 
 // Configuration

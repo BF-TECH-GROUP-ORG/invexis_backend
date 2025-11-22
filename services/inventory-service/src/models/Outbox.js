@@ -26,9 +26,7 @@ const outboxSchema = new Schema(
         'inventory.low.stock',
         'inventory.out.of.stock',
         'inventory.restocked',
-        // Warehouse events
-        'inventory.warehouse.created',
-        'inventory.warehouse.updated',
+        // Warehouse events removed
         // Alert events
         'inventory.alert.triggered'
       ]

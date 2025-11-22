@@ -5,6 +5,7 @@ const Category = require('../models/Category');
 const { validateMongoId } = require('../utils/validateMongoId');
 const fs = require('fs');
 const path = require('path');
+const { publishProductEvent } = require('../events/productEvents');
 
 const getAllProducts = asyncHandler(async (req, res) => {
   const {
@@ -204,6 +205,11 @@ const createProduct = asyncHandler(async (req, res) => {
     );
   }
 
+  // Emit inventory.product.created event
+  await publishProductEvent('inventory.product.created', product.toObject());
+
+  console.log("event published: inventory.product.created");
+
   res.status(201).json({
     success: true,
     message: 'Product created successfully',
@@ -267,6 +273,21 @@ const updateProduct = asyncHandler(async (req, res) => {
   });
 
   await product.save();
+
+  // Emit inventory.product.updated event
+  await publishProductEvent('inventory.product.updated', product.toObject());
+
+  // If product became exposed (visibility changed to public OR activated while public), notify ecommerce
+  try {
+    const becamePublic = oldProduct.visibility !== product.visibility && product.visibility === 'public';
+    const becameActiveAndPublic = oldProduct.status !== product.status && product.status === 'active' && product.visibility === 'public';
+    if (becamePublic || becameActiveAndPublic) {
+      await publishProductEvent('product.exposed', product.toObject());
+      console.log('event published: product.exposed');
+    }
+  } catch (err) {
+    console.error('Failed to publish product.exposed event', err.message);
+  }
 
   res.status(200).json({
     success: true,
@@ -336,6 +357,9 @@ const deleteProduct = asyncHandler(async (req, res) => {
     );
   }
 
+  // Emit inventory.product.deleted event
+  await publishProductEvent('inventory.product.deleted', { _id: id });
+
   res.status(200).json({
     success: true,
     message: 'Product deleted successfully'
@@ -345,7 +369,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
 const updateInventory = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoId(id);
-  const { quantity, operation = 'set', warehouseId, variationId, reason } = req.body;
+  const { quantity, operation = 'set', variationId, reason } = req.body;
 
   const product = await Product.findById(id);
   if (!product) {
@@ -385,29 +409,14 @@ const updateInventory = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'You do not have enough products in stock' });
   }
 
-  // Handle perWarehouse if warehouseId provided
-  let warehouseUpdate = null;
-  if (warehouseId) {
-    validateMongoId(warehouseId);
-    const warehouseEntry = product.inventory.perWarehouse.find(wh => wh.warehouseId.equals(warehouseId));
-    if (warehouseEntry) {
-      warehouseEntry.quantity = newQuantity; // Update existing
-    } else {
-      product.inventory.perWarehouse.push({
-        warehouseId,
-        quantity: newQuantity,
-        lowStockThreshold: product.inventory.lowStockThreshold
-      });
-    }
-    warehouseUpdate = true;
-  }
+  // Note: per-warehouse support removed; update product-level inventory only
 
   const StockChange = require('../models/StockChange');
   const stockChange = new StockChange({
     companyId: product.companyId,
     productId: id,
     variationId,
-    warehouseId,
+    warehouseId: null,
     changeType: operation === 'decrement' ? 'sale' : (operation === 'increment' ? 'restock' : 'adjustment'),
     quantity: operation === 'decrement' ? -quantity : quantity,
     previousStock: oldQuantity,
@@ -417,13 +426,8 @@ const updateInventory = asyncHandler(async (req, res) => {
   });
   await stockChange.save();
 
-  // Update main quantity if not warehouse-specific (or aggregate if warehouse)
-  if (!warehouseId) {
-    product.inventory.quantity = newQuantity;
-  } else if (warehouseUpdate) {
-    // Re-aggregate main quantity
-    product.inventory.quantity = product.inventory.perWarehouse.reduce((total, wh) => total + wh.quantity, 0);
-  }
+  // Update main product-level quantity
+  product.inventory.quantity = newQuantity;
 
   // Update availability based on total
   product.availability = product.inventory.quantity > 0 ? 'in_stock' : 'out_of_stock';
@@ -512,12 +516,12 @@ const getFeaturedProducts = asyncHandler(async (req, res) => {
   if (companyId) validateMongoId(companyId);
   if (category) validateMongoId(category);
 
-  const query = { 
-    featured: true, 
-    status: 'active', 
-    visibility: 'public' 
+  const query = {
+    featured: true,
+    status: 'active',
+    visibility: 'public'
   };
-  
+
   if (category) query.category = category;
   if (companyId) query.companyId = companyId;
 

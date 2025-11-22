@@ -20,7 +20,6 @@ const axios = require('axios');
 
 // Import models
 const Product = require('../src/models/Product');
-const Warehouse = require('../src/models/Warehouse');
 
 // Configuration
 const SHOP_SERVICE_URL = process.env.SHOP_SERVICE_URL || 'http://shop-service:3002';
@@ -56,7 +55,7 @@ async function connectDatabase() {
 async function fetchAllShops() {
   try {
     logger.info('Fetching shops from shop-service...');
-    
+
     // Note: This assumes shop-service has an endpoint to get all shops
     // You may need to adjust the endpoint based on your actual API
     const response = await axios.get(`${SHOP_SERVICE_URL}/api/v1/shops/all`, {
@@ -79,45 +78,9 @@ async function fetchAllShops() {
   }
 }
 
-/**
- * Create warehouse entry for a shop
- */
-async function createWarehouseForShop(shop) {
-  try {
-    // Check if warehouse already exists
-    const existingWarehouse = await Warehouse.findOne({
-      companyId: shop.company_id,
-      name: `Shop: ${shop.name}`
-    });
-
-    if (existingWarehouse) {
-      logger.info(`Warehouse already exists for shop: ${shop.name} (${shop.id})`);
-      return existingWarehouse;
-    }
-
-    // Create new warehouse
-    const warehouse = new Warehouse({
-      companyId: shop.company_id,
-      name: `Shop: ${shop.name}`,
-      location: {
-        address: shop.address_line1 || '',
-        city: shop.city || '',
-        state: shop.region || '',
-        country: shop.country || '',
-        zipCode: shop.postal_code || ''
-      },
-      capacity: shop.capacity || 0,
-      isActive: shop.status === 'open'
-    });
-
-    await warehouse.save();
-    logger.success(`Created warehouse for shop: ${shop.name} (${shop.id})`);
-    return warehouse;
-  } catch (error) {
-    logger.error(`Failed to create warehouse for shop ${shop.name}: ${error.message}`);
-    throw error;
-  }
-}
+// Note: Warehouse model has been removed from this service.
+// This script will only link shops to products via shopAvailability
+// and set shop-related fields on products where appropriate.
 
 /**
  * Link shop to all products in the company
@@ -159,18 +122,25 @@ async function linkShopToProducts(shop) {
  */
 async function processShop(shop) {
   logger.info(`\n📦 Processing shop: ${shop.name} (${shop.id})`);
-  
+
   try {
-    // 1. Create warehouse entry
-    const warehouse = await createWarehouseForShop(shop);
-    
-    // 2. Link shop to products
+    // Link shop to products
     const linkedCount = await linkShopToProducts(shop);
-    
+
+    // Optionally: set a default shopId on products that don't have one
+    // Here we will NOT overwrite existing product.shopId values. If desired,
+    // you can uncomment the update below to set product.shopId to this shop
+    // for products that currently have null shopId.
+    //
+    // await Product.updateMany(
+    //   { companyId: shop.company_id, shopId: { $in: [null, undefined] } },
+    //   { $set: { shopId: shop.id } }
+    // );
+
     return {
       shopId: shop.id,
       shopName: shop.name,
-      warehouseId: warehouse._id,
+      warehouseId: null,
       productsLinked: linkedCount,
       success: true
     };
@@ -190,7 +160,7 @@ async function processShop(shop) {
  */
 async function runMigration() {
   logger.info('🚀 Starting shop backfill migration...\n');
-  
+
   const startTime = Date.now();
   const results = {
     total: 0,
@@ -214,11 +184,11 @@ async function runMigration() {
 
     // 3. Process each shop
     logger.info(`\n📋 Processing ${shops.length} shops...\n`);
-    
+
     for (const shop of shops) {
       const result = await processShop(shop);
       results.details.push(result);
-      
+
       if (result.success) {
         results.successful++;
       } else {
@@ -228,7 +198,7 @@ async function runMigration() {
 
     // 4. Summary
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    
+
     logger.info('\n' + '='.repeat(60));
     logger.info('📊 MIGRATION SUMMARY');
     logger.info('='.repeat(60));

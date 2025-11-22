@@ -190,48 +190,7 @@ const stockEvents = {
   }
 };
 
-/**
- * Warehouse Events
- */
-const warehouseEvents = {
-  async created(warehouse, companyId, session = null) {
-    return await Outbox.create(
-      {
-        type: 'inventory.warehouse.created',
-        exchange: 'events_topic',
-        routingKey: 'inventory.warehouse.created',
-        payload: {
-          warehouseId: warehouse._id,
-          companyId,
-          name: warehouse.name,
-          location: warehouse.location,
-          createdAt: new Date().toISOString(),
-          traceId: uuidv4()
-        }
-      },
-      session
-    );
-  },
-
-  async updated(warehouse, companyId, changes, session = null) {
-    return await Outbox.create(
-      {
-        type: 'inventory.warehouse.updated',
-        exchange: 'events_topic',
-        routingKey: 'inventory.warehouse.updated',
-        payload: {
-          warehouseId: warehouse._id,
-          companyId,
-          name: warehouse.name,
-          changes,
-          updatedAt: new Date().toISOString(),
-          traceId: uuidv4()
-        }
-      },
-      session
-    );
-  }
-};
+// Warehouse events removed - warehouses are no longer part of inventory service
 
 /**
  * Alert Events
@@ -261,7 +220,6 @@ const alertEvents = {
 module.exports = {
   productEvents,
   stockEvents,
-  warehouseEvents,
   alertEvents
 };
 

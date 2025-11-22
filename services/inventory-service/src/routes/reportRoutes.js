@@ -23,7 +23,7 @@ router.get('/turnover', getInventoryTurnover);
 router.get('/aging', getAgingInventory);
 router.get('/stock-movement', getStockMovementReport);
 router.get('/adjustments', getAdjustmentReport);
-router.get('/warehouse', getWarehouseReport);
+// Warehouse reports removed after warehouse feature removal
 router.get('/alerts', getAlertSummary);
 router.get('/discount-impact', getDiscountImpact);
 

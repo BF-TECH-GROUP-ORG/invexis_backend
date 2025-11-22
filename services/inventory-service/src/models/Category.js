@@ -31,6 +31,12 @@ const categorySchema = new mongoose.Schema({
     default: null,
     index: true,
   },
+  // companyId is required for level 3 categories to scope them to a company
+  companyId: {
+    type: String,
+    default: null,
+    index: true
+  },
   isActive: {
     type: Boolean,
     default: true,
@@ -105,7 +111,7 @@ categorySchema.index({ level: 1, parentCategory: 1 });
 categorySchema.index({ isActive: 1, sortOrder: 1 });
 
 // Middleware to generate slug
-categorySchema.pre('save', function(next) {
+categorySchema.pre('save', function (next) {
   if (this.isModified('name')) {
     this.slug = this.name
       .toLowerCase()
@@ -117,7 +123,7 @@ categorySchema.pre('save', function(next) {
 });
 
 // Middleware to validate parent category level
-categorySchema.pre('save', async function(next) {
+categorySchema.pre('save', async function (next) {
   if (this.parentCategory) {
     const parent = await this.constructor.findById(this.parentCategory);
     if (!parent) {
@@ -132,11 +138,18 @@ categorySchema.pre('save', async function(next) {
   } else if (this.level !== 1) {
     return next(new Error('Root categories must be level 1'));
   }
+
+  // Validation: level 3 categories must include a companyId
+  if (this.level === 3) {
+    if (!this.companyId) {
+      return next(new Error('companyId is required for level 3 categories'));
+    }
+  }
   next();
 });
 
 // Static method to get category tree
-categorySchema.statics.getCategoryTree = async function(parentId = null, level = 1) {
+categorySchema.statics.getCategoryTree = async function (parentId = null, level = 1) {
   const categories = await this.find({
     parentCategory: parentId,
     level: level,
@@ -155,13 +168,13 @@ categorySchema.statics.getCategoryTree = async function(parentId = null, level =
 };
 
 // Static method to get category path
-categorySchema.statics.getCategoryPath = async function(categoryId) {
+categorySchema.statics.getCategoryPath = async function (categoryId) {
   const category = await this.findById(categoryId);
   if (!category) return [];
-  
+
   const path = [category];
   let currentCategory = category;
-  
+
   while (currentCategory.parentCategory) {
     currentCategory = await this.findById(currentCategory.parentCategory);
     if (currentCategory) {
@@ -170,7 +183,7 @@ categorySchema.statics.getCategoryPath = async function(categoryId) {
       break;
     }
   }
-  
+
   return path;
 };
 

@@ -1,5 +1,5 @@
 const { app, initialize } = require("./app");
-const { close: closeRabbitMQ } = require("/app/shared/rabbitmq");
+const { close: close } = require("/app/shared/rabbitmq");
 
 const PORT = process.env.PORT || 8008;
 
@@ -18,7 +18,7 @@ const gracefulShutdown = async (signal) => {
     console.log("HTTP server closed");
 
     try {
-      await closeRabbitMQ();
+      await close();
       console.log("RabbitMQ connection closed");
     } catch (error) {
       console.error("Error closing RabbitMQ:", error);

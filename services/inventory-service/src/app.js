@@ -42,7 +42,7 @@ app.get("/", (req, res) => {
     endpoints: {
       products: "/inventory/products",
       categories: "/inventory/categories",
-      warehouses: "/inventory/warehouses",
+      // warehouses endpoint removed
       stock: "/inventory/stock",
       alerts: "/inventory/alerts",
       health: "/health",

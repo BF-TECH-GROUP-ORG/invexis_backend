@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
-const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
+const { connect: connect } = require("/app/shared/rabbitmq");
 
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
@@ -91,7 +91,7 @@ const initializeDatabase = async () => {
 // Initialize RabbitMQ and event system
 const initializeEventSystem = async () => {
   try {
-    await connectRabbitMQ();
+    await connect();
     await consumeEvents();
     await initPublishers();
     await startOutboxDispatcher(1000); // Process outbox every 1 second
