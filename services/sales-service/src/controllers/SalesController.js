@@ -1,5 +1,6 @@
 const { Op, DataTypes } = require("sequelize");
 const InvoicePdfService = require("../services/invoicePdf.service.js");
+const knownUserService = require("../services/knownUser.service");
 const {
   saleEvents,
   invoiceEvents,
@@ -11,6 +12,7 @@ const {
   SalesReturn,
   Invoice,
   SalesReturnItem,
+  KnownUser,
 } = require("../models/index.model");
 /*
   All handlers are arrow functions and exported via module.exports at the bottom.
@@ -24,9 +26,11 @@ const createSale = async (req, res) => {
       shopId,
       soldBy,
       saleType,
+      knownUserId,
       customerId,
       customerName,
       customerPhone,
+      customerEmail,
       customerAddress,
       items = [],
       paymentMethod,
@@ -35,9 +39,54 @@ const createSale = async (req, res) => {
     // Basic validation
     if (!companyId || !shopId || !soldBy || !items.length) {
       await t.rollback();
-      return res
-        .status(400)
-        .json({ message: "Missing required fields or items" });
+      return res.status(400).json({
+        message:
+          "Missing required fields: companyId, shopId, soldBy, items",
+      });
+    }
+
+    // Handle KnownUser: either use provided knownUserId or create from customer data
+    let finalKnownUserId = knownUserId;
+
+    if (!knownUserId) {
+      // If no knownUserId provided, create/find from customer data
+      if (!customerName || !customerPhone || !customerEmail) {
+        await t.rollback();
+        return res.status(400).json({
+          message:
+            "Either knownUserId or customer data (name, phone, email) must be provided",
+        });
+      }
+
+      // Create or find KnownUser using the service (will find if exists, create if not)
+      const knownUser = await knownUserService.findOrCreateKnownUser(
+        {
+          companyId,
+          customerId,
+          customerName,
+          customerPhone,
+          customerEmail,
+          customerAddress,
+        },
+        t
+      );
+      finalKnownUserId = knownUser.knownUserId;
+    } else {
+      // If knownUserId provided, verify it exists and belongs to the company
+      const knownUser = await KnownUser.findByPk(knownUserId, { transaction: t });
+      if (!knownUser) {
+        await t.rollback();
+        return res.status(404).json({
+          message: "KnownUser not found",
+        });
+      }
+
+      if (knownUser.companyId !== companyId) {
+        await t.rollback();
+        return res.status(403).json({
+          message: "KnownUser does not belong to this company",
+        });
+      }
     }
 
     // Calculate totals
@@ -60,10 +109,7 @@ const createSale = async (req, res) => {
         shopId,
         soldBy,
         saleType,
-        customerId,
-        customerName,
-        customerPhone,
-        customerAddress,
+        knownUserId: finalKnownUserId,
         subTotal,
         discountTotal,
         taxTotal,
@@ -154,6 +200,7 @@ const getSale = async (req, res) => {
         { model: SalesItem, as: "items" },
         { model: SalesReturn, as: "returns" },
         { model: Invoice, as: "invoice" },
+        { model: KnownUser, as: "knownUser" },
       ],
     });
 
@@ -173,9 +220,6 @@ const updateSale = async (req, res) => {
       "status",
       "paymentStatus",
       "paymentMethod",
-      "customerName",
-      "customerPhone",
-      "customerAddress",
       "soldBy",
     ];
     const payload = {};
@@ -302,12 +346,13 @@ const listSales = async (req, res) => {
 
 const getCustomerPurchases = async (req, res) => {
   try {
-    const { customerId } = req.params;
+    const { knownUserId } = req.params;
     const sales = await Sale.findAll({
-      where: { customerId },
+      where: { knownUserId },
       include: [
         { model: SalesItem, as: "items" },
         { model: Invoice, as: "invoice" },
+        { model: KnownUser, as: "knownUser" },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -320,9 +365,9 @@ const getCustomerPurchases = async (req, res) => {
 
 const customerSalesReport = async (req, res) => {
   try {
-    const { customerId } = req.params;
+    const { knownUserId } = req.params;
     const { startDate, endDate } = req.query;
-    const where = { customerId };
+    const where = { knownUserId };
 
     if (startDate && endDate) {
       where.createdAt = {

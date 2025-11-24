@@ -1,56 +1,78 @@
+// src/index.js
+require("dotenv").config();
 const express = require("express");
+const connectDB = require("./config/db");
+const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
+const redisClient = require("/app/shared/redis");
+const notificationQueue = require("./config/queue");
+const consumeEvents = require("./events/consumer");
+const { initPublishers } = require("./events/producer");
+const logger = require("./utils/logger");
+
 const app = express();
 const PORT = process.env.PORT || 8008;
-<<<<<<< HEAD
-// in notification-service app
-app.get("/health", (req, res) => res.sendStatus(200));
 
-app.get("/", (req, res) => res.send("Hello from notification-service!"));
-app.listen(PORT, () =>
-  console.log(`notification-service running on port ${PORT}`)
-);
-=======
-const router = require('./routes/notification')
-// in notification-service app
-app.get('/health', (req, res) => res.sendStatus(200));
-app.use('/notification', router)
-app.listen(PORT, () => console.log(`notification-service running on port ${PORT}`));
-<<<<<<< HEAD
->>>>>>> ce9cc58373456b16292975932d180f8fad336166
-=======
-// src/index.js
-require('dotenv').config();
-const express = require('express');
-const connectDB = require('./config/database');
-const { connectRabbitMQ } = require('./config/rabbitmq');
-const notificationQueue = require('./config/queue');
-const { startConsumers } = require('./consumers/generalConsumer');
-const healthRoutes = require('./controllers/health');
-const testRoutes = require('./controllers/test');
-const notificationRoutes = require('./controllers/notifications');
-const logger = require('./utils/logger');
+// Middleware
+app.use(express.json());
 
-app.use('/health', healthRoutes);
-app.use('/test', testRoutes);
-app.use('/notifications', notificationRoutes);
+// Routes
+app.get("/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    service: "notification-service",
+  });
+});
+
+app.get("/ready", async (_req, res) => {
+  try {
+    const redisOk = redisClient.isConnected;
+
+    if (redisOk) {
+      res.json({ ready: true });
+    } else {
+      res.status(503).json({ ready: false, reason: "Dependencies not ready" });
+    }
+  } catch (error) {
+    res.status(503).json({ ready: false, error: error.message });
+  }
+});
 
 const start = async () => {
+  try {
+    // Connect to database
     await connectDB();
-    await connectRabbitMQ();
-    await startConsumers();
+    logger.info("✅ Database connected");
 
+    // Connect to RabbitMQ
+    await connectRabbitMQ();
+    logger.info("✅ RabbitMQ connected");
+
+    // Initialize event publishers
+    await initPublishers();
+    logger.info("✅ Event publishers initialized");
+
+    // Start event consumers
+    await consumeEvents();
+    logger.info("✅ Event consumers started");
+
+    // Start server
     app.listen(PORT, () => {
-        logger.info(`Notification Service running on port ${PORT}`);
+      logger.info(`🚀 Notification Service running on port ${PORT}`);
     });
+  } catch (error) {
+    logger.error("Failed to start notification service:", error);
+    process.exit(1);
+  }
 };
 
 start().catch((err) => {
-    logger.error('Failed to start:', err);
-    process.exit(1);
+  logger.error("Failed to start:", err);
+  process.exit(1);
 });
 
-process.on('SIGINT', async () => {
-    await notificationQueue.close();
-    process.exit(0);
+process.on("SIGINT", async () => {
+  logger.info("Shutting down gracefully...");
+  await notificationQueue.close();
+  process.exit(0);
 });
->>>>>>> c1a79b2722fb191f738c2bdfe7a29ab54adafd49

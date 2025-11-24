@@ -1,16 +1,33 @@
 {
-  "name": "sales-service",
+  "name": "debt-service",
   "version": "1.0.0",
-  "main": "dist/index.js",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "jest"
+    "dev": "nodemon --watch src --exec node src/index.js",
+    "start": "node src/index.js",
+    "build": "echo \"No build step configured\"",
+    "test": "echo \"No tests configured\" && exit 0"
   },
   "dependencies": {
+    "amqplib": "^0.10.9",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0",
-    "nodemon": "^3.1.10"
+    "express": "^4.18.2",
+    "express-session": "^1.18.2",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.8.2",
+    "mongoose": "^8.19.4",
+    "morgan": "^1.10.1",
+    "node-cron": "^3.0.3",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.10",
+    "supertest": "^7.1.4"
   }
 }

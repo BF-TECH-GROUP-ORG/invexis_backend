@@ -20,7 +20,9 @@ const companyEvents = {
         routingKey: "company.created",
         payload: {
           companyId: company.id,
+          adminId: company.createdBy,
           name: company.name,
+          email: company.email,
           domain: company.domain,
           tier: company.tier,
           createdAt: new Date().toISOString(),
@@ -222,4 +224,3 @@ module.exports = {
   companyEvents,
   subscriptionEvents,
 };
-

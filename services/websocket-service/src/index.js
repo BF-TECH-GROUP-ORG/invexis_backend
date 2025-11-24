@@ -8,26 +8,10 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { initAdapter } = require('./config/adapter');
 const logger = require('./utils/logger');
-const cluster = require('node:cluster');
-const { healthCheck } = require('./config/shared');
+const { redis, rabbitmq, healthCheck } = require('./config/shared');
 const { authenticateSocket } = require('./middleware/auth');
-const { handleJoin, handleLeave, handleCustomEvents } = require('./events/handlers');
+const { initializeHandlers, handleJoin, handleLeave, handleCustomEvents } = require('./events/handlers');
 const { startRealtimeConsumer } = require('./consumers/realtime');
-
-let connectRabbitMQ, redis;
-
-try {
-    const rabbitmq = require('/app/shared/rabbitmq.js');
-    connectRabbitMQ = rabbitmq.connect;
-    redis = require('/app/shared/redis.js');
-} catch (err) {
-    console.warn('Shared dependencies not available, running in standalone mode');
-    connectRabbitMQ = async () => console.log('RabbitMQ connection skipped');
-    redis = {
-        connect: async () => console.log('Redis connection skipped'),
-        quit: async () => console.log('Redis quit skipped')
-    };
-}
 
 const app = express();
 const server = createServer(app);
@@ -35,186 +19,195 @@ const server = createServer(app);
 // Security & perf middleware
 app.use(helmet());
 app.use(compression());
-app.use(cors({ origin: process.env.CORS_ORIGINS.split(',') }));
+app.use(cors({ origin: process.env.CORS_ORIGINS?.split(',') || ['*'] }));
 
-const { configureSocketIO, SCALING_CONFIG } = require('./config/scaling');
-
+// Socket.IO configuration
 const io = new Server(server, {
-    cors: {
-        origin: process.env.CORS_ORIGINS.split(','),
-        methods: ['GET', 'POST'],
-        credentials: true
-    },
-    ...SCALING_CONFIG.socket
+  cors: {
+    origin: process.env.CORS_ORIGINS?.split(',') || ['*'],
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  pingTimeout: 20000,
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e6,
+  transports: ['websocket'],
+  serveClient: false,
+  cookie: false
 });
 
-// Configure Socket.IO for high scale
-configureSocketIO(io);
+// Initialize handlers
+initializeHandlers(io);
 
-// Adapter for cluster
-// Adapter for cluster will be initialized after shared services are ready
-// (moved into startWorker to ensure Redis client exists)
-
-// Auth middleware
+// Auth middleware - Authenticate all socket connections
 io.use(authenticateSocket);
 
 // Socket handlers
 io.on('connection', (socket) => {
-    logger.info(`Worker ${process.pid}: New connection ${socket.id} (user: ${socket.userId})`);
+  logger.info(`New connection ${socket.id} (user: ${socket.userId})`);
 
-    handleJoin(socket);
-    handleLeave(socket);
-    handleCustomEvents(socket);
+  handleJoin(socket);
+  handleLeave(socket);
+  handleCustomEvents(socket);
 
-    socket.on('disconnect', (reason) => {
-        logger.info(`Worker ${process.pid}: Disconnect ${socket.id}: ${reason}`);
-    });
+  socket.on('disconnect', (reason) => {
+    logger.info(`Disconnect ${socket.id}: ${reason}`);
+  });
 
-    socket.emit('connected', { userId: socket.userId, socketId: socket.id, worker: process.pid });
+  socket.emit('connected', { userId: socket.userId, socketId: socket.id });
 });
 
 app.get('/', (req, res) => {
-    res.send('Websocket Service is mounted to gateway.');
+  res.send('Websocket Service is running');
 });
 
-// Health endpoint (cluster-aware)
+// Health endpoint
 app.get('/health', async (req, res) => {
+  try {
     const sharedHealth = await healthCheck();
-    const clusterInfo = cluster.isWorker ? { workerId: process.pid, primaryId: cluster.isPrimary ? process.pid : 'N/A' } : { primaryId: process.pid };
     res.json({
-        status: 'ok',
-        connectedClients: io.engine.clientsCount,
-        ...sharedHealth,
-        ...clusterInfo,
-        timestamp: new Date().toISOString()
+      status: 'ok',
+      connectedClients: io.engine.clientsCount,
+      ...sharedHealth,
+      timestamp: new Date().toISOString()
     });
+  } catch (error) {
+    logger.error('Health check failed:', error);
+    res.status(503).json({ status: 'error', error: error.message });
+  }
 });
 
-const PORT = process.env.PORT || 9002;
+const getPort = () => {
+  const port = process.env.PORT;
+  if (port === '0') return 0; // Dynamic port for testing
+  return parseInt(port, 10) || 9002;
+};
 
 const startWorker = async () => {
-    let retries = 5;
-    while (retries > 0) {
-        try {
-            console.log('Attempting to connect to services...');
+  let retries = 5;
+  while (retries > 0) {
+    try {
+      logger.info('Attempting to connect to services...');
 
-            // Connect to Redis
-            if (redis && typeof redis.connect === 'function') {
-                await redis.connect();
-                console.log('redis connected');
-            }
+      // Connect to Redis
+      if (redis && typeof redis.connect === 'function') {
+        await redis.connect();
+        logger.info('Redis connected');
+      }
 
-            // Connect to RabbitMQ
-            console.log('RabbitMQ: Attempting connection...');
-            await rabbitmq.connect();
+      // Connect to RabbitMQ
+      logger.info('Connecting to RabbitMQ...');
+      await rabbitmq.connect();
+      logger.info('RabbitMQ connected');
 
-            // Initialize Socket.IO Redis adapter
-            try {
-                initAdapter(io);
-            } catch (err) {
-                logger.error('Failed to initialize Socket.IO adapter:', err.message);
-                throw err;
-            }
+      // Initialize Socket.IO Redis adapter
+      initAdapter(io);
 
-            // Start realtime consumer
-            await startRealtimeConsumer(io);
+      // Start realtime consumer
+      await startRealtimeConsumer(io);
 
-            // Start HTTP server (bind to all interfaces for LB)
-            server.listen(PORT, '0.0.0.0', () => {
-                console.log(`Websocket service running on port ${PORT} - Cached & Event-ready`);
-            });
+      // Start HTTP server
+      const port = getPort();
+      return new Promise((resolve, reject) => {
+        server.listen(port, '0.0.0.0', () => {
+          const actualPort = server.address().port;
+          logger.info(`Websocket service running on port ${actualPort}`);
+          resolve();
+        }).on('error', reject);
+      });
+    } catch (error) {
+      logger.error(`Startup attempt failed: ${error.message}`);
+      retries--;
 
-            return; // Success - exit the retry loop
-        } catch (error) {
-            logger.error(`Startup attempt failed: ${error.message}`);
-            retries--;
+      if (retries === 0) {
+        logger.error('Maximum retries reached. Exiting...');
+        throw error;
+      }
 
-            if (retries === 0) {
-                logger.error('Maximum retries reached. Exiting...');
-                throw error;
-            }
-
-            logger.info(`Retrying in 5 seconds... (${retries} attempts remaining)`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
-        }
+      logger.info(`Retrying in 5 seconds... (${retries} attempts remaining)`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
+  }
 };
 
 // Graceful shutdown handler
 const shutdown = async () => {
-    console.log('Graceful shutdown initiated...');
-    try {
-        // Close all Socket.IO connections
-        if (io) {
-            const sockets = await io.fetchSockets();
-            for (const socket of sockets) {
-                socket.disconnect(true);
-            }
-            io.close();
-            console.log('All Socket.IO connections closed');
+  logger.info('Graceful shutdown initiated...');
+  try {
+    // Close all Socket.IO connections
+    if (io) {
+      try {
+        const sockets = await io.fetchSockets();
+        for (const socket of sockets) {
+          socket.disconnect(true);
         }
-
-        // Close HTTP server
-        server.close(() => {
-            console.log('HTTP server closed');
-        });
-
-        // Close Redis connection
-        if (redis && redis.disconnect) {
-            await redis.disconnect();
-            console.log('Redis connection closed');
-        }
-
-        // Close RabbitMQ connection
-        if (rabbitmq && rabbitmq.close) {
-            await rabbitmq.close();
-            console.log('RabbitMQ connection closed');
-        }
-
-        console.log('Graceful shutdown completed');
-        process.exit(0);
-    } catch (error) {
-        console.error(`Shutdown error: ${error.message}`);
-        process.exit(1);
+        io.close();
+        logger.info('All Socket.IO connections closed');
+      } catch (err) {
+        logger.warn('Error closing Socket.IO:', err.message);
+      }
     }
-};
 
-// Load shared dependencies
-let rabbitmq;
-try {
-    rabbitmq = require('/app/shared/rabbitmq.js');
-    redis = require('/app/shared/redis.js');
-} catch (err) {
-    console.error('Failed to load shared modules:', err);
-    process.exit(1);
-}
+    // Close HTTP server
+    return new Promise((resolve) => {
+      if (!server.listening) {
+        logger.info('Server not running, skipping close');
+        resolve();
+        return;
+      }
+
+      server.close(() => {
+        logger.info('HTTP server closed');
+        resolve();
+      });
+
+      // Force close after 5 seconds
+      setTimeout(() => {
+        logger.warn('Force closing server');
+        resolve();
+      }, 5000);
+    });
+  } catch (error) {
+    logger.error(`Shutdown error: ${error.message}`);
+  }
+};
 
 // Start server
 if (require.main === module) {
-    // Connect to RabbitMQ first, then start worker
-    rabbitmq.connect()
-        .then(() => {
-            console.log('rabbitmq connected');
-            return startWorker();
-        })
-        .catch((err) => {
-            console.error('Worker startup failed:', err && err.stack ? err.stack : err);
-            process.exit(1);
-        });
+  startWorker()
+    .then(() => {
+      logger.info('Worker started successfully');
+    })
+    .catch((err) => {
+      logger.error('Worker startup failed:', err);
+      process.exit(1);
+    });
 }
 
 // Listen for termination signals
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+const handleShutdown = async () => {
+  try {
+    const { cleanup } = require('./events/handlers');
+    if (cleanup) cleanup();
+    await shutdown();
+    process.exit(0);
+  } catch (error) {
+    logger.error('Shutdown failed:', error);
+    process.exit(1);
+  }
+};
 
-// Global error handlers for better observability
-process.on('unhandledRejection', (reason, p) => {
-    console.error('Unhandled Rejection at:', p, 'reason:', reason && reason.stack ? reason.stack : reason);
+process.on('SIGTERM', handleShutdown);
+process.on('SIGINT', handleShutdown);
+
+// Global error handlers
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection:', reason);
 });
+
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err && err.stack ? err.stack : err);
-    // attempt graceful shutdown
-    shutdown().catch(() => process.exit(1));
+  logger.error('Uncaught Exception:', err);
+  shutdown().catch(() => process.exit(1));
 });
 
-module.exports = { app, server, io, startWorker }; // For testing
+module.exports = { app, server, io, startWorker, shutdown };

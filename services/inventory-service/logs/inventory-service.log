@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 {"level":"info","message":"Server started successfully","timestamp":"2025-10-22 10:30:52"}
 {"level":"info","message":"Server running on port http://localhost:8007","timestamp":"2025-10-22 10:30:52"}
 {"level":"info","message":"Server started successfully","timestamp":"2025-10-22 10:44:32"}
@@ -442,4 +441,4 @@
 {"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-01 12:37:06"}
 {"level":"info","message":"🚀 Starting outbox dispatcher (interval: 1000ms)","timestamp":"2025-11-01 12:57:32"}
 {"level":"info","message":"✅ Outbox dispatcher started","timestamp":"2025-11-01 12:57:32"}
->>>>>>> c58c67b74d2085536654c736497155da2e5936cb
+{"level":"error","message":"❌ Error processing outbox: Connection to mongodb:27017 interrupted due to server monitor timeout","timestamp":"2025-11-19 11:19:50"}

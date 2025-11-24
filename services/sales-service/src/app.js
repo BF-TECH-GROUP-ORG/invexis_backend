@@ -3,13 +3,14 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 const sequelize = require("./config/db");
-
+const cors=require('cors')
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 
 const salesRouter = require("./routes/SalesRoutes");
 const invoiceRouter = require("./routes/InvoiceRoutes");
+const knownUserRouter = require("./routes/KnownUserRoutes");
 const PORT = process.env.PORT || 9000;
 
 const app = express();
@@ -19,21 +20,7 @@ app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
 // CORS middleware
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
+app.use(cors());
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -57,12 +44,15 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     endpoints: {
       sales: "/sales",
+      knownUsers: "/known-users",
+      invoices: "/invoices",
       health: "/health",
     },
   });
 });
 
 // API Routes
+app.use("/known-users", knownUserRouter);
 app.use("/sales", salesRouter);
 app.use("/invoices", invoiceRouter);
 
@@ -130,6 +120,7 @@ app.listen(PORT, () => {
   initialize()
   console.log(`🚀 Sales Service running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
-  console.log(`📍 API endpoint: http://localhost:${PORT}/sales`);
+  console.log(`📍 Sales endpoint: http://localhost:${PORT}/sales`);
+  console.log(`📍 KnownUsers endpoint: http://localhost:${PORT}/known-users`);
 });
 module.exports = app;

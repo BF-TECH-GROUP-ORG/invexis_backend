@@ -20,8 +20,18 @@ const shopEvents = {
           shopId: shop.id,
           companyId: shop.company_id,
           name: shop.name,
-          city: shop.city,
-          country: shop.country,
+          location: {
+            address: shop.address_line1,
+            address2: shop.address_line2,
+            city: shop.city,
+            region: shop.region,
+            country: shop.country,
+            postal_code: shop.postal_code,
+            latitude: shop.latitude,
+            longitude: shop.longitude,
+          },
+          capacity: shop.capacity,
+          timezone: shop.timezone,
           status: shop.status,
           createdAt: new Date().toISOString(),
           traceId: uuidv4(),
@@ -68,6 +78,7 @@ const shopEvents = {
           shopId,
           companyId,
           oldStatus,
+          status: newStatus, // Add 'status' field for inventory service
           newStatus,
           changedAt: new Date().toISOString(),
           traceId: uuidv4(),
@@ -195,4 +206,3 @@ module.exports = {
   shopEvents,
   departmentEvents,
 };
-

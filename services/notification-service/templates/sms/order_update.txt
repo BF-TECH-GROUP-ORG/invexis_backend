@@ -1,0 +1,1 @@
+Order {{orderId}}: {{status}}. Total {{orderTotal}}. Details: {{actionUrl}}

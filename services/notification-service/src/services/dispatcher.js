@@ -1,7 +1,8 @@
 // src/services/dispatcher.js
 const Notification = require('../models/Notification');
+const Template = require('../models/Template');
 const { notificationEventSchema } = require('../utils/validator');
-const { compileTemplate } = require('./templateService');
+const { compileTemplatesForChannels } = require('./templateService');
 const notificationQueue = require('../config/queue');
 const logger = require('../utils/logger');
 
@@ -14,18 +15,36 @@ const dispatchEvent = async (eventPayload) => {
 
     const { event, data: payload, recipients, companyId, templateName, channels } = eventPayload;
 
-    // Compile template for all (shared)
-    const { title, body } = await compileTemplate(templateName, payload);
+    // Validate that templates exist for all enabled channels
+    const templateValidation = await Template.validateTemplatesExist(templateName, channels);
+    if (!templateValidation.isValid) {
+        logger.warn(`Missing templates for ${templateName}:`, templateValidation.missingChannels);
+        // Continue with available templates, missing ones will use defaults
+    }
+
+    // Compile templates for all enabled channels
+    const compiledContent = await compileTemplatesForChannels(templateName, payload, channels);
+
+    // Get legacy title and body for backward compatibility
+    const legacyContent = compiledContent.inApp || compiledContent.email ||
+                         Object.values(compiledContent)[0] ||
+                         { title: "Notification", body: "You have a new notification." };
 
     // Create notification for each recipient (personalized if needed)
     const jobs = [];
     for (const userId of recipients) {
         const notification = new Notification({
-            title,
-            body,
+            // Legacy fields for backward compatibility
+            title: legacyContent.title || legacyContent.subject || "Notification",
+            body: legacyContent.body || legacyContent.html || legacyContent.message || "You have a new notification.",
+
+            // New template system
             templateName,
             payload,
             channels,
+            compiledContent, // Store channel-specific compiled content
+
+            // Targeting
             userId,
             companyId,
             scope: 'personal', // Assume personal for recipients list; adjust for broadcast
@@ -39,8 +58,58 @@ const dispatchEvent = async (eventPayload) => {
         jobs.push(notificationQueue.add('deliver', { notificationId: notification._id }, { delay }));
     }
 
-    logger.info(`Dispatched ${recipients.length} notifications for event ${event}`);
+    logger.info(`Dispatched ${recipients.length} notifications for event ${event} with templates for channels: ${Object.keys(compiledContent).join(', ')}`);
     return jobs;
 };
 
-module.exports = { dispatchEvent };
+/**
+ * Dispatch notification for multiple scopes (company, department, role-based)
+ */
+const dispatchBroadcastEvent = async (eventPayload) => {
+    const { error } = notificationEventSchema.validate(eventPayload);
+    if (error) {
+        logger.error('Invalid broadcast event payload:', error.details[0].message);
+        return false;
+    }
+
+    const { event, data: payload, companyId, templateName, channels, scope, departmentId, roles } = eventPayload;
+
+    // Validate templates
+    const templateValidation = await Template.validateTemplatesExist(templateName, channels);
+    if (!templateValidation.isValid) {
+        logger.warn(`Missing templates for ${templateName}:`, templateValidation.missingChannels);
+    }
+
+    // Compile templates
+    const compiledContent = await compileTemplatesForChannels(templateName, payload, channels);
+
+    // Get legacy content
+    const legacyContent = compiledContent.inApp || compiledContent.email ||
+                         Object.values(compiledContent)[0] ||
+                         { title: "Notification", body: "You have a new notification." };
+
+    // Create broadcast notification
+    const notification = new Notification({
+        title: legacyContent.title || legacyContent.subject || "Notification",
+        body: legacyContent.body || legacyContent.html || legacyContent.message || "You have a new notification.",
+        templateName,
+        payload,
+        channels,
+        compiledContent,
+        companyId,
+        departmentId,
+        roles,
+        scope: scope || 'company',
+        status: 'pending'
+    });
+
+    await notification.save();
+
+    // Queue delivery
+    const job = notificationQueue.add('deliver', { notificationId: notification._id });
+
+    logger.info(`Dispatched broadcast notification for event ${event} with scope ${scope}`);
+    return [job];
+};
+
+module.exports = { dispatchEvent, dispatchBroadcastEvent };

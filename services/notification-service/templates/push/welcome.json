@@ -1,0 +1,5 @@
+{
+  "title": "Welcome to {{companyName}}",
+  "body": "Hi {{userName}} — tap to finish setting up your account.",
+  "data": { "action": "open_welcome", "url": "{{actionUrl}}" }
+}

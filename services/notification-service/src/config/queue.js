@@ -1,6 +1,6 @@
 // src/config/queue.js
 const Queue = require('bull');
-const redis = require('./redis');
+const redis = require('/app/shared/redis');
 const logger = require('../utils/logger');
 
 const notificationQueue = new Queue('notification delivery', {
@@ -11,7 +11,7 @@ const notificationQueue = new Queue('notification delivery', {
     }
 });
 
-notificationQueue.process(async (job) => {
+notificationQueue.process('deliver',async (job) => {
     // Worker logic in queue/workers.js
     const { deliverNotification } = require('../queue/workers');
     return deliverNotification(job.data);
