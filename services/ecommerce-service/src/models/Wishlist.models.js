@@ -1,15 +1,12 @@
 // models/Wishlist.js
-const mongoose = require('mongoose');
-const WishlistSchema = new mongoose.Schema({
-    userId: { type: String, required: true },
-    companyId: { type: String, required: true },
-    shopId: { type: String },
+const mongoose = require("mongoose");
 
-    items: [{ productId: String, addedAt: { type: Date, default: Date.now } }],
+const WishlistSchema = new mongoose.Schema(
+    {
+        userId: { type: String, required: true },
+        items: [{ productId: String, addedAt: { type: Date, default: Date.now } }],
+    },
+    { timestamps: true }
+);
 
-    isDeleted: { type: Boolean, default: false }
-}, { timestamps: true });
-
-// WishlistSchema.index({ userId: 1, companyId: 1 });
-
-module.exports = mongoose.model('Wishlist', WishlistSchema);
+module.exports = mongoose.model("Wishlist", WishlistSchema);

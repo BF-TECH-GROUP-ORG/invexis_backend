@@ -18,10 +18,12 @@ describe('Debt Endpoints', () => {
         const res = await request(app)
             .post('/debt/create')
             .send({
-                companyId, shopId, customerId,
+                companyId, shopId,
+                customer: { id: customerId, name: 'Test Customer', phone: '0700111222' },
                 hashedCustomerId,
                 salesId: shopId, salesStaffId: customerId,
-                items: [{ itemId: shopId, quantity: 1, unitPrice: 100, totalPrice: 100 }],
+                createdBy: { id: customerId, name: 'Tester' },
+                items: [{ itemId: shopId, itemName: 'Test Product', quantity: 1, unitPrice: 100, totalPrice: 100 }],
                 totalAmount: 100, amountPaidNow: 0, balance: 100,
                 status: 'UNPAID', dueDate: new Date(), shareLevel: 'FULL'
             });
@@ -34,8 +36,10 @@ describe('Debt Endpoints', () => {
         const res = await request(app)
             .post('/debt/repayment')
             .send({
-                companyId, shopId, customerId, debtId,
-                paymentId: shopId, amountPaid: 50, paymentMethod: 'CASH', paymentReference: 'TEST-REF-2'
+                companyId, shopId, debtId,
+                customer: { id: customerId, name: 'Test Customer', phone: '0700111222' },
+                paymentId: shopId, amountPaid: 50, paymentMethod: 'CASH', paymentReference: 'TEST-REF-2',
+                createdBy: { id: customerId, name: 'Repayer' }
             });
         expect(res.statusCode).toBe(201);
         expect(res.body.repayment).toBeDefined();

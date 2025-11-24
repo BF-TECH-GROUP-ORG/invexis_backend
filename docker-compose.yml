@@ -166,7 +166,7 @@ services:
       MYSQL_PASSWORD: invexispass
       MYSQL_DATABASE: salesdb
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - sales_mysql_data:/var/lib/mysql
     command:

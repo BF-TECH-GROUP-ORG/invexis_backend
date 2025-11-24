@@ -2,7 +2,7 @@ const asyncHandler = require('express-async-handler');
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const StockChange = require('../models/StockChange');
-const Warehouse = require('../models/Warehouse');
+// Warehouse model removed; shop-level inventory uses product.shopAvailability and product.inventory.quantity
 const { validateMongoId } = require('../utils/validateMongoId');
 const { logger } = require('../utils/logger');
 
@@ -48,12 +48,7 @@ const getShopProducts = asyncHandler(async (req, res) => {
     query.$text = { $search: search };
   }
   if (inStock === 'true') {
-    query['inventory.perWarehouse'] = {
-      $elemMatch: {
-        warehouseId: shopId,
-        quantity: { $gt: 0 }
-      }
-    };
+    query['inventory.quantity'] = { $gt: 0 };
   }
 
   const products = await Product.find(query)
@@ -67,18 +62,12 @@ const getShopProducts = asyncHandler(async (req, res) => {
 
   // Transform products to include shop-specific inventory
   const shopProducts = products.map(product => {
-    const shopWarehouse = product.inventory.perWarehouse?.find(
-      wh => wh.warehouseId.toString() === shopId
-    );
-    const shopAvail = product.shopAvailability?.find(
-      sa => sa.shopId === shopId
-    );
-
+    const shopAvail = product.shopAvailability?.find(sa => sa.shopId === shopId);
     return {
       ...product,
       shopInventory: {
-        quantity: shopWarehouse?.quantity || 0,
-        lowStockThreshold: shopWarehouse?.lowStockThreshold || product.inventory.lowStockThreshold,
+        quantity: product.inventory.quantity || 0,
+        lowStockThreshold: product.inventory.lowStockThreshold,
         customPrice: shopAvail?.customPrice || null,
         effectivePrice: shopAvail?.customPrice || product.pricing.salePrice || product.pricing.basePrice
       }
@@ -186,47 +175,21 @@ const allocateInventoryToShop = asyncHandler(async (req, res) => {
       throw new Error('Shop not linked to this product. Please link the shop first.');
     }
 
-    // Find or create warehouse entry for shop
-    let shopWarehouse = product.inventory.perWarehouse.find(
-      wh => wh.warehouseId.toString() === shopId
-    );
+    // Update product-level inventory and create stock change
+    const previous = product.inventory.quantity || 0;
+    const newStock = previous + quantity;
+    product.inventory.quantity = newStock;
 
-    const previousStock = shopWarehouse?.quantity || 0;
-
-    if (!shopWarehouse) {
-      // Get warehouse ID for the shop
-      const warehouse = await Warehouse.findOne({
-        companyId,
-        name: { $regex: `Shop:` }
-      }).session(session);
-
-      if (!warehouse) {
-        throw new Error('Warehouse not found for shop. Please ensure shop is properly registered.');
-      }
-
-      product.inventory.perWarehouse.push({
-        warehouseId: warehouse._id,
-        quantity: 0,
-        lowStockThreshold: product.inventory.lowStockThreshold
-      });
-      shopWarehouse = product.inventory.perWarehouse[product.inventory.perWarehouse.length - 1];
-    }
-
-    // Update quantity
-    shopWarehouse.quantity += quantity;
-    const newStock = shopWarehouse.quantity;
-
-    // Save product
     await product.save({ session });
 
-    // Create stock change record
+    // Create stock change record (no warehouse model; warehouseId left null)
     const stockChange = new StockChange({
       companyId,
       productId: product._id,
-      warehouseId: shopWarehouse.warehouseId,
+      warehouseId: null,
       changeType: 'transfer',
       quantity,
-      previousStock,
+      previousStock: previous,
       newStock,
       reason: reason || `Allocated to shop ${shopId}`,
       changedBy: userId || 'system'
@@ -285,20 +248,8 @@ const getShopInventorySummary = asyncHandler(async (req, res) => {
     },
     {
       $project: {
-        shopWarehouse: {
-          $filter: {
-            input: '$inventory.perWarehouse',
-            as: 'wh',
-            cond: { $eq: ['$$wh.warehouseId', shopId] }
-          }
-        },
+        quantity: '$inventory.quantity',
         lowStockThreshold: '$inventory.lowStockThreshold'
-      }
-    },
-    {
-      $project: {
-        quantity: { $arrayElemAt: ['$shopWarehouse.quantity', 0] },
-        lowStockThreshold: { $arrayElemAt: ['$shopWarehouse.lowStockThreshold', 0] }
       }
     },
     {

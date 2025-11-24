@@ -7,13 +7,13 @@ const Sale = sequelize.define(
   {
     saleId: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
     companyId: { type: DataTypes.UUID, allowNull: false },
-    shopId: { type: DataTypes.UUID, allowNull: false },
+    shopId: { type: DataTypes.STRING, allowNull: false },
     knownUserId: {
       type: DataTypes.BIGINT,
       allowNull: false,
       comment: "Reference to KnownUser - stores all customer info",
     },
-    soldBy: { type: DataTypes.BIGINT, allowNull: false },
+    soldBy: { type: DataTypes.STRING, allowNull: false },
     saleType: {
       type: DataTypes.ENUM("in_store", "ecommerce", "delivery"),
       defaultValue: "in_store",
@@ -39,7 +39,7 @@ const Sale = sequelize.define(
     paymentMethod: {
       type: DataTypes.ENUM("cash", "card", "mobile", "wallet", "bank_transfer"),
     },
-    paymentId: { type: DataTypes.BIGINT },
+    paymentId: { type: DataTypes.BIGINT, defaultValue: 1 },
   },
   {
     tableName: "sales",

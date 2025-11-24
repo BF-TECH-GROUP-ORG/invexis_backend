@@ -129,6 +129,69 @@ const sampleTemplates = [
         priority: 'high'
       }
     }
+  },
+
+  // Sale notification templates
+  {
+    name: 'sale_created',
+    type: 'email',
+    subject: 'Sale #{{saleId}} Confirmed',
+    content: `
+      <h2>Sale Confirmed — #{{saleId}}</h2>
+      <p>Hello,</p>
+      <p>A new sale has been successfully created.</p>
+      
+      <div style="margin: 20px 0; padding: 15px; background-color: #f9f9f9; border-radius: 5px;">
+        <p><strong>Sale ID:</strong> #{{saleId}}</p>
+        <p><strong>Amount:</strong> {{formatCurrency amount}}</p>
+        <p><strong>Date:</strong> {{formatDate createdAt}}</p>
+      </div>
+      
+      <p>Thank you for your business!</p>
+      <p>— The {{companyName}} Team</p>
+    `,
+    metadata: {
+      emailConfig: {
+        isHtml: true,
+        priority: 'normal'
+      }
+    }
+  },
+  {
+    name: 'sale_created',
+    type: 'sms',
+    content: 'Sale #{{saleId}} confirmed! Amount: {{amount}}. Thanks for your business!',
+    metadata: {
+      smsConfig: {
+        maxLength: 160,
+        allowUnicode: true
+      }
+    }
+  },
+  {
+    name: 'sale_created',
+    type: 'push',
+    content: JSON.stringify({
+      title: 'Sale #{{saleId}} Confirmed',
+      body: 'New sale created for {{amount}}',
+      data: {
+        action: 'open_sale',
+        saleId: '{{saleId}}'
+      }
+    }),
+    metadata: {
+      pushConfig: {
+        sound: 'default',
+        priority: 'normal'
+      }
+    }
+  },
+  {
+    name: 'sale_created',
+    type: 'inApp',
+    subject: 'Sale #{{saleId}} Created',
+    content: 'New sale #{{saleId}} created for {{amount}}',
+    metadata: {}
   }
 ];
 

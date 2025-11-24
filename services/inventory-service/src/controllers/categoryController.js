@@ -90,6 +90,17 @@ const getCategoryTree = asyncHandler(async (req, res) => {
   });
 });
 
+const getLevel3CategoriesByCompany = asyncHandler(async (req, res) => {
+  const { companyId } = req.params;
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId parameter is required' });
+  }
+
+  const categories = await Category.find({ level: 3, companyId, isActive: true }).sort({ sortOrder: 1, name: 1 });
+
+  res.status(200).json({ success: true, data: categories, count: categories.length });
+});
+
 const getCategoryPath = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoId(id);
@@ -202,6 +213,11 @@ const updateCategory = asyncHandler(async (req, res) => {
     });
   }
 
+  // Post-update validation: level 3 categories must have companyId
+  if (category.level === 3 && !category.companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required for level 3 categories' });
+  }
+
   res.status(200).json({
     success: true,
     message: 'Category updated successfully',
@@ -223,7 +239,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
   }
 
   // Check if category has products
-  const productsCount = await Product.countDocuments({ 
+  const productsCount = await Product.countDocuments({
     $or: [
       { category: id },
       { subcategory: id },
@@ -299,6 +315,7 @@ module.exports = {
   getCategoryById,
   getCategoryBySlug,
   getCategoryTree,
+  getLevel3CategoriesByCompany,
   getCategoryPath,
   createCategory,
   updateCategory,

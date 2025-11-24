@@ -6,7 +6,6 @@
 
 const Product = require('../../models/Product');
 const Category = require('../../models/Category');
-const Warehouse = require('../../models/Warehouse');
 const StockChange = require('../../models/StockChange');
 const Alert = require('../../models/Alert');
 const Discount = require('../../models/Discount');
@@ -26,7 +25,6 @@ async function handleCompanyDeleted(data) {
     const deletionResults = {
       products: 0,
       categories: 0,
-      warehouses: 0,
       stockChanges: 0,
       alerts: 0,
       discounts: 0,
@@ -41,9 +39,7 @@ async function handleCompanyDeleted(data) {
     const categoriesResult = await Category.deleteMany({ companyId });
     deletionResults.categories = categoriesResult.deletedCount;
 
-    // Delete warehouses
-    const warehousesResult = await Warehouse.deleteMany({ companyId });
-    deletionResults.warehouses = warehousesResult.deletedCount;
+    // Warehouse model removed; no warehouse cleanup required here
 
     // Delete stock changes
     const stockChangesResult = await StockChange.deleteMany({ companyId });
@@ -81,6 +77,11 @@ module.exports = async function handleCompanyEvent(event) {
     logger.info(`🏢 Processing company event: ${type}`);
 
     switch (type) {
+      case 'company.created':
+        // No action needed for inventory service on company creation
+        logger.info(`✅ Company created acknowledged: ${data.companyId || 'unknown'}`);
+        break;
+
       case 'company.deleted':
         await handleCompanyDeleted(data);
         break;

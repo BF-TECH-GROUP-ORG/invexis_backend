@@ -10,12 +10,25 @@ module.exports = [
     name: "sales",
     queue: "inventory_sales_events",
     exchange: "events_topic",
-    pattern: "sales.#",
+    pattern: "sale.#",
     handler: require("../handlers/salesEvent.handler"),
     events: [
-      "sales.order.created",
-      "sales.order.cancelled",
-      "sales.return.confirmed"
+      "sale.created",
+      "sale.cancelled",
+      "sale.return.confirmed"
+    ]
+  },
+  {
+    name: "ecommerce",
+    queue: "inventory_ecommerce_events",
+    exchange: "events_topic",
+    pattern: "ecommerce.#",
+    handler: require("../handlers/ecommerceEvent.handler"),
+    events: [
+      "ecommerce.order.created",
+      "ecommerce.order.updated",
+      "ecommerce.order.cancelled",
+      "ecommerce.cart.checked_out"
     ]
   },
   {

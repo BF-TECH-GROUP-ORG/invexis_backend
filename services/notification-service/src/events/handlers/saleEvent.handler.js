@@ -55,23 +55,22 @@ async function handleSaleCreated(data) {
   try {
     logger.info(`💰 New sale created: #${saleId} (${amount})`);
 
-    const notification = await Notification.create({
-      companyId,
-      userId: createdBy,
-      type: "sale_created",
-      title: "New Sale",
-      body: `Sale #${saleId} has been created successfully.`,
-      scope: "company",
-      channels: { email: true, push: true, inApp: true },
-      payload: {
+    const { dispatchEvent } = require("../../services/dispatcher");
+
+    await dispatchEvent({
+      event: "sale.created",
+      data: {
         email: customerEmail,
         phone: customerPhone,
         ...data,
       },
+      recipients: [createdBy],
+      companyId,
+      templateName: "sale_created",
+      channels: { email: true, push: true, inApp: true }
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Sale creation notification queued for sale ${saleId}`);
+    logger.info(`✅ Sale creation notification dispatched for sale ${saleId}`);
   } catch (error) {
     logger.error(`❌ Error creating sale notification:`, error.message);
     throw error;

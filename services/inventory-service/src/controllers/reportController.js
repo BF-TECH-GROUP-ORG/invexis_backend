@@ -4,7 +4,7 @@ const Category = require('../models/Category');
 const StockChange = require('../models/StockChange');
 const Alert = require('../models/Alert');
 const Discount = require('../models/Discount');
-const Warehouse = require('../models/Warehouse');
+// Warehouse model removed
 const InventoryAdjustment = require('../models/InventoryAdjustment');
 const { validateMongoId } = require('../utils/validateMongoId');
 
@@ -91,7 +91,7 @@ const getDailyReport = asyncHandler(async (req, res) => {
     { $match: { companyId } },
     { $group: { _id: null, avgSold: { $avg: '$sales.totalSold' }, avgStock: { $avg: '$inventory.quantity' } } }
   ]);
-    // Average stock level
+  // Average stock level
   const avgStock = await Product.aggregate([
     { $match: { companyId } },
     { $group: { _id: null, avgQuantity: { $avg: '$inventory.quantity' } } }
@@ -348,9 +348,9 @@ const getInventoryTurnover = asyncHandler(async (req, res) => {
   const benchmark = 4; // Ideal 4x/year
   const efficiency = turnoverRatio / benchmark * 100;
 
-  res.json({ 
-    success: true, 
-    data: { 
+  res.json({
+    success: true,
+    data: {
       periodDays: days,
       turnoverRatio: Math.round(turnoverRatio * 100) / 100,
       turnoverDays: Math.round(turnoverDays * 100) / 100,
@@ -359,7 +359,7 @@ const getInventoryTurnover = asyncHandler(async (req, res) => {
       efficiencyPct: Math.round(efficiency * 100) / 100 + '%',
       benchmark: `${benchmark}x/year`,
       insights: turnoverRatio > benchmark ? 'Excellent—fast-moving stock' : (turnoverRatio > 2 ? 'Good—monitor slow items' : 'Low—clear dead stock')
-    } 
+    }
   });
 });
 
@@ -400,8 +400,8 @@ const getAgingInventory = asyncHandler(async (req, res) => {
 });
 
 const getStockMovementReport = asyncHandler(async (req, res) => {
-const companyId = "testCompany"
-const { startDate, endDate, productId } = req.query;
+  const companyId = "testCompany"
+  const { startDate, endDate, productId } = req.query;
 
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
@@ -442,8 +442,8 @@ const { startDate, endDate, productId } = req.query;
 });
 
 const getAdjustmentReport = asyncHandler(async (req, res) => {
-const companyId = "testCompany"
-const { status, startDate, endDate } = req.query;
+  const companyId = "testCompany"
+  const { status, startDate, endDate } = req.query;
 
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
@@ -483,50 +483,40 @@ const { status, startDate, endDate } = req.query;
 });
 
 const getWarehouseReport = asyncHandler(async (req, res) => {
-const companyId = "testCompany"
-const { warehouseId } = req.query;
+  const companyId = "testCompany";
+  const { shopId } = req.query; // former warehouseId - now represent shop locations
 
-  if (warehouseId) validateMongoId(warehouseId);
+  if (shopId) validateMongoId(shopId);
 
-  const filter = { companyId };
-  if (warehouseId) filter['inventory.perWarehouse.warehouseId'] = warehouseId;
+  // Aggregate inventory by shop (based on shopAvailability linking)
+  const pipeline = [
+    { $match: { companyId, 'shopAvailability.shopId': { $exists: true } } },
+    { $unwind: '$shopAvailability' },
+    { $match: shopId ? { 'shopAvailability.shopId': shopId } : {} },
+    { $group: { _id: '$shopAvailability.shopId', totalStock: { $sum: '$inventory.quantity' }, totalValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }, totalProducts: { $sum: 1 } } },
+  ];
 
-  const warehouseStock = await Product.aggregate([
-    { $match: filter },
-    { $unwind: '$inventory.perWarehouse' },
-    { $group: { _id: '$inventory.perWarehouse.warehouseId', totalStock: { $sum: '$inventory.perWarehouse.quantity' }, totalValue: { $sum: { $multiply: ['$inventory.perWarehouse.quantity', '$pricing.cost'] } } } },
-    { $lookup: { from: 'warehouses', localField: '_id', foreignField: '_id', as: 'warehouse' } },
-    { $unwind: '$warehouse' },
-    { $project: { name: '$warehouse.name', totalStock: 1, totalValue: 1, capacity: '$warehouse.capacity' } },
-    { $addFields: { utilizationPct: { $cond: [{ $gt: ['$capacity', 0] }, { $multiply: [{ $divide: ['$totalStock', '$capacity'] }, 100] }, 0 ] } } }
-  ]);
+  const shopStock = await Product.aggregate(pipeline);
 
-  const totalStockAll = warehouseStock.reduce((sum, w) => sum + w.totalStock, 0);
-  const avgUtilization = warehouseStock.length > 0 ? warehouseStock.reduce((sum, w) => sum + w.utilizationPct, 0) / warehouseStock.length : 0;
+  const totalStockAll = shopStock.reduce((sum, s) => sum + s.totalStock, 0);
 
   const report = {
-    totalWarehouses: warehouseStock.length,
+    totalLocations: shopStock.length,
     totalStock: totalStockAll,
-    avgUtilizationPct: Math.round(avgUtilization * 100) / 100 + '%',
-    warehouses: warehouseStock.map(w => ({
-      name: w.name,
-      totalStock: w.totalStock,
-      totalValue: w.totalValue.toFixed(2),
-      utilizationPct: Math.round(w.utilizationPct * 100) / 100 + '%',
-      capacity: w.capacity || 'Unlimited'
-    })),
-    insights: {
-      overUtilized: warehouseStock.filter(w => w.utilizationPct > 80).length,
-      recommendation: avgUtilization > 70 ? 'Rebalance stock across warehouses' : 'Optimal distribution'
-    }
+    locations: shopStock.map(s => ({
+      shopId: s._id,
+      totalProducts: s.totalProducts,
+      totalStock: s.totalStock,
+      totalValue: s.totalValue.toFixed(2)
+    }))
   };
 
   res.json({ success: true, data: report });
 });
 
 const getAlertSummary = asyncHandler(async (req, res) => {
-const companyId = "testCompany"
-const { startDate, endDate } = req.query;
+  const companyId = "testCompany"
+  const { startDate, endDate } = req.query;
 
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
@@ -536,12 +526,14 @@ const { startDate, endDate } = req.query;
   const summary = await Alert.aggregate([
     { $match: filter },
     { $group: { _id: { type: '$type', isResolved: '$isResolved' }, count: { $sum: 1 } } },
-    { $group: { 
-      _id: '$_id.type', 
-      total: { $sum: '$count' }, 
-      resolved: { $sum: { $cond: [{ $eq: ['$isResolved', true] }, '$count', 0 ] } },
-      unresolved: { $sum: { $cond: [{ $eq: ['$isResolved', false] }, '$count', 0 ] } } 
-    } },
+    {
+      $group: {
+        _id: '$_id.type',
+        total: { $sum: '$count' },
+        resolved: { $sum: { $cond: [{ $eq: ['$isResolved', true] }, '$count', 0] } },
+        unresolved: { $sum: { $cond: [{ $eq: ['$isResolved', false] }, '$count', 0] } }
+      }
+    },
     { $sort: { total: -1 } }
   ]);
 
@@ -569,8 +561,8 @@ const { startDate, endDate } = req.query;
 });
 
 const getDiscountImpact = asyncHandler(async (req, res) => {
-const companyId = "testCompany"
-const { startDate, endDate } = req.query;
+  const companyId = "testCompany"
+  const { startDate, endDate } = req.query;
 
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
@@ -579,41 +571,49 @@ const { startDate, endDate } = req.query;
 
   const impact = await Discount.aggregate([
     { $match: filter },
-    { $lookup: {
-      from: 'products',
-      localField: 'productId',
-      foreignField: '_id',
-      as: 'product'
-    } },
+    {
+      $lookup: {
+        from: 'products',
+        localField: 'productId',
+        foreignField: '_id',
+        as: 'product'
+      }
+    },
     { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
-    { $project: { 
-      name: 1, 
-      type: 1, 
-      value: 1, 
-      discountAmount: { $multiply: ['$value', { $ifNull: ['$product.sales.totalSold', 0] }] },
-      salesLift: { $ifNull: ['$product.sales.totalSold', 0] },
-      revenue: { $multiply: [{ $ifNull: ['$product.pricing.basePrice', 0] }, { $ifNull: ['$product.sales.totalSold', 0] }] },
-      cost: { $ifNull: ['$product.pricing.cost', 0] }
-    } },
-    { $group: { 
-      _id: '$type', 
-      count: { $sum: 1 },
-      totalDiscount: { $sum: '$discountAmount' },
-      totalSalesLift: { $sum: '$salesLift' },
-      totalRevenue: { $sum: '$revenue' },
-      totalCost: { $sum: '$cost' },
-      avgMargin: { $avg: { $divide: [{ $subtract: ['$revenue', '$cost'] }, '$revenue'] } }
-    } },
-    { $project: { 
-      type: '$_id', 
-      count: 1, 
-      totalDiscount: { $round: ['$totalDiscount', 2] },
-      totalSalesLift: 1,
-      totalRevenue: { $round: ['$totalRevenue', 2] },
-      totalCost: { $round: ['$totalCost', 2] },
-      roi: { $round: [{ $divide: [{ $subtract: ['$totalRevenue', '$totalCost'] }, '$totalDiscount'] }, 2] },
-      avgMarginPct: { $round: [{ $multiply: ['$avgMargin', 100] }, 2] }
-    } }
+    {
+      $project: {
+        name: 1,
+        type: 1,
+        value: 1,
+        discountAmount: { $multiply: ['$value', { $ifNull: ['$product.sales.totalSold', 0] }] },
+        salesLift: { $ifNull: ['$product.sales.totalSold', 0] },
+        revenue: { $multiply: [{ $ifNull: ['$product.pricing.basePrice', 0] }, { $ifNull: ['$product.sales.totalSold', 0] }] },
+        cost: { $ifNull: ['$product.pricing.cost', 0] }
+      }
+    },
+    {
+      $group: {
+        _id: '$type',
+        count: { $sum: 1 },
+        totalDiscount: { $sum: '$discountAmount' },
+        totalSalesLift: { $sum: '$salesLift' },
+        totalRevenue: { $sum: '$revenue' },
+        totalCost: { $sum: '$cost' },
+        avgMargin: { $avg: { $divide: [{ $subtract: ['$revenue', '$cost'] }, '$revenue'] } }
+      }
+    },
+    {
+      $project: {
+        type: '$_id',
+        count: 1,
+        totalDiscount: { $round: ['$totalDiscount', 2] },
+        totalSalesLift: 1,
+        totalRevenue: { $round: ['$totalRevenue', 2] },
+        totalCost: { $round: ['$totalCost', 2] },
+        roi: { $round: [{ $divide: [{ $subtract: ['$totalRevenue', '$totalCost'] }, '$totalDiscount'] }, 2] },
+        avgMarginPct: { $round: [{ $multiply: ['$avgMargin', 100] }, 2] }
+      }
+    }
   ]);
 
   const totalDiscount = impact.reduce((sum, i) => sum + i.totalDiscount, 0);

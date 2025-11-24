@@ -5,7 +5,6 @@
  */
 
 const Product = require("../../models/Product");
-const Warehouse = require("../../models/Warehouse");
 const { logger } = require("../../utils/logger");
 
 /**
@@ -17,33 +16,8 @@ async function handleShopCreated(data) {
 
     logger.info(`🏪 Processing shop created: ${shopId} (${name})`);
 
-    // 1. Create warehouse entry for the shop
-    const existingWarehouse = await Warehouse.findOne({
-      companyId,
-      name: `Shop: ${name}`,
-    });
-
-    let warehouseId;
-    if (!existingWarehouse) {
-      const warehouse = new Warehouse({
-        companyId,
-        name: `Shop: ${name}`,
-        location: {
-          address: location?.address || "",
-          city: location?.city || "",
-          state: location?.region || "",
-          country: location?.country || "",
-          zipCode: location?.postal_code || "",
-        },
-        isActive: true,
-      });
-      await warehouse.save();
-      warehouseId = warehouse._id;
-      logger.info(`✅ Created warehouse entry for shop ${shopId}`);
-    } else {
-      warehouseId = existingWarehouse._id;
-      logger.info(`ℹ️ Warehouse already exists for shop ${shopId}`);
-    }
+    // Warehouse model removed; no warehouse entry is created for shops.
+    let warehouseId = null;
 
     // 2. Add shop to shopAvailability for all active products in the company
     const result = await Product.updateMany(
@@ -67,9 +41,7 @@ async function handleShopCreated(data) {
       }
     );
 
-    logger.info(
-      `✅ Linked shop ${shopId} to ${result.modifiedCount} products via shopAvailability`
-    );
+    logger.info(`✅ Linked shop ${shopId} to ${result.modifiedCount} products via shopAvailability`);
 
     return { success: true, productsLinked: result.modifiedCount, warehouseId };
   } catch (error) {
@@ -93,7 +65,6 @@ async function handleShopDeleted(data) {
       {
         $pull: {
           shopAvailability: { shopId },
-          "inventory.perWarehouse": { warehouseId: shopId },
         },
       }
     );
@@ -102,13 +73,7 @@ async function handleShopDeleted(data) {
       `✅ Removed shop ${shopId} from ${result.modifiedCount} products`
     );
 
-    // 2. Deactivate warehouse (soft delete)
-    await Warehouse.updateMany(
-      { companyId, name: { $regex: `Shop:.*${shopId}` } },
-      { isActive: false }
-    );
-
-    logger.info(`✅ Deactivated warehouse for shop ${shopId}`);
+    // Warehouse model removed; nothing to deactivate
 
     return { success: true, productsUnlinked: result.modifiedCount };
   } catch (error) {

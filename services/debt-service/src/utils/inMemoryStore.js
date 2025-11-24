@@ -4,7 +4,6 @@
 // WARNING: this is per-process cache for reads and Redis is used as a write-ahead
 // queue. If Redis is unavailable the store falls back to an in-memory queue.
 
-const uuidv4 = require('uuid').v4;
 const mongoose = require('mongoose');
 
 function getRedis() {

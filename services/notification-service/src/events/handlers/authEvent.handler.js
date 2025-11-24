@@ -59,22 +59,21 @@ async function handleUserCreated(data) {
   try {
     logger.info(`👤 New user created: ${email} (${userId})`);
 
-    const notification = await Notification.create({
-      companyId,
-      userId,
-      type: "user_created",
-      title: "Welcome to Invexis",
-      body: "Your account has been created successfully. Please verify your email.",
-      scope: "personal",
-      channels: { email: true, inApp: true },
-      payload: {
+    const { dispatchEvent } = require("../../services/dispatcher");
+
+    await dispatchEvent({
+      event: "user.created",
+      data: {
         email,
         ...data,
       },
+      recipients: [userId],
+      companyId,
+      templateName: "welcome",
+      channels: { email: true, inApp: true }
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ User creation notification queued for user ${userId}`);
+    logger.info(`✅ User creation notification dispatched for user ${userId}`);
   } catch (error) {
     logger.error(`❌ Error creating user notification:`, error.message);
     throw error;

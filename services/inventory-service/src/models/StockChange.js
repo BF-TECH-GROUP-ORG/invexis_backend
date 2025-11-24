@@ -6,20 +6,20 @@ const stockChangeSchema = new Schema({
   companyId: { type: String, required: true, index: true },
   productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
   variationId: { type: Schema.Types.ObjectId, default: null, index: true }, // Added for variant-specific logging, aligning with Product variations
-  changeType: { type: String, enum: ['restock', 'adjustment', 'sale', 'return', 'transfer'], required: true }, // Added 'transfer' for multi-warehouse
+  changeType: { type: String, enum: ['restock', 'adjustment', 'sale', 'return'], required: true },
   quantity: { type: Number, required: true },
   previousStock: { type: Number, required: true },
   newStock: { type: Number, required: true },
   reason: { type: String, trim: true },
   userId: { type: String, default: null },
-  warehouseId: { type: Schema.Types.ObjectId, ref: 'Warehouse', default: null, index: true }, // Added for multi-location support
+  // warehouseId removed - warehouses no longer supported. Keep audit via product-level stock changes.
   changeDate: { type: Date, default: Date.now, index: true }
 });
 
 // Improved indexes for better querying
 stockChangeSchema.index({ companyId: 1, changeDate: -1 });
 
-stockChangeSchema.pre('save', async function(next) {
+stockChangeSchema.pre('save', async function (next) {
   if (this.quantity === 0) {
     return next(new Error('Quantity cannot be zero'));
   }
@@ -28,8 +28,8 @@ stockChangeSchema.pre('save', async function(next) {
   if (['sale', 'adjustment'].includes(this.changeType) && this.quantity > 0) {
     return next(new Error('Quantity must be negative for sale or adjustment'));
   }
-  if (['restock', 'return', 'transfer'].includes(this.changeType) && this.quantity < 0) {
-    return next(new Error('Quantity must be positive for restock, return, or transfer'));
+  if (['restock', 'return'].includes(this.changeType) && this.quantity < 0) {
+    return next(new Error('Quantity must be positive for restock or return'));
   }
 
   // Fetch product and handle variant/warehouse if specified

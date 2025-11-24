@@ -17,7 +17,7 @@ const sendEmailCore = async (notification, userEmail, userId, companyId) => {
 
     let subject, html, text;
 
-    if (emailContent) {
+    if (emailContent && (emailContent.subject || emailContent.html)) {
       subject = emailContent.subject;
       html = emailContent.html;
       text = emailContent.text;

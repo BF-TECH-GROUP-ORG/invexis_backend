@@ -16,7 +16,7 @@ const getAllAlerts = asyncHandler(async (req, res) => {
   const query = { companyId };
   if (type) query.type = type;
   if (isResolved !== undefined) query.isResolved = isResolved === 'true';
-
+''
   const alerts = await Alert.find(query)
     .populate('productId', 'name slug')
     .populate('categoryId', 'name slug')

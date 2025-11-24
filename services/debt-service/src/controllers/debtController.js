@@ -393,7 +393,8 @@ async function markDebtPaid(req, res) {
         if (!companyId) return res.status(400).json({ error: 'companyId required' });
         if (!debtId) return res.status(400).json({ error: 'debtId required' });
 
-        const result = await require('../services/debtService').markDebtPaid({ companyId, debtId, paymentMethod: req.body.paymentMethod, paymentReference: req.body.paymentReference, paymentId: req.body.paymentId });
+        const createdBy = req.body.createdBy || (req.headers['x-user-id'] ? { id: req.headers['x-user-id'], name: req.headers['x-user-name'] || null } : undefined);
+        const result = await require('../services/debtService').markDebtPaid({ companyId, debtId, paymentMethod: req.body.paymentMethod, paymentReference: req.body.paymentReference, paymentId: req.body.paymentId, createdBy });
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -410,7 +411,8 @@ async function cancelDebt(req, res) {
         if (!debtId) return res.status(400).json({ error: 'debtId required' });
 
         const reason = req.body.reason || null;
-        const result = await require('../services/debtService').cancelDebt({ companyId, debtId, reason });
+        const performedBy = req.body.performedBy || (req.headers['x-user-id'] ? { id: req.headers['x-user-id'], name: req.headers['x-user-name'] || null } : undefined);
+        const result = await require('../services/debtService').cancelDebt({ companyId, debtId, reason, performedBy });
         res.json(result);
     } catch (err) {
         console.error(err);

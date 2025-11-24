@@ -1,4 +1,5 @@
 const express = require('express');
+const upload = require('../middleware/upload');
 const {
   createCompany,
   getAllCompanies,
@@ -34,8 +35,8 @@ router.delete('/:id', deleteCompany);
 router.patch('/:id/status', changeCompanyStatus);
 router.patch('/:id/tier', changeCompanyTier);
 
-// Verification routes
-router.post('/:id/verification-docs', uploadCompanyVerificationDocs);
+// Verification routes - use multer for file uploads
+router.post('/:id/verification-docs', upload.array('documents', 10), uploadCompanyVerificationDocs);
 router.patch('/:id/verification', reviewCompanyVerification);
 
 router.patch('/:id/reactivate', reactivateCompany);
