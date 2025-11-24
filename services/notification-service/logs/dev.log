@@ -610,3 +610,11 @@
 {"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-22T20:09:25.753Z"}
 {"level":"info","message":"✅ Database connected","timestamp":"2025-11-22T20:09:25.762Z"}
 {"address":"172.18.0.21","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.21:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.21:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-22T20:09:25.809Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-24T09:12:50.299Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-24T09:12:50.331Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-24T09:12:51.141Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-24T09:12:51.145Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-24T09:12:52.452Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-24T09:12:52.473Z"}
+{"companyId":"b9f76bc0-c372-4023-9eae-0943688eae45","domain":"techhub-rw-1763725478.com","level":"info","message":"🏢 Processing company event: company.updated","name":"Kajo Rwanda ","tier":"Basic","timestamp":"2025-11-24T09:18:13.925Z","traceId":"9203cbff-ce8e-4f20-bc2a-2653984b5200","trace_id":"29de4139-2160-43f1-ac24-226c2cefd603","updatedAt":"2025-11-24T09:18:13.395Z"}
+{"level":"info","message":"📝 Company updated: Kajo Rwanda  (b9f76bc0-c372-4023-9eae-0943688eae45)","timestamp":"2025-11-24T09:18:13.929Z"}

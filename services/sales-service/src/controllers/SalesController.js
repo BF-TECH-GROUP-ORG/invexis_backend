@@ -155,7 +155,7 @@ const createSale = async (req, res) => {
     );
 
     // Create outbox events within transaction (will be published by dispatcher)
-    await saleEvents.created(sale, t);
+    await saleEvents.created(sale, saleItems, t);
     await invoiceEvents.created(invoice, sale, t);
 
     await t.commit();
@@ -175,14 +175,18 @@ const createSale = async (req, res) => {
       // Don't fail the sale creation if PDF generation fails
     }
 
-    return res.status(201).json({
-      sale,
-      items: saleItems,
+    const responseData = {
+      sale: sale.toJSON ? sale.toJSON() : sale,
+      items: saleItems.map(item => item.toJSON ? item.toJSON() : item),
       invoice: {
-        ...invoice.toJSON(),
+        ...(invoice.toJSON ? invoice.toJSON() : invoice),
         pdfUrl: invoice.pdfUrl || `/invoices/pdf/${invoice.invoiceId}`,
       },
-    });
+    };
+
+    console.log(' Response being sent:', JSON.stringify(responseData, null, 2));
+
+    return res.status(201).json(responseData);
   } catch (error) {
     await t.rollback();
     console.error("createSale error:", error);
@@ -231,12 +235,186 @@ const updateSale = async (req, res) => {
     if (!sale) return res.status(404).json({ message: "Sale not found" });
 
     await sale.update(payload);
-    return res.json({ message: "Sale updated", sale });
+
+    return res.json({ message: "Sale updated", sale: sale.toJSON() });
   } catch (error) {
     console.error("updateSale error:", error);
     return res.status(500).json({ error: error.message });
   }
 };
+
+/**
+ * Update sale contents (customer info, items, amounts)
+ * Handles adding, updating, and removing sale items
+ */
+const updateSaleContents = async (req, res) => {
+  const t = await Sale.sequelize.transaction();
+
+  try {
+    const { id } = req.params;
+    const {
+      customerId,
+      customerName,
+      customerEmail,
+      customerPhone,
+      items = [],
+      notes
+    } = req.body;
+
+    // Find the sale with items
+    const sale = await Sale.findByPk(id, {
+      include: [{ model: SalesItem, as: "items" }],
+      transaction: t
+    });
+
+    if (!sale) {
+      await t.rollback();
+      return res.status(404).json({ message: "Sale not found" });
+    }
+
+    // Only allow updating if sale is in draft or initiated status
+    if (!['draft', 'initiated'].includes(sale.status)) {
+      await t.rollback();
+      return res.status(400).json({
+        message: "Cannot update sale contents after it has been confirmed"
+      });
+    }
+
+    // Update sale basic info
+    const saleUpdates = {};
+    if (customerId !== undefined) saleUpdates.customerId = customerId;
+    if (customerName !== undefined) saleUpdates.customerName = customerName;
+    if (customerEmail !== undefined) saleUpdates.customerEmail = customerEmail;
+    if (customerPhone !== undefined) saleUpdates.customerPhone = customerPhone;
+    if (notes !== undefined) saleUpdates.notes = notes;
+
+    if (Object.keys(saleUpdates).length > 0) {
+      await sale.update(saleUpdates, { transaction: t });
+    }
+
+    // Handle items if provided
+    if (items && items.length > 0) {
+      // Validate items first
+      for (const item of items) {
+        if (!item.productId) {
+          if (!t.finished) await t.rollback();
+          return res.status(400).json({
+            error: 'Each item must have a productId'
+          });
+        }
+        if (!item.productName) {
+          if (!t.finished) await t.rollback();
+          return res.status(400).json({
+            error: 'Each item must have a productName'
+          });
+        }
+        if (!item.quantity || item.quantity <= 0) {
+          if (!t.finished) await t.rollback();
+          return res.status(400).json({
+            error: 'Each item must have a valid quantity'
+          });
+        }
+        if (item.unitPrice === undefined || item.unitPrice === null) {
+          if (!t.finished) await t.rollback();
+          return res.status(400).json({
+            error: 'Each item must have a unitPrice'
+          });
+        }
+        if (item.total === undefined || item.total === null) {
+          if (!t.finished) await t.rollback();
+          return res.status(400).json({
+            error: 'Each item must have a total'
+          });
+        }
+      }
+
+      // Get existing item IDs
+      const existingItemIds = sale.items.map(item => item.saleItemId);
+      const updatedItemIds = items
+        .filter(item => item.saleItemId)
+        .map(item => item.saleItemId);
+
+      // Delete items that are no longer in the list
+      const itemsToDelete = existingItemIds.filter(id => !updatedItemIds.includes(id));
+      if (itemsToDelete.length > 0) {
+        await SalesItem.destroy({
+          where: { saleItemId: itemsToDelete },
+          transaction: t
+        });
+      }
+
+      // Process each item (update existing or create new)
+      for (const item of items) {
+        const itemData = {
+          saleId: sale.saleId,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount: item.discount || 0,
+          tax: item.tax || 0,
+          total: item.total
+        };
+
+        if (item.saleItemId) {
+          // Update existing item
+          await SalesItem.update(itemData, {
+            where: { saleItemId: item.saleItemId },
+            transaction: t
+          });
+        } else {
+          // Create new item
+          await SalesItem.create(itemData, { transaction: t });
+        }
+      }
+
+      // Recalculate sale totals
+      const updatedItems = await SalesItem.findAll({
+        where: { saleId: sale.saleId },
+        transaction: t
+      });
+
+      const subTotal = updatedItems.reduce((sum, item) =>
+        sum + parseFloat(item.unitPrice) * item.quantity, 0
+      );
+      const discountTotal = updatedItems.reduce((sum, item) =>
+        sum + parseFloat(item.discount || 0), 0
+      );
+      const taxTotal = updatedItems.reduce((sum, item) =>
+        sum + parseFloat(item.tax || 0), 0
+      );
+      const totalAmount = subTotal - discountTotal + taxTotal;
+
+      await sale.update({
+        subTotal,
+        discountTotal,
+        taxTotal,
+        totalAmount
+      }, { transaction: t });
+    }
+
+    await t.commit();
+
+    // Fetch updated sale with items
+    const updatedSale = await Sale.findByPk(id, {
+      include: [{ model: SalesItem, as: "items" }]
+    });
+
+    return res.json({
+      message: "Sale contents updated successfully",
+      sale: updatedSale.toJSON()
+    });
+
+  } catch (error) {
+    // Only rollback if transaction hasn't been rolled back or committed yet
+    if (!t.finished) {
+      await t.rollback();
+    }
+    console.error("updateSaleContents error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
 
 const deleteSale = async (req, res) => {
   try {
@@ -505,6 +683,7 @@ module.exports = {
   createSale,
   getSale,
   updateSale,
+  updateSaleContents,
   deleteSale,
   createReturn,
   listSales,

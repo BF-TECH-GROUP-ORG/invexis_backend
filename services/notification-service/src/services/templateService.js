@@ -1,10 +1,10 @@
 // src/services/templateService.js
 const Handlebars = require("handlebars");
-const Template = require("../models/Template");
+
 const logger = require("../utils/logger");
 
 // Register Handlebars helpers
-Handlebars.registerHelper('formatDate', function(date, format) {
+Handlebars.registerHelper('formatDate', function (date, format) {
   if (!date) return '';
   const d = new Date(date);
   if (format === 'short') {
@@ -22,7 +22,7 @@ Handlebars.registerHelper('formatDate', function(date, format) {
   return d.toISOString();
 });
 
-Handlebars.registerHelper('formatCurrency', function(amount, currency) {
+Handlebars.registerHelper('formatCurrency', function (amount, currency) {
   if (typeof amount !== 'number') return amount;
   const currencyCode = (typeof currency === 'string') ? currency : 'USD';
   return new Intl.NumberFormat('en-US', {
@@ -31,51 +31,60 @@ Handlebars.registerHelper('formatCurrency', function(amount, currency) {
   }).format(amount);
 });
 
-Handlebars.registerHelper('truncate', function(str, length = 50) {
+Handlebars.registerHelper('truncate', function (str, length = 50) {
   if (!str || typeof str !== 'string') return str;
   return str.length > length ? str.substring(0, length) + '...' : str;
 });
 
-Handlebars.registerHelper('uppercase', function(str) {
+Handlebars.registerHelper('uppercase', function (str) {
   return str ? str.toString().toUpperCase() : '';
 });
 
-Handlebars.registerHelper('lowercase', function(str) {
+Handlebars.registerHelper('lowercase', function (str) {
   return str ? str.toString().toLowerCase() : '';
 });
 
-Handlebars.registerHelper('eq', function(a, b) {
+Handlebars.registerHelper('eq', function (a, b) {
   return a === b;
 });
 
-Handlebars.registerHelper('ne', function(a, b) {
+Handlebars.registerHelper('ne', function (a, b) {
   return a !== b;
 });
 
-Handlebars.registerHelper('gt', function(a, b) {
+Handlebars.registerHelper('gt', function (a, b) {
   return a > b;
 });
 
-Handlebars.registerHelper('lt', function(a, b) {
+Handlebars.registerHelper('lt', function (a, b) {
   return a < b;
 });
 
-Handlebars.registerHelper('and', function(a, b) {
+Handlebars.registerHelper('and', function (a, b) {
   return a && b;
 });
 
-Handlebars.registerHelper('or', function(a, b) {
+Handlebars.registerHelper('or', function (a, b) {
   return a || b;
 });
 
-Handlebars.registerHelper('default', function(value, defaultValue) {
+Handlebars.registerHelper('default', function (value, defaultValue) {
   return value || defaultValue;
 });
 
 // Current year helper for copyright notices
-Handlebars.registerHelper('currentYear', function() {
+Handlebars.registerHelper('currentYear', function () {
   return new Date().getFullYear();
 });
+
+/**
+ * Compile templates for all enabled channels
+ * @param {string} templateName - Name of the template
+ * @param {object} payload - Data to compile template with
+ * @param {object} channels - Enabled channels {email: true, sms: false, etc}
+ * @returns {object} Compiled content for each channel
+ */
+const templatesRegistry = require("../config/templates");
 
 /**
  * Compile templates for all enabled channels
@@ -89,33 +98,38 @@ const compileTemplatesForChannels = async (templateName, payload, channels) => {
   const compiledContent = {};
 
   try {
-    // Fetch all templates for this name and enabled channels
-    const templates = await Template.find({
-      name: templateName,
-      type: { $in: enabledChannels },
-      isActive: true
-    });
+    // Look up template in local registry
+    const templateGroup = templatesRegistry[templateName];
 
-    if (templates.length === 0) {
-      logger.warn(`No templates found for ${templateName} with channels: ${enabledChannels.join(', ')}`);
+    if (!templateGroup) {
+      logger.warn(`No templates found for ${templateName} in registry`);
       return getDefaultContent(enabledChannels);
     }
 
-    // Compile each template
-    for (const template of templates) {
-      try {
-        const compiled = await compileTemplateForChannel(template, payload);
-        compiledContent[template.type] = compiled;
-      } catch (error) {
-        logger.error(`Error compiling ${template.type} template for ${templateName}:`, error);
-        compiledContent[template.type] = getDefaultContentForChannel(template.type);
-      }
-    }
-
-    // Add default content for missing channels
+    // Compile for each enabled channel
     for (const channel of enabledChannels) {
-      if (!compiledContent[channel]) {
+      const templateDef = templateGroup[channel];
+
+      if (!templateDef) {
         logger.warn(`Template ${templateName} missing for channel ${channel}, using default`);
+        compiledContent[channel] = getDefaultContentForChannel(channel);
+        continue;
+      }
+
+      try {
+        // Construct a template object similar to what the DB would return
+        const templateObj = {
+          name: templateName,
+          type: channel,
+          content: templateDef.content,
+          subject: templateDef.subject,
+          metadata: templateDef.metadata || {}
+        };
+
+        const compiled = await compileTemplateForChannel(templateObj, payload);
+        compiledContent[channel] = compiled;
+      } catch (error) {
+        logger.error(`Error compiling ${channel} template for ${templateName}:`, error);
         compiledContent[channel] = getDefaultContentForChannel(channel);
       }
     }
@@ -156,7 +170,7 @@ const compileTemplateForChannel = async (template, payload) => {
 const compileEmailTemplate = (template, payload, hbsTemplate) => {
   const htmlContent = hbsTemplate(payload);
   const subject = template.subject ? Handlebars.compile(template.subject)(payload) :
-                  payload.title || "Notification";
+    payload.title || "Notification";
 
   return {
     subject,

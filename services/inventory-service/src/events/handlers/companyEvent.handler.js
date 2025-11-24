@@ -77,6 +77,11 @@ module.exports = async function handleCompanyEvent(event) {
     logger.info(`🏢 Processing company event: ${type}`);
 
     switch (type) {
+      case 'company.created':
+        // No action needed for inventory service on company creation
+        logger.info(`✅ Company created acknowledged: ${data.companyId || 'unknown'}`);
+        break;
+
       case 'company.deleted':
         await handleCompanyDeleted(data);
         break;

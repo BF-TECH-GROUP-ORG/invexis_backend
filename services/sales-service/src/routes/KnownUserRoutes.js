@@ -1,38 +1,38 @@
 const express = require("express");
 const router = express.Router();
 const knownUserController = require("../controllers/KnownUserController");
-const {
-  checkSubscriptionActive,
-  checkFeatureAccess,
-  checkRateLimits,
-} = require("/app/shared/middlewares/subscription");
+// const {
+//   checkSubscriptionActive,
+//   checkFeatureAccess,
+//   checkRateLimits,
+// } = require("/app/shared/middlewares/subscription");
 
 // Apply rate limiting
-router.use(
-  checkRateLimits({
-    limits: { basic: 200, mid: 1000, pro: 5000 },
-    windowMs: 60000,
-    companyIdSource: "body",
-    companyIdField: "company_id",
-  })
-);
+// router.use(
+//   checkRateLimits({
+//     limits: { basic: 200, mid: 1000, pro: 5000 },
+//     windowMs: 60000,
+//     companyIdSource: "body",
+//     companyIdField: "company_id",
+//   })
+// );
 
 // Apply subscription validation for modifying operations
-router.use((req, res, next) => {
-  if (["POST", "PUT", "DELETE"].includes(req.method)) {
-    return checkSubscriptionActive({
-      companyIdSource: "body",
-      companyIdField: "company_id",
-    })(req, res, next);
-  }
-  next();
-});
+// router.use((req, res, next) => {
+//   if (["POST", "PUT", "DELETE"].includes(req.method)) {
+//     return checkSubscriptionActive({
+//       companyIdSource: "body",
+//       companyIdField: "company_id",
+//     })(req, res, next);
+//   }
+//   next();
+// });
 
 /**
  * POST /known-users
  * Create a new KnownUser
  */
-router.post("/", checkFeatureAccess("sales", "internalStaffSales"), knownUserController.createKnownUser);
+router.post("/", knownUserController.createKnownUser);
 
 /**
  * GET /known-users/search
@@ -61,7 +61,7 @@ router.get("/:id", knownUserController.getKnownUser);
  */
 router.put(
   "/:id",
-  checkFeatureAccess("sales", "internalStaffSales"),
+  // checkFeatureAccess("sales", "internalStaffSales"),
   knownUserController.updateKnownUser
 );
 
@@ -71,7 +71,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  checkFeatureAccess("sales", "internalStaffSales"),
+  // checkFeatureAccess("sales", "internalStaffSales"),
   knownUserController.deactivateKnownUser
 );
 

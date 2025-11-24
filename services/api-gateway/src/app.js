@@ -80,7 +80,25 @@ app.use("/api", limiter);
  * 3. checkFeatureAccess - Feature enabled for tier
  * 4. checkRateLimits - Within tier rate limits
  */
+app.use("/api/auth", authLimiter, authProxy);
 
+// Protected services (require authentication - enforced by services themselves)
+app.use("/api/company", companyProxy);
+app.use("/api/shop", shopProxy);
+app.use("/api/inventory", inventoryProxy);
+app.use("/api/sales", salesProxy);
+app.use("/api/payment", paymentProxy);
+app.use("/api/ecommerce", ecommerceProxy);
+app.use("/api/notification", notificationProxy);
+app.use("/api/analytics", analyticsProxy);
+app.use("/api/audit", auditProxy);
+app.use("/api/debt", debtProxy);
+
+// Socket.IO specific routes (add these before other websocket routes)
+app.use("/socket.io", websocketProxy);
+
+// General websocket routes
+app.use("/api/websocket", websocketProxy);
  /**
 these routes will be applied when uncommented during freemium implementation
  * app.use("/api/auth", authLimiter, authProxy);
