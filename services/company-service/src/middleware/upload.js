@@ -1,20 +1,39 @@
 const multer = require('multer');
-const path = require('path');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    // Store files in uploads/verification-docs directory
-    cb(null, 'uploads/verification-docs');
-  },
-  filename: function (req, file, cb) {
-    // Create unique filename: companyId_timestamp_originalname
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Configure Cloudinary storage
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    // Get company ID from params
     const companyId = req.params.id;
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const nameWithoutExt = path.basename(file.originalname, ext);
-    cb(null, `${companyId}_${uniqueSuffix}_${nameWithoutExt}${ext}`);
-  }
+
+    // Determine file format based on mimetype
+    let format;
+    if (file.mimetype === 'application/pdf') {
+      format = 'pdf';
+    } else if (file.mimetype.startsWith('image/')) {
+      format = file.mimetype.split('/')[1]; // jpeg, png, etc.
+    } else {
+      format = 'auto';
+    }
+
+    return {
+      folder: `verification-docs/${companyId}`,
+      format: format,
+      resource_type: 'auto', // Automatically detect resource type (image, raw, video)
+      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
+    };
+  },
 });
 
 // File filter - only allow certain file types
@@ -37,13 +56,14 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer
+// Configure multer with Cloudinary storage
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB max file size
-  }
+  },
 });
 
 module.exports = upload;
+

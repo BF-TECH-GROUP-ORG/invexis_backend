@@ -355,7 +355,6 @@ services:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
-      - ./services/company-service/uploads:/app/uploads
       - ./services/company-service:/app
     depends_on:
       company-postgres:

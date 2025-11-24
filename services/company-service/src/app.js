@@ -16,9 +16,6 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded files statically
-app.use('/uploads', express.static('uploads'));
-
 // CORS middleware (configure as needed)
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");

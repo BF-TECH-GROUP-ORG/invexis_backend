@@ -584,7 +584,7 @@ const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
 
   const nowIso = new Date().toISOString();
 
-  // Process uploaded files from multer
+  // Process uploaded files from Cloudinary
   const newDocs = req.files.map((file, index) => {
     // Get document type from form data if provided
     const docTypeField = `documentType_${index}`;
@@ -594,10 +594,12 @@ const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
       id: `doc_${Date.now()}_${index}`,
       type: req.body[docTypeField] || file.mimetype,
       name: file.originalname,
-      url: `/uploads/verification-docs/${file.filename}`, // Store relative path
-      filename: file.filename, // Store actual filename
+      url: file.path, // Cloudinary URL (secure_url)
+      cloudinary_public_id: file.filename, // Cloudinary public ID
       size: file.size,
       mimetype: file.mimetype,
+      format: file.format,
+      resource_type: file.resource_type,
       notes: req.body[docNotesField] || null,
       uploadedAt: nowIso,
       uploadedBy: userId,
