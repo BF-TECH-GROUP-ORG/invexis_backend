@@ -140,7 +140,7 @@ const getCompanyById = asyncHandler(async (req, res) => {
  * @access  Public
  */
 const getCompanyByDomain = asyncHandler(async (req, res) => {
-  const domain  = req.params.domain;
+  const domain = req.params.domain;
   console.log(domain)
   const company = await Company.findCompanyByDomain(domain);
 
@@ -553,11 +553,11 @@ const setCompanyCategories = asyncHandler(async (req, res) => {
  */
 const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { documents } = req.body;
 
-  if (!documents || !Array.isArray(documents) || documents.length === 0) {
+  // Check if files were uploaded
+  if (!req.files || req.files.length === 0) {
     res.status(400);
-    throw new Error("documents must be a non-empty array");
+    throw new Error("No files uploaded. Please upload at least one document.");
   }
 
   const company = await Company.findCompanyById(id);
@@ -584,15 +584,25 @@ const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
 
   const nowIso = new Date().toISOString();
 
-  const newDocs = documents.map((doc, index) => ({
-    id: doc.id || `doc_${Date.now()}_${index}`,
-    type: doc.type || null,
-    name: doc.name || null,
-    url: doc.url || null,
-    notes: doc.notes || null,
-    uploadedAt: doc.uploadedAt || nowIso,
-    uploadedBy: doc.uploadedBy || userId,
-  }));
+  // Process uploaded files from multer
+  const newDocs = req.files.map((file, index) => {
+    // Get document type from form data if provided
+    const docTypeField = `documentType_${index}`;
+    const docNotesField = `documentNotes_${index}`;
+
+    return {
+      id: `doc_${Date.now()}_${index}`,
+      type: req.body[docTypeField] || file.mimetype,
+      name: file.originalname,
+      url: `/uploads/verification-docs/${file.filename}`, // Store relative path
+      filename: file.filename, // Store actual filename
+      size: file.size,
+      mimetype: file.mimetype,
+      notes: req.body[docNotesField] || null,
+      uploadedAt: nowIso,
+      uploadedBy: userId,
+    };
+  });
 
   metadata.verification = {
     ...existingVerification,
@@ -620,6 +630,7 @@ const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
     success: true,
     message: "Verification documents uploaded successfully",
     data: updatedCompany,
+    uploadedFiles: newDocs,
   });
 });
 
