@@ -53,8 +53,8 @@ app.use(
 app.set("trust proxy", 1);
 
 // Body parsing middleware
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ }));
+app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -121,8 +121,28 @@ app.use("/socket.io", websocketProxy);
 // General websocket routes
 app.use("/api/websocket", websocketProxy);
 
-// */
-// // Auth service (public routes, no subscription check needed)
+*/
+ app.use("/api/auth", authLimiter, authProxy);
+
+// Protected services (require authentication - enforced by services themselves)
+app.use("/api/company", companyProxy);
+app.use("/api/shop", shopProxy);
+app.use("/api/inventory", inventoryProxy);
+app.use("/api/sales", salesProxy);
+app.use("/api/payment", paymentProxy);
+app.use("/api/ecommerce", ecommerceProxy);
+app.use("/api/notification", notificationProxy);
+app.use("/api/analytics", analyticsProxy);
+app.use("/api/audit", auditProxy);
+app.use("/api/debt", debtProxy);
+
+// Socket.IO specific routes (add these before other websocket routes)
+app.use("/socket.io", websocketProxy);
+
+// General websocket routes
+app.use("/api/websocket", websocketProxy);
+
+// Auth service (public routes, no subscription check needed)
 // app.use("/api/auth", authLimiter, authProxy);
 
 // // ============================================================================

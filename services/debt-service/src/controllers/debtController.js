@@ -64,6 +64,48 @@ async function listCompanyDebts(req, res) {
     }
 }
 
+// List paid debts for a company (convenience route)
+async function listCompanyPaidDebts(req, res) {
+    try {
+        const companyId = req.params.companyId || req.headers['x-company-id'];
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ companyId, status: 'PAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// List partially-paid debts for a company
+async function listCompanyPartiallyPaidDebts(req, res) {
+    try {
+        const companyId = req.params.companyId || req.headers['x-company-id'];
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ companyId, status: 'PARTIALLY_PAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// List unpaid debts for a company
+async function listCompanyUnpaidDebts(req, res) {
+    try {
+        const companyId = req.params.companyId || req.headers['x-company-id'];
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ companyId, status: 'UNPAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
 async function listShopDebts(req, res) {
     try {
         const shopId = req.params.shopId;
@@ -77,10 +119,94 @@ async function listShopDebts(req, res) {
     }
 }
 
+// List paid debts for a shop (convenience route)
+async function listShopPaidDebts(req, res) {
+    try {
+        const shopId = req.params.shopId;
+        const companyId = req.body.companyId || req.headers['x-company-id'];
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ companyId, shopId, status: 'PAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// List partially-paid debts for a shop
+async function listShopPartiallyPaidDebts(req, res) {
+    try {
+        const shopId = req.params.shopId;
+        const companyId = req.body.companyId || req.headers['x-company-id'];
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ companyId, shopId, status: 'PARTIALLY_PAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// List unpaid debts for a shop
+async function listShopUnpaidDebts(req, res) {
+    try {
+        const shopId = req.params.shopId;
+        const companyId = req.body.companyId || req.headers['x-company-id'];
+        if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ companyId, shopId, status: 'UNPAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
 async function listCustomerDebts(req, res) {
     try {
         const customerId = req.params.customerId;
         const result = await debtService.listDebts({ customerId });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// List paid debts for a customer (convenience route)
+async function listCustomerPaidDebts(req, res) {
+    try {
+        const customerId = req.params.customerId;
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ customerId, status: 'PAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// List partially-paid debts for a customer
+async function listCustomerPartiallyPaidDebts(req, res) {
+    try {
+        const customerId = req.params.customerId;
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ customerId, status: 'PARTIALLY_PAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// List unpaid debts for a customer
+async function listCustomerUnpaidDebts(req, res) {
+    try {
+        const customerId = req.params.customerId;
+        const { page, limit } = req.query;
+        const result = await debtService.listDebts({ customerId, status: 'UNPAID', page: Number(page) || 1, limit: Number(limit) || 50 });
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -109,25 +235,19 @@ async function internalLookup(req, res) {
         const { isValidHashedCustomerId } = require('../utils/hashedId');
         if (!isValidHashedCustomerId(hashedCustomerId)) return res.status(400).json({ error: 'malformed hashedCustomerId' });
 
-        // Try cache first
-        const getRedis = () => {
-            if (global && global.redisClient) return global.redisClient;
-            try { return require('/app/shared/redis.js'); } catch (e) { try { return require('../shared/redis'); } catch (e2) { return null; } }
-        };
-        const redis = getRedis();
+        // Try cache first (use shared cache helpers)
+        const cache = require('../utils/cache');
         const cacheKey = `debt:lookup:${hashedCustomerId}`;
         try {
-            if (redis && redis.get) {
-                const cached = await redis.get(cacheKey);
-                if (cached) return res.json(JSON.parse(cached));
-            }
+            const cached = await cache.get(cacheKey);
+            if (cached) return res.json(JSON.parse(cached));
         } catch (e) { /* swallow cache errors */ }
 
         const crossRepo = require('../repositories/crossCompanyRepository');
         const summary = await crossRepo.findByHashedCustomerId(hashedCustomerId);
         if (!summary) {
             const out = { exists: false, hashedCustomerId, lastUpdated: new Date() };
-            try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(out), 'EX', 30); } catch (e) { }
+            try { await cache.set(cacheKey, out, 30); } catch (e) { }
             return res.json(out);
         }
 
@@ -151,7 +271,7 @@ async function internalLookup(req, res) {
             correlationId: null
         };
 
-        try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(out), 'EX', 30); } catch (e) { }
+        try { await cache.set(cacheKey, out, 30); } catch (e) { }
         // Emit a lookup event so sales-service (or other interested consumers) can be notified of POS lookups.
         try {
             const inMemoryStore = require('../utils/inMemoryStore');
@@ -216,7 +336,15 @@ async function crossCompanyCustomerDebts(req, res) {
         const hashedId = req.params.hashedId;
         const requestingCompanyId = req.query.companyId || req.headers['x-company-id'];
         if (!hashedId) return res.status(400).json({ error: 'hashedCustomerId required' });
+        const cache = require('../utils/cache');
+        const cacheKey = `debt:customer:${hashedId}:debts`;
+        try {
+            const cached = await cache.get(cacheKey);
+            if (cached) return res.json({ debts: JSON.parse(cached) });
+        } catch (e) { /* swallow cache errors */ }
+
         const results = await require('../services/debtService').crossCompanyCustomerDebts({ hashedCustomerId: hashedId, requestingCompanyId });
+        try { await cache.set(cacheKey, results, 30); } catch (e) { }
         res.json({ debts: results });
     } catch (err) {
         console.error(err);
@@ -265,7 +393,8 @@ async function markDebtPaid(req, res) {
         if (!companyId) return res.status(400).json({ error: 'companyId required' });
         if (!debtId) return res.status(400).json({ error: 'debtId required' });
 
-        const result = await require('../services/debtService').markDebtPaid({ companyId, debtId, paymentMethod: req.body.paymentMethod, paymentReference: req.body.paymentReference, paymentId: req.body.paymentId });
+        const createdBy = req.body.createdBy || (req.headers['x-user-id'] ? { id: req.headers['x-user-id'], name: req.headers['x-user-name'] || null } : undefined);
+        const result = await require('../services/debtService').markDebtPaid({ companyId, debtId, paymentMethod: req.body.paymentMethod, paymentReference: req.body.paymentReference, paymentId: req.body.paymentId, createdBy });
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -282,7 +411,8 @@ async function cancelDebt(req, res) {
         if (!debtId) return res.status(400).json({ error: 'debtId required' });
 
         const reason = req.body.reason || null;
-        const result = await require('../services/debtService').cancelDebt({ companyId, debtId, reason });
+        const performedBy = req.body.performedBy || (req.headers['x-user-id'] ? { id: req.headers['x-user-id'], name: req.headers['x-user-name'] || null } : undefined);
+        const result = await require('../services/debtService').cancelDebt({ companyId, debtId, reason, performedBy });
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -311,4 +441,16 @@ module.exports = {
     ,
     markDebtPaid,
     cancelDebt
+    ,
+    listCompanyPaidDebts
+    ,
+    listShopPaidDebts,
+    listCustomerPaidDebts
+    ,
+    listCompanyPartiallyPaidDebts,
+    listCompanyUnpaidDebts,
+    listShopPartiallyPaidDebts,
+    listShopUnpaidDebts,
+    listCustomerPartiallyPaidDebts,
+    listCustomerUnpaidDebts
 };

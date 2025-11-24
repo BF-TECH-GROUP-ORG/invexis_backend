@@ -28,38 +28,53 @@ async function createDebt(payload) {
             companyId,
             shopId,
             customerId,
+            customer, // optional object: { id, name, phone }
             salesId,
             salesStaffId,
-            items = [],
+            createdBy, // optional actor: { id, name }
+            items = [], // each item must include itemName
             totalAmount,
             amountPaidNow = 0,
             dueDate,
             consentRef,
-            shareLevel = 'NONE'
+            shareLevel = 'NONE',
+            hashedCustomerId: providedHashed
         } = payload;
 
-        const balance = Number(totalAmount) - Number(amountPaidNow);
+        const balance = Number(totalAmount || 0) - Number(amountPaidNow || 0);
         const status = await computeStatus(totalAmount, amountPaidNow);
 
         // Ensure we never persist raw identifiers: compute hashedCustomerId if a raw identifier is provided
-        const hashedCustomerId = payload.hashedCustomerId || (payload.rawCustomerIdentifier ? hashIdentifier(payload.rawCustomerIdentifier) : undefined);
+        const hashedCustomerId = providedHashed || (payload.rawCustomerIdentifier ? hashIdentifier(payload.rawCustomerIdentifier) : undefined);
+
+        // Normalize customer object: prefer explicit customer object, otherwise use customerId
+        const customerObj = customer && customer.id ? customer : (customerId ? { id: customerId } : undefined);
+
+        // Validate items: each item must have itemName
+        if (!Array.isArray(items) || items.some(i => !i.itemName)) {
+            throw new Error('Each item must include itemName');
+        }
 
         const debtDoc = {
             companyId,
             shopId,
-            customerId,
+            // keep customerId for queries but also embed customer object for frontend
+            customerId: customerObj ? customerObj.id : undefined,
+            customer: customerObj,
             hashedCustomerId,
             salesId,
             salesStaffId,
-            items,
             totalAmount,
             amountPaidNow,
             balance,
+            createdBy: createdBy || undefined,
+            updatedBy: createdBy || undefined,
             status,
             dueDate,
             consentRef,
             shareLevel,
-            balanceHistory: [{ date: new Date(), balance }]
+            balanceHistory: [{ date: new Date(), balance }],
+            isDeleted: false
         };
 
         // Fast path: write to in-memory store + Redis-backed queue and return immediately
@@ -71,12 +86,12 @@ async function createDebt(payload) {
         // Fire-and-forget: enqueue summaries, events, publish immediate (best-effort), invalidate cache
         Promise.all([
             // Enqueue summary updates into the same durable pipeline
-            inMemoryStore.enqueueSummary({ type: 'customer', op: 'onCreate', data: { companyId, customerId, totalAmount, amountPaidNow } }),
+            inMemoryStore.enqueueSummary({ type: 'customer', op: 'onCreate', data: { companyId, customerId: customerObj ? customerObj.id : customerId, totalAmount, amountPaidNow } }),
             inMemoryStore.enqueueSummary({ type: 'shop', op: 'onCreate', data: { companyId, shopId, totalAmount, amountPaidNow } }),
             inMemoryStore.enqueueSummary({ type: 'company', op: 'onCreate', data: { companyId, totalAmount, amountPaidNow } }),
             // enqueue outbox event (persisted by persister)
             (async () => {
-                try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_CREATED', payload: { debtId: saved._id, companyId, shopId, customerId } }); } catch (e) { /* swallow */ }
+                try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_CREATED', payload: { debtId: saved._id, companyId, shopId, customerId: customerObj ? customerObj.id : customerId } }); } catch (e) { /* swallow */ }
             })(),
             // cross-company summary upsert (persisted by persister)
             (async () => {
@@ -108,7 +123,7 @@ async function createDebt(payload) {
             (async () => {
                 try {
                     if (global && typeof global.rabbitmqPublish === 'function') {
-                        await global.rabbitmqPublish('debt.created', { debtId: saved._id, companyId, shopId, customerId });
+                        await global.rabbitmqPublish('debt.created', { debtId: saved._id, companyId, shopId, customerId: customerObj ? customerObj.id : customerId });
                     }
                 } catch (e) { /* swallow */ }
             })(),
@@ -132,7 +147,7 @@ async function createDebt(payload) {
 async function recordRepayment(payload) {
     const perf = require('../utils/perf');
     return perf.measureAsync('recordRepayment', async () => {
-        const { debtId, companyId, shopId, customerId, amountPaid, paymentMethod = 'CASH', paymentReference, paymentId } = payload;
+        const { debtId, companyId, shopId, customerId, customer, amountPaid, paymentMethod = 'CASH', paymentReference, paymentId, createdBy } = payload;
 
         // Idempotency check: prevent duplicate repayments via Redis deduplication key
         if (paymentId) {
@@ -156,12 +171,14 @@ async function recordRepayment(payload) {
         const repayment = inMemoryStore.createRepayment({
             companyId,
             shopId,
-            customerId,
+            customerId: customer && customer.id ? customer.id : customerId,
+            customer: customer || (customerId ? { id: customerId } : undefined),
             debtId,
             paymentId: paymentId || new mongoose.Types.ObjectId(),
             amountPaid,
             paymentMethod,
-            paymentReference
+            paymentReference,
+            createdBy: createdBy || undefined
         });
 
         // Update debt in-memory for immediate read availability
@@ -180,10 +197,10 @@ async function recordRepayment(payload) {
         const result = { debt, repayment };
         Promise.all([
             // Enqueue summary updates into the same durable pipeline
-            inMemoryStore.enqueueSummary({ type: 'customer', op: 'onRepayment', data: { companyId, customerId, amountPaid } }),
+            inMemoryStore.enqueueSummary({ type: 'customer', op: 'onRepayment', data: { companyId, customerId: customer && customer.id ? customer.id : customerId, amountPaid } }),
             inMemoryStore.enqueueSummary({ type: 'shop', op: 'onRepayment', data: { companyId, shopId, amountPaid } }),
             inMemoryStore.enqueueSummary({ type: 'company', op: 'onRepayment', data: { companyId, amountPaid } }),
-            (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_REPAID', payload: { debtId: debt._id, repaymentId: repayment._id, companyId, shopId, customerId } }); } catch (e) { } })(),
+            (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_REPAID', payload: { debtId: debt._id, repaymentId: repayment._id, companyId, shopId, customerId: customer && customer.id ? customer.id : customerId } }); } catch (e) { } })(),
             (async () => {
                 try {
                     if (global && typeof global.rabbitmqPublish === 'function') {
@@ -552,7 +569,7 @@ async function softDeleteDebt({ companyId, debtId }) {
 }
 
 // Mark a debt as paid (creates a repayment for the remaining balance if needed)
-async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', paymentReference, paymentId }) {
+async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', paymentReference, paymentId, createdBy }) {
     const perf = require('../utils/perf');
     return perf.measureAsync('markDebtPaid', async () => {
         const debt = await debtRepo.findById(debtId, companyId);
@@ -567,11 +584,13 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
                 companyId,
                 shopId: debt.shopId,
                 customerId: debt.customerId,
+                customer: debt.customer || undefined,
                 debtId: debt._id,
                 paymentId: paymentId || new mongoose.Types.ObjectId(),
                 amountPaid: remaining,
                 paymentMethod,
-                paymentReference
+                paymentReference,
+                createdBy: createdBy || debt.updatedBy || debt.createdBy || undefined
             });
 
             // update debt in-memory
@@ -612,7 +631,7 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
 }
 
 // Cancel a debt: mark status CANCELLED and treat remaining balance as written-off (update summaries)
-async function cancelDebt({ companyId, debtId, reason = null }) {
+async function cancelDebt({ companyId, debtId, reason = null, performedBy }) {
     const perf = require('../utils/perf');
     return perf.measureAsync('cancelDebt', async () => {
         const debt = await debtRepo.findById(debtId, companyId);
@@ -623,6 +642,8 @@ async function cancelDebt({ companyId, debtId, reason = null }) {
         debt.status = 'CANCELLED';
         debt.cancelledAt = new Date();
         debt.cancelReason = reason;
+        debt.cancelledBy = performedBy || debt.updatedBy || debt.createdBy || undefined;
+        debt.updatedBy = performedBy || debt.updatedBy || debt.createdBy || undefined;
         debt.updatedAt = new Date();
         const inMemoryStore = require('../utils/inMemoryStore');
         inMemoryStore.createDebt(debt);

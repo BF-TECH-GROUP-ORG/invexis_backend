@@ -6,7 +6,7 @@ const inventoryAdjustmentSchema = new Schema({
   companyId: { type: String, required: true, index: true },
   productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
   variationId: { type: Schema.Types.ObjectId, default: null },
-  warehouseId: { type: Schema.Types.ObjectId, ref: 'Warehouse', default: null },
+  // warehouseId removed - warehouses no longer supported
   adjustmentType: { type: String, enum: ['damage', 'theft', 'count', 'other'], required: true },
   quantity: { type: Number, required: true, min: 1 },
   reason: { type: String, required: true, trim: true },
@@ -21,7 +21,7 @@ const inventoryAdjustmentSchema = new Schema({
 inventoryAdjustmentSchema.index({ companyId: 1, status: 1 });
 
 // models/InventoryAdjustment.js (Updated pre-save hook)
-inventoryAdjustmentSchema.pre('save', async function(next) {
+inventoryAdjustmentSchema.pre('save', async function (next) {
   this.updatedAt = new Date();
 
   if (this.isModified('status') && this.status === 'approved') {
@@ -61,7 +61,7 @@ inventoryAdjustmentSchema.pre('save', async function(next) {
         newStock: newQuantity, // Required field set
         reason: this.reason,
         userId: this.userId,
-        warehouseId: this.warehouseId
+        // warehouseId: null (warehouses removed)
       });
       await stockChange.save();
 

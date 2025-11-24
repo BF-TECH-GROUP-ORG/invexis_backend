@@ -2,23 +2,56 @@ const Joi = require('joi');
 
 const localizedStringSchema = Joi.object().pattern(/.*/, Joi.string()).min(1).required();
 
+const mediaSchema = Joi.object({
+  url: Joi.string().uri().required(),
+  alt: Joi.string().optional(),
+  isPrimary: Joi.boolean().optional(),
+  sortOrder: Joi.number().integer().optional()
+});
+
+const addressSchema = Joi.object({
+  name: Joi.string().optional(),
+  street: Joi.string().optional(),
+  city: Joi.string().optional(),
+  state: Joi.string().optional(),
+  postalCode: Joi.string().optional(),
+  country: Joi.string().optional(),
+  phone: Joi.string().optional()
+});
+
+const timelineSchema = Joi.object({
+  status: Joi.string().required(),
+  description: Joi.string().optional(),
+  timestamp: Joi.date().default(Date.now),
+  location: Joi.string().optional()
+});
+
+const paginationSchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+  sortBy: Joi.string().optional(),
+  sortOrder: Joi.string().valid('asc', 'desc').default('desc')
+});
+
 const cartItemSchema = Joi.object({
   productId: Joi.string().required(),
   quantity: Joi.number().integer().min(1).required(),
   priceAtAdd: Joi.number().min(0).required(),
   currency: Joi.string().required(),
+  discount: Joi.number().default(0),
+  tax: Joi.number().default(0),
   metadata: Joi.object().optional()
 });
 
 const cartSchema = Joi.object({
-  companyId: Joi.string().required(),
-  userId: Joi.string().required(),
-  shopId: Joi.string().optional(),
-  items: Joi.array().items(cartItemSchema).required(),
-  status: Joi.string().valid('active', 'checked_out', 'abandoned').optional(),
-  lastActivity: Joi.date().optional(),
-  isDeleted: Joi.boolean().optional(),
-  metadata: Joi.object().optional()
+  userId: Joi.string().optional(),
+  items: Joi.array().items(cartItemSchema).default([]),
+  total: Joi.number().default(0),
+  currency: Joi.string().default('USD'),
+  discount: Joi.number().default(0),
+  tax: Joi.number().default(0),
+  status: Joi.string().valid('active', 'checked_out', 'abandoned').default('active'),
+  lastActivity: Joi.date().default(Date.now)
 });
 
 const orderItemSchema = Joi.object({
@@ -29,136 +62,168 @@ const orderItemSchema = Joi.object({
   metadata: Joi.object().optional()
 });
 
+const paymentSchema = Joi.object({
+  paymentRef: Joi.string().optional(),
+  provider: Joi.string().optional(),
+  providerMetadata: Joi.object().optional()
+});
+
 const orderSchema = Joi.object({
   orderId: Joi.string().required(),
   userId: Joi.string().required(),
-  companyId: Joi.string().required(),
-  shopId: Joi.string().optional(),
-  items: Joi.array().items(orderItemSchema).min(1).required(),
-  subtotal: Joi.number().min(0).required(),
-  totalAmount: Joi.number().min(0).required(),
+  items: Joi.array().items(orderItemSchema).required(),
+  subtotal: Joi.number().required(),
+  shippingAmount: Joi.number().default(0),
+  taxes: Joi.number().default(0),
+  totalAmount: Joi.number().required(),
   currency: Joi.string().required(),
-  shippingAmount: Joi.number().min(0).optional(),
-  taxes: Joi.number().min(0).optional(),
-  status: Joi.string().valid('pending', 'confirmed', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded').optional(),
-  paymentStatus: Joi.string().valid('unpaid', 'processing', 'paid', 'failed', 'refunded').optional(),
-  payment: Joi.object().optional(),
-  shippingAddress: Joi.object().optional(),
-  billingAddress: Joi.object().optional(),
+  status: Joi.string().valid('pending', 'confirmed', 'paid', 'shipped', 'delivered', 'cancelled', 'refunded').default('pending'),
+  paymentStatus: Joi.string().valid('unpaid', 'processing', 'paid', 'failed', 'refunded').default('unpaid'),
+  payment: paymentSchema.optional(),
+  shippingAddress: addressSchema.optional(),
+  billingAddress: addressSchema.optional(),
   createdBy: Joi.string().optional(),
-  updatedBy: Joi.string().optional(),
-  isDeleted: Joi.boolean().optional(),
-  deletedAt: Joi.date().optional(),
-  retentionExpiresAt: Joi.date().optional(),
-  metadata: Joi.object().optional()
+  updatedBy: Joi.string().optional()
 });
 
 const promotionSchema = Joi.object({
   promotionId: Joi.string().required(),
-  companyId: Joi.string().required(),
-  shopId: Joi.string().optional(),
   name: Joi.string().required(),
   code: Joi.string().optional(),
   discountType: Joi.string().valid('percentage', 'fixed', 'free_shipping').required(),
-  discountValue: Joi.number().min(0).required(),
-  description: Joi.string().optional(),
+  discountValue: Joi.number().required(),
   startAt: Joi.date().required(),
   endAt: Joi.date().required(),
-  usageLimit: Joi.number().integer().min(0).optional(),
-  usedCount: Joi.number().integer().min(0).optional(),
-  perCustomerLimit: Joi.number().integer().min(0).optional(),
-  constraints: Joi.object().optional(),
-  status: Joi.string().valid('active', 'expired', 'disabled').optional(),
-  isDeleted: Joi.boolean().optional(),
-  metadata: Joi.object().optional()
+  relatedProductIds: Joi.array().items(Joi.string()).optional(),
+  status: Joi.string().valid('active', 'expired', 'disabled').default('active'),
+  visibility: Joi.string().valid('public', 'private', 'unlisted').default('public'),
+  createdBy: Joi.string().optional(),
+  updatedBy: Joi.string().optional()
 });
 
 const reviewSchema = Joi.object({
-  reviewId: Joi.string().required(),
-  userId: Joi.string().required(),
   productId: Joi.string().required(),
+  userId: Joi.string().required(),
   companyId: Joi.string().required(),
   rating: Joi.number().integer().min(1).max(5).required(),
   comment: Joi.string().optional(),
-  isApproved: Joi.boolean().optional(),
-  flagged: Joi.boolean().optional(),
+  isApproved: Joi.boolean().default(false),
+  flagged: Joi.boolean().default(false),
+  helpfulCount: Joi.number().default(0),
+  metadata: Joi.object().optional(),
   createdBy: Joi.string().optional(),
   updatedBy: Joi.string().optional(),
-  isDeleted: Joi.boolean().optional(),
-  metadata: Joi.object().optional()
+  isDeleted: Joi.boolean().default(false),
+  deletedAt: Joi.date().optional()
 });
 
 const wishlistItemSchema = Joi.object({
   productId: Joi.string().required(),
-  addedAt: Joi.date().optional()
+  addedAt: Joi.date().default(Date.now)
 });
 
 const wishlistSchema = Joi.object({
   userId: Joi.string().required(),
-  companyId: Joi.string().required(),
-  shopId: Joi.string().optional(),
-  items: Joi.array().items(wishlistItemSchema).required(),
-  isDeleted: Joi.boolean().optional(),
-  metadata: Joi.object().optional()
+  items: Joi.array().items(wishlistItemSchema).default([])
 });
 
 const bannerSchema = Joi.object({
-  bannerId: Joi.string().optional(), // Generated if not provided
   companyId: Joi.string().required(),
   shopId: Joi.string().optional(),
-  title: localizedStringSchema,
+  title: localizedStringSchema.required(),
   subtitle: localizedStringSchema.optional(),
-  imageUrl: Joi.string().uri().required(),
-  target: Joi.object().required(),
-  type: Joi.string().valid('homepage', 'seasonal', 'product_highlight').optional().default('homepage'),
-  priority: Joi.number().integer().optional().default(0),
+  image: mediaSchema.required(),
+  type: Joi.string().valid('homepage', 'seasonal', 'product_highlight').default('homepage'),
+  priority: Joi.number().default(0),
   startAt: Joi.date().optional(),
   endAt: Joi.date().optional(),
-  isActive: Joi.boolean().optional().default(true),
-  isDeleted: Joi.boolean().optional(),
-  metadata: Joi.object().optional()
+  ctaAction: Joi.string().valid('product', 'category', 'url', 'none').default('none'),
+  ctaPayload: Joi.object().optional(),
+  clicks: Joi.number().default(0),
+  views: Joi.number().default(0),
+  relatedPromotions: Joi.array().items(Joi.string()).optional(),
+  relatedProducts: Joi.array().items(Joi.string()).optional(),
+  status: Joi.string().valid('active', 'inactive', 'archived').default('active'),
+  visibility: Joi.string().valid('public', 'private', 'unlisted').default('public')
 });
 
-const productSchema = Joi.object({
-  productId: Joi.string().required(),
+const deliverySchema = Joi.object({
+  orderId: Joi.string().required(),
   companyId: Joi.string().required(),
   shopId: Joi.string().optional(),
-  title: localizedStringSchema,
-  shortDescription: localizedStringSchema.optional(),
-  longDescription: localizedStringSchema.optional(),
-  price: Joi.number().min(0).required(),
-  currency: Joi.string().required(),
-  images: Joi.array().items(
-    Joi.object({
-      url: Joi.string().uri().required(),
-      alt: localizedStringSchema.optional()
-    })
-  ).optional(),
-  seo: Joi.object({
-    slug: Joi.string().optional(),
-    metaTitle: localizedStringSchema.optional(),
-    metaDescription: localizedStringSchema.optional()
-  }).optional(),
-  compareAtPrice: Joi.number().min(0).optional(),
-  tags: Joi.array().items(Joi.string()).optional(),
-  featured: Joi.boolean().optional(),
-  visibility: Joi.string().valid('public', 'private', 'unlisted').optional(),
-  status: Joi.string().valid('active', 'inactive', 'archived').optional(),
-  createdBy: Joi.string().optional(),
-  updatedBy: Joi.string().optional(),
-  isDeleted: Joi.boolean().optional(),
-  deletedAt: Joi.date().optional(),
-  defaultLocale: Joi.string().optional(),
-  defaultCurrency: Joi.string().optional(),
+  provider: Joi.string().required(),
+  trackingNumber: Joi.string().optional(),
+  trackingUrl: Joi.string().optional(),
+  shippingAddress: addressSchema.required(),
+  deliveryMethod: Joi.string().optional(),
+  expectedAt: Joi.date().optional(),
+  deliveredAt: Joi.date().optional(),
+  status: Joi.string().valid('pending', 'in_transit', 'delivered', 'cancelled', 'failed').default('pending'),
+  timeline: Joi.array().items(timelineSchema).default([]),
+  notes: Joi.string().optional(),
   metadata: Joi.object().optional()
 });
 
+const catalogProductSchema = Joi.object({
+  productId: Joi.string().required(),
+  companyId: Joi.string().required(),
+  name: Joi.string().required(),
+  slug: Joi.string().required(),
+  shortDescription: Joi.string().optional(),
+  price: Joi.number().required(),
+  currency: Joi.string().default('USD'),
+  salePrice: Joi.number().optional(),
+  featured: Joi.boolean().default(false),
+  images: Joi.array().items(mediaSchema).optional(),
+  status: Joi.string().valid('active', 'inactive', 'archived').default('active'),
+  visibility: Joi.string().valid('public', 'private', 'unlisted').default('public'),
+  categoryId: Joi.string().optional(),
+  subcategoryId: Joi.string().optional(),
+  subSubcategoryId: Joi.string().optional(),
+  stockQty: Joi.number().default(0),
+  availability: Joi.string().valid('in_stock', 'out_of_stock', 'low_stock', 'backorder', 'scheduled').default('in_stock'),
+  relatedPromotionIds: Joi.array().items(Joi.string()).optional(),
+  relatedBannerIds: Joi.array().items(Joi.string()).optional(),
+  metadata: Joi.object().optional(),
+  createdBy: Joi.string().optional(),
+  updatedBy: Joi.string().optional()
+});
+
+const Cart = require('../models/Cart.models');
+const Catalog = require('../models/Catalog.models');
+const Delivery = require('../models/Delivery.models');
+const FailedEvent = require('../models/FailedEvent.models');
+const FeaturedBanner = require('../models/FeaturedBanner.models');
+const Order = require('../models/Order.models');
+const Outbox = require('../models/Outbox.models');
+const Promotion = require('../models/Promotion.models');
+const Review = require('../models/Review.models');
+const Wishlist = require('../models/Wishlist.models');
+
 module.exports = {
+  // Models
+  Cart,
+  Catalog,
+  Delivery,
+  FailedEvent,
+  FeaturedBanner,
+  Order,
+  Outbox,
+  Promotion,
+  Review,
+  Wishlist,
+
+  // Schemas
   cartSchema,
   orderSchema,
   promotionSchema,
   reviewSchema,
   wishlistSchema,
   bannerSchema,
-  productSchema
+  catalogProductSchema, // Renamed from productSchema
+  deliverySchema,
+  mediaSchema,
+  addressSchema,
+  timelineSchema,
+  paginationSchema
 };

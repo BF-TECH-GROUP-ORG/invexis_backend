@@ -2,11 +2,13 @@ require("dotenv").config();
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
-const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
+const { connect: connect } = require("/app/shared/rabbitmq");
 
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
+const { startCleaner } = require('./workers/abandonedCartCleaner');
+const { warmupActiveCarts } = require('./workers/cacheWarmup');
 const connectDB = require("./config/db");
 
 const ecommerceRoute = require("./routes/ecommerceRoute");
@@ -89,10 +91,20 @@ const initializeDatabase = async () => {
 // Initialize RabbitMQ and event system
 const initializeEventSystem = async () => {
   try {
-    await connectRabbitMQ();
+    await connect();
     await consumeEvents();
     await initPublishers();
     await startOutboxDispatcher(1000); // Process outbox every 1 second
+    // Start background workers (run only in one instance in production)
+    try {
+      startCleaner();
+      // Optionally warmup cache for a single company on startup (non-blocking)
+      if (process.env.CACHE_WARMUP_COMPANY) {
+        warmupActiveCarts(process.env.CACHE_WARMUP_COMPANY).catch(err => console.error('Cache warmup failed', err.message));
+      }
+    } catch (err) {
+      console.error('Failed to start background workers', err.message);
+    }
     console.log("✅ Event system initialized");
   } catch (error) {
     console.error("❌ Failed to initialize event system:", error);

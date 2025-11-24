@@ -1,21 +1,25 @@
-// models/Review.js
 const mongoose = require('mongoose');
+
 const ReviewSchema = new mongoose.Schema({
-    reviewId: { type: String, required: true, unique: true },
-    userId: { type: String, required: true },
-    productId: { type: String, required: true },
-    companyId: { type: String, required: true },
+    productId: { type: String, required: true, index: true },
+    userId: { type: String, required: true, index: true },
+    companyId: { type: String, required: true, index: true },
 
-    rating: { type: Number, min: 1, max: 5, required: true },
-    comment: { type: String },
-
-    isApproved: { type: Boolean, default: false }, // moderation flow
+    rating: { type: Number, required: true, min: 1, max: 5 },
+    comment: String,
+    isApproved: { type: Boolean, default: false },
     flagged: { type: Boolean, default: false },
 
-    createdBy: { type: String },
-    updatedBy: { type: String },
+    helpfulCount: { type: Number, default: 0 },
+    metadata: mongoose.Schema.Types.Mixed,
 
-    isDeleted: { type: Boolean, default: false }
+    createdBy: String,
+    updatedBy: String,
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: Date
 }, { timestamps: true });
+
+ReviewSchema.index({ productId: 1, companyId: 1 });
+ReviewSchema.index({ userId: 1 });
 
 module.exports = mongoose.model('Review', ReviewSchema);

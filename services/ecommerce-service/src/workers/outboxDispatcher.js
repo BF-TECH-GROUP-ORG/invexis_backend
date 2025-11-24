@@ -9,6 +9,7 @@ const { emit } = require('../events/producer');
 const logger = require('../utils/logger.js');
 
 let dispatcherInterval = null;
+let isProcessing = false;
 
 /**
  * Start outbox dispatcher
@@ -18,10 +19,14 @@ async function startOutboxDispatcher(intervalMs = 1000) {
     logger.info(`🚀 Starting outbox dispatcher (interval: ${intervalMs}ms)`);
 
     dispatcherInterval = setInterval(async () => {
+      if (isProcessing) return;
       try {
+        isProcessing = true;
         await processOutbox();
       } catch (error) {
         logger.error(`❌ Error in outbox dispatcher: ${error.message}`);
+      } finally {
+        isProcessing = false;
       }
     }, intervalMs);
 
@@ -39,11 +44,28 @@ async function stopOutboxDispatcher() {
   try {
     if (dispatcherInterval) {
       clearInterval(dispatcherInterval);
+
+      // Wait for current processing to finish (max 5 seconds)
+      let retries = 0;
+      while (isProcessing && retries < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries++;
+      }
+
       logger.info('✅ Outbox dispatcher stopped');
     }
   } catch (error) {
     logger.error(`❌ Error stopping dispatcher: ${error.message}`);
   }
+}
+
+/**
+ * Calculate next retry time with exponential backoff
+ */
+function getNextRetryDate(attempts) {
+  // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+  const delaySeconds = Math.pow(2, attempts + 1);
+  return new Date(Date.now() + delaySeconds * 1000);
 }
 
 /**
@@ -57,11 +79,16 @@ async function processOutbox() {
     // Fetch pending events
     const pendingEvents = await Outbox.OutboxService.fetchBatch(50);
 
-    if (pendingEvents.length === 0) return;
+    // Fetch failed events ready for retry
+    const retryEvents = await Outbox.OutboxService.fetchFailedForRetry(20);
 
-    logger.info(`📤 Processing ${pendingEvents.length} pending events`);
+    const eventsToProcess = [...pendingEvents, ...retryEvents];
 
-    for (const event of pendingEvents) {
+    if (eventsToProcess.length === 0) return;
+
+    logger.info(`📤 Processing ${eventsToProcess.length} events (${pendingEvents.length} pending, ${retryEvents.length} retries)`);
+
+    for (const event of eventsToProcess) {
       try {
         // Mark as processing
         await Outbox.markAsProcessing(event._id);
@@ -85,8 +112,26 @@ async function processOutbox() {
           `❌ Failed to publish event ${event._id}: ${error.message}`
         );
 
-        // Mark as failed
-        await Outbox.OutboxService.markAsFailed(event._id, error);
+        const currentAttempts = (event.attempts || 0) + 1;
+
+        if (currentAttempts >= 5) {
+          // Max attempts reached, move to dead letter
+          await Outbox.OutboxService.markAsDeadLetter(event._id, error);
+          logger.error(`💀 Event ${event._id} moved to dead letter queue after ${currentAttempts} attempts`);
+        } else {
+          // Schedule retry
+          const nextRetry = getNextRetryDate(currentAttempts);
+
+          await Outbox.findByIdAndUpdate(event._id, {
+            status: 'failed',
+            lastError: error.message,
+            attempts: currentAttempts,
+            nextRetryAt: nextRetry,
+            updatedAt: new Date()
+          });
+
+          logger.info(`Checking retry for event ${event._id} in ${Math.round((nextRetry - Date.now()) / 1000)}s`);
+        }
       }
     }
   } catch (error) {
@@ -100,6 +145,7 @@ async function processOutbox() {
 function getStatus() {
   return {
     running: !!dispatcherInterval,
+    processing: isProcessing,
     timestamp: new Date().toISOString()
   };
 }

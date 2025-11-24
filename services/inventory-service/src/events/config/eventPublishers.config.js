@@ -62,17 +62,7 @@ module.exports = {
   },
 
   // Warehouse Events (2)
-  'inventory.warehouse.created': {
-    exchange: 'events_topic',
-    routingKey: 'inventory.warehouse.created',
-    description: 'Published when a new warehouse is created'
-  },
-
-  'inventory.warehouse.updated': {
-    exchange: 'events_topic',
-    routingKey: 'inventory.warehouse.updated',
-    description: 'Published when warehouse details are updated'
-  },
+  // Warehouse events removed - warehouses are no longer part of the service
 
   // Alert Events (1)
   'inventory.alert.triggered': {

@@ -19,23 +19,36 @@ const outboxSchema = new Schema(
         'ecommerce.cart.created',
         'ecommerce.cart.updated',
         'ecommerce.cart.abandoned',
+        'ecommerce.cart.checked_out',
+        'ecommerce.payment.request',
         // Order events
         'ecommerce.order.created',
         'ecommerce.order.confirmed',
         'ecommerce.order.shipped',
         'ecommerce.order.delivered',
         'ecommerce.order.cancelled',
+        'ecommerce.order.updated',
         // Review events
         'ecommerce.review.created',
         'ecommerce.review.approved',
+        'ecommerce.review.deleted',
         // Promotion events
         'ecommerce.promotion.created',
+        'ecommerce.promotion.updated',
+        'ecommerce.promotion.deleted',
         'ecommerce.promotion.expired',
         // Wishlist events
         'ecommerce.wishlist.created',
         'ecommerce.wishlist.updated',
+        // Catalog events
+        'ecommerce.catalog.created',
+        'ecommerce.catalog.updated',
         // Banner events
-        'ecommerce.banner.activated'
+        'ecommerce.banner.activated',
+        'ecommerce.banner.created',
+        'ecommerce.banner.updated',
+        'ecommerce.banner.deleted',
+        'ecommerce.banner.toggled'
       ]
     },
     exchange: {
@@ -54,7 +67,7 @@ const outboxSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'processing', 'sent', 'failed'],
+      enum: ['pending', 'processing', 'sent', 'failed', 'dead_letter'],
       default: 'pending',
       index: true
     },
@@ -66,6 +79,11 @@ const outboxSchema = new Schema(
     lastError: {
       type: String,
       default: null
+    },
+    nextRetryAt: {
+      type: Date,
+      default: null,
+      index: true
     },
     processedAt: {
       type: Date,
@@ -112,6 +130,19 @@ outboxSchema.statics.findPending = async function (limit = 50) {
 };
 
 /**
+ * Find failed events ready for retry
+ */
+outboxSchema.statics.findFailedForRetry = async function (limit = 50) {
+  return await this.find({
+    status: 'failed',
+    nextRetryAt: { $lte: new Date() }
+  })
+    .sort({ nextRetryAt: 1 })
+    .limit(limit)
+    .lean();
+};
+
+/**
  * Mark event as processing
  */
 outboxSchema.statics.markAsProcessing = async function (id) {
@@ -150,6 +181,21 @@ outboxSchema.statics.markAsFailed = async function (id, error) {
       status: 'failed',
       lastError: error?.message || String(error),
       attempts: { $inc: 1 },
+      updatedAt: new Date()
+    },
+    { new: true }
+  );
+};
+
+/**
+ * Mark event as dead letter
+ */
+outboxSchema.statics.markAsDeadLetter = async function (id, error) {
+  return await this.findByIdAndUpdate(
+    id,
+    {
+      status: 'dead_letter',
+      lastError: error?.message || String(error),
       updatedAt: new Date()
     },
     { new: true }
@@ -209,12 +255,20 @@ const OutboxService = {
     return await Outbox.findPending(limit);
   },
 
+  async fetchFailedForRetry(limit = 50) {
+    return await Outbox.findFailedForRetry(limit);
+  },
+
   async markAsSent(id) {
     return await Outbox.markAsSent(id);
   },
 
   async markAsFailed(id, error) {
     return await Outbox.markAsFailed(id, error);
+  },
+
+  async markAsDeadLetter(id, error) {
+    return await Outbox.markAsDeadLetter(id, error);
   },
 
   async resetStale(hoursThreshold = 0.2) {

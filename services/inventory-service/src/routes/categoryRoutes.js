@@ -6,6 +6,7 @@ const {
   getCategoryById,
   getCategoryBySlug,
   getCategoryTree,
+  getLevel3CategoriesByCompany,
   getCategoryPath,
   createCategory,
   updateCategory,
@@ -14,6 +15,9 @@ const {
 } = require('../controllers/categoryController');
 
 router.get('/', getAllCategories);
+// Route to fetch level-3 categories scoped to a company
+router.get('/company/:companyId/level3', getLevel3CategoriesByCompany);
+
 router.get('/:id', getCategoryById);
 router.get('/slug/:slug', getCategoryBySlug);
 router.get('/view/tree', getCategoryTree);

@@ -9,7 +9,7 @@ const getAllAdjustments = asyncHandler(async (req, res) => {
   if (!companyId) {
     return res.status(400).json({ success: false, message: 'Company ID is required' });
   }
-//   validateMongoId(companyId);
+  //   validateMongoId(companyId);
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 

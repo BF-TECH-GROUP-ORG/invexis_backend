@@ -1,29 +1,31 @@
 // models/Cart.js
-const mongoose = require('mongoose');
-const CartItemSchema = new mongoose.Schema({
-    productId: { type: String, required: true },
-    quantity: { type: Number, required: true, min: 1 },
-    priceAtAdd: { type: Number, required: true },    // snapshot
-    currency: { type: String, required: true },      // ISO 4217 snapshot
-    metadata: { type: mongoose.Schema.Types.Mixed }  // e.g., options, variant
-}, { _id: false });
+const mongoose = require("mongoose");
 
-const CartSchema = new mongoose.Schema({
-    // userId removed: guest carts allowed
-    companyId: { type: String, required: true },
-    shopId: { type: String },
+const CartItemSchema = new mongoose.Schema(
+    {
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'CatalogProduct', required: true },
+        quantity: { type: Number, required: true, min: 1 },
+        priceAtAdd: { type: Number, required: true },
+        currency: { type: String, required: true },
+        discount: { type: Number, default: 0 },
+        tax: { type: Number, default: 0 },
+        metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
+    },
+    { _id: false }
+);
 
-    items: { type: [CartItemSchema], default: [] },
+const CartSchema = new mongoose.Schema(
+    {
+        userId: { type: String }, // optional for guest carts
+        items: { type: [CartItemSchema], default: [] },
+        total: { type: Number, default: 0 },
+        currency: { type: String, default: "USD" },
+        discount: { type: Number, default: 0 },
+        tax: { type: Number, default: 0 },
+        status: { type: String, enum: ["active", "checked_out", "abandoned"], default: "active" },
+        lastActivity: { type: Date, default: Date.now },
+    },
+    { timestamps: true }
+);
 
-    status: { type: String, enum: ['active', 'checked_out', 'abandoned'], default: 'active' },
-
-    // timestamps: updatedAt used to detect abandoned carts
-    lastActivity: { type: Date, default: Date.now },
-
-    isDeleted: { type: Boolean, default: false }
-}, { timestamps: true });
-
-// Optional TTL index for auto-clean of abandoned carts (careful in prod)
-// CartSchema.index({ lastActivity: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 90 }); // 90 days
-
-module.exports = mongoose.model('Cart', CartSchema);
+module.exports = mongoose.model("Cart", CartSchema);

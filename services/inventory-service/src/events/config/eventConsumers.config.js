@@ -19,6 +19,19 @@ module.exports = [
     ]
   },
   {
+    name: "ecommerce",
+    queue: "inventory_ecommerce_events",
+    exchange: "events_topic",
+    pattern: "ecommerce.#",
+    handler: require("../handlers/ecommerceEvent.handler"),
+    events: [
+      "ecommerce.order.created",
+      "ecommerce.order.updated",
+      "ecommerce.order.cancelled",
+      "ecommerce.cart.checked_out"
+    ]
+  },
+  {
     name: "shop",
     queue: "inventory_shop_events",
     exchange: "events_topic",

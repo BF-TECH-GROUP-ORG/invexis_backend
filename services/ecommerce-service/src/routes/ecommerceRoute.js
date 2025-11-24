@@ -9,6 +9,11 @@ const promotionController = require('../controllers/promotionController');
 const reviewController = require('../controllers/reviewController');
 const wishlistController = require('../controllers/wishlistController');
 const featuredBannerController = require('../controllers/featureBannerController');
+// Additional Controllers for merged routes
+const recommendationController = require('../controllers/recommendationController');
+const searchController = require('../controllers/searchController');
+const orderTrackingController = require('../controllers/orderTrackingController');
+
 
 router.get("/", (req, res) => {
   res.json({ message: "E-commerce Service is running." });
@@ -59,5 +64,18 @@ router.post('/banners', featuredBannerController.createBanner); // Create new ba
 router.put('/banners/:companyId/:bannerId', featuredBannerController.updateBanner); // Update banner
 router.delete('/banners/:companyId/:bannerId', featuredBannerController.deleteBanner); // Soft delete banner
 router.patch('/banners/:companyId/:bannerId/active', featuredBannerController.toggleActive); // Toggle active status
+
+// Recommendation routes (merged)
+router.get('/recommendations', recommendationController.getRecommendations);
+router.get('/recommendations/recently-viewed', recommendationController.getRecentlyViewed);
+
+// Search routes (merged)
+router.get('/search', searchController.searchProducts);
+router.get('/search/filters', searchController.getFilterOptions);
+router.get('/search/autocomplete', searchController.autocomplete);
+
+// Order Tracking routes
+router.get('/order-tracking/:orderId', orderTrackingController.getTracking);
+router.put('/order-tracking/:orderId', orderTrackingController.updateTracking);
 
 module.exports = router;

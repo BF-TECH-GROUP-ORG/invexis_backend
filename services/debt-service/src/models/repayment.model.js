@@ -5,6 +5,12 @@ const RepaymentSchema = new mongoose.Schema({
     companyId: { type: mongoose.Types.ObjectId, required: true },
     shopId: { type: mongoose.Types.ObjectId, required: true },
     customerId: { type: mongoose.Types.ObjectId, required: true },
+    // Embedded customer object to provide name/phone for frontend
+    customer: {
+        id: { type: mongoose.Types.ObjectId },
+        name: { type: String },
+        phone: { type: String }
+    },
     debtId: { type: mongoose.Types.ObjectId, required: true },
 
 
@@ -16,6 +22,12 @@ const RepaymentSchema = new mongoose.Schema({
         default: "CASH"
     },
     paymentReference: { type: String },
+
+    // Audit: who recorded the repayment
+    createdBy: {
+        id: { type: mongoose.Types.ObjectId },
+        name: { type: String }
+    },
 
     paidAt: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now }
