@@ -107,7 +107,7 @@ const createShop = asyncHandler(async (req, res) => {
  * @access  Private (Company User)
  */
 const getShops = asyncHandler(async (req, res) => {
-  const companyId = req.user?.companyId || req.body.companyId;
+  const companyId = req.user?.companyId || req.body.companyId || req.query.companyId;
   if (!companyId) {
     res.status(400);
     throw new Error("Company ID is required");
