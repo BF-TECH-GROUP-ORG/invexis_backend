@@ -19,7 +19,14 @@ const registerConsumers = async (consumerConfigs) => {
         },
         async (event, routingKey) => {
           console.log(`📥 [${config.name}] Received: ${routingKey}`);
-          await config.handler(event, routingKey);
+          try {
+            console.log(`🔍 About to call handler for ${config.name}`, JSON.stringify(event, null, 2));
+            await config.handler(event, routingKey);
+            console.log(`✅ Handler completed for ${config.name}`);
+          } catch (handlerError) {
+            console.error(`❌ Handler error for ${config.name}:`, handlerError);
+            throw handlerError;
+          }
         }
       );
 

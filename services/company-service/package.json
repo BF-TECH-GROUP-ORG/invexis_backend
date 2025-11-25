@@ -20,10 +20,13 @@
   "description": "Company management microservice for Invexis platform",
   "dependencies": {
     "amqplib": "^0.10.3",
+    "cloudinary": "^1.41.3",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
     "knex": "^3.1.0",
+    "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0",
     "objection": "^3.1.5",
     "pg": "^8.16.3",
     "uuid": "^13.0.0"

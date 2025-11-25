@@ -59,24 +59,23 @@ async function handleCompanyCreated(data) {
   try {
     logger.info(`🎉 New company created: ${name} (${companyId})`);
 
-    const notification = await Notification.create({
-      companyId,
-      userId: adminId,
-      type: "welcome",
-      title: "Welcome to Invexis",
-      body: `Welcome ${name}! Your account is ready. Start managing your inventory and sales.`,
-      scope: "personal",
-      templateName: "welcome_company",
-      channels: { email: true, push: true, inApp: true },
-      payload: {
+    const { dispatchEvent } = require("../../services/dispatcher");
+
+    await dispatchEvent({
+      event: "company.created",
+      data: {
         email: data.email,
         companyName: name,
+        userName: name,  // Use company name as username for welcome message
         ...data,
       },
+      recipients: [adminId],
+      companyId,
+      templateName: "welcome",
+      channels: { email: true, inApp: true }
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Welcome notification queued for company ${companyId}`);
+    logger.info(`✅ Welcome notification dispatched for company ${companyId}`);
   } catch (error) {
     logger.error(`❌ Error creating welcome notification:`, error.message);
     throw error;

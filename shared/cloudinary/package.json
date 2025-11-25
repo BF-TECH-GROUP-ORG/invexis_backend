@@ -1,0 +1,11 @@
+{
+    "name": "@invexis/cloudinary",
+    "version": "1.0.0",
+    "description": "Shared Cloudinary upload utilities for Invexis microservices",
+    "main": "index.js",
+    "dependencies": {
+        "cloudinary": "^2.5.1",
+        "multer": "^2.0.2",
+        "multer-storage-cloudinary": "^4.0.0"
+    }
+}
