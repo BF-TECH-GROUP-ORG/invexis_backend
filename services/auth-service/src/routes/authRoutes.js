@@ -27,7 +27,7 @@ router.use(corsForAuth);
 const loginRateLimit = rateLimitByUser(100, 3600000); // 1 hour window
 
 router.get('/', (req, res) => {
-    res.json({ message: "auth service is routed to the gateway" })
+    res.json({ message: "auth service is routed to the gateways" })
 })
 
 // Public routes (no auth)

@@ -35,7 +35,7 @@ router.get('/', (req, res) => {
 
 // Registration and Basic Auth
 router.post('/register', authCtrl.register);
-router.post('/login', loginRateLimit, authCtrl.login);
+router.post('/login', authCtrl.login);
 
 // OTP Authentication
 router.post('/login/otp/request', loginRateLimit, authCtrl.requestOtpLogin);

@@ -160,7 +160,7 @@ UserSchema.pre("save", async function (next) {
 
 // Indexes (analytics + perf, strings for companies/shops)
 UserSchema.index({ role: 1, dateOfBirth: 1 }); // Analytics queries
-UserSchema.index({ companies: 1, shops: 1, role: 1 }); // Org queries (string $in works)
+// UserSchema.index({ companies: 1, shops: 1, role: 1 }); // Removed: cannot index parallel arrays
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ phone: 1 }, { unique: true });
 UserSchema.index({ username: 1 }, { unique: true });
