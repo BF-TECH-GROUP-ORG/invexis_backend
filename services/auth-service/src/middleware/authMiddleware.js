@@ -19,7 +19,8 @@ async function requireAuth(req, res, next) {
         if (!header) throw new AuthError('No authorization header', 401);
         const token = header.split(' ')[1];
         if (!token) throw new AuthError('Invalid authorization format', 401);
-        const payload = tokenService.verifyAccess(token);
+        const payload = await tokenService.verifyAccess(token);
+        if (!payload) throw new AuthError('Invalid or expired token', 401);
         const user = await User.findById(payload.sub);
         if (!user || user.accountStatus !== 'active') throw new AuthError('Unauthorized', 401);
         req.user = user;

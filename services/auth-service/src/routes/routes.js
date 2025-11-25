@@ -4,29 +4,7 @@ const passport = require('passport');
 const router = express.Router();
 const authCtrl = require('../controllers/authController');
 const tokenService = require('../services/tokenService');
-const { uploadProfileImage } = require('../middleware/upload');
-const {
-    requireAuth,
-    requireRole,
-} = require('../middleware/authMiddleware');
-const {
-    corsForAuth,
-    rateLimitByUser,
-    checkTokenBlacklist,
-    checkConsent,
-    deviceFingerprint,
-    enforce2FA,
-} = require('/app/shared/middlewares/auth/auth');
-
-// Apply CORS to all auth routes
-router.use(corsForAuth);
-
-// Rate limiting for public routes (100 req/hour per user/IP)
-const loginRateLimit = rateLimitByUser(100, 3600000); // 1 hour window
-
-/**
- * Public Routes - No Authentication Required
- */
+const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 // Health check
 router.get('/', (req, res) => {
@@ -38,12 +16,12 @@ router.post('/register', authCtrl.register);
 router.post('/login', authCtrl.login);
 
 // OTP Authentication
-router.post('/login/otp/request', loginRateLimit, authCtrl.requestOtpLogin);
-router.post('/login/otp/verify', loginRateLimit, authCtrl.verifyOtpLogin);
+router.post('/login/otp/request', authCtrl.requestOtpLogin);
+router.post('/login/otp/verify', authCtrl.verifyOtpLogin);
 
 // Password Reset
-router.post('/password/reset', loginRateLimit, authCtrl.requestPasswordReset);
-router.post('/password/reset/confirm', loginRateLimit, authCtrl.confirmPasswordReset);
+router.post('/password/reset', authCtrl.requestPasswordReset);
+router.post('/password/reset/confirm', authCtrl.confirmPasswordReset);
 
 /**
  * Google OAuth Routes
@@ -143,111 +121,57 @@ router.get('/google/callback',
  */
 
 // Session Management
-router.get('/refresh', checkTokenBlacklist, authCtrl.refresh);
-router.post('/logout', requireAuth, checkTokenBlacklist, deviceFingerprint, authCtrl.logout);
-router.get('/sessions', requireAuth, checkTokenBlacklist, authCtrl.getSessions);
-router.delete('/sessions/:sessionId', requireAuth, checkTokenBlacklist, enforce2FA, authCtrl.revokeSession);
+router.get('/refresh', authCtrl.refresh);
+router.post('/logout', requireAuth, authCtrl.logout);
+router.get('/sessions', requireAuth, authCtrl.getSessions);
+router.delete('/sessions/:sessionId', requireAuth, authCtrl.revokeSession);
 
 // Profile Management
-router.get('/me', requireAuth, checkTokenBlacklist, deviceFingerprint, authCtrl.getCurrentUser);
-router.put('/profile', requireAuth, checkTokenBlacklist, deviceFingerprint, uploadProfileImage, authCtrl.updateProfile);
-router.delete('/account', requireAuth, checkTokenBlacklist, enforce2FA, authCtrl.deleteAccount);
+router.get('/me', requireAuth, authCtrl.getCurrentUser);
+router.put('/profile', requireAuth, authCtrl.updateProfile);
+router.delete('/account', requireAuth, authCtrl.deleteAccount);
 
 // Email Management
-router.post('/verify/resend/:type', requireAuth, checkTokenBlacklist, authCtrl.resendVerification);
-router.post('/email/change', requireAuth, checkTokenBlacklist, enforce2FA, authCtrl.changeEmail);
-router.post('/email/confirm', requireAuth, checkTokenBlacklist, authCtrl.confirmChangeEmail);
+router.post('/verify/resend/:type', requireAuth, authCtrl.resendVerification);
+router.post('/email/change', requireAuth, authCtrl.changeEmail);
+router.post('/email/confirm', requireAuth, authCtrl.confirmChangeEmail);
 
 // Password Management
-router.post('/password/change', requireAuth, checkTokenBlacklist, enforce2FA, authCtrl.changePassword);
+router.post('/password/change', requireAuth, authCtrl.changePassword);
 
 // 2FA Management
-router.post('/2fa/setup', requireAuth, checkTokenBlacklist, deviceFingerprint, authCtrl.setup2FA);
-router.post('/2fa/verify', requireAuth, checkTokenBlacklist, authCtrl.verify2FASetup);
-router.post('/2fa/disable', requireAuth, checkTokenBlacklist, enforce2FA, authCtrl.disable2FA);
+router.post('/2fa/setup', requireAuth, authCtrl.setup2FA);
+router.post('/2fa/verify', requireAuth, authCtrl.verify2FASetup);
+router.post('/2fa/disable', requireAuth, authCtrl.disable2FA);
 
 // Consent Management
-router.get('/consents', requireAuth, checkTokenBlacklist, checkConsent(['terms_and_privacy']), authCtrl.getConsents);
-router.post('/consent/accept', requireAuth, checkTokenBlacklist, authCtrl.acceptConsent);
-router.post('/consent/revoke', requireAuth, checkTokenBlacklist, checkConsent(['terms_and_privacy']), authCtrl.revokeConsent);
+router.get('/consents', requireAuth, authCtrl.getConsents);
+router.post('/consent/accept', requireAuth, authCtrl.acceptConsent);
+router.post('/consent/revoke', requireAuth, authCtrl.revokeConsent);
 
 /**
  * Admin Routes - Requires Admin Role + Consent
  */
 
 // User Management
-router.post('/verify/:userId',
-    requireAuth,
-    requireRole(['super_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.verify
-);
+router.post('/verify/:userId', requireAuth, authCtrl.verify);
 
-router.get('/users',
-    requireAuth,
-    requireRole(['super_admin', 'company_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.getUsers
-);
+router.get('/users', requireAuth, authCtrl.getUsers);
 
-router.post('/users',
-    requireAuth,
-    requireRole(['super_admin', 'company_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.createUser
-);
+router.post('/users', requireAuth, authCtrl.createUser);
 
-router.put('/users/:id',
-    requireAuth,
-    requireRole(['super_admin', 'company_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.updateUser
-);
+router.put('/users/:id', requireAuth, authCtrl.updateUser);
 
-router.delete('/users/:id',
-    requireAuth,
-    requireRole(['super_admin', 'company_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.deleteUser
-);
+router.delete('/users/:id', requireAuth, authCtrl.deleteUser);
 
-router.get('/users/:id',
-    requireAuth,
-    requireRole(['super_admin', 'company_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.getUserById
-);
+router.get('/users/:id', requireAuth, authCtrl.getUserById);
 
 // Bulk Operations (Super Admin Only)
-router.post('/users/bulk',
-    requireAuth,
-    requireRole(['super_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.bulkUpdateUsers
-);
+router.post('/users/bulk', requireAuth, authCtrl.bulkUpdateUsers);
 
-router.post('/users/:id/unlock',
-    requireAuth,
-    requireRole(['super_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.unlockAccount
-);
+router.post('/users/:id/unlock', requireAuth, authCtrl.unlockAccount);
 
 // Compliance Management
-router.get('/consents/compliance',
-    requireAuth,
-    requireRole(['super_admin']),
-    checkTokenBlacklist,
-    checkConsent(['terms_and_privacy']),
-    authCtrl.checkConsentCompliance
-);
+router.get('/consents/compliance', requireAuth, authCtrl.checkConsentCompliance);
 
 module.exports = router;

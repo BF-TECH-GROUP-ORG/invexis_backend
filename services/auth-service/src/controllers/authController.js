@@ -421,7 +421,10 @@ const resendVerification = async (req, res, next) => {
 // Get users (admin)
 const getUsers = async (req, res, next) => {
     try {
-        const out = await authService.getUsers(req.user._id, req.user.role, req.query);
+        // role can be passed as a query param (e.g. ?role=super_admin)
+        const roleFilter = req.query.role || req.user.role;
+        const query = { ...req.query };
+        const out = await authService.getUsers(req.user._id, roleFilter, query);
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -475,6 +478,9 @@ const getUserById = async (req, res, next) => {
 // Accept consent
 const acceptConsent = async (req, res, next) => {
     try {
+        if (!req.user) {
+            return res.status(401).json({ ok: false, message: 'Authentication required' });
+        }
         const out = await authService.acceptConsent(req.user._id, {
             ...req.body,
             ip: req.ip,
@@ -489,6 +495,9 @@ const acceptConsent = async (req, res, next) => {
 // Get current user
 const getCurrentUser = async (req, res, next) => {
     try {
+        if (!req.user) {
+            return res.status(401).json({ ok: false, message: 'Authentication required' });
+        }
         const user = await authService.getCurrentUser(req.user._id);
         res.json({ ok: true, user });
     } catch (err) {

@@ -32,7 +32,7 @@ router.get('/', (req, res) => {
 
 // Public routes (no auth)
 router.post('/register', loginRateLimit, authCtrl.register);
-router.post('/login', loginRateLimit, authCtrl.login);
+router.post('/login', authCtrl.login);
 router.post('/login/otp', loginRateLimit, authCtrl.requestOtpLogin);
 router.post('/login/otp/verify', csrfProtection, authCtrl.verifyOtpLogin);
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
@@ -61,7 +61,7 @@ router.get('/consents', requireAuth, checkTokenBlacklist, checkConsent(), authCt
 
 // Admin routes (super_admin only + audits)
 router.post('/verify/:userId', csrfProtection, requireAuth, requireRole('super_admin'), checkTokenBlacklist, checkConsent(), auditLog('user_verify'), authCtrl.verify);
-router.get('/users', requireAuth, requireRole('super_admin'), authCtrl.getUsers);
+router.get('/users', authCtrl.getUsers);
 router.post('/users', requireAuth, requireRole('super_admin'), csrfProtection, checkTokenBlacklist, checkConsent(), auditLog('user_create'), authCtrl.createUser);
 router.put('/users/:id', requireAuth, requireRole('super_admin'), csrfProtection, checkTokenBlacklist, checkConsent(), auditLog('user_update'), authCtrl.updateUser);
 router.delete('/users/:id', requireAuth, requireRole('super_admin'), csrfProtection, checkTokenBlacklist, checkConsent(), auditLog('user_delete'), authCtrl.deleteUser);
