@@ -7,7 +7,17 @@ const Consent = require('../src/models/Consent.models');
 const Verification = require('../src/models/Verification.models');
 const LoginHistory = require('../src/models/LoginHistory.models');
 const Preference = require('../src/models/Preference.models');
+const speakeasy = require('speakeasy');
 const { MongoMemoryServer } = require('mongodb-memory-server');
+
+// Mock upload middleware to avoid Cloudinary dependency
+jest.mock('../src/middleware/upload', () => ({
+    uploadProfileImage: (req, res, next) => {
+        req.profilePictureUrl = '/uploads/profiles/mock-profile.jpg';
+        req.cloudinaryPublicId = 'mock-public-id';
+        next();
+    }
+}));
 
 // Mock external services (tokenService, events)
 jest.mock('../src/services/tokenService', () => ({
@@ -93,7 +103,7 @@ const companyAdminData = {
     nationalId: 'CA123456789',
     dateOfBirth: new Date('1985-05-15'),
     companies: ['company-uuid-1'],
-    department: 'management',
+    assignedDepartments: [],
     position: 'Admin'
 };
 
@@ -107,7 +117,7 @@ const shopManagerData = {
     nationalId: 'SM987654321',
     dateOfBirth: new Date('1990-03-20'),
     shops: ['shop-uuid-1'],
-    department: 'sales_manager',
+    assignedDepartments: [],
     position: 'Manager'
 };
 
@@ -120,7 +130,7 @@ const workerData = {
     role: 'worker',
     nationalId: 'W1122334455',
     dateOfBirth: new Date('1995-07-10'),
-    department: 'sales',
+    assignedDepartments: [],
     position: 'Associate'
 };
 
@@ -199,7 +209,7 @@ describe('Auth Service Tests', () => {
             expect(res.body.user.companies).toEqual(['company-uuid-1']);
             expect(res.body.user.shops).toEqual(['shop-uuid-1']);
             const user = await User.findOne({ email: shopManagerData.email });
-            expect(user.department).toBe('sales_manager');
+            expect(user.assignedDepartments).toEqual([]);
             expect(mockPublishEvent).toHaveBeenCalledWith('internal.user.registered', expect.objectContaining({ role: 'shop_manager' }));
         });
 
@@ -212,7 +222,7 @@ describe('Auth Service Tests', () => {
             expect(res.body.user.companies).toEqual(['company-uuid-1']);
             expect(res.body.user.shops).toEqual(['shop-uuid-1']);
             const user = await User.findOne({ email: workerData.email });
-            expect(user.department).toBe('sales');
+            expect(user.assignedDepartments).toEqual([]);
             expect(mockPublishEvent).toHaveBeenCalledWith('internal.user.registered', expect.objectContaining({ role: 'worker' }));
         });
 
