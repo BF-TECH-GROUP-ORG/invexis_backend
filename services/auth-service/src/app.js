@@ -78,9 +78,6 @@ app.use(passport.session());
 // });
 // app.use(limiter);
 
-// Serve static uploads for profile pictures
-app.use('/uploads', express.static(path.join(__dirname, '../Uploads')));
-
 // Routes
 app.use('/auth', authRoutes);
 
