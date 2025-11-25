@@ -632,3 +632,31 @@
 {"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-24T13:27:13.671Z"}
 {"level":"info","message":"✅ Database connected","timestamp":"2025-11-24T13:27:13.705Z"}
 {"address":"172.18.0.14","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.14:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.14:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-24T13:27:13.914Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-25T08:34:23.386Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-25T08:34:23.393Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-25T08:34:23.646Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-25T08:34:23.648Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-25T08:34:24.016Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-25T08:34:24.021Z"}
+{"capacity":50,"companyId":"63589267-e7aa-4692-b8b8-45b33ad94fc6","createdAt":"2025-11-25T08:35:54.407Z","level":"info","location":{"address":"29554","address2":"29282","city":"Ipsum illum obcaec","country":"VO","latitude":7,"longitude":97,"postal_code":"Ex et quo iure aut q","region":"Enim eum consequuntu"},"message":"🏪 Processing shop event: shop.created","name":"Elaine Rodriguez","shopId":"5ebdcb6e-6653-403d-930a-128a205e1962","status":"open","timestamp":"2025-11-25T08:35:55.022Z","timezone":"UTC","traceId":"62e3cc7c-a0c9-45b0-8e2c-349eac9d69cd"}
+{"level":"info","message":"🏪 New shop created: undefined (5ebdcb6e-6653-403d-930a-128a205e1962)","timestamp":"2025-11-25T08:35:55.023Z"}
+{"level":"error","message":"❌ Error creating shop notification:","timestamp":"2025-11-25T08:35:55.048Z"}
+{"level":"error","message":"❌ Error handling shop event: Notification validation failed: templateName: Path `templateName` is required.","timestamp":"2025-11-25T08:35:55.049Z"}
+{"capacity":30,"companyId":"07f0c16d-95af-4cd6-998b-edfea57d87d7","createdAt":"2025-11-25T08:52:33.652Z","level":"info","location":{"address":"76 South New Avenue","address2":"Cumque qui magnam nu","city":"Amet dolor quidem u","country":"IU","latitude":19,"longitude":72,"postal_code":"Laborum consequatur","region":"Ut dolorem maiores e"},"message":"🏪 Processing shop event: shop.created","name":"Silas Hahn","shopId":"aeeca036-424c-42b9-94e6-1e9a0346dd84","status":"open","timestamp":"2025-11-25T08:52:34.662Z","timezone":"UTC","traceId":"4e92826c-bd91-4291-a401-4a5d1273aa4a"}
+{"level":"info","message":"🏪 New shop created: undefined (aeeca036-424c-42b9-94e6-1e9a0346dd84)","timestamp":"2025-11-25T08:52:34.664Z"}
+{"level":"error","message":"❌ Error creating shop notification:","timestamp":"2025-11-25T08:52:34.671Z"}
+{"level":"error","message":"❌ Error handling shop event: Notification validation failed: templateName: Path `templateName` is required.","timestamp":"2025-11-25T08:52:34.672Z"}
+{"capacity":28,"companyId":"07f0c16d-95af-4cd6-998b-edfea57d87d7","createdAt":"2025-11-25T09:03:46.325Z","level":"info","location":{"address":"380 West Oak Drive","address2":"Est ut similique eo","city":"Facilis corporis ear","country":"QU","latitude":40,"longitude":68,"postal_code":"Officia nihil velit","region":"Eiusmod libero recus"},"message":"🏪 Processing shop event: shop.created","name":"Carolyn Paul","shopId":"3db3d5b5-83d7-4428-836c-df322593a6cc","status":"open","timestamp":"2025-11-25T09:03:47.098Z","timezone":"UTC","traceId":"9e34dfb6-6b32-4385-8a40-7578e1b6ea8e"}
+{"level":"info","message":"🏪 New shop created: undefined (3db3d5b5-83d7-4428-836c-df322593a6cc)","timestamp":"2025-11-25T09:03:47.102Z"}
+{"level":"error","message":"❌ Error creating shop notification:","timestamp":"2025-11-25T09:03:47.112Z"}
+{"level":"error","message":"❌ Error handling shop event: Notification validation failed: templateName: Path `templateName` is required.","timestamp":"2025-11-25T09:03:47.113Z"}
+{"deviceId":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36","ip":"::ffff:172.18.0.4","level":"info","message":"🔐 Processing auth event: auth.session.created","sessionId":"6925798aca9c274f9591895a","timestamp":"2025-11-25T09:40:26.922Z","userId":"69245db15630218ace02b5d3"}
+{"level":"warn","message":"⚠️ Unhandled auth event type: auth.session.created","timestamp":"2025-11-25T09:40:26.935Z"}
+{"data":{"device":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36","ip":"::ffff:172.18.0.4","method":"password","role":"super_admin","userId":"69245db15630218ace02b5d3"},"event":"user.logged_in","level":"info","message":"🔐 Processing auth event: auth.user.logged_in","service":"auth-service","timestamp":"2025-11-25T09:40:26.917Z"}
+{"level":"warn","message":"⚠️ Unhandled auth event type: auth.user.logged_in","timestamp":"2025-11-25T09:40:26.942Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-25T09:52:32.877Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-25T09:52:32.906Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-25T09:52:33.141Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-25T09:52:33.143Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-25T09:52:33.472Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-25T09:52:33.480Z"}
