@@ -16,7 +16,7 @@ const baseUserSchema = Joi.object({
     companies: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['company-uuid-123']
     shops: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['shop-uuid-456']
     position: Joi.string().max(100).optional(),
-    department: Joi.string().valid("sales", "inventory_management", "inventory_operations", "sales_manager", "development", "hr", "management", "other").optional(),
+    assignedDepartments: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['dept-uuid-789']
     employmentStatus: Joi.string().valid("active", "on_leave", "suspended", "terminated").default("active"),
     emergencyContact: Joi.object({
         name: Joi.string().min(2).max(50).optional(),
@@ -61,7 +61,7 @@ const registerSchema = baseUserSchema.keys({
         value.companies = []; // No prompt
         value.shops = [];
         value.nationalId = undefined;
-        value.department = undefined;
+        value.assignedDepartments = [];
         value.position = undefined;
         value.emergencyContact = null;
         value.address = null;
@@ -85,9 +85,7 @@ const registerSchema = baseUserSchema.keys({
             if (!value.shops?.length) return helpers.error('any.required', { key: 'shops' });
             value.shops = value.shops.map(id => id.toString()); // Ensure strings
         }
-        if (value.role === 'worker' && !value.department) {
-            return helpers.error('any.required', { key: 'department' });
-        }
+        // assignedDepartments optional for worker
         // Company admin: No shops req
         if (value.role === 'company_admin') value.shops = [];
     }
@@ -95,7 +93,7 @@ const registerSchema = baseUserSchema.keys({
     if (value.role === 'super_admin') {
         value.companies = [];
         value.shops = [];
-        value.department = null;
+        value.assignedDepartments = [];
         value.position = null;
     }
     // Phone encouraged

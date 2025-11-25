@@ -176,6 +176,8 @@ const createProduct = asyncHandler(async (req, res) => {
   delete req.body.images;
   delete req.body.videos;
 
+  // Use pre-generated ID from middleware (if available) or let MongoDB generate one
+  // The ID is pre-generated in middleware to use in Cloudinary upload paths
   const product = new Product(req.body);
 
   // Add audit trail entry

@@ -103,6 +103,29 @@ async function setupSubscribers() {
         }
     );
 
+    // Department updates from shop service
+    await subscribe(
+        { queue: 'auth_department_updates', exchange: exchanges.topic, pattern: 'shop.department.user.*' },
+        async (content, routingKey) => {
+            const { event, data: { userId, departmentId, action } } = content;
+            if (!['shop.department.user.assigned', 'shop.department.user.removed'].includes(event)) return;
+            const user = await User.findById(userId);
+            if (!user) return console.warn(`User ${userId} not found for department update`);
+
+            if (!user.assignedDepartments) user.assignedDepartments = [];
+
+            if (action === 'assigned' && !user.assignedDepartments.includes(departmentId)) {
+                user.assignedDepartments.push(departmentId);
+            } else if (action === 'removed') {
+                user.assignedDepartments = user.assignedDepartments.filter(id => id !== departmentId);
+            }
+            await user.save();
+            await invalidateUserCache(userId);
+            await publishEvent('auth.user.tenancy.updated', { userId, departmentId, action: 'department' });
+            console.log(`Updated department for user ${userId}: ${action} ${departmentId}`);
+        }
+    );
+
     console.log('AuthService: Subscribers set up for external tenancy updates');
 }
 
@@ -203,7 +226,7 @@ async function register(data, options = {}) {
     if (user.role === 'customer') {
         await publishEvent('customer.registered', { userId: user._id, firstName: user.firstName, lastName: user.lastName, phone: user.phone, email: user.email }); // Notification: OTP/welcome
     } else {
-        await publishEvent('internal.user.registered', { userId: user._id, role: user.role, department: user.department, companies: user.companies, shops: user.shops }); // HR/audit
+        await publishEvent('internal.user.registered', { userId: user._id, role: user.role, assignedDepartments: user.assignedDepartments, companies: user.companies, shops: user.shops }); // HR/audit
     }
 
     // Tenancy event if assigned

@@ -3,7 +3,7 @@ const { createUploadMiddleware, handleUploadError } = require('/app/shared/cloud
 
 // Create upload middleware for product images and videos
 const upload = createUploadMiddleware({
-  folder: 'products/{shopId}',
+  folder: 'products/{productId}',
   allowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'avi', 'webm'],
   maxFileSize: 50 * 1024 * 1024, // 50MB
   resourceType: 'auto', // Auto-detect image or video

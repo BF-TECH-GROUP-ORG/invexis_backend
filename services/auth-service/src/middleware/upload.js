@@ -1,5 +1,6 @@
-// Import shared Cloudinary utilities
-const { createUploadMiddleware, handleUploadError } = require('/app/shared/cloudinary');
+const path = require('path');
+// Import shared Cloudinary utilities - use relative path for test compatibility
+const { createUploadMiddleware, handleUploadError } = require(path.resolve(__dirname, '../../../../shared/cloudinary'));
 
 // Create upload middleware for profile pictures
 const upload = createUploadMiddleware({
