@@ -618,3 +618,26 @@
 {"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-24T09:12:52.473Z"}
 {"companyId":"b9f76bc0-c372-4023-9eae-0943688eae45","domain":"techhub-rw-1763725478.com","level":"info","message":"🏢 Processing company event: company.updated","name":"Kajo Rwanda ","tier":"Basic","timestamp":"2025-11-24T09:18:13.925Z","traceId":"9203cbff-ce8e-4f20-bc2a-2653984b5200","trace_id":"29de4139-2160-43f1-ac24-226c2cefd603","updatedAt":"2025-11-24T09:18:13.395Z"}
 {"level":"info","message":"📝 Company updated: Kajo Rwanda  (b9f76bc0-c372-4023-9eae-0943688eae45)","timestamp":"2025-11-24T09:18:13.929Z"}
+{"capacity":18,"companyId":"63589267-e7aa-4692-b8b8-45b33ad94fc6","createdAt":"2025-11-24T11:50:04.792Z","level":"info","location":{"address":"12 Rocky Cowley Lane","address2":"Officiis modi dolore","city":"Velit et quaerat vol","country":"CO","latitude":95,"longitude":37,"postal_code":"Sint quaerat accusan","region":"Esse dicta voluptas "},"message":"🏪 Processing shop event: shop.created","name":"Iola Rowland","shopId":"5c7ed733-f892-4435-bf13-3427d44e1618","status":"open","timestamp":"2025-11-24T11:50:05.263Z","timezone":"UTC","traceId":"1ed9f07b-ed06-4238-b45b-0ec4375decb1"}
+{"level":"info","message":"🏪 New shop created: undefined (5c7ed733-f892-4435-bf13-3427d44e1618)","timestamp":"2025-11-24T11:50:05.340Z"}
+{"level":"error","message":"❌ Error creating shop notification:","timestamp":"2025-11-24T11:50:05.815Z"}
+{"level":"error","message":"❌ Error handling shop event: Notification validation failed: templateName: Path `templateName` is required.","timestamp":"2025-11-24T11:50:05.818Z"}
+{"capacity":58,"companyId":"63589267-e7aa-4692-b8b8-45b33ad94fc6","createdAt":"2025-11-24T11:54:03.437Z","level":"info","location":{"address":"134 East Rocky Cowley Court","address2":"Pariatur Sapiente s","city":"Quia atque quaerat s","country":"CO","latitude":55,"longitude":19,"postal_code":"In irure ullamco cor","region":"Assumenda illo beata"},"message":"🏪 Processing shop event: shop.created","name":"Sonia Gamble","shopId":"f7768e41-73d0-457d-8901-d6a72c6b8a9e","status":"open","timestamp":"2025-11-24T11:54:04.071Z","timezone":"UTC","traceId":"6f5b70c9-df7b-45ec-b61b-96a96f877b6e"}
+{"level":"info","message":"🏪 New shop created: undefined (f7768e41-73d0-457d-8901-d6a72c6b8a9e)","timestamp":"2025-11-24T11:54:04.079Z"}
+{"level":"error","message":"❌ Error creating shop notification:","timestamp":"2025-11-24T11:54:04.092Z"}
+{"level":"error","message":"❌ Error handling shop event: Notification validation failed: templateName: Path `templateName` is required.","timestamp":"2025-11-24T11:54:04.092Z"}
+{"capacity":76,"companyId":"63589267-e7aa-4692-b8b8-45b33ad94fc6","createdAt":"2025-11-24T11:55:11.639Z","level":"info","location":{"address":"55 Oak Drive","address2":"Qui ea dolor rem ea ","city":"Maiores laboris ut c","country":"OM","latitude":17,"longitude":32,"postal_code":"Voluptate quos et no","region":"Nihil eum quo asperi"},"message":"🏪 Processing shop event: shop.created","name":"Zeph Barrett","shopId":"9d973ff1-1623-489f-933a-d70b0657ede7","status":"open","timestamp":"2025-11-24T11:55:11.834Z","timezone":"UTC","traceId":"d64498a4-6b0b-4caf-8e1d-4b9c8689f759"}
+{"level":"info","message":"🏪 New shop created: undefined (9d973ff1-1623-489f-933a-d70b0657ede7)","timestamp":"2025-11-24T11:55:11.839Z"}
+{"level":"error","message":"❌ Error creating shop notification:","timestamp":"2025-11-24T11:55:11.851Z"}
+{"level":"error","message":"❌ Error handling shop event: Notification validation failed: templateName: Path `templateName` is required.","timestamp":"2025-11-24T11:55:11.852Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-24T15:16:22.831Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-24T15:16:22.883Z"}
+{"address":"172.18.0.16","code":"ECONNREFUSED","errno":-111,"level":"error","message":"Failed to start notification service: connect ECONNREFUSED 172.18.0.16:5672","port":5672,"stack":"Error: connect ECONNREFUSED 172.18.0.16:5672\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)","syscall":"connect","timestamp":"2025-11-24T15:16:23.022Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-25T07:52:25.218Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-25T07:52:25.290Z"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-11-25T07:55:04.449Z"}
+{"level":"info","message":"✅ Database connected","timestamp":"2025-11-25T07:55:04.460Z"}
+{"level":"info","message":"✅ RabbitMQ connected","timestamp":"2025-11-25T07:55:04.866Z"}
+{"level":"info","message":"✅ Event publishers initialized","timestamp":"2025-11-25T07:55:04.884Z"}
+{"level":"info","message":"✅ Event consumers started","timestamp":"2025-11-25T07:55:06.124Z"}
+{"level":"info","message":"🚀 Notification Service running on port 8008","timestamp":"2025-11-25T07:55:06.142Z"}

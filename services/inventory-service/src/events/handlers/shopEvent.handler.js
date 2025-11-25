@@ -5,7 +5,6 @@
  */
 
 const Product = require("../../models/Product");
-const { logger } = require("../../utils/logger");
 
 /**
  * Handle shop created event - Register shop as warehouse and link to products
@@ -14,7 +13,7 @@ async function handleShopCreated(data) {
   try {
     const { shopId, companyId, name, location } = data.payload || data;
 
-    logger.info(`🏪 Processing shop created: ${shopId} (${name})`);
+    console.log(`🏪 Processing shop created: ${shopId} (${name})`);
 
     // Warehouse model removed; no warehouse entry is created for shops.
     let warehouseId = null;
@@ -41,11 +40,11 @@ async function handleShopCreated(data) {
       }
     );
 
-    logger.info(`✅ Linked shop ${shopId} to ${result.modifiedCount} products via shopAvailability`);
+    console.log(`✅ Linked shop ${shopId} to ${result.modifiedCount} products via shopAvailability`);
 
     return { success: true, productsLinked: result.modifiedCount, warehouseId };
   } catch (error) {
-    logger.error(`❌ Error handling shop created: ${error.message}`);
+    console.error(`❌ Error handling shop created:`, error);
     throw error;
   }
 }
@@ -57,7 +56,7 @@ async function handleShopDeleted(data) {
   try {
     const { shopId, companyId } = data.payload || data;
 
-    logger.info(`🏪 Processing shop deleted: ${shopId}`);
+    console.log(`🏪 Processing shop deleted: ${shopId}`);
 
     // 1. Remove shop from shopAvailability in all products
     const result = await Product.updateMany(
@@ -69,7 +68,7 @@ async function handleShopDeleted(data) {
       }
     );
 
-    logger.info(
+    console.log(
       `✅ Removed shop ${shopId} from ${result.modifiedCount} products`
     );
 
@@ -77,7 +76,7 @@ async function handleShopDeleted(data) {
 
     return { success: true, productsUnlinked: result.modifiedCount };
   } catch (error) {
-    logger.error(`❌ Error handling shop deleted: ${error.message}`);
+    console.error(`❌ Error handling shop deleted:`, error);
     throw error;
   }
 }
@@ -89,7 +88,7 @@ async function handleShopStatusChanged(data) {
   try {
     const { shopId, companyId, status } = data.payload || data;
 
-    logger.info(`🏪 Processing shop status changed: ${shopId} -> ${status}`);
+    console.log(`🏪 Processing shop status changed: ${shopId} -> ${status}`);
 
     const enabled = status === "open";
 
@@ -110,13 +109,13 @@ async function handleShopStatusChanged(data) {
       }
     );
 
-    logger.info(
+    console.log(
       `✅ Updated shop availability (enabled=${enabled}) for ${result.modifiedCount} products`
     );
 
     return { success: true, productsUpdated: result.modifiedCount };
   } catch (error) {
-    logger.error(`❌ Error handling shop status changed: ${error.message}`);
+    console.error(`❌ Error handling shop status changed:`, error);
     throw error;
   }
 }
@@ -126,28 +125,29 @@ async function handleShopStatusChanged(data) {
  */
 module.exports = async function handleShopEvent(event) {
   try {
-    const { type, data } = event;
+    const { type, payload, data } = event;
+    const eventData = payload || data;
 
-    logger.info(`🏪 Processing shop event: ${type}`);
+    console.log(`🏪 Processing shop event: ${type}`);
 
     switch (type) {
       case "shop.created":
-        await handleShopCreated(data);
+        await handleShopCreated(eventData);
         break;
 
       case "shop.deleted":
-        await handleShopDeleted(data);
+        await handleShopDeleted(eventData);
         break;
 
       case "shop.status.changed":
-        await handleShopStatusChanged(data);
+        await handleShopStatusChanged(eventData);
         break;
 
       default:
-        logger.warn(`⚠️ Unhandled shop event type: ${type}`);
+        console.warn(`⚠️ Unhandled shop event type: ${type}`);
     }
   } catch (error) {
-    logger.error(`❌ Error handling shop event: ${error.message}`);
+    console.error(`❌ Error handling shop event:`, error);
     throw error;
   }
 };
