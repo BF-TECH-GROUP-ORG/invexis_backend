@@ -4,6 +4,7 @@ const logger = require("../utils/logger");
 const DeliveryLog = require("../models/DeliveryLog");
 const { checkRateLimit } = require("../utils/rateLimiter");
 const { createSmsCircuitBreaker } = require("../utils/circuitBreaker");
+const { getSmsMessage, hasTemplate } = require("../config/smsTemplates");
 
 /**
  * Core SMS sending function (wrapped by circuit breaker)
@@ -12,20 +13,32 @@ const sendSMSCore = async (notification, phoneNumber, userId, companyId) => {
   const startTime = Date.now();
 
   try {
-    // Get SMS-specific compiled content or fallback to legacy fields
-    const smsContent = notification.getContentForChannel('sms');
-
     let messageBody;
 
-    if (smsContent) {
-      messageBody = smsContent.message;
+    // Use the new simple template system
+    if (notification.templateName && hasTemplate(notification.templateName)) {
+      messageBody = getSmsMessage(
+        notification.templateName,
+        notification.payload || {},
+        { maxLength: 160, truncate: true }
+      );
+      logger.info(`✅ Using SMS template: ${notification.templateName}`);
+    } else if (notification.compiledContent?.sms?.message) {
+      // Support legacy compiled content if it exists
+      messageBody = notification.compiledContent.sms.message;
+      logger.info(`Using legacy compiled SMS content`);
     } else {
-      // Fallback to legacy fields with length limit
+      // Final fallback to legacy title + body fields
       const title = notification.title || '';
       const body = notification.body || '';
       const combined = title ? `${title}: ${body}` : body;
       messageBody = combined.length > 160 ? combined.substring(0, 157) + '...' : combined;
-      logger.warn(`No SMS template found for notification ${notification._id}, using legacy fields`);
+      logger.warn(`No SMS template found for ${notification.templateName}, using legacy fields`);
+    }
+
+    // Validate message
+    if (!messageBody || messageBody.trim().length === 0) {
+      throw new Error('SMS message body is empty');
     }
 
     const messageOptions = {
@@ -34,23 +47,20 @@ const sendSMSCore = async (notification, phoneNumber, userId, companyId) => {
       to: phoneNumber,
     };
 
-    // Add Unicode support if specified in template
-    if (smsContent?.allowUnicode === false) {
-      // Force ASCII encoding by removing non-ASCII characters
-      messageOptions.body = messageBody.replace(/[^\x00-\x7F]/g, '');
-    }
-
+    // Send via Twilio
     const message = await client.messages.create(messageOptions);
     const responseTime = Date.now() - startTime;
 
     logger.info(`✅ SMS sent to ${phoneNumber} in ${responseTime}ms (${messageBody.length} chars)`);
+    logger.debug(`SMS content: "${messageBody}"`);
 
     return {
       success: true,
       providerId: message.sid,
       responseTime,
       recipient: phoneNumber,
-      messageLength: messageBody.length
+      messageLength: messageBody.length,
+      message: messageBody
     };
   } catch (error) {
     const responseTime = Date.now() - startTime;
@@ -72,6 +82,12 @@ const smsCircuitBreaker = createSmsCircuitBreaker(sendSMSCore);
  * Send SMS with rate limiting, circuit breaker, and delivery logging
  */
 const sendSMS = async (notification, phoneNumber, userId, companyId) => {
+  // Validate phone number
+  if (!phoneNumber) {
+    logger.error('❌ Cannot send SMS: phone number is missing');
+    return { success: false, error: 'Phone number is required' };
+  }
+
   // Create delivery log
   const deliveryLog = await DeliveryLog.createLog({
     notificationId: notification._id,
@@ -91,8 +107,9 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
       await DeliveryLog.markAsFailed(
         deliveryLog._id,
         error,
-        new Date(Date.now() + 60000)
+        new Date(Date.now() + 60000) // Retry after 1 minute
       );
+      logger.warn(`⚠️ SMS rate limit exceeded for company ${companyId}`);
       return { success: false, rateLimited: true };
     }
 
@@ -110,15 +127,21 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
         result.providerId,
         result.responseTime
       );
-      return { success: true, logId: deliveryLog._id };
+      return {
+        success: true,
+        logId: deliveryLog._id,
+        messageId: result.providerId,
+        messageLength: result.messageLength
+      };
     } else if (result.fallback) {
       const error = new Error(result.error);
       error.code = "CIRCUIT_BREAKER_OPEN";
       await DeliveryLog.markAsFailed(
         deliveryLog._id,
         error,
-        new Date(Date.now() + 300000)
+        new Date(Date.now() + 300000) // Retry after 5 minutes
       );
+      logger.warn(`⚠️ SMS circuit breaker open for company ${companyId}`);
       return { success: false, circuitBreakerOpen: true };
     }
   } catch (error) {
@@ -130,6 +153,8 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
       error.error || error,
       nextRetryAt
     );
+
+    logger.error(`❌ Failed to send SMS to ${phoneNumber}:`, error.message);
     return { success: false, error: error.message, logId: deliveryLog._id };
   }
 };

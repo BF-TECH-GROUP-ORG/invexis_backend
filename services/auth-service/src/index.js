@@ -20,20 +20,19 @@ try {
 
 const PORT = process.env.PORT || 8001;
 
-// Validate critical environment variables
-const requiredEnvVars = [
-    'MONGO_URI',
+// Validate required environment variables
+const requiredVars = [
+    'DB_MONGO',
     'JWT_ACCESS_SECRET',
     'JWT_REFRESH_SECRET',
     'SESSION_SECRET',
-    'GOOGLE_CLIENT_ID',
-    'GOOGLE_CLIENT_SECRET',
-    'GOOGLE_CALLBACK_URL',
-    'UPLOAD_PATH'
+    'CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET'
 ];
-const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
-if (missingEnvVars.length > 0) {
-    console.error(`Missing environment variables: ${missingEnvVars.join(', ')}`);
+const missingVars = requiredVars.filter(v => !process.env[v]);
+if (missingVars.length > 0) {
+    console.error(`Missing environment variables: ${missingVars.join(', ')}`);
     process.exit(1);
 }
 
