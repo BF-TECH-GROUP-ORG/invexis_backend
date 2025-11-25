@@ -150,7 +150,7 @@ const getShopById = asyncHandler(async (req, res) => {
   }
 
   // Verify company ownership
-  const companyId = req.user?.companyId || req.body.companyId;
+  const companyId = req.user?.companyId || req.body.companyId|| req.query.companyId;
   if (shop.company_id !== companyId) {
     res.status(403);
     throw new Error("Unauthorized: Shop does not belong to your company");
@@ -178,7 +178,7 @@ const updateShop = asyncHandler(async (req, res) => {
   }
 
   // Verify company ownership
-  const companyId = req.user?.companyId || req.body.companyId;
+  const companyId = req.user?.companyId || req.body.companyId || req.query.companyId;
   if (shop.company_id !== companyId) {
     res.status(403);
     throw new Error("Unauthorized: Shop does not belong to your company");
@@ -291,7 +291,7 @@ const deleteShop = asyncHandler(async (req, res) => {
   }
 
   // Verify company ownership
-  const companyId = req.user?.companyId || req.body.companyId;
+  const companyId = req.user?.companyId || req.body.companyId || req.query.companyId;
   if (shop.company_id !== companyId) {
     res.status(403);
     throw new Error("Unauthorized: Shop does not belong to your company");

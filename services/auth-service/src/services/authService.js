@@ -237,7 +237,16 @@ async function register(data, options = {}) {
     // Cache
     await redis.set(`user:${user._id}`, JSON.stringify(user.toObject({ versionKey: false })), 'EX', CACHE_TTLS.user);
 
-    return { user: user.toObject({ versionKey: false, transform: doc => { delete doc.password; return doc; } }), verificationTokens };
+    // Generate refreshToken and session for the new user
+    const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
+    user.sessions.push(session._id);
+    await user.save();
+
+    return {
+        user: user.toObject({ versionKey: false, transform: doc => { delete doc.password; return doc; } }),
+        verificationTokens,
+        refreshToken
+    };
 }
 
 // Login (cached, rate-limited)
@@ -327,7 +336,7 @@ async function login(data, options = {}) {
         return {
             ok: true,
             accessToken: tokenService.signAccess({ sub: user._id.toString() }),
-            refreshToken,
+            refreshToken:refreshToken,
             user: await getCachedUser(user._id, '-password')
         };
     } catch (error) {

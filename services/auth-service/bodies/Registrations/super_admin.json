@@ -21,8 +21,7 @@
         "language": "en",
         "notifications": {
             "email": true,
-            "sms": true,
-            "inApp": true
+            "sms": true
         }
     }
 }
