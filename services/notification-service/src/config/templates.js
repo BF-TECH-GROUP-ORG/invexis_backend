@@ -118,6 +118,40 @@ const templates = {
             subject: 'Order {{orderId}} confirmed',
             content: 'Your order {{orderId}} has been confirmed.'
         }
+    },
+
+    otp: {
+        email: {
+            subject: 'Your Verification Code - {{companyName}}',
+            content: loadTemplate('otp.html'),
+            metadata: {
+                priority: 'high'
+            }
+        },
+        sms: {
+            content: '{{companyName}} OTP: {{otp}}. Valid for {{expiryMinutes}} minutes. Do not share this code.',
+            metadata: {
+                maxLength: 160
+            }
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Verification Code',
+                body: 'Your OTP: {{otp}}. Valid for {{expiryMinutes}} minutes',
+                data: {
+                    action: 'otp',
+                    otp: '{{otp}}'
+                }
+            }),
+            metadata: {
+                sound: 'default',
+                priority: 'high'
+            }
+        },
+        inApp: {
+            subject: 'Your Verification Code',
+            content: 'Your OTP is {{otp}}. Valid for {{expiryMinutes}} minutes.'
+        }
     }
 };
 

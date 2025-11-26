@@ -43,7 +43,7 @@ const login = async (req, res) => {
         sameSite: 'lax',
         maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
     });
-    res.json({ ok: true, accessToken: result.accessToken, refreshToken: result.refreshToken, user: result.user });
+    res.json({ ok: true, accessToken: result.accessToken, user: result.user });
 };
 
 // Request OTP for login
@@ -505,6 +505,32 @@ const getCurrentUser = async (req, res, next) => {
     }
 };
 
+// Update FCM token for push notifications
+const updateFcmToken = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ ok: false, message: 'Authentication required' });
+        }
+
+        const { fcmToken } = req.body;
+
+        if (!fcmToken) {
+            return res.status(400).json({ ok: false, message: 'FCM token is required' });
+        }
+
+        const User = require('../models/User.models');
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { fcmToken },
+            { new: true, select: 'fcmToken' }
+        );
+
+        res.json({ ok: true, message: 'FCM token updated successfully', fcmToken: user.fcmToken });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     register,
     login,
@@ -538,5 +564,6 @@ module.exports = {
     deleteUser,
     getUserById,
     acceptConsent,
-    getCurrentUser
+    getCurrentUser,
+    updateFcmToken
 };

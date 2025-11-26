@@ -57,6 +57,18 @@ async function handleSaleCreated(data) {
 
     const { dispatchEvent } = require("../../services/dispatcher");
 
+    // Determine channels
+    const channels = {
+      email: !!customerEmail,
+      push: true,
+      inApp: true,
+      sms: !!customerPhone
+    };
+
+    if (!customerPhone) {
+      logger.warn(`⚠️ No phone number for sale ${saleId}, SMS skipped`);
+    }
+
     await dispatchEvent({
       event: "sale.created",
       data: {
@@ -67,7 +79,7 @@ async function handleSaleCreated(data) {
       recipients: [createdBy],
       companyId,
       templateName: "sale_created",
-      channels: { email: true, push: true, inApp: true }
+      channels
     });
 
     logger.info(`✅ Sale creation notification dispatched for sale ${saleId}`);

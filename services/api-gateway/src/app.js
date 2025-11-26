@@ -44,7 +44,7 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With","ngrok-skip-browser-warning","Access-Control-Allow-Origin"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With","ngrok-skip-browser-warning"],
     credentials: true,
   })
 );
