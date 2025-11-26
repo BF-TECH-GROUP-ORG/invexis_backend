@@ -48,6 +48,7 @@ router.put('/me', requireAuth, csrfProtection, checkTokenBlacklist, deviceFinger
 // router.put('/me/profile-picture', requireAuth, csrfProtection, uploadProfileImage, checkTokenBlacklist, authCtrl.updateProfilePicture);
 router.delete('/me', requireAuth, csrfProtection, checkTokenBlacklist, enforce2FA, auditLog('account_delete'), authCtrl.deleteAccount);
 router.post('/me/verify/resend/:type', requireAuth, csrfProtection, checkTokenBlacklist, authCtrl.resendVerification);
+router.post('/me/fcm-token', requireAuth, csrfProtection, checkTokenBlacklist, authCtrl.updateFcmToken);
 router.post('/me/email/change', requireAuth, csrfProtection, checkTokenBlacklist, enforce2FA, auditLog('email_change'), authCtrl.changeEmail);
 router.post('/me/email/change/confirm', requireAuth, csrfProtection, checkTokenBlacklist, authCtrl.confirmChangeEmail);
 router.post('/me/password/change', requireAuth, csrfProtection, checkTokenBlacklist, enforce2FA, auditLog('password_change'), authCtrl.changePassword);

@@ -27,6 +27,9 @@ const UserSchema = new mongoose.Schema({
     twoFAEnabled: { type: Boolean, default: false },
     twoFASecret: { type: String, select: false },
 
+    // Push Notifications (all)
+    fcmToken: { type: String, default: null }, // Firebase Cloud Messaging token for push notifications
+
     // Identity/HR (non-customer only)
     nationalId: { type: String, unique: true, sparse: true, match: /^[A-Z0-9]{5,20}$/, required: function () { return this.role !== 'customer'; } },
 

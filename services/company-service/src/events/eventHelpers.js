@@ -23,6 +23,8 @@ const companyEvents = {
           adminId: company.createdBy,
           name: company.name,
           email: company.email,
+          phone: company.phone,  // Added for SMS notifications
+          fcmToken: company.fcmToken,  // Added for push notifications
           domain: company.domain,
           tier: company.tier,
           createdAt: new Date().toISOString(),

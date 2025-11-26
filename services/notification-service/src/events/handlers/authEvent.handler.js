@@ -49,7 +49,7 @@ module.exports = async function handleAuthEvent(event, routingKey) {
  * Handle user creation
  */
 async function handleUserCreated(data) {
-  const { userId, email, companyId } = data;
+  const { userId, email, phone, companyId } = data;
 
   if (!userId || !email) {
     logger.warn("⚠️ User created event missing required fields");
@@ -61,16 +61,28 @@ async function handleUserCreated(data) {
 
     const { dispatchEvent } = require("../../services/dispatcher");
 
+    // Determine channels
+    const channels = {
+      email: !!email,
+      inApp: true,
+      sms: !!phone
+    };
+
+    if (!phone) {
+      logger.warn(`⚠️ No phone number for user ${userId}, SMS skipped`);
+    }
+
     await dispatchEvent({
       event: "user.created",
       data: {
         email,
+        phone,
         ...data,
       },
       recipients: [userId],
       companyId,
       templateName: "welcome",
-      channels: { email: true, inApp: true }
+      channels
     });
 
     logger.info(`✅ User creation notification dispatched for user ${userId}`);
@@ -94,10 +106,44 @@ async function handleUserVerified(data) {
  * Handle password reset
  */
 async function handlePasswordReset(data) {
-  const { userId, email } = data;
+  const { userId, email, phone, resetCode, companyId } = data;
 
-  logger.info(`🔑 Password reset requested: ${email} (${userId})`);
-  // Could send password reset notification
+  if (!userId || (!email && !phone)) {
+    logger.warn("⚠️ Password reset event missing required fields");
+    return;
+  }
+
+  try {
+    logger.info(`🔑 Password reset requested: ${email || phone} (${userId})`);
+
+    const { dispatchEvent } = require("../../services/dispatcher");
+
+    const channels = {
+      email: !!email,
+      sms: !!phone,
+      inApp: false // Usually password reset is external to app flow
+    };
+
+    await dispatchEvent({
+      event: "user.password.reset",
+      data: {
+        email,
+        phone,
+        resetCode,
+        userName: data.userName || 'User',
+        ...data,
+      },
+      recipients: [userId],
+      companyId,
+      templateName: "password_reset",
+      channels
+    });
+
+    logger.info(`✅ Password reset notification dispatched for user ${userId}`);
+  } catch (error) {
+    logger.error(`❌ Error creating password reset notification:`, error.message);
+    throw error;
+  }
 }
 
 /**

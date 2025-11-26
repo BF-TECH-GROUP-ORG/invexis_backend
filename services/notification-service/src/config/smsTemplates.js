@@ -169,6 +169,18 @@ const smsTemplates = {
     },
 
     /**
+     * OTP (One-Time Password) code
+     * @param {object} payload
+     * @param {string} payload.otp - OTP code (usually 6 digits)
+     * @param {string} payload.companyName - Company name
+     * @param {number} [payload.expiryMinutes=10] - Expiry time in minutes
+     */
+    otp: (payload) => {
+        const { otp, companyName, expiryMinutes = 10 } = payload;
+        return `${companyName} OTP: ${otp}. Valid for ${expiryMinutes} minutes. Do not share this code.`;
+    },
+
+    /**
      * Generic notification fallback
      * @param {object} payload
      * @param {string} payload.title - Notification title
