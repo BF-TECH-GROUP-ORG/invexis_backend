@@ -7,6 +7,7 @@ const { registerSchema, loginSchema, updateProfileSchema, updateUserSchema, chan
 const { hashPassword, comparePassword, hashToken } = require('../utils/hashPassword');
 const redis = require('/app/shared/redis.js');
 const { publish: publishRabbitMQ, exchanges, subscribe } = require('/app/shared/rabbitmq.js');
+const { publishUserEvent } = require('../events/producer');
 
 const User = require('../models/User.models');
 const Session = require('../models/Session.models');
@@ -221,6 +222,9 @@ async function register(data, options = {}) {
         await publishEvent('verification.requested', { userId: user._id, type: 'phone', details: { phone: value.phone }, role: user.role, firstName: user.firstName, lastName: user.lastName });
     }
 
+    // Publish user.created event for company service to create company-user relationship
+    await publishUserEvent.created(user);
+
     // Role-specific events
     await publishEvent('user.registered', { userId: user._id, role: user.role, email: user.email, phone: user.phone, firstName: user.firstName, lastName: user.lastName });
     if (user.role === 'customer') {
@@ -336,7 +340,7 @@ async function login(data, options = {}) {
         return {
             ok: true,
             accessToken: tokenService.signAccess({ sub: user._id.toString() }),
-            refreshToken:refreshToken,
+            refreshToken: refreshToken,
             user: await getCachedUser(user._id, '-password')
         };
     } catch (error) {
@@ -381,6 +385,8 @@ async function updateProfile(userId, data, profilePictureUrl = null) {
     await user.save();
     await invalidateUserCache(userId);
 
+    // Publish user.updated event for other services to sync
+    await publishUserEvent.updated(user);
     await publishEvent('user.profile.updated', { userId, role: user.role });
 
     return { user: await getCachedUser(userId) };

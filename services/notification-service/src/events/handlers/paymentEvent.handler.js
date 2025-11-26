@@ -49,7 +49,7 @@ module.exports = async function handlePaymentEvent(event, routingKey) {
  * Handle successful payment
  */
 async function handlePaymentSuccess(data) {
-  const { paymentId, companyId, amount, userId, email } = data;
+  const { paymentId, companyId, amount, userId, email, phone } = data;
 
   if (!paymentId || !companyId) {
     logger.warn("⚠️ Payment success event missing required fields");
@@ -59,22 +59,32 @@ async function handlePaymentSuccess(data) {
   try {
     logger.info(`✅ Payment successful: ${paymentId} (${amount})`);
 
-    const notification = await Notification.create({
-      companyId,
-      userId,
-      type: "payment_success",
-      title: "Payment Successful",
-      body: `Your payment of ${amount} has been processed successfully.`,
-      scope: "personal",
-      channels: { email: true, inApp: true },
-      payload: {
+    const { dispatchEvent } = require("../../services/dispatcher");
+
+    const channels = {
+      email: !!email,
+      inApp: true,
+      sms: !!phone
+    };
+
+    if (!phone) {
+      logger.warn(`⚠️ No phone number for payment ${paymentId}, SMS skipped`);
+    }
+
+    await dispatchEvent({
+      event: "payment.success",
+      data: {
         email,
+        phone,
         ...data,
       },
+      recipients: [userId],
+      companyId,
+      templateName: "payment_received",
+      channels
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Payment success notification queued for payment ${paymentId}`);
+    logger.info(`✅ Payment success notification dispatched for payment ${paymentId}`);
   } catch (error) {
     logger.error(`❌ Error creating payment success notification:`, error.message);
     throw error;
@@ -95,23 +105,32 @@ async function handlePaymentFailed(data) {
   try {
     logger.error(`❌ Payment failed: ${paymentId} - ${reason}`);
 
-    const notification = await Notification.create({
-      companyId,
-      userId,
-      type: "payment_failed",
-      title: "Payment Failed",
-      body: `Your payment of ${amount} failed. Reason: ${reason}. Please try again.`,
-      scope: "personal",
-      channels: { email: true, sms: true, inApp: true },
-      payload: {
+    const { dispatchEvent } = require("../../services/dispatcher");
+
+    const channels = {
+      email: !!email,
+      inApp: true,
+      sms: !!phone
+    };
+
+    if (!phone) {
+      logger.warn(`⚠️ No phone number for failed payment ${paymentId}, SMS skipped`);
+    }
+
+    await dispatchEvent({
+      event: "payment.failed",
+      data: {
         email,
         phone,
         ...data,
       },
+      recipients: [userId],
+      companyId,
+      templateName: "payment_failed", // Note: Need to ensure this template exists or falls back gracefully
+      channels
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Payment failed notification queued for payment ${paymentId}`);
+    logger.info(`✅ Payment failed notification dispatched for payment ${paymentId}`);
   } catch (error) {
     logger.error(`❌ Error creating payment failed notification:`, error.message);
     throw error;

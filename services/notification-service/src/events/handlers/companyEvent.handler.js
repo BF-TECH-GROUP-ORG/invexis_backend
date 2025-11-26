@@ -49,7 +49,7 @@ module.exports = async function handleCompanyEvent(event, routingKey) {
  * Handle company creation - Send welcome notification
  */
 async function handleCompanyCreated(data) {
-  const { companyId, name, adminId } = data;
+  const { companyId, name, adminId, email, phone, fcmToken } = data;
   console.log(data)
   if (!companyId || !adminId) {
     logger.warn("⚠️ Company created event missing required fields");
@@ -61,21 +61,42 @@ async function handleCompanyCreated(data) {
 
     const { dispatchEvent } = require("../../services/dispatcher");
 
+    // Determine which channels to enable based on available contact info
+    const channels = {
+      email: !!email,     // Enable email if email exists
+      inApp: true,        // Always enable in-app
+      sms: !!phone,       // Enable SMS only if phone exists
+      push: !!fcmToken    // Enable push if FCM token exists
+    };
+
+    if (!phone) {
+      logger.warn(`⚠️ No phone number provided for company ${companyId}, SMS will be skipped`);
+    }
+    if (!email) {
+      logger.warn(`⚠️ No email provided for company ${companyId}, email will be skipped`);
+    }
+    if (!fcmToken) {
+      logger.warn(`⚠️ No FCM token provided for company ${companyId}, push will be skipped`);
+    }
+
     await dispatchEvent({
       event: "company.created",
       data: {
-        email: data.email,
+        email: email,
+        phone: phone,        // Include phone number in payload
+        fcmToken: fcmToken,  // Include FCM token in payload
         companyName: name,
         userName: name,  // Use company name as username for welcome message
+        supportEmail: process.env.SUPPORT_EMAIL || 'support@invexis.com',
         ...data,
       },
       recipients: [adminId],
       companyId,
       templateName: "welcome",
-      channels: { email: true, inApp: true }
+      channels
     });
 
-    logger.info(`✅ Welcome notification dispatched for company ${companyId}`);
+    logger.info(`✅ Welcome notification dispatched for company ${companyId} (channels: ${Object.keys(channels).filter(k => channels[k]).join(', ')})`);
   } catch (error) {
     logger.error(`❌ Error creating welcome notification:`, error.message);
     throw error;

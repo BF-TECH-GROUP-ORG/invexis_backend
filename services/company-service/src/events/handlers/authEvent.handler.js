@@ -1,5 +1,7 @@
 "use strict";
-const CompanyUserController = require("../../controllers/companyUserController");
+const CompanyUser = require("../../models/companyUser.model");
+const Role = require("../../models/role.model");
+const User = require("../../models/user.model");
 
 /**
  * Handles authentication and user lifecycle events from auth-service
@@ -8,13 +10,18 @@ const CompanyUserController = require("../../controllers/companyUserController")
  */
 module.exports = async function handleAuthEvent(event) {
   try {
-    const { type, data } = event;
+    const type = event.type || event.event;
+    const data = event.data;
 
     console.log(`🔐 Processing auth event: ${type}`, data);
 
     switch (type) {
       case "user.created":
         await handleUserCreated(data);
+        break;
+
+      case "user.updated":
+        await handleUserUpdated(data);
         break;
 
       case "user.deleted":
@@ -43,7 +50,7 @@ module.exports = async function handleAuthEvent(event) {
  * Assign newly created user to their company
  */
 async function handleUserCreated(data) {
-  const { userId } = data;
+  const { userId, companies, role } = data;
 
   if (!userId) {
     console.warn("⚠️ User created event missing userId");
@@ -51,9 +58,43 @@ async function handleUserCreated(data) {
   }
 
   try {
-    console.log(`👤 New user created: ${userId}`);
-    await CompanyUserController.assignUserToCompany(userId);
-    console.log(`✅ User ${userId} assigned to company`);
+    // First, sync user data to local users table
+    await User.upsert(data);
+    console.log(`✅ User ${userId} data synced to local database`);
+
+    // Then handle company assignment if applicable
+    if (!companies || companies.length === 0) {
+      console.log(`ℹ️ User ${userId} has no companies assigned, skipping company-user creation`);
+      return;
+    }
+
+    console.log(`👤 New user created: ${userId}, Role: ${role}, Companies: ${companies}`);
+
+    for (const companyId of companies) {
+      // Find role ID for the company
+      let roleRecord = await Role.findByName(companyId, role);
+
+      if (!roleRecord) {
+        console.warn(`⚠️ Role '${role}' not found for company ${companyId}. Skipping assignment.`);
+        continue;
+      }
+
+      // Check if already assigned
+      const existing = await CompanyUser.findByUserAndCompany(userId, companyId);
+      if (existing) {
+        console.log(`ℹ️ User ${userId} already assigned to company ${companyId}`);
+        continue;
+      }
+
+      await CompanyUser.assign({
+        company_id: companyId,
+        user_id: userId,
+        role_id: roleRecord.id,
+        createdBy: 'system',
+      });
+      console.log(`✅ User ${userId} assigned to company ${companyId} with role ${role}`);
+    }
+
   } catch (error) {
     console.error(`❌ Error assigning user ${userId}:`, error.message);
     throw error;
@@ -61,8 +102,29 @@ async function handleUserCreated(data) {
 }
 
 /**
+ * Handle user update event
+ * Sync updated user data to local replica
+ */
+async function handleUserUpdated(data) {
+  const { userId } = data;
+
+  if (!userId) {
+    console.warn("⚠️ User updated event missing userId");
+    return;
+  }
+
+  try {
+    await User.upsert(data);
+    console.log(`✅ User ${userId} data updated in local database`);
+  } catch (error) {
+    console.error(`❌ Error updating user ${userId}:`, error.message);
+    throw error;
+  }
+}
+
+/**
  * Handle user deletion event
- * Remove user from all company-user relationships
+ * Remove user from all company-user relationships and local database
  */
 async function handleUserDeleted(data) {
   const { userId, companyId } = data;
@@ -74,8 +136,22 @@ async function handleUserDeleted(data) {
 
   try {
     console.log(`🗑️ User deleted: ${userId}`);
-    await CompanyUserController.removeUserFromCompany(userId, companyId);
-    console.log(`✅ User ${userId} removed from company relationships`);
+
+    // Remove from company assignments
+    if (companyId) {
+      await CompanyUser.remove(companyId, userId);
+      console.log(`✅ User ${userId} removed from company ${companyId}`);
+    } else {
+      const userCompanies = await CompanyUser.findByUser(userId);
+      for (const uc of userCompanies) {
+        await CompanyUser.remove(uc.company_id, userId);
+      }
+      console.log(`✅ User ${userId} removed from all companies`);
+    }
+
+    // Remove from local users table
+    await User.delete(userId);
+    console.log(`✅ User ${userId} removed from local database`);
   } catch (error) {
     console.error(`❌ Error removing user ${userId}:`, error.message);
     throw error;
@@ -96,7 +172,7 @@ async function handleUserSuspended(data) {
 
   try {
     console.log(`⏸️ User suspended: ${userId} from company ${companyId}`);
-    await CompanyUserController.suspendUser(userId, companyId);
+    await CompanyUser.suspend(companyId, userId, 'system');
     console.log(`✅ User ${userId} suspended from company ${companyId}`);
   } catch (error) {
     console.error(`❌ Error suspending user ${userId}:`, error.message);
@@ -118,7 +194,10 @@ async function handleAllUsersSuspended(data) {
 
   try {
     console.log(`⏸️ All users suspended from company: ${companyId}`);
-    await CompanyUserController.suspendAllUsersFromCompany(companyId);
+    const users = await CompanyUser.findByCompany(companyId);
+    for (const user of users) {
+      await CompanyUser.suspend(companyId, user.user_id, 'system');
+    }
     console.log(`✅ All users suspended from company ${companyId}`);
   } catch (error) {
     console.error(
