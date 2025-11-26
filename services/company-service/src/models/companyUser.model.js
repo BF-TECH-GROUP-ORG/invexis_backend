@@ -2,7 +2,7 @@ const db = require("../config");
 const { v4: uuidv4 } = require("uuid");
 
 class CompanyUser {
-  static table = "company_users";
+  static table = "company_role_assignments";
 
   constructor(data) {
     this.id = uuidv4();
@@ -10,10 +10,10 @@ class CompanyUser {
     this.user_id = data.user_id;
     this.role_id = data.role_id;
     this.status = data.status || "active"; // active | suspended
-    this.createdBy = data.createdBy || null;
-    this.updatedBy = data.updatedBy || null;
-    this.createdAt = new Date();
-    this.updatedAt = new Date();
+    this.assigned_by = data.createdBy || null; // mapped from createdBy
+    this.updated_by = data.updatedBy || null; // mapped from updatedBy
+    this.assigned_at = new Date(); // mapped from createdAt
+    this.updated_at = new Date(); // mapped from updatedAt
   }
 
   // ✅ Assign a user to a company with a role
@@ -46,8 +46,8 @@ class CompanyUser {
       .where({ company_id: companyId, user_id: userId })
       .update({
         role_id: roleId,
-        updatedBy: actor,
-        updatedAt: new Date(),
+        updated_by: actor,
+        updated_at: new Date(),
       });
     return this.findByUserAndCompany(userId, companyId);
   }
@@ -58,8 +58,8 @@ class CompanyUser {
       .where({ company_id: companyId, user_id: userId })
       .update({
         status: "suspended",
-        updatedBy: actor,
-        updatedAt: new Date(),
+        updated_by: actor,
+        updated_at: new Date(),
       });
     return this.findByUserAndCompany(userId, companyId);
   }

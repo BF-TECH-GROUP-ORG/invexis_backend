@@ -385,6 +385,8 @@ async function updateProfile(userId, data, profilePictureUrl = null) {
     await user.save();
     await invalidateUserCache(userId);
 
+    // Publish user.updated event for other services to sync
+    await publishUserEvent.updated(user);
     await publishEvent('user.profile.updated', { userId, role: user.role });
 
     return { user: await getCachedUser(userId) };

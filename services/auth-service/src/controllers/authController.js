@@ -43,7 +43,7 @@ const login = async (req, res) => {
         sameSite: 'lax',
         maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
     });
-    res.json({ ok: true, accessToken: result.accessToken, refreshToken: result.refreshToken, user: result.user });
+    res.json({ ok: true, accessToken: result.accessToken, user: result.user });
 };
 
 // Request OTP for login

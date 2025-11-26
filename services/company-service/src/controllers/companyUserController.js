@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const CompanyUser = require('../models/companyUser.model');
 const Company = require('../models/company.model');
 const Role = require('../models/role.model');
+const User = require('../models/user.model');
 const { publishCompanyUserEvent } = require('../events/producer');
 
 /**
@@ -57,14 +58,15 @@ const assignUserToCompany = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Get all users in a company
+ * @desc    Get all users in a company with full details
  * @route   GET /api/company-users/company/:companyId
  * @access  Private
  */
 const getUsersByCompany = asyncHandler(async (req, res) => {
   const { companyId } = req.params;
 
-  const users = await CompanyUser.findByCompany(companyId);
+  // Use User model which JOINs with company_role_assignments and users table
+  const users = await User.getByCompany(companyId);
 
   res.json({
     success: true,
@@ -214,7 +216,7 @@ const removeUserFromCompany = asyncHandler(async (req, res) => {
   });
 });
 
-const suspendAllUsersFromCompany=asyncHandler(async(req,res)=>{
+const suspendAllUsersFromCompany = asyncHandler(async (req, res) => {
   const { companyId } = req.params;
   const users = await CompanyUser.findByCompany(companyId);
   for (const user of users) {

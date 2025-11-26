@@ -2,7 +2,7 @@ const db = require("../config");
 const { v4: uuidv4 } = require("uuid");
 
 class Role {
-  static table = "roles";
+  static table = "company_roles";
 
   constructor(data) {
     this.id = uuidv4();

@@ -3,7 +3,7 @@
  * Publishes authentication and user lifecycle events
  */
 
-const { emit } = require('/app/shared/rabbitmq');
+const { publish, exchanges } = require('/app/shared/rabbitmq');
 
 /**
  * Publish user-related events
@@ -31,7 +31,7 @@ const publishUserEvent = {
                 }
             };
 
-            await emit('auth.user.created', eventData);
+            await publish(exchanges.topic, 'auth.user.created', eventData);
             console.log(`✅ Published user.created event for user ${user._id}`);
         } catch (error) {
             console.error('❌ Failed to publish user.created event:', error.message);
@@ -53,7 +53,7 @@ const publishUserEvent = {
                 }
             };
 
-            await emit('auth.user.updated', eventData);
+            await publish(exchanges.topic, 'auth.user.updated', eventData);
             console.log(`✅ Published user.updated event for user ${user._id}`);
         } catch (error) {
             console.error('❌ Failed to publish user.updated event:', error.message);
@@ -74,7 +74,7 @@ const publishUserEvent = {
                 }
             };
 
-            await emit('auth.user.deleted', eventData);
+            await publish(exchanges.topic, 'auth.user.deleted', eventData);
             console.log(`✅ Published user.deleted event for user ${userId}`);
         } catch (error) {
             console.error('❌ Failed to publish user.deleted event:', error.message);
@@ -96,7 +96,7 @@ const publishUserEvent = {
                 }
             };
 
-            await emit('auth.user.suspended', eventData);
+            await publish(exchanges.topic, 'auth.user.suspended', eventData);
             console.log(`✅ Published user.suspended event for user ${userId}`);
         } catch (error) {
             console.error('❌ Failed to publish user.suspended event:', error.message);
@@ -117,7 +117,7 @@ const publishUserEvent = {
                 }
             };
 
-            await emit('auth.user.suspendedAll', eventData);
+            await publish(exchanges.topic, 'auth.user.suspendedAll', eventData);
             console.log(`✅ Published user.suspendedAll event for company ${companyId}`);
         } catch (error) {
             console.error('❌ Failed to publish user.suspendedAll event:', error.message);
