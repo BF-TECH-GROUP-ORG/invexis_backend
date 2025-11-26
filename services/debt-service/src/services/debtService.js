@@ -168,13 +168,14 @@ async function recordRepayment(payload) {
 
         // Fast path: create repayment in-memory + enqueue for persistence
         const inMemoryStore = require('../utils/inMemoryStore');
+        const repaymentId = paymentId || new mongoose.Types.ObjectId();
         const repayment = inMemoryStore.createRepayment({
             companyId,
             shopId,
             customerId: customer && customer.id ? customer.id : customerId,
             customer: customer || (customerId ? { id: customerId } : undefined),
             debtId,
-            paymentId: paymentId || new mongoose.Types.ObjectId(),
+            paymentId: repaymentId,
             amountPaid,
             paymentMethod,
             paymentReference,
@@ -182,7 +183,7 @@ async function recordRepayment(payload) {
         });
 
         // Update debt in-memory for immediate read availability
-        debt.amountPaidNow = (Number(debt.amountPaidNow) + Number(amountPaid));
+        debt.amountPaidNow = Number(debt.amountPaidNow) + Number(amountPaid);
         debt.balance = Number(debt.totalAmount) - Number(debt.amountPaidNow);
         debt.status = await computeStatus(debt.totalAmount, debt.amountPaidNow);
         debt.repayments = debt.repayments || [];
@@ -192,6 +193,63 @@ async function recordRepayment(payload) {
         debt.updatedAt = new Date();
         // enqueue updated debt for persistence
         inMemoryStore.createDebt(debt);
+
+        // IMMEDIATE DB WRITE: persist repayment + updated debt directly to MongoDB so UI reflects changes instantly
+        // When balance reaches 0 or less, automatically mark debt as PAID
+        let savedDebt, wasAutoPaid = false;
+        try {
+            // Write repayment directly to DB
+            await Repayment.create({
+                _id: repayment._id,
+                companyId,
+                shopId,
+                customerId: debt.customerId,
+                customer: customer || (customerId ? { id: customerId } : undefined),
+                debtId: debt._id,
+                paymentId: repaymentId,
+                amountPaid,
+                paymentMethod,
+                paymentReference,
+                createdBy: createdBy || undefined,
+                paidAt: new Date(),
+                createdAt: new Date()
+            });
+
+            // Auto-mark debt as PAID if balance is 0 or less
+            const finalStatus = debt.balance <= 0 ? 'PAID' : debt.status;
+            wasAutoPaid = finalStatus === 'PAID' && debt.status !== 'PAID';
+
+            // Write updated debt directly to DB
+            savedDebt = await Debt.findOneAndUpdate(
+                { _id: debtId, companyId, isDeleted: false },
+                {
+                    amountPaidNow: debt.amountPaidNow,
+                    balance: Math.max(0, debt.balance), // ensure balance never goes negative
+                    status: finalStatus,
+                    repayments: debt.repayments,
+                    balanceHistory: debt.balanceHistory,
+                    updatedAt: new Date()
+                },
+                { new: true, lean: true }
+            );
+
+            // Update result object to reflect DB-persisted debt (UI gets fresh data)
+            if (savedDebt) {
+                Object.assign(debt, savedDebt);
+            }
+
+            // If debt was auto-marked PAID, publish that event (async, non-blocking)
+            if (wasAutoPaid) {
+                try {
+                    if (global && typeof global.rabbitmqPublish === 'function') {
+                        global.rabbitmqPublish('debt.fully_paid', { debtId: debt._id, companyId }).catch(() => { });
+                    }
+                } catch (e) { }
+            }
+        } catch (e) {
+            console.error('Direct DB write failed:', e.message);
+            throw new Error(`Failed to persist repayment: ${e.message}`);
+        }
 
         // Fire-and-forget: enqueue summaries, events, publish immediate, invalidate cache, cache response for deduplication
         const result = { debt, repayment };
@@ -272,7 +330,8 @@ async function recordRepayment(payload) {
             }
         } catch (e) { }
 
-        return result;
+        // Return fresh DB data (savedDebt) if persisted, otherwise in-memory debt
+        return { debt: savedDebt || debt, repayment };
     });
 }
 
@@ -610,7 +669,63 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
             inMemoryStore.createDebt(debt);
         }
 
-        // Fire-and-forget background tasks
+        // DIRECT DB WRITE: persist repayment (if any) and updated debt immediately so the DB reflects PAID status
+        let savedDebt = null;
+        try {
+            if (repayment) {
+                // persist repayment record
+                await Repayment.create({
+                    _id: repayment._id,
+                    companyId,
+                    shopId: debt.shopId,
+                    customerId: debt.customerId,
+                    customer: debt.customer || undefined,
+                    debtId: debt._id,
+                    paymentId: repayment.paymentId || repayment._id,
+                    amountPaid: repayment.amountPaid,
+                    paymentMethod: repayment.paymentMethod,
+                    paymentReference: repayment.paymentReference,
+                    createdBy: repayment.createdBy || undefined,
+                    paidAt: new Date(),
+                    createdAt: new Date()
+                });
+            }
+
+            // Force final status to PAID when marking paid
+            const finalStatus = 'PAID';
+
+            // Convert companyId to ObjectId if needed (allow UUID/string passed from client)
+            let companyIdQuery = companyId;
+            try {
+                if (typeof companyId === 'string' && companyId.length === 24) {
+                    companyIdQuery = mongoose.Types.ObjectId(companyId);
+                }
+            } catch (e) {
+                companyIdQuery = companyId;
+            }
+
+            savedDebt = await Debt.findOneAndUpdate(
+                { _id: debtId, companyId: companyIdQuery, isDeleted: false },
+                {
+                    amountPaidNow: debt.amountPaidNow,
+                    balance: Math.max(0, debt.balance),
+                    status: finalStatus,
+                    repayments: debt.repayments,
+                    balanceHistory: debt.balanceHistory,
+                    updatedAt: debt.updatedAt
+                },
+                { new: true, lean: true }
+            );
+
+            if (savedDebt) {
+                // reflect DB-persisted object in the returned in-memory debt
+                Object.assign(debt, savedDebt);
+            }
+        } catch (e) {
+            console.error('Direct DB write failed (will retry via persister):', e.message);
+        }
+
+        // Fire-and-forget background tasks (enqueue events/summaries, invalidate cache, publish notifications)
         Promise.all([
             (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_MARKED_PAID', payload: { debtId: debt._id, companyId, repaymentId: repayment ? repayment._id : null } }); } catch (e) { } })(),
             (async () => { try { inMemoryStore.enqueueSummary({ type: 'company', op: 'onRepayment', data: { companyId, amountPaid: remaining } }); } catch (e) { } })(),
@@ -626,7 +741,8 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
             })()
         ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
 
-        return { debt, repayment };
+        // Return the DB-persisted debt when available (ensures caller sees PAID status)
+        return { debt: savedDebt || debt, repayment };
     });
 }
 
@@ -647,6 +763,38 @@ async function cancelDebt({ companyId, debtId, reason = null, performedBy }) {
         debt.updatedAt = new Date();
         const inMemoryStore = require('../utils/inMemoryStore');
         inMemoryStore.createDebt(debt);
+
+        // DIRECT DB WRITE: persist cancelled debt immediately to DB
+        (async () => {
+            try {
+                // Convert companyId to ObjectId if needed (allow UUID/string passed from client)
+                let companyIdQuery = companyId;
+                try {
+                    if (typeof companyId === 'string' && companyId.length !== 24) {
+                        companyIdQuery = companyId;
+                    } else if (typeof companyId === 'string') {
+                        companyIdQuery = mongoose.Types.ObjectId(companyId);
+                    }
+                } catch (e) {
+                    companyIdQuery = companyId;
+                }
+
+                await Debt.findOneAndUpdate(
+                    { _id: debtId, companyId: companyIdQuery, isDeleted: false },
+                    {
+                        status: debt.status,
+                        cancelledAt: debt.cancelledAt,
+                        cancelReason: debt.cancelReason,
+                        cancelledBy: debt.cancelledBy,
+                        updatedBy: debt.updatedBy,
+                        updatedAt: debt.updatedAt
+                    },
+                    { new: true, lean: true }
+                );
+            } catch (e) {
+                console.error('Direct DB write failed (will retry via persister):', e.message);
+            }
+        })();
 
         // Fire-and-forget: enqueue events and adjust summaries (treat as repayment for summary adjustment)
         Promise.all([

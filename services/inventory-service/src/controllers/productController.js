@@ -6,6 +6,9 @@ const { validateMongoId } = require('../utils/validateMongoId');
 const fs = require('fs');
 const path = require('path');
 const { publishProductEvent } = require('../events/productEvents');
+const { generateSKU, generateASIN, generateUPC, generateBarcode, generateQRCode } = require('../utils/productGenerator');
+const redis = require('/app/shared/redis');
+const { scanDel } = require('../utils/redisHelper');
 
 const getAllProducts = asyncHandler(async (req, res) => {
   const {
@@ -30,6 +33,14 @@ const getAllProducts = asyncHandler(async (req, res) => {
   if (category) validateMongoId(category);
   if (subcategory) validateMongoId(subcategory);
   if (subSubcategory) validateMongoId(subSubcategory);
+
+  // Generate cache key based on query params
+  const cacheKey = `products:${JSON.stringify(req.query)}`;
+  const cachedData = await redis.get(cacheKey);
+
+  if (cachedData) {
+    return res.status(200).json(JSON.parse(cachedData));
+  }
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -64,7 +75,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
 
   const total = await Product.countDocuments(query);
 
-  res.status(200).json({
+  const responseData = {
     success: true,
     data: products,
     pagination: {
@@ -73,12 +84,28 @@ const getAllProducts = asyncHandler(async (req, res) => {
       total,
       pages: Math.ceil(total / parseInt(limit))
     }
-  });
+  };
+
+  // Cache for 5 minutes
+  await redis.set(cacheKey, JSON.stringify(responseData), 'EX', 300);
+
+  res.status(200).json(responseData);
 });
 
 const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoId(id);
+
+  const cacheKey = `product:${id}`;
+  const cachedProduct = await redis.get(cacheKey);
+
+  if (cachedProduct) {
+    return res.status(200).json({
+      success: true,
+      data: JSON.parse(cachedProduct)
+    });
+  }
+
   const product = await Product.findById(id)
     .populate('category', 'name slug level attributes')
     .populate('subcategory', 'name slug level attributes')
@@ -91,6 +118,8 @@ const getProductById = asyncHandler(async (req, res) => {
     });
   }
 
+  await redis.set(cacheKey, JSON.stringify(product), 'EX', 3600);
+
   res.status(200).json({
     success: true,
     data: product
@@ -99,6 +128,17 @@ const getProductById = asyncHandler(async (req, res) => {
 
 const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
+
+  const cacheKey = `product:slug:${slug}`;
+  const cachedProduct = await redis.get(cacheKey);
+
+  if (cachedProduct) {
+    return res.status(200).json({
+      success: true,
+      data: JSON.parse(cachedProduct)
+    });
+  }
+
   const product = await Product.findOne({ slug })
     .populate('category', 'name slug level attributes')
     .populate('subcategory', 'name slug level attributes')
@@ -111,6 +151,8 @@ const getProductBySlug = asyncHandler(async (req, res) => {
     });
   }
 
+  await redis.set(cacheKey, JSON.stringify(product), 'EX', 3600);
+
   res.status(200).json({
     success: true,
     data: product
@@ -122,6 +164,13 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
   validateMongoId(categoryId);
 
   const { includeSubcategories = false, page = 1, limit = 20, sort = '-createdAt' } = req.query;
+
+  const cacheKey = `products:category:${categoryId}:${JSON.stringify(req.query)}`;
+  const cachedData = await redis.get(cacheKey);
+
+  if (cachedData) {
+    return res.status(200).json(JSON.parse(cachedData));
+  }
 
   const pageInt = parseInt(page);
   const limitInt = parseInt(limit);
@@ -146,7 +195,7 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
 
   const paginatedProducts = products.slice(startIndex, endIndex);
 
-  res.status(200).json({
+  const responseData = {
     success: true,
     data: paginatedProducts,
     pagination: {
@@ -155,10 +204,12 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
       total,
       pages: Math.ceil(total / limitInt)
     }
-  });
+  };
+
+  await redis.set(cacheKey, JSON.stringify(responseData), 'EX', 300);
+
+  res.status(200).json(responseData);
 });
-
-
 
 const createProduct = asyncHandler(async (req, res) => {
   // Check validation errors
@@ -176,9 +227,74 @@ const createProduct = asyncHandler(async (req, res) => {
   delete req.body.images;
   delete req.body.videos;
 
-  // Use pre-generated ID from middleware (if available) or let MongoDB generate one
-  // The ID is pre-generated in middleware to use in Cloudinary upload paths
+  // Auto-generate fields
+  const category = await Category.findById(req.body.category);
+  const categoryName = category ? category.name : 'GEN';
+
+  if (!req.body.sku) {
+    req.body.sku = generateSKU(req.body.brand, categoryName);
+  }
+  if (!req.body.asin) {
+    req.body.asin = generateASIN();
+  }
+  if (!req.body.upc) {
+    req.body.upc = generateUPC();
+  }
+
+  // Ensure Barcode and QR Code strings are generated if missing
+  if (!req.body.barcode) {
+    req.body.barcode = generateBarcode();
+  }
+  if (!req.body.qrCode) {
+    req.body.qrCode = generateQRCode();
+  }
+
   const product = new Product(req.body);
+
+  // Generate and upload Barcode and QR Code images
+  try {
+    const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
+    const { uploadBuffer } = require('../utils/uploadUtil');
+
+    // Generate buffers
+    const qrBuffer = await generateQRCodeBuffer(JSON.stringify({
+      id: product._id,
+      sku: product.sku,
+      name: product.name
+    }));
+    const barcodeBuffer = await generateBarcodeBuffer(product.barcode);
+
+    // Upload to Cloudinary
+    const qrUpload = await uploadBuffer(qrBuffer, `products/${product._id}`, 'qrcode');
+    const barcodeUpload = await uploadBuffer(barcodeBuffer, `products/${product._id}`, 'barcode');
+
+    // Add to product images
+    newImages.push({
+      url: qrUpload.secure_url,
+      cloudinary_id: qrUpload.public_id,
+      type: 'image',
+      format: qrUpload.format,
+      size: qrUpload.bytes,
+      altText: 'QR Code',
+      isPrimary: false,
+      sortOrder: 100 // Put at end
+    });
+
+    newImages.push({
+      url: barcodeUpload.secure_url,
+      cloudinary_id: barcodeUpload.public_id,
+      type: 'image',
+      format: barcodeUpload.format,
+      size: barcodeUpload.bytes,
+      altText: 'Barcode',
+      isPrimary: false,
+      sortOrder: 101 // Put at end
+    });
+
+  } catch (err) {
+    console.error('Failed to generate/upload barcode/QR code images:', err);
+    // Continue without failing the request, but log error
+  }
 
   // Add audit trail entry
   product.auditTrail.push({
@@ -189,9 +305,13 @@ const createProduct = asyncHandler(async (req, res) => {
 
   product.images = newImages.map((img, index) => ({
     url: img.url,
-    alt: img.altText,
-    isPrimary: index === 0,
-    sortOrder: index
+    cloudinary_id: img.cloudinary_id,
+    type: img.type || 'image',
+    format: img.format,
+    size: img.size,
+    altText: img.altText || img.alt,
+    isPrimary: img.isPrimary || (index === 0),
+    sortOrder: img.sortOrder !== undefined ? img.sortOrder : index
   }));
 
   product.videoUrls = newVideos.map(v => v.url);
@@ -206,6 +326,9 @@ const createProduct = asyncHandler(async (req, res) => {
       { $inc: { 'statistics.totalProducts': 1 } }
     );
   }
+
+  // Invalidate list caches
+  await scanDel('products:*');
 
   // Emit inventory.product.created event
   await publishProductEvent('inventory.product.created', product.toObject());
@@ -275,6 +398,11 @@ const updateProduct = asyncHandler(async (req, res) => {
   });
 
   await product.save();
+
+  // Invalidate caches
+  await redis.del(`product:${id}`);
+  await redis.del(`product:slug:${oldProduct.slug}`);
+  await scanDel('products:*');
 
   // Emit inventory.product.updated event
   await publishProductEvent('inventory.product.updated', product.toObject());
@@ -358,6 +486,11 @@ const deleteProduct = asyncHandler(async (req, res) => {
       { $inc: { 'statistics.totalProducts': -1 } }
     );
   }
+
+  // Invalidate caches
+  await redis.del(`product:${id}`);
+  await redis.del(`product:slug:${product.slug}`);
+  await scanDel('products:*');
 
   // Emit inventory.product.deleted event
   await publishProductEvent('inventory.product.deleted', { _id: id });
@@ -456,6 +589,14 @@ const updateInventory = asyncHandler(async (req, res) => {
     });
     await alert.save();
   }
+
+  // Invalidate caches
+  await redis.del(`product:${id}`);
+  await redis.del(`product:slug:${product.slug}`);
+  await scanDel('products:*');
+
+  // Emit event
+  await publishProductEvent('inventory.product.updated', product.toObject());
 
   res.status(200).json({
     success: true,

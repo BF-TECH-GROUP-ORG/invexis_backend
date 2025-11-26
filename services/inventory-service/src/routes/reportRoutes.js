@@ -10,7 +10,6 @@ const {
   getAgingInventory,
   getStockMovementReport,
   getAdjustmentReport,
-  getWarehouseReport,
   getAlertSummary,
   getDiscountImpact
 } = require('../controllers/reportController');

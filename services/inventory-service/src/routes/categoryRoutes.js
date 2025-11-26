@@ -6,17 +6,29 @@ const {
   getCategoryById,
   getCategoryBySlug,
   getCategoryTree,
+  getLevel2Categories,
+  getLevel3Categories,
   getLevel3CategoriesByCompany,
+  getLevel3CategoriesByCompanyPaginated,
+  getCategoriesByIds,
   getCategoryPath,
   createCategory,
   updateCategory,
   deleteCategory,
-  toggleActiveStatus
+  toggleActiveStatus,
+  createLevel3Category
 } = require('../controllers/categoryController');
 
 router.get('/', getAllCategories);
+// Route to fetch level-2 categories only
+router.get('/level/2', getLevel2Categories);
+// Route to fetch level-3 categories only
+router.get('/level/3', getLevel3Categories);
 // Route to fetch level-3 categories scoped to a company
-router.get('/company/:companyId/level3', getLevel3CategoriesByCompany);
+router.get('/company/:companyId/level3', getLevel3CategoriesByCompanyPaginated);
+
+// Route to fetch multiple categories by ids (POST body: { ids: [...] })
+router.post('/by-ids', getCategoriesByIds);
 
 // Specific routes MUST come before generic /:id route
 router.get('/slug/:slug', getCategoryBySlug);
@@ -26,6 +38,8 @@ router.get('/path/:id', getCategoryPath);
 router.get('/:id', getCategoryById);
 
 router.post('/', createCategory);
+// Dedicated route to create level-3 categories for a company
+router.post('/company/:companyId/level3', createLevel3Category);
 router.put('/:id', updateCategory);
 router.delete('/:id', deleteCategory);
 router.patch('/:id/toggle-active', toggleActiveStatus);

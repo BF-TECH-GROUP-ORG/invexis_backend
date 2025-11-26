@@ -122,6 +122,18 @@ categorySchema.pre('save', function (next) {
   next();
 });
 
+// Middleware to preserve companyId for level 3 categories
+categorySchema.pre('save', async function (next) {
+  // If this is an update (not a new document) and it's level 3, restore the original companyId
+  if (!this.isNew && this.level === 3) {
+    const original = await this.constructor.findById(this._id);
+    if (original && original.companyId) {
+      this.companyId = original.companyId;
+    }
+  }
+  next();
+});
+
 // Middleware to validate parent category level
 categorySchema.pre('save', async function (next) {
   if (this.parentCategory) {

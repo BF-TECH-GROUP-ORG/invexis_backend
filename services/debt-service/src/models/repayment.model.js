@@ -14,7 +14,8 @@ const RepaymentSchema = new mongoose.Schema({
     debtId: { type: mongoose.Types.ObjectId, required: true },
 
 
-    paymentId: { type: mongoose.Types.ObjectId, required: true },
+    // paymentId is an external idempotency key (may be ObjectId or external string like a payment provider id)
+    paymentId: { type: String, required: true },
     amountPaid: { type: Number, required: true },
     paymentMethod: {
         type: String,
@@ -25,7 +26,8 @@ const RepaymentSchema = new mongoose.Schema({
 
     // Audit: who recorded the repayment
     createdBy: {
-        id: { type: mongoose.Types.ObjectId },
+        // allow non-ObjectId actor ids (e.g. temp-user-id or external system ids)
+        id: { type: String },
         name: { type: String }
     },
 

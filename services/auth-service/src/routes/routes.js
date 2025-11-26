@@ -121,7 +121,7 @@ router.get('/google/callback',
  */
 
 // Session Management
-router.get('/refresh', authCtrl.refresh);
+router.post('/refresh', authCtrl.refresh);
 router.post('/logout', requireAuth, authCtrl.logout);
 router.get('/sessions', requireAuth, authCtrl.getSessions);
 router.delete('/sessions/:sessionId', requireAuth, authCtrl.revokeSession);

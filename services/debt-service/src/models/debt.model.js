@@ -8,7 +8,7 @@ const DebtSchema = new mongoose.Schema({
     customerId: { type: mongoose.Types.ObjectId, required: true },
     // Embedded customer object for convenience in front-end (id, name, phone)
     customer: {
-        id: { type: mongoose.Types.ObjectId },
+        id: { type: String, default: null },
         name: { type: String },
         phone: { type: String }
     },
@@ -60,17 +60,18 @@ const DebtSchema = new mongoose.Schema({
 
     // Audit: who created/updated the debt (store id + human name)
     createdBy: {
-        id: { type: mongoose.Types.ObjectId },
+        // allow actor ids to be strings (external/system ids) to avoid casting errors
+        id: { type: String },
         name: { type: String }
     },
     updatedBy: {
-        id: { type: mongoose.Types.ObjectId },
+        id: { type: String, default: null },
         name: { type: String }
     },
     cancelledAt: { type: Date },
     cancelReason: { type: String },
     cancelledBy: {
-        id: { type: mongoose.Types.ObjectId },
+        id: { type: String, default: null },
         name: { type: String }
     },
 
