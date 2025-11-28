@@ -1,0 +1,134 @@
+{
+    "companyId": "COMPANY_123",
+    "shopId": "SHOP_1",
+    "name": "Premium Organic Cotton T-Shirt",
+    "description": {
+        "short": "Premium organic cotton t-shirt, ethically sourced and made.",
+        "long": "Detailed description about materials, care instructions, sustainability practices, etc."
+    },
+    "brand": "EcoWear",
+    "manufacturer": "FairTrade Mills Inc.",
+    "tags": [
+        "organic",
+        "cotton",
+        "sustainable",
+        "unisex"
+    ],
+    "category": "64a7f123456789abcdef0123",
+    "pricing": {
+        "basePrice": 19.99,
+        "salePrice": 15.99,
+        "listPrice": 22.99,
+        "cost": 7.50,
+        "currency": "USD"
+    },
+    "inventory": {
+        "trackQuantity": true,
+        "quantity": 150,
+        "lowStockThreshold": 10,
+        "allowBackorder": false
+    },
+    "condition": "new",
+    "availability": "in_stock",
+    "attributes": [
+        {
+            "name": "Material",
+            "value": "100% Organic Cotton"
+        },
+        {
+            "name": "Care",
+            "value": "Wash cold, tumble dry low"
+        }
+    ],
+    "images": [
+        {
+            "url": "https://cdn.example.com/products/ts-premium-1.jpg",
+            "alt": "Front view",
+            "isPrimary": true,
+            "sortOrder": 1
+        },
+        {
+            "url": "https://cdn.example.com/products/ts-premium-2.jpg",
+            "alt": "Back view",
+            "isPrimary": false,
+            "sortOrder": 2
+        }
+    ],
+    "videoUrls": [
+        "https://youtube.com/watch?v=example"
+    ],
+    "status": "active",
+    "visibility": "public",
+    "featured": true,
+    "isActive": true,
+    "sortOrder": 5,
+    "seo": {
+        "metaTitle": "Premium Organic Cotton T-Shirt | EcoWear",
+        "metaDescription": "Ethically made organic cotton t-shirt for sustainable fashion.",
+        "keywords": [
+            "organic",
+            "cotton",
+            "sustainable",
+            "tshirt"
+        ]
+    },
+    "variants": [
+        {
+            "name": "Color",
+            "options": [
+                "Red",
+                "Blue",
+                "Green",
+                "Black"
+            ]
+        },
+        {
+            "name": "Size",
+            "options": [
+                "XS",
+                "S",
+                "M",
+                "L",
+                "XL",
+                "XXL"
+            ]
+        }
+    ],
+    "variations": [
+        {
+            "attributes": [
+                {
+                    "name": "Color",
+                    "value": "Red"
+                },
+                {
+                    "name": "Size",
+                    "value": "M"
+                }
+            ],
+            "price": 19.99,
+            "stockQty": 45,
+            "images": [
+                {
+                    "url": "https://cdn.example.com/variations/ts-red-m.jpg",
+                    "alt": "Red T-Shirt Size M",
+                    "isPrimary": true
+                }
+            ]
+        },
+        {
+            "attributes": [
+                {
+                    "name": "Color",
+                    "value": "Blue"
+                },
+                {
+                    "name": "Size",
+                    "value": "L"
+                }
+            ],
+            "price": 19.99,
+            "stockQty": 38
+        }
+    ]
+}

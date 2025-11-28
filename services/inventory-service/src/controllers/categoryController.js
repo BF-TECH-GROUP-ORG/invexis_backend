@@ -419,13 +419,9 @@ const deleteCategory = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check if category has products
+  // Check if category has products - products now only reference one category field (level 3)
   const productsCount = await Product.countDocuments({
-    $or: [
-      { category: id },
-      { subcategory: id },
-      { subSubcategory: id }
-    ]
+    category: id
   });
 
   if (productsCount > 0) {

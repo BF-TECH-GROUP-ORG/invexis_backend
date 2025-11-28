@@ -19,11 +19,28 @@ const productEvents = {
         payload: {
           productId: product._id,
           companyId,
+          // Basic identity
           name: product.name,
+          slug: product.slug,
           sku: product.sku,
+          asin: product.asin,
+          upc: product.upc,
           category: product.category,
+          // Pricing & inventory
           pricing: product.pricing,
           inventory: product.inventory,
+          // Media
+          images: product.images || [],
+          videoUrls: product.videoUrls || [],
+          // Variants/variations
+          variants: product.variants || [],
+          variations: product.variations || [],
+          // Supplier information
+          supplierName: product.supplierName || null,
+          // Additional useful fields
+          description: product.description || null,
+          brand: product.brand || null,
+          attributes: product.attributes || [],
           createdAt: new Date().toISOString(),
           traceId: uuidv4()
         }
@@ -41,7 +58,18 @@ const productEvents = {
         payload: {
           productId: product._id,
           companyId,
+          // Provide updated snapshot for consumers
           name: product.name,
+          slug: product.slug,
+          sku: product.sku,
+          pricing: product.pricing,
+          inventory: product.inventory,
+          images: product.images || [],
+          videoUrls: product.videoUrls || [],
+          variants: product.variants || [],
+          variations: product.variations || [],
+          // Supplier information (updated)
+          supplierName: product.supplierName || null,
           changes,
           updatedAt: new Date().toISOString(),
           traceId: uuidv4()

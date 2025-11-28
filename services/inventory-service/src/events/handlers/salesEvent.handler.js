@@ -6,6 +6,8 @@
 
 const Product = require('../../models/Product');
 const { logger } = require('../../utils/logger');
+const producer = require('../../events/producer');
+const ProcessedEvent = require('../../models/ProcessedEvent');
 
 /**
  * Handle order created event - Reduce inventory
@@ -42,6 +44,14 @@ async function handleOrderCreated(data) {
       product.inventory.quantity = Math.max(0, oldQuantity - quantity);
 
       await product.save();
+
+      // Publish stock update event so other services (e.g., ecommerce) can sync
+      try {
+        await producer.emit('inventory.product.updated', product.toObject());
+        console.log(`Published inventory.product.updated for ${productId}`);
+      } catch (err) {
+        console.error(`Failed to publish inventory.product.updated for ${productId}:`, err.message || err);
+      }
 
       console.log(
         `✅ Inventory reduced for product ${productId}: ${oldQuantity} → ${product.inventory.quantity}`
@@ -82,6 +92,14 @@ async function handleOrderCancelled(data) {
 
       await product.save();
 
+      // Publish stock update event
+      try {
+        await producer.emit('inventory.product.updated', product.toObject());
+        logger.info(`Published inventory.product.updated for ${productId}`);
+      } catch (err) {
+        logger.error(`Failed to publish inventory.product.updated for ${productId}: ${err.message || err}`);
+      }
+
       logger.info(
         `✅ Inventory restored for product ${productId}: ${oldQuantity} → ${product.inventory.quantity}`
       );
@@ -120,6 +138,14 @@ async function handleReturnConfirmed(data) {
       product.inventory.quantity = oldQuantity + quantity;
 
       await product.save();
+
+      // Publish stock update event
+      try {
+        await producer.emit('inventory.product.updated', product.toObject());
+        logger.info(`Published inventory.product.updated for returned product ${productId}`);
+      } catch (err) {
+        logger.error(`Failed to publish inventory.product.updated for returned product ${productId}: ${err.message || err}`);
+      }
 
       logger.info(
         `✅ Inventory restored for returned product ${productId}: ${oldQuantity} → ${product.inventory.quantity}`
@@ -161,6 +187,21 @@ module.exports = async function handleSalesEvent(event) {
       return;
     }
 
+    // Idempotency: derive a stable key (prefer traceId, fallback to type+entity id)
+    const traceId = eventData.traceId || eventData.trace_id;
+    const fallbackId = eventData.saleId || eventData.orderId || eventData.returnId || eventData.id || '';
+    const dedupKey = traceId || `${type}:${fallbackId}`;
+
+    if (!dedupKey) {
+      logger.warn('⚠️ No deduplication key found for event; proceeding without idempotency');
+    } else {
+      const existing = await ProcessedEvent.findOne({ key: dedupKey });
+      if (existing) {
+        logger.info(`ℹ️ Duplicate event ignored (key=${dedupKey})`);
+        return; // already processed
+      }
+    }
+
     switch (type) {
       case 'sale.created':
         await handleOrderCreated(eventData);
@@ -177,6 +218,21 @@ module.exports = async function handleSalesEvent(event) {
 
       default:
         console.warn(`⚠️ Unhandled sales event type: ${type}`);
+    }
+
+    // Mark event as processed for idempotency
+    try {
+      if (dedupKey) {
+        await ProcessedEvent.create({ key: dedupKey, type, payloadSummary: { saleId: eventData.saleId, orderId: eventData.orderId } });
+        logger.info(`✅ Marked event processed (key=${dedupKey})`);
+      }
+    } catch (err) {
+      // Ignore duplicate key errors (race), log others
+      if (err.code === 11000) {
+        logger.warn(`⚠️ ProcessedEvent race: key already exists ${dedupKey}`);
+      } else {
+        logger.error(`❌ Failed to persist processed event key ${dedupKey}: ${err.message || err}`);
+      }
     }
   } catch (err) {
     console.error(`❌ Error handling sales event:`, err);

@@ -4,7 +4,7 @@ const { publish, exchanges } = require('/app/shared/rabbitmq');
 const logger = require('../utils/logger');
 
 // Advanced order filtering
-exports.filterOrders = async (req, res, next) => {
+exports.getOrdersAdvancedFilter = async (req, res, next) => {
     try {
         const { companyId, status, userId, minAmount, maxAmount, startDate, endDate, page = 1, limit = 20 } = req.query;
         const query = { companyId, isDeleted: false };
@@ -52,7 +52,7 @@ exports.bulkUpdateOrderStatus = async (req, res, next) => {
 };
 
 // Process refund
-exports.processRefund = async (req, res, next) => {
+exports.initiateRefund = async (req, res, next) => {
     try {
         const { companyId, orderId, refundAmount, reason } = req.body;
         const order = await Order.findOne({ orderId, companyId });
@@ -73,7 +73,7 @@ exports.processRefund = async (req, res, next) => {
 };
 
 // Request return
-exports.requestReturn = async (req, res, next) => {
+exports.initiateReturn = async (req, res, next) => {
     try {
         const { companyId, orderId, items, reason } = req.body;
         const order = await Order.findOne({ orderId, companyId });
@@ -113,7 +113,7 @@ exports.approveReturn = async (req, res, next) => {
 };
 
 // Order tracking details
-exports.getOrderTracking = async (req, res, next) => {
+exports.getFullTracking = async (req, res, next) => {
     try {
         const { companyId, orderId } = req.query;
         const cacheKey = `order_tracking:${companyId}:${orderId}`;
@@ -165,6 +165,33 @@ exports.getRefundAnalytics = async (req, res, next) => {
         res.json({ success: true, data: refundAnalytics });
     } catch (error) {
         logger.error('Error in getRefundAnalytics:', error);
+        next(error);
+    }
+};
+
+// Return analytics
+exports.getReturnAnalytics = async (req, res, next) => {
+    try {
+        const { companyId } = req.query;
+        const cacheKey = `return_analytics:${companyId}`;
+        const cached = await cache.getJSON(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
+        const returnedOrders = await Order.find({ companyId, returnStatus: { $in: ['requested', 'approved'] } }).lean();
+        const totalReturned = returnedOrders.length;
+        const totalItems = returnedOrders.reduce((sum, o) => sum + (o.returnItems?.length || 0), 0);
+
+        const returnAnalytics = {
+            totalReturned,
+            totalReturnItems: totalItems,
+            returnRate: ((totalReturned / await Order.countDocuments({ companyId })) * 100).toFixed(2) + '%',
+            itemsPerReturn: (totalItems / totalReturned).toFixed(2)
+        };
+
+        await cache.setJSON(cacheKey, returnAnalytics, 3600);
+        res.json({ success: true, data: returnAnalytics });
+    } catch (error) {
+        logger.error('Error in getReturnAnalytics:', error);
         next(error);
     }
 };

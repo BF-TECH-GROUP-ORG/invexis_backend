@@ -51,6 +51,23 @@ module.exports = [
     events: [
       "company.deleted"
     ]
+  },
+  {
+    name: "alerts",
+    queue: "inventory_alert_events",
+    exchange: "events_topic",
+    pattern: "product.#|order.#|inventory.#|stock.#",
+    handler: require("../handlers/alertEvent.handler"),
+    events: [
+      "product.created",
+      "product.price_changed",
+      "product.stock_changed",
+      "order.created",
+      "order.shipped",
+      "order.delivered",
+      "inventory.adjusted",
+      "stock.received"
+    ]
   }
 ];
 

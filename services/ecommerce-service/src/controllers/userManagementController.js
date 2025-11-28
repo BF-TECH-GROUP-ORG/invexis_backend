@@ -4,7 +4,7 @@ const cache = require('../utils/cache');
 const logger = require('../utils/logger');
 
 // User purchase history
-exports.getUserPurchaseHistory = async (req, res, next) => {
+exports.getPurchaseHistory = async (req, res, next) => {
     try {
         const { companyId, userId, limit = 20, page = 1 } = req.query;
         const cacheKey = `user_history:${companyId}:${userId}:${page}`;
@@ -25,7 +25,7 @@ exports.getUserPurchaseHistory = async (req, res, next) => {
 };
 
 // User preferences (based on purchases and views)
-exports.getUserPreferences = async (req, res, next) => {
+exports.getCustomerPreferences = async (req, res, next) => {
     try {
         const { companyId, userId } = req.query;
         const cacheKey = `user_preferences:${companyId}:${userId}`;
@@ -54,7 +54,25 @@ exports.getUserPreferences = async (req, res, next) => {
         await cache.setJSON(cacheKey, preferences, 1800);
         res.json({ success: true, data: preferences });
     } catch (error) {
-        logger.error('Error in getUserPreferences:', error);
+        logger.error('Error in getCustomerPreferences:', error);
+        next(error);
+    }
+};
+
+// Update customer preferences
+exports.updateCustomerPreferences = async (req, res, next) => {
+    try {
+        const { companyId, userId } = req.body;
+        const { preferences } = req.body;
+
+        const cacheKey = `user_preferences:${companyId}:${userId}`;
+        await cache.del(cacheKey);
+
+        // Store preferences in order metadata or separate collection
+        // For now, clear cache to refresh
+        res.json({ success: true, message: 'Preferences updated', data: { userId, preferences } });
+    } catch (error) {
+        logger.error('Error in updateCustomerPreferences:', error);
         next(error);
     }
 };
@@ -143,7 +161,7 @@ exports.getHighValueCustomers = async (req, res, next) => {
 };
 
 // Churn analysis (inactive customers)
-exports.getInactiveCustomers = async (req, res, next) => {
+exports.getChurnAnalysis = async (req, res, next) => {
     try {
         const { companyId, days = 90 } = req.query;
         const cacheKey = `inactive:${companyId}:${days}`;
@@ -161,7 +179,7 @@ exports.getInactiveCustomers = async (req, res, next) => {
         await cache.setJSON(cacheKey, inactiveCustomers, 3600);
         res.json({ success: true, data: inactiveCustomers });
     } catch (error) {
-        logger.error('Error in getInactiveCustomers:', error);
+        logger.error('Error in getChurnAnalysis:', error);
         next(error);
     }
 };

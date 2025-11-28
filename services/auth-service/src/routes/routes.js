@@ -84,10 +84,13 @@ router.get('/google/callback',
                 );
 
                 // Set refresh token as HTTP-only cookie
+                // Compute secure/samesite dynamically (support ngrok HTTPS in development)
+                const forwardedProto = (req.headers && req.headers['x-forwarded-proto']) || '';
+                const isSecure = req.secure || forwardedProto.toLowerCase() === 'https' || process.env.NODE_ENV === 'production' || process.env.FORCE_COOKIE_SECURE === 'true';
                 res.cookie('refreshToken', refreshToken, {
                     httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'lax',
+                    secure: !!isSecure,
+                    sameSite: isSecure ? 'none' : 'lax',
                     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
                 });
 

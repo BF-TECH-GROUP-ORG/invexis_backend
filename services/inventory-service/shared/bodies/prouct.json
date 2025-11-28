@@ -1,0 +1,69 @@
+{
+    "companyId": "COMPANY_123",
+    "shopId": "SHOP_1",
+    "name": "Organic Cotton T-Shirt - Premium",
+    "description": {
+        "short": "Premium organic cotton t-shirt, ethically made.",
+        "long": "Long marketing description and specs..."
+    },
+    "brand": "GreenThreads",
+    "tags": [
+        "organic",
+        "cotton",
+        "tshirt"
+    ],
+    "category": "64a7f123456789abcdef0123",
+    "pricing": {
+        "basePrice": 15.99,
+        "salePrice": 12.99,
+        "currency": "USD",
+        "cost": 6.50
+    },
+    "inventory": {
+        "trackQuantity": true,
+        "quantity": 100,
+        "lowStockThreshold": 10,
+        "allowBackorder": false
+    },
+    "images": [
+        {
+            "url": "https://cdn.example.com/img/ts1.jpg",
+            "alt": "tshirt",
+            "isPrimary": true
+        }
+    ],
+    "variants": [
+        {
+            "name": "Color",
+            "options": [
+                "Red",
+                "Blue"
+            ]
+        },
+        {
+            "name": "Size",
+            "options": [
+                "S",
+                "M",
+                "L"
+            ]
+        }
+    ],
+    "variations": [
+        {
+            "sku": "GT-RED-M",
+            "attributes": [
+                {
+                    "name": "Color",
+                    "value": "Red"
+                },
+                {
+                    "name": "Size",
+                    "value": "M"
+                }
+            ],
+            "price": 15.99,
+            "stockQty": 50
+        }
+    ]
+}

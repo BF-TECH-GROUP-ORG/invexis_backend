@@ -6,7 +6,7 @@ const streamifier = require('streamifier');
 const upload = createUploadMiddleware({
   folder: 'products/{productId}',
   allowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'avi', 'webm'],
-  maxFileSize: 50 * 1024 * 1024, // 50MB
+  maxFileSize: 500 * 1024 * 1024, // 500MB
   resourceType: 'auto', // Auto-detect image or video
 }).fields([
   { name: 'images', maxCount: 10 },
@@ -74,4 +74,4 @@ const uploadBuffer = (buffer, folder, publicId) => {
   });
 };
 
-module.exports = { handleUploads, uploadBuffer };
+module.exports = { handleUploads, uploadBuffer, cloudinary };

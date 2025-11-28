@@ -4,6 +4,7 @@ const { Schema } = mongoose;
 
 const inventoryAdjustmentSchema = new Schema({
   companyId: { type: String, required: true, index: true },
+  shopId: { type: String, required: true, index: true }, // Shop-level tracking for multi-tenant isolation
   productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
   variationId: { type: Schema.Types.ObjectId, default: null },
   // warehouseId removed - warehouses no longer supported
@@ -18,6 +19,7 @@ const inventoryAdjustmentSchema = new Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+inventoryAdjustmentSchema.index({ companyId: 1, shopId: 1, status: 1 });
 inventoryAdjustmentSchema.index({ companyId: 1, status: 1 });
 
 // models/InventoryAdjustment.js (Updated pre-save hook)
@@ -53,6 +55,7 @@ inventoryAdjustmentSchema.pre('save', async function (next) {
       const StockChange = mongoose.model('StockChange');
       const stockChange = new StockChange({
         companyId: this.companyId,
+        shopId: this.shopId, // Include shopId for shop-level tracking
         productId: this.productId,
         variationId: this.variationId,
         changeType: 'adjustment',
@@ -60,8 +63,7 @@ inventoryAdjustmentSchema.pre('save', async function (next) {
         previousStock: oldQuantity,
         newStock: newQuantity, // Required field set
         reason: this.reason,
-        userId: this.userId,
-        // warehouseId: null (warehouses removed)
+        userId: this.userId
       });
       await stockChange.save();
 

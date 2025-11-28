@@ -9,16 +9,16 @@ const DebtSchema = new mongoose.Schema({
     // Embedded customer object for convenience in front-end (id, name, phone)
     customer: {
         id: { type: String, default: null },
-        name: { type: String },
-        phone: { type: String }
+        name: { type: String, default: null },
+        phone: { type: String, default: null }
     },
 
     // Hashed customer identifier for cross-company visibility (do NOT store raw phone/NID)
     hashedCustomerId: { type: String, index: true },
 
     // Sales / staff info
-    salesId: { type: mongoose.Types.ObjectId, required: true },
-    salesStaffId: { type: mongoose.Types.ObjectId, required: true },
+    salesId: { type: mongoose.Types.ObjectId, default: null },
+    salesStaffId: { type: mongoose.Types.ObjectId, required: true, default: null },
 
 
     items: [
@@ -48,7 +48,7 @@ const DebtSchema = new mongoose.Schema({
     overdueDays: { type: Number, default: 0 },
 
     // Consent reference and share level control cross-company visibility
-    consentRef: { type: String },
+    consentRef: { type: String, default: null },
     shareLevel: {
         type: String,
         enum: ['NONE', 'PARTIAL', 'FULL'],
@@ -56,17 +56,17 @@ const DebtSchema = new mongoose.Schema({
     },
 
     // Embedded repayment references for fast reads
-    repayments: [{ type: mongoose.Types.ObjectId, ref: 'Repayment' }],
+    repayments: [{ type: mongoose.Types.ObjectId, ref: 'Repayment', default: [] }],
 
     // Audit: who created/updated the debt (store id + human name)
     createdBy: {
         // allow actor ids to be strings (external/system ids) to avoid casting errors
-        id: { type: String },
-        name: { type: String }
+        id: { type: String, default: null },
+        name: { type: String, default: null }
     },
     updatedBy: {
         id: { type: String, default: null },
-        name: { type: String }
+        name: { type: String, default: null }
     },
     cancelledAt: { type: Date },
     cancelReason: { type: String },

@@ -152,4 +152,57 @@ exports.getCustomerBuyingPatterns = async (req, res, next) => {
     }
 };
 
+// Customer behavior patterns (alias for buying patterns)
+exports.getCustomerBehaviorPatterns = async (req, res, next) => {
+    req.query.userId = req.params.userId;
+    return exports.getCustomerBuyingPatterns(req, res, next);
+};
+
+// Customer journey (timeline of purchases)
+exports.getCustomerJourney = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const { companyId } = req.query;
+
+        if (!companyId || !userId) {
+            return res.status(400).json({ success: false, message: 'companyId and userId required' });
+        }
+
+        const cacheKey = `customer_journey:${companyId}:${userId}`;
+        const cached = await cache.getJSON(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
+        const orders = await Order.find({ companyId, userId })
+            .sort({ createdAt: 1 })
+            .lean();
+
+        const journey = {
+            userId,
+            totalOrders: orders.length,
+            timeline: orders.map(o => ({
+                orderId: o._id,
+                date: o.createdAt,
+                items: o.items.length,
+                total: o.totalAmount,
+                status: o.status
+            })),
+            firstOrder: orders.length > 0 ? orders[0].createdAt : null,
+            lastOrder: orders.length > 0 ? orders[orders.length - 1].createdAt : null,
+            totalSpent: orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0)
+        };
+
+        await cache.setJSON(cacheKey, journey, 3600);
+        res.json({ success: true, data: journey });
+    } catch (error) {
+        logger.error('Error in getCustomerJourney:', error);
+        next(error);
+    }
+};
+
+// Product relationship graph (alias for getProductGraph)
+exports.getProductRelationshipGraph = async (req, res, next) => {
+    req.query.productId = req.params.productId;
+    return exports.getProductGraph(req, res, next);
+};
+
 module.exports = exports;

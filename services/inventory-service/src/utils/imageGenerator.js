@@ -11,7 +11,10 @@ const generateQRCodeBuffer = async (text) => {
         return await QRCode.toBuffer(text, {
             errorCorrectionLevel: 'H',
             margin: 1,
-            width: 300
+            width: 300,
+            color: {
+                light: '#ffffffff' // White background
+            }
         });
     } catch (err) {
         throw new Error(`Failed to generate QR Code: ${err.message}`);
@@ -28,10 +31,12 @@ const generateBarcodeBuffer = async (text) => {
         bwipjs.toBuffer({
             bcid: 'code128',       // Barcode type
             text: text,            // Text to encode
-            scale: 3,              // 3x scaling factor
-            height: 10,            // Bar height, in millimeters
+            scale: 5,              // Increased scale for better scanning
+            height: 15,            // Increased height
             includetext: true,     // Show human-readable text
-            textxalign: 'center',  // Always good to align text
+            textxalign: 'center',
+            backgroundcolor: 'ffffff', // White background
+            padding: 10,           // Quiet zone
         }, (err, png) => {
             if (err) {
                 reject(new Error(`Failed to generate Barcode: ${err.message}`));
