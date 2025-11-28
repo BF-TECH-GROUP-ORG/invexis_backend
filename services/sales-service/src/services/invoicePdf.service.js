@@ -1,6 +1,5 @@
 const PDFDocument = require("pdfkit");
-const { uploadBuffer } = require("/app/shared/cloudinary");
-const { presets } = require("/app/shared/cloudinary");
+const { uploadBuffer, presets } = require("/app/shared/cloudinary");
 
 /**
  * Invoice PDF Generation Service
@@ -17,6 +16,10 @@ class InvoicePdfService {
    */
   static async generateInvoicePdf(invoiceData, saleData, items = [], companyData = {}) {
     try {
+      console.log("🔧 Starting PDF generation...");
+      console.log("📋 Invoice data:", { invoiceNumber: invoiceData.invoiceNumber, invoiceId: invoiceData.invoiceId });
+      console.log("📋 Sale data:", { saleId: saleData.saleId, companyId: saleData.companyId });
+
       // Create PDF document
       const doc = new PDFDocument({
         size: "A4",
@@ -48,6 +51,8 @@ class InvoicePdfService {
       // Finalize PDF
       doc.end();
 
+      console.log("📄 PDF generation completed, waiting for buffer...");
+
       // Wait for PDF to be fully generated
       const pdfBuffer = await new Promise((resolve, reject) => {
         doc.on("end", () => {
@@ -56,6 +61,8 @@ class InvoicePdfService {
         doc.on("error", reject);
       });
 
+      console.log("✅ PDF buffer created, size:", pdfBuffer.length, "bytes");
+
       // Upload to Cloudinary
       const fileName = `INV-${invoiceData.invoiceNumber}-${Date.now()}`;
       const folder = presets.invoicePdfConfig.folder(
@@ -63,12 +70,22 @@ class InvoicePdfService {
         saleData.saleId || invoiceData.saleId || 'unknown'
       );
 
+      console.log("☁️ Uploading to Cloudinary...");
+      console.log("📂 Folder:", folder);
+      console.log("📝 File name:", fileName);
+
+      // Upload PDF as image type with flags for browser viewing
       const uploadResult = await uploadBuffer(pdfBuffer, {
         folder: folder,
         publicId: fileName,
-        resourceType: 'raw',
+        resourceType: 'image', // Use 'image' instead of 'raw' for better URL support
         format: 'pdf',
+        type: 'upload',
+        flags: 'attachment', // This allows the PDF to be downloadable
       });
+
+      console.log("✅ Upload successful!");
+      console.log("🔗 Secure URL:", uploadResult.secure_url);
 
       return {
         pdfUrl: uploadResult.secure_url,
@@ -76,7 +93,9 @@ class InvoicePdfService {
         fileName: `${fileName}.pdf`,
       };
     } catch (error) {
-      console.error("❌ Error generating/uploading PDF:", error.message);
+      console.error("❌ Error generating/uploading PDF:");
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
       throw error;
     }
   }

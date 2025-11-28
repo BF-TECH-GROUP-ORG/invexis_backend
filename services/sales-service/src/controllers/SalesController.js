@@ -162,16 +162,22 @@ const createSale = async (req, res) => {
 
     // Generate PDF asynchronously (don't block response)
     try {
+      console.log("🎯 Attempting to generate PDF for invoice:", invoice.invoiceId);
       const pdfData = await InvoicePdfService.generateInvoicePdf(
         invoice.toJSON(),
         sale.toJSON(),
         saleItems.map((item) => item.toJSON()),
         { name: "INVEXIS", email: "info@invexis.com" }
       );
+      console.log("✅ PDF generated successfully:", pdfData);
       // Update invoice with PDF URL
       await invoice.update({ pdfUrl: pdfData.pdfUrl });
+      await invoice.reload(); // Reload to get the updated pdfUrl
+      console.log("✅ Invoice updated with pdfUrl:", invoice.pdfUrl);
     } catch (pdfError) {
-      console.error("⚠️ Warning: PDF generation failed:", pdfError.message);
+      console.error("⚠️ Warning: PDF generation failed:");
+      console.error("Error message:", pdfError.message);
+      console.error("Error stack:", pdfError.stack);
       // Don't fail the sale creation if PDF generation fails
     }
 
@@ -184,7 +190,7 @@ const createSale = async (req, res) => {
       },
     };
 
-    console.log(' Response being sent:', JSON.stringify(responseData, null, 2));
+    console.log('✅ Response being sent:', JSON.stringify(responseData, null, 2));
 
     return res.status(201).json(responseData);
   } catch (error) {
