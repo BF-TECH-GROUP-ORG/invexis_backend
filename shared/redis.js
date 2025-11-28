@@ -69,6 +69,87 @@ class RedisClient {
         }
     }
 
+    async incr(key) {
+        try {
+            return await this.client.incr(key);
+        } catch (err) {
+            console.error("Redis INCR error", err.message);
+            throw err;
+        }
+    }
+
+    async expire(key, seconds) {
+        try {
+            return await this.client.expire(key, seconds);
+        } catch (err) {
+            console.error("Redis EXPIRE error", err.message);
+            throw err;
+        }
+    }
+
+    async setex(key, seconds, value) {
+        try {
+            return await this.client.setex(key, seconds, value);
+        } catch (err) {
+            console.error("Redis SETEX error", err.message);
+            throw err;
+        }
+    }
+
+    async exists(key) {
+        try {
+            return await this.client.exists(key);
+        } catch (err) {
+            console.error("Redis EXISTS error", err.message);
+            return 0;
+        }
+    }
+
+    async sadd(key, ...members) {
+        try {
+            return await this.client.sadd(key, ...members);
+        } catch (err) {
+            console.error("Redis SADD error", err.message);
+            throw err;
+        }
+    }
+
+    async srem(key, ...members) {
+        try {
+            return await this.client.srem(key, ...members);
+        } catch (err) {
+            console.error("Redis SREM error", err.message);
+            throw err;
+        }
+    }
+
+    async scard(key) {
+        try {
+            return await this.client.scard(key);
+        } catch (err) {
+            console.error("Redis SCARD error", err.message);
+            return 0;
+        }
+    }
+
+    async smembers(key) {
+        try {
+            return await this.client.smembers(key);
+        } catch (err) {
+            console.error("Redis SMEMBERS error", err.message);
+            return [];
+        }
+    }
+
+    async keys(pattern) {
+        try {
+            return await this.client.keys(pattern);
+        } catch (err) {
+            console.error("Redis KEYS error", err.message);
+            return [];
+        }
+    }
+
     async publish(channel, message) {
         try {
             return await this.client.publish(channel, message);

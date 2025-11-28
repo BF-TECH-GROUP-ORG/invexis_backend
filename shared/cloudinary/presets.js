@@ -79,10 +79,34 @@ const imagePreset = createUploadMiddleware({
     resourceType: 'image',
 });
 
+/**
+ * For sales-service: Invoice PDFs
+ * Folder structure: invoices/{companyId}/{saleId}/
+ * Note: This preset is for HTTP uploads. For buffer uploads, use uploadBuffer directly.
+ */
+const invoicePdfPreset = createUploadMiddleware({
+    folder: 'invoices/{companyId}/{saleId}',
+    allowedFormats: ['pdf'],
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    resourceType: 'raw',
+});
+
+/**
+ * Invoice PDF folder configuration (for use with uploadBuffer)
+ */
+const invoicePdfConfig = {
+    folder: (companyId, saleId) => `invoices/${companyId}/${saleId}`,
+    resourceType: 'raw',
+    format: 'pdf',
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+};
+
 module.exports = {
     productMediaPreset,
     profilePicturePreset,
     verificationDocsPreset,
     documentPreset,
     imagePreset,
+    invoicePdfPreset,
+    invoicePdfConfig,
 };
