@@ -5,6 +5,7 @@ const { notificationEventSchema } = require('../utils/validator');
 const { compileTemplatesForChannels } = require('./templateService');
 const notificationQueue = require('../config/queue');
 const logger = require('../utils/logger');
+const { eventChannelMapping } = require('../config/eventChannelMapping');
 
 const dispatchEvent = async (eventPayload) => {
     const { error } = notificationEventSchema.validate(eventPayload);
@@ -13,7 +14,20 @@ const dispatchEvent = async (eventPayload) => {
         return false;
     }
 
-    const { event, data: payload, recipients, companyId, templateName, channels } = eventPayload;
+    let { event, data: payload, recipients, companyId, templateName, channels, priority } = eventPayload;
+
+    // Apply event mapping if channels are not explicitly provided
+    if ((!channels || channels.length === 0) && eventChannelMapping[event]) {
+        const mapping = eventChannelMapping[event];
+        channels = mapping.channels;
+        if (!priority) priority = mapping.priority;
+        logger.info(`Applied channel mapping for event ${event}: ${channels.join(', ')} (Priority: ${priority})`);
+    }
+
+    // Fallback to default if still no channels
+    if (!channels || channels.length === 0) {
+        channels = ['in-app']; // Default fallback
+    }
 
     // Template validation skipped (using local registry)
     // const templateValidation = await Template.validateTemplatesExist(templateName, channels);
@@ -38,6 +52,7 @@ const dispatchEvent = async (eventPayload) => {
             templateName,
             payload,
             channels,
+            priority: priority || 'normal',
             compiledContent, // Store channel-specific compiled content
 
             // Targeting
@@ -51,7 +66,7 @@ const dispatchEvent = async (eventPayload) => {
 
         // Queue delivery with delay if sendAt
         const delay = notification.sendAt > new Date() ? notification.sendAt - new Date() : 0;
-        jobs.push(notificationQueue.add('deliver', { notificationId: notification._id }, { delay }));
+        jobs.push(notificationQueue.add('deliver', { notificationId: notification._id }, { delay, priority: priority === 'high' ? 1 : undefined }));
     }
 
     logger.info(`Dispatched ${recipients.length} notifications for event ${event} with templates for channels: ${Object.keys(compiledContent).join(', ')}`);
@@ -68,7 +83,20 @@ const dispatchBroadcastEvent = async (eventPayload) => {
         return false;
     }
 
-    const { event, data: payload, companyId, templateName, channels, scope, departmentId, roles } = eventPayload;
+    let { event, data: payload, companyId, templateName, channels, scope, departmentId, roles, priority } = eventPayload;
+
+    // Apply event mapping if channels are not explicitly provided
+    if ((!channels || channels.length === 0) && eventChannelMapping[event]) {
+        const mapping = eventChannelMapping[event];
+        channels = mapping.channels;
+        if (!priority) priority = mapping.priority;
+        logger.info(`Applied channel mapping for broadcast event ${event}: ${channels.join(', ')} (Priority: ${priority})`);
+    }
+
+    // Fallback to default if still no channels
+    if (!channels || channels.length === 0) {
+        channels = ['in-app']; // Default fallback
+    }
 
     // Validate templates
     const templateValidation = await Template.validateTemplatesExist(templateName, channels);
@@ -91,6 +119,7 @@ const dispatchBroadcastEvent = async (eventPayload) => {
         templateName,
         payload,
         channels,
+        priority: priority || 'normal',
         compiledContent,
         companyId,
         departmentId,
@@ -102,7 +131,7 @@ const dispatchBroadcastEvent = async (eventPayload) => {
     await notification.save();
 
     // Queue delivery
-    const job = notificationQueue.add('deliver', { notificationId: notification._id });
+    const job = notificationQueue.add('deliver', { notificationId: notification._id }, { priority: priority === 'high' ? 1 : undefined });
 
     logger.info(`Dispatched broadcast notification for event ${event} with scope ${scope}`);
     return [job];
