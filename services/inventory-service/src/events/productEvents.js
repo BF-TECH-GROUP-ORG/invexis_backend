@@ -1,14 +1,29 @@
-const { getChannel } = require('../config/rabbitmq');
+/**
+ * Product Event Publisher
+ * Publishes product CRUD events to RabbitMQ topic exchange
+ * for consumption by other services (ecommerce, etc.)
+ */
 
+const producer = require('./producer');
+const logger = require('../utils/logger');
+
+/**
+ * Publish product event to topic exchange
+ * @param {String} eventType - Event type (e.g., 'inventory.product.created')
+ * @param {Object} data - Product data to publish (full product object)
+ */
 const publishProductEvent = async (eventType, data) => {
   try {
-    const channel = getChannel();
-    if (!channel) throw new Error('RabbitMQ channel not initialized');
-    const message = JSON.stringify({ eventType, data });
-    channel.sendToQueue('product.events', Buffer.from(message), { persistent: true });
-    console.log(`Published product event: ${eventType}`);
+    // Emit using the producer which uses eventPublishers.config for routing
+    await producer.emit(eventType, data);
+    logger.info(`📤 [PRODUCT EVENT] Published: ${eventType}`, {
+      productId: data._id,
+      productName: data.name,
+      companyId: data.companyId
+    });
   } catch (error) {
-    console.error('Failed to publish product event:', error);
+    logger.error(`❌ [PRODUCT EVENT] Failed to publish ${eventType}:`, error);
+    // Don't throw - allow product operation to complete even if event publication fails
   }
 };
 

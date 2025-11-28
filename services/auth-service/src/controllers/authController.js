@@ -4,6 +4,19 @@ const tokenService = require('../services/tokenService');
 const LoginHistory = require('../models/LoginHistory.models');
 const { uploadProfileImage } = require('../middleware/upload');
 
+// Helper to compute secure cookie options based on request/proxy/ENV
+function getRefreshCookieOptions(req) {
+    const forwardedProto = (req.headers && req.headers['x-forwarded-proto']) || '';
+    const isSecure = req.secure || forwardedProto.toLowerCase() === 'https' || process.env.NODE_ENV === 'production' || process.env.FORCE_COOKIE_SECURE === 'true';
+    // When cookie must be sent cross-site from a secure origin (e.g. ngrok HTTPS), browsers require SameSite=None and Secure=true
+    return {
+        httpOnly: true,
+        secure: !!isSecure,
+        sameSite: isSecure ? 'none' : 'lax',
+        maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+    };
+}
+
 // Register a new user
 const register = async (req, res) => {
     const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
@@ -38,10 +51,7 @@ const login = async (req, res) => {
     }
 
     res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+        ...getRefreshCookieOptions(req)
     });
     res.json({ ok: true, accessToken: result.accessToken, user: result.user });
 };
@@ -74,10 +84,7 @@ const verifyOtpLogin = async (req, res) => {
     }
 
     res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+        ...getRefreshCookieOptions(req)
     });
     res.json({ ok: true, accessToken: result.accessToken, user: result.user });
 };
@@ -139,12 +146,7 @@ const googleCallback = async (req, res, next) => {
         await req.user.save();
 
         // Set refresh token cookie
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
-        });
+        res.cookie('refreshToken', refreshToken, getRefreshCookieOptions(req));
 
         // Clear the authType from session
         delete req.session.authType;
@@ -181,12 +183,7 @@ const refresh = async (req, res, next) => {
         const tokens = await authService.refresh(refreshToken);
 
         // Set the new refresh token in cookie
-        res.cookie('refreshToken', tokens.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
-        });
+        res.cookie('refreshToken', tokens.refreshToken, getRefreshCookieOptions(req));
 
         res.json({
             ok: true,

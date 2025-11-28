@@ -44,7 +44,7 @@ async function seedAllModels(req, res) {
             shopId,
             customerId,
             customer: {
-                id: customerId,
+                id: customerId.toString(),
                 name: 'John Doe',
                 phone: '+256700123456'
             },
@@ -68,7 +68,7 @@ async function seedAllModels(req, res) {
             shareLevel: 'FULL',
             consentRef: 'CONSENT-' + companyId.toString().slice(-6),
             createdBy: {
-                id: salesStaffId,
+                id: salesStaffId.toString(),
                 name: 'Admin User'
             },
             balanceHistory: [
@@ -82,7 +82,7 @@ async function seedAllModels(req, res) {
             shopId,
             customerId,
             customer: {
-                id: customerId,
+                id: customerId.toString(),
                 name: 'John Doe',
                 phone: '+256700123456'
             },
@@ -106,7 +106,7 @@ async function seedAllModels(req, res) {
             shareLevel: 'PARTIAL',
             consentRef: 'CONSENT-' + companyId.toString().slice(-6),
             createdBy: {
-                id: salesStaffId,
+                id: salesStaffId.toString(),
                 name: 'Admin User'
             },
             balanceHistory: [
@@ -115,6 +115,14 @@ async function seedAllModels(req, res) {
         });
 
         console.log('✓ Created 2 debts');
+
+        // Verify debts were saved
+        const debtCount = await Debt.countDocuments();
+        console.log(`✓ Verified: ${debtCount} debts in database`);
+
+        if (debtCount < 2) {
+            throw new Error(`Expected 2 debts in database, but found ${debtCount}. Debts may not be persisting.`);
+        }
 
         // Seed repayments
         const repayment1 = await Repayment.create({
@@ -127,18 +135,26 @@ async function seedAllModels(req, res) {
                 phone: '+256700123456'
             },
             debtId: debt1._id,
-            paymentId,
+            paymentId: paymentId.toString(),
             amountPaid: 50,
             paymentMethod: 'CASH',
             paymentReference: 'SEED-REF-001-' + Date.now(),
             createdBy: {
-                id: salesStaffId,
+                id: salesStaffId.toString(),
                 name: 'Admin User'
             },
             paidAt: new Date(Date.now() - 1 * 60 * 60 * 1000) // Paid 1 hour ago
         });
 
         console.log('✓ Created 1 repayment');
+
+        // Verify repayments were saved
+        const repaymentCount = await Repayment.countDocuments();
+        console.log(`✓ Verified: ${repaymentCount} repayments in database`);
+
+        if (repaymentCount < 1) {
+            throw new Error(`Expected 1 repayment in database, but found ${repaymentCount}. Repayments may not be persisting.`);
+        }
 
         // Seed CompanySummary
         await CompanySummary.create({
@@ -233,10 +249,25 @@ async function seedAllModels(req, res) {
         res.status(201).json(seedData);
     } catch (err) {
         console.error('❌ Seed error:', err.message);
+        console.error('Error details:', {
+            name: err.name,
+            message: err.message,
+            code: err.code,
+            path: err.path,
+            value: err.value,
+            kind: err.kind
+        });
         res.status(500).json({
             success: false,
             error: err.message,
-            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+            errorType: err.name,
+            errorCode: err.code,
+            details: process.env.NODE_ENV === 'development' ? {
+                message: err.message,
+                path: err.path,
+                kind: err.kind,
+                stack: err.stack
+            } : undefined
         });
     }
 }

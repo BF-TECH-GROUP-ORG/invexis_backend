@@ -11,6 +11,7 @@
   "dependencies": {
     "amqp-connection-manager": "^5.0.0",
     "amqplib": "^0.10.9",
+    "bwip-js": "^4.8.0",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -25,6 +26,8 @@
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "node-schedule": "^2.1.1",
+    "qrcode": "^1.5.4",
+    "streamifier": "^0.1.1",
     "uuid": "^13.0.0",
     "winston": "^3.18.3"
   },

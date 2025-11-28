@@ -10,10 +10,19 @@ const {
   getAgingInventory,
   getStockMovementReport,
   getAdjustmentReport,
-  getWarehouseReport,
   getAlertSummary,
   getDiscountImpact
+  // Advanced Reports
+  ,
+  getExecutiveDashboard,
+  getRealTimeMetrics,
+  getSalesAnalytics,
+  getForecast,
+  getInventoryOptimization,
+  getBenchmarks,
+  buildCustomReport
 } = require('../controllers/reportController');
+const { protect } = require('../middleware/auth');
 
 router.get('/daily', getDailyReport);
 router.get('/product/:productId', getProductReport);
@@ -26,5 +35,14 @@ router.get('/adjustments', getAdjustmentReport);
 // Warehouse reports removed after warehouse feature removal
 router.get('/alerts', getAlertSummary);
 router.get('/discount-impact', getDiscountImpact);
+
+// ==================== ADVANCED REPORTS ====================
+router.get('/dashboard', protect, getExecutiveDashboard);
+router.get('/metrics/realtime', protect, getRealTimeMetrics);
+router.get('/analytics/sales', protect, getSalesAnalytics);
+router.get('/forecast', protect, getForecast);
+router.get('/optimization', protect, getInventoryOptimization);
+router.get('/benchmarks', protect, getBenchmarks);
+router.post('/custom', protect, buildCustomReport);
 
 module.exports = router;

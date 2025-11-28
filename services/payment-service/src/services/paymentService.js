@@ -1,217 +1,420 @@
-// src/Services/paymentsService.js
+// src/services/paymentService.js
+// Main payment service orchestrating all gateways and database operations
+
 require('dotenv').config();
-const axios = require('axios');
-const { v4: uuidv4 } = require('uuid');
-const redis = require('/app/shared/redis') || require('/app/shared/redis');
-const rabbitmq = require('/app/shared/rabbitmq') || require('/app/shared/rabbitmq');
+const paymentRepository = require('../repositories/paymentRepository');
+const transactionRepository = require('../repositories/transactionRepository');
+const invoiceService = require('./invoiceService');
+const stripeGateway = require('./gateways/stripeGateway');
+const mtnMomoGateway = require('./gateways/mtnMomoGateway');
+const airtelMoneyGateway = require('./gateways/airtelMoneyGateway');
+const mpesaGateway = require('./gateways/mpesaGateway');
+const { GATEWAY_TYPES, PAYMENT_STATUS, TRANSACTION_TYPE, TRANSACTION_STATUS } = require('../utils/constants');
 
-const {
-    MTN_BASE_URL,
-    MTN_SUBSCRIPTION_KEY,
-    MTN_USER,
-    MTN_API_KEY,
-    MTN_TARGET_ENVIRONMENT,
-    MTN_RETRY_LIMIT = 3,
-    MTN_RETRY_DELAY_MS = 1000,
-} = process.env;
-
-/* ------------------------------------------------------------------
- * Helper 1: Get Access Token (MTN)
- * ------------------------------------------------------------------ */
-async function getMtnAccessToken() {
-    try {
-        const response = await axios.post(
-            `${MTN_BASE_URL}/collection/token/`,
-            {},
-            {
-                headers: {
-                    'Ocp-Apim-Subscription-Key': MTN_SUBSCRIPTION_KEY,
-                    Authorization: 'Basic ' + Buffer.from(`${MTN_USER}:${MTN_API_KEY}`).toString('base64'),
-                },
-            }
-        );
-
-        return response.data.access_token;
-    } catch (err) {
-        console.error('Failed to get MTN Access Token:', err.response?.data || err.message);
-        throw new Error('Unable to authenticate with MTN MoMo API');
-    }
+// Optional: RabbitMQ and Redis for events and caching
+let redis, rabbitmq;
+try {
+    redis = require('/app/shared/redis');
+    rabbitmq = require('/app/shared/rabbitmq');
+} catch (error) {
+    console.warn('Shared services (Redis/RabbitMQ) not available, continuing without them');
+    redis = null;
+    rabbitmq = null;
 }
 
-/* ------------------------------------------------------------------
- * Helper 2: Send Payment Request (MTN)
- * ------------------------------------------------------------------ */
-async function initiateMtnPayment(amount, phoneNumber) {
-    try {
-        // Create unique reference
-        const referenceId = uuidv4();
+class PaymentService {
+    /**
+     * Initiate a payment
+     * @param {Object} paymentData - Payment information
+     * @returns {Promise<Object>} Payment result
+     */
+    async initiatePayment(paymentData) {
+        const {
+            user_id,
+            seller_id,
+            company_id,
+            shop_id,
+            order_id,
+            payout_recipient_id,
+            payout_details,
+            amount,
+            currency,
+            description,
+            method,
+            gateway,
+            phoneNumber,
+            customer_email,
+            line_items,
+            metadata,
+            ip,
+            device_fingerprint,
+            location
+        } = paymentData;
 
-        // Build body
-        const body = {
-            amount: amount.toString(),
-            currency: 'EUR',
-            externalId: referenceId,
-            payer: {
-                partyIdType: 'MSISDN',
-                partyId: phoneNumber.replace('+', ''), // remove + sign if any
+        // Validate gateway
+        if (!Object.values(GATEWAY_TYPES).includes(gateway)) {
+            throw new Error(`Unsupported gateway: ${gateway}`);
+        }
+
+        try {
+            // Create payment record in database
+            const payment = await paymentRepository.createPayment({
+                user_id,
+                seller_id,
+                company_id,
+                shop_id,
+                order_id,
+                payout_recipient_id,
+                payout_details,
+                company_id,
+                order_id,
+                amount,
+                currency,
+                description,
+                method,
+                gateway,
+                customer_email,
+                line_items,
+                metadata,
+                ip,
+                device_fingerprint,
+                location
+            });
+
+            // Create initial transaction record
+            const transaction = await transactionRepository.createTransaction({
+                payment_id: payment.payment_id,
+                user_id,
+                seller_id,
+                company_id,
+                type: TRANSACTION_TYPE.CHARGE,
+                amount,
+                currency,
+                status: TRANSACTION_STATUS.PENDING,
+                metadata: { gateway, initial_request: true }
+            });
+
+            // Initiate payment with appropriate gateway
+            let gatewayResult;
+            let gateway_token;
+
+            switch (gateway) {
+                case GATEWAY_TYPES.STRIPE:
+                    gatewayResult = await stripeGateway.createPaymentIntent({
+                        amount,
+                        currency,
+                        description,
+                        metadata,
+                        customer_email
+                    });
+                    gateway_token = gatewayResult.payment_intent_id;
+                    break;
+
+                case GATEWAY_TYPES.MTN_MOMO:
+                    gatewayResult = await mtnMomoGateway.initiatePayment({
+                        amount,
+                        currency,
+                        phoneNumber,
+                        description,
+                        metadata
+                    });
+                    gateway_token = gatewayResult.reference_id;
+                    break;
+
+                case GATEWAY_TYPES.AIRTEL_MONEY:
+                    gatewayResult = await airtelMoneyGateway.initiatePayment({
+                        amount,
+                        currency,
+                        phoneNumber,
+                        description,
+                        metadata
+                    });
+                    gateway_token = gatewayResult.reference_id;
+                    break;
+
+                case GATEWAY_TYPES.MPESA:
+                    gatewayResult = await mpesaGateway.initiatePayment({
+                        amount,
+                        phoneNumber,
+                        description,
+                        metadata
+                    });
+                    gateway_token = gatewayResult.checkout_request_id;
+                    break;
+
+                default:
+                    throw new Error(`Gateway ${gateway} not implemented`);
+            }
+
+            // Update payment with gateway token
+            await paymentRepository.updatePaymentStatus(payment.payment_id, {
+                status: PAYMENT_STATUS.PROCESSING,
+                gateway_token,
+                metadata: { ...metadata, gateway_response: gatewayResult }
+            });
+
+            // Update transaction status
+            await transactionRepository.updateTransactionStatus(transaction.transaction_id, {
+                status: TRANSACTION_STATUS.PENDING,
+                gateway_transaction_id: gateway_token,
+                metadata: { gateway_response: gatewayResult }
+            });
+
+            // Publish event to RabbitMQ (if available)
+            if (rabbitmq) {
+                try {
+                    await rabbitmq.publish(rabbitmq.exchanges.topic, 'payment.initiated', {
+                        payment_id: payment.payment_id,
+                        user_id,
+                        seller_id,
+                        amount,
+                        currency,
+                        gateway,
+                        timestamp: Date.now()
+                    }, { headers: { source: 'payment-service' } });
+                } catch (error) {
+                    console.warn('Failed to publish payment.initiated event:', error.message);
+                }
+            }
+
+            return {
+                success: true,
+                payment_id: payment.payment_id,
+                transaction_id: transaction.transaction_id,
+                gateway_token,
+                status: PAYMENT_STATUS.PROCESSING,
+                gateway_response: gatewayResult,
+                message: 'Payment initiated successfully'
+            };
+
+        } catch (error) {
+            console.error('Payment initiation error:', error.message);
+
+            // Publish failure event (if RabbitMQ available)
+            if (rabbitmq) {
+                try {
+                    await rabbitmq.publish(rabbitmq.exchanges.topic, 'payment.failed', {
+                        user_id,
+                        seller_id,
+                        amount,
+                        currency,
+                        gateway,
+                        error: error.message,
+                        timestamp: Date.now()
+                    }, { headers: { source: 'payment-service' } });
+                } catch (e) {
+                    console.warn('Failed to publish payment.failed event:', e.message);
+                }
+            }
+
+            throw error;
+        }
+    }
+
+    /**
+     * Check payment status
+     * @param {string} payment_id - Payment UUID
+     * @returns {Promise<Object>} Payment status
+     */
+    async checkPaymentStatus(payment_id) {
+        const payment = await paymentRepository.getPaymentById(payment_id);
+
+        if (!payment) {
+            throw new Error('Payment not found');
+        }
+
+        // If payment is already in final state, return it
+        if ([PAYMENT_STATUS.SUCCEEDED, PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED].includes(payment.status)) {
+            return {
+                payment_id: payment.payment_id,
+                status: payment.status,
+                amount: payment.amount,
+                currency: payment.currency,
+                gateway: payment.gateway,
+                processed_at: payment.processed_at
+            };
+        }
+
+        // Query gateway for latest status
+        try {
+            let gatewayStatus;
+
+            switch (payment.gateway) {
+                case GATEWAY_TYPES.STRIPE:
+                    gatewayStatus = await stripeGateway.getPaymentStatus(payment.gateway_token);
+                    break;
+
+                case GATEWAY_TYPES.MTN_MOMO:
+                    gatewayStatus = await mtnMomoGateway.checkPaymentStatus(payment.gateway_token);
+                    break;
+
+                case GATEWAY_TYPES.AIRTEL_MONEY:
+                    gatewayStatus = await airtelMoneyGateway.checkPaymentStatus(payment.gateway_token);
+                    break;
+
+                case GATEWAY_TYPES.MPESA:
+                    gatewayStatus = await mpesaGateway.checkPaymentStatus(payment.gateway_token);
+                    break;
+
+                default:
+                    throw new Error(`Gateway ${payment.gateway} not supported`);
+            }
+
+            // Update payment status based on gateway response
+            const newStatus = this.mapGatewayStatus(gatewayStatus.status, payment.gateway);
+
+            if (newStatus !== payment.status) {
+                await paymentRepository.updatePaymentStatus(payment_id, {
+                    status: newStatus,
+                    metadata: { ...payment.metadata, latest_gateway_status: gatewayStatus }
+                });
+
+                // If payment succeeded, generate invoice
+                if (newStatus === PAYMENT_STATUS.SUCCEEDED) {
+                    await this.handleSuccessfulPayment(payment);
+                }
+            }
+
+            return {
+                payment_id: payment.payment_id,
+                status: newStatus,
+                amount: payment.amount,
+                currency: payment.currency,
+                gateway: payment.gateway,
+                gateway_status: gatewayStatus
+            };
+
+        } catch (error) {
+            console.error('Error checking payment status:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Handle successful payment
+     * @param {Object} payment - Payment record
+     */
+    async handleSuccessfulPayment(payment) {
+        try {
+            // Generate invoice
+            const invoice = await invoiceService.generateInvoice({
+                payment_id: payment.payment_id,
+                user_id: payment.user_id,
+                seller_id: payment.seller_id,
+                company_id: payment.company_id,
+                amount: payment.amount,
+                currency: payment.currency,
+                description: payment.description,
+                metadata: payment.metadata
+            }, payment.metadata?.line_items || []);
+
+            // Generate PDF
+            await invoiceService.generatePDF(invoice.invoice_id);
+
+            // Mark invoice as paid
+            await invoiceService.markAsPaid(invoice.invoice_id);
+
+            // Publish success event
+            if (rabbitmq) {
+                try {
+                    await rabbitmq.publish(rabbitmq.exchanges.topic, 'payment.succeeded', {
+                        payment_id: payment.payment_id,
+                        invoice_id: invoice.invoice_id,
+                        user_id: payment.user_id,
+                        seller_id: payment.seller_id,
+                        amount: payment.amount,
+                        currency: payment.currency,
+                        timestamp: Date.now()
+                    }, { headers: { source: 'payment-service' } });
+                } catch (error) {
+                    console.warn('Failed to publish payment.succeeded event:', error.message);
+                }
+            }
+
+        } catch (error) {
+            console.error('Error handling successful payment:', error.message);
+        }
+    }
+
+    /**
+     * Map gateway-specific status to standard payment status
+     * @param {string} gatewayStatus - Gateway status
+     * @param {string} gateway - Gateway type
+     * @returns {string} Standard payment status
+     */
+    mapGatewayStatus(gatewayStatus, gateway) {
+        const statusMap = {
+            [GATEWAY_TYPES.STRIPE]: {
+                'succeeded': PAYMENT_STATUS.SUCCEEDED,
+                'processing': PAYMENT_STATUS.PROCESSING,
+                'requires_payment_method': PAYMENT_STATUS.PENDING,
+                'requires_confirmation': PAYMENT_STATUS.PENDING,
+                'requires_action': PAYMENT_STATUS.PENDING,
+                'canceled': PAYMENT_STATUS.CANCELLED,
+                'failed': PAYMENT_STATUS.FAILED
             },
-            payerMessage: 'Invexis Payment',
-            payeeNote: 'Payment via Invexis',
+            [GATEWAY_TYPES.MTN_MOMO]: {
+                'successful': PAYMENT_STATUS.SUCCEEDED,
+                'pending': PAYMENT_STATUS.PROCESSING,
+                'failed': PAYMENT_STATUS.FAILED
+            },
+            [GATEWAY_TYPES.AIRTEL_MONEY]: {
+                'ts': PAYMENT_STATUS.SUCCEEDED,
+                'pending': PAYMENT_STATUS.PROCESSING,
+                'failed': PAYMENT_STATUS.FAILED
+            },
+            [GATEWAY_TYPES.MPESA]: {
+                'succeeded': PAYMENT_STATUS.SUCCEEDED,
+                'pending': PAYMENT_STATUS.PROCESSING,
+                'failed': PAYMENT_STATUS.FAILED
+            }
         };
 
-        // Retry loop for transient network/5xx errors
-        let attempt = 0;
-        let lastErr;
-        const retryLimit = parseInt(MTN_RETRY_LIMIT, 10) || 3;
-        const retryDelay = parseInt(MTN_RETRY_DELAY_MS, 10) || 1000;
+        return statusMap[gateway]?.[gatewayStatus.toLowerCase()] || PAYMENT_STATUS.PROCESSING;
+    }
 
-        while (attempt < retryLimit) {
-            attempt++;
-            try {
-                const token = await getMtnAccessToken();
-                const response = await axios.post(
-                    `${MTN_BASE_URL}/collection/v1_0/requesttopay`,
-                    body,
-                    {
-                        headers: {
-                            'X-Reference-Id': referenceId,
-                            'X-Target-Environment': MTN_TARGET_ENVIRONMENT,
-                            'Ocp-Apim-Subscription-Key': MTN_SUBSCRIPTION_KEY,
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                        },
-                        timeout: 10000,
-                    }
-                );
+    /**
+     * Cancel a payment
+     * @param {string} payment_id - Payment UUID
+     * @param {string} reason - Cancellation reason
+     * @returns {Promise<Object>} Updated payment
+     */
+    async cancelPayment(payment_id, reason) {
+        const payment = await paymentRepository.getPaymentById(payment_id);
 
-                console.log('MTN MoMo Request Status:', response.status, response.statusText);
-
-                return {
-                    message: 'MTN payment initiated',
-                    referenceId,
-                    status: response.statusText,
-                    code: response.status,
-                };
-            } catch (err) {
-                lastErr = err;
-                const status = err.response?.status;
-                // Retry only on 5xx or network errors
-                if (status && status >= 500 && status < 600) {
-                    console.warn(`MTN request attempt ${attempt} failed with ${status}, retrying after ${retryDelay}ms`);
-                    await new Promise((r) => setTimeout(r, retryDelay));
-                    continue;
-                }
-                // For other errors don't retry
-                console.error('MTN Payment Error (non-retry):', err.response?.data || err.message);
-                throw new Error('Failed to initiate MTN payment');
-            }
+        if (!payment) {
+            throw new Error('Payment not found');
         }
 
-        console.error('MTN Payment Error (final):', lastErr?.response?.data || lastErr?.message);
-        throw new Error('Failed to initiate MTN payment after retries');
-    } catch (err) {
-        // Bubble up (most caught above), but normalize
-        console.error('MTN Payment Error (outer):', err.response?.data || err.message || err);
-        throw err;
+        if (payment.status !== PAYMENT_STATUS.PENDING && payment.status !== PAYMENT_STATUS.PROCESSING) {
+            throw new Error(`Cannot cancel payment with status: ${payment.status}`);
+        }
+
+        return await paymentRepository.updatePaymentStatus(payment_id, {
+            status: PAYMENT_STATUS.CANCELLED,
+            cancellation_reason: reason
+        });
+    }
+
+    /**
+     * Get user payments
+     * @param {string} user_id - User UUID
+     * @param {Object} options - Query options
+     * @returns {Promise<Array>} List of payments
+     */
+    async getUserPayments(user_id, options = {}) {
+        return await paymentRepository.getPaymentsByUser(user_id, options);
+    }
+
+    /**
+     * Get seller payments
+     * @param {string} seller_id - Seller UUID
+     * @param {Object} options - Query options
+     * @returns {Promise<Array>} List of payments
+     */
+    async getSellerPayments(seller_id, options = {}) {
+        return await paymentRepository.getPaymentsBySeller(seller_id, options);
     }
 }
 
-/* ------------------------------------------------------------------
- * Helper 3: Check Payment Status (MTN)
- * ------------------------------------------------------------------ */
-async function checkMtnPaymentStatus(referenceId) {
-    try {
-        const token = await getMtnAccessToken();
-        const response = await axios.get(
-            `${MTN_BASE_URL}/collection/v1_0/requesttopay/${referenceId}`,
-            {
-                headers: {
-                    'X-Target-Environment': MTN_TARGET_ENVIRONMENT,
-                    'Ocp-Apim-Subscription-Key': MTN_SUBSCRIPTION_KEY,
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
-        return response.data;
-    } catch (err) {
-        console.error('MTN Status Check Error:', err.response?.data || err.message);
-        throw new Error('Unable to retrieve payment status');
-    }
-}
-
-/* ------------------------------------------------------------------
- * Main Payment Processor
- * ------------------------------------------------------------------ */
-// High-level processPayment with idempotency, caching and event publishing
-exports.processPayment = async (provider, amount, phoneNumber, options = {}) => {
-    const providerKey = (provider || '').toLowerCase();
-
-    if (!providerKey) throw new Error('Provider required');
-
-    if (providerKey !== 'mtn') {
-        throw new Error(`${provider} payment not yet implemented`);
-    }
-
-    // Idempotency - use provided idempotencyKey or phone+amount
-    const idempotencyKey = options.idempotencyKey || `${providerKey}:${phoneNumber}:${amount}`;
-    const cacheKey = `payment:idempotency:${idempotencyKey}`;
-
-    try {
-        // Check cache to avoid duplicate requests
-        const cached = await redis.get(cacheKey);
-        if (cached) {
-            try {
-                const parsed = JSON.parse(cached);
-                return { cached: true, ...parsed };
-            } catch (e) {
-                // Fallthrough and overwrite cache
-            }
-        }
-
-        // Initiate payment
-        const result = await initiateMtnPayment(amount, phoneNumber);
-
-        // Cache result with a TTL (short lived)
-        try {
-            await redis.set(cacheKey, JSON.stringify(result), 'EX', 60 * 5); // 5 minutes
-        } catch (e) {
-            console.warn('Redis set failed for idempotency cache', e.message);
-        }
-
-        // Publish event to RabbitMQ (best-effort)
-        try {
-            const payload = {
-                event: 'payment.initiated',
-                provider: providerKey,
-                amount,
-                phoneNumber,
-                result,
-                timestamp: Date.now(),
-            };
-            await rabbitmq.publish(rabbitmq.exchanges.topic, 'payment.initiated', payload, { headers: { source: 'payment-service' } });
-        } catch (e) {
-            console.warn('RabbitMQ publish failed for payment.initiated', e.message);
-        }
-
-        return result;
-    } catch (err) {
-        // Publish failure event
-        try {
-            const payload = {
-                event: 'payment.failed',
-                provider: providerKey,
-                amount,
-                phoneNumber,
-                error: err.message,
-                timestamp: Date.now(),
-            };
-            await rabbitmq.publish(rabbitmq.exchanges.topic, 'payment.failed', payload, { headers: { source: 'payment-service' } });
-        } catch (e) {
-            console.warn('RabbitMQ publish failed for payment.failed', e.message);
-        }
-
-        throw err;
-    }
-};
-
-exports.checkMtnPaymentStatus = checkMtnPaymentStatus;
+module.exports = new PaymentService();

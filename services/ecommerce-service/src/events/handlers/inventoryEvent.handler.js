@@ -4,8 +4,8 @@
  * Manages product cache invalidation and stock updates
  */
 
-const redis = require('/app/shared/redis.js');
-const { logger } = require('../../utils/app');
+const cache = require('../../utils/cache');
+const logger = require('../../utils/logger');
 
 /**
  * Handle product created event - Cache product
@@ -17,7 +17,7 @@ async function handleProductCreated(data) {
     logger.info(`📦 Processing product created: ${productId}`);
 
     // Invalidate product list cache
-    await redis.del(`products:${companyId}:*`);
+    await cache.del(`products:${companyId}:*`);
 
     logger.info(`✅ Product cache invalidated for company ${companyId}`);
   } catch (error) {
@@ -36,12 +36,12 @@ async function handleProductUpdated(data) {
     logger.info(`📦 Processing product updated: ${productId}`);
 
     // Invalidate product cache
-    await redis.del(`product:${companyId}:${productId}`);
-    await redis.del(`products:${companyId}:*`);
+    await cache.del(`product:${companyId}:${productId}`);
+    await cache.del(`products:${companyId}:*`);
 
     // Invalidate related caches
-    await redis.del(`cart:${companyId}:*`);
-    await redis.del(`wishlist:${companyId}:*`);
+    await cache.del(`cart:${companyId}:*`);
+    await cache.del(`wishlist:${companyId}:*`);
 
     logger.info(`✅ Product and related caches invalidated`);
   } catch (error) {
@@ -60,12 +60,12 @@ async function handleProductDeleted(data) {
     logger.info(`📦 Processing product deleted: ${productId}`);
 
     // Invalidate product cache
-    await redis.del(`product:${companyId}:${productId}`);
-    await redis.del(`products:${companyId}:*`);
+    await cache.del(`product:${companyId}:${productId}`);
+    await cache.del(`products:${companyId}:*`);
 
     // Invalidate related caches
-    await redis.del(`cart:${companyId}:*`);
-    await redis.del(`wishlist:${companyId}:*`);
+    await cache.del(`cart:${companyId}:*`);
+    await cache.del(`wishlist:${companyId}:*`);
 
     logger.info(`✅ Product removed from cache`);
   } catch (error) {
@@ -84,7 +84,7 @@ async function handleStockUpdated(data) {
     logger.info(`📦 Processing stock updated: ${productId} → ${newQuantity}`);
 
     // Invalidate product cache
-    await redis.del(`product:${companyId}:${productId}`);
+    await cache.del(`product:${companyId}:${productId}`);
 
     logger.info(`✅ Stock cache updated`);
   } catch (error) {
@@ -103,11 +103,11 @@ async function handleOutOfStock(data) {
     logger.info(`📦 Processing out of stock: ${productName}`);
 
     // Invalidate product cache
-    await redis.del(`product:${companyId}:${productId}`);
-    await redis.del(`products:${companyId}:*`);
+    await cache.del(`product:${companyId}:${productId}`);
+    await cache.del(`products:${companyId}:*`);
 
     // Invalidate cart cache (product no longer available)
-    await redis.del(`cart:${companyId}:*`);
+    await cache.del(`cart:${companyId}:*`);
 
     logger.info(`✅ Out of stock event processed`);
   } catch (error) {

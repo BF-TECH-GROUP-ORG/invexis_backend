@@ -8,17 +8,17 @@ const DebtSchema = new mongoose.Schema({
     customerId: { type: mongoose.Types.ObjectId, required: true },
     // Embedded customer object for convenience in front-end (id, name, phone)
     customer: {
-        id: { type: mongoose.Types.ObjectId },
-        name: { type: String },
-        phone: { type: String }
+        id: { type: String, default: null },
+        name: { type: String, default: null },
+        phone: { type: String, default: null }
     },
 
     // Hashed customer identifier for cross-company visibility (do NOT store raw phone/NID)
     hashedCustomerId: { type: String, index: true },
 
     // Sales / staff info
-    salesId: { type: mongoose.Types.ObjectId, required: true },
-    salesStaffId: { type: mongoose.Types.ObjectId, required: true },
+    salesId: { type: mongoose.Types.ObjectId, default: null },
+    salesStaffId: { type: mongoose.Types.ObjectId, required: true, default: null },
 
 
     items: [
@@ -48,7 +48,7 @@ const DebtSchema = new mongoose.Schema({
     overdueDays: { type: Number, default: 0 },
 
     // Consent reference and share level control cross-company visibility
-    consentRef: { type: String },
+    consentRef: { type: String, default: null },
     shareLevel: {
         type: String,
         enum: ['NONE', 'PARTIAL', 'FULL'],
@@ -56,21 +56,22 @@ const DebtSchema = new mongoose.Schema({
     },
 
     // Embedded repayment references for fast reads
-    repayments: [{ type: mongoose.Types.ObjectId, ref: 'Repayment' }],
+    repayments: [{ type: mongoose.Types.ObjectId, ref: 'Repayment', default: [] }],
 
     // Audit: who created/updated the debt (store id + human name)
     createdBy: {
-        id: { type: mongoose.Types.ObjectId },
-        name: { type: String }
+        // allow actor ids to be strings (external/system ids) to avoid casting errors
+        id: { type: String, default: null },
+        name: { type: String, default: null }
     },
     updatedBy: {
-        id: { type: mongoose.Types.ObjectId },
-        name: { type: String }
+        id: { type: String, default: null },
+        name: { type: String, default: null }
     },
     cancelledAt: { type: Date },
     cancelReason: { type: String },
     cancelledBy: {
-        id: { type: mongoose.Types.ObjectId },
+        id: { type: String, default: null },
         name: { type: String }
     },
 

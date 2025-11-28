@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const getAllCategories = asyncHandler(async (req, res) => {
-  const { level, parentCategory, isActive, search, page = 1, limit = 50 } = req.query;
+  const { level, parentCategory, isActive, search, page = 1, limit = 50, companyId } = req.query;
 
   if (parentCategory) validateMongoId(parentCategory);
 
@@ -17,6 +17,7 @@ const getAllCategories = asyncHandler(async (req, res) => {
   const query = {};
   if (level) query.level = parseInt(level);
   if (parentCategory) query.parentCategory = parentCategory;
+  if (companyId) query.companyId = companyId;
   if (isActive !== undefined) query.isActive = isActive === 'true';
   if (search) {
     query.$text = { $search: search };
@@ -90,6 +91,93 @@ const getCategoryTree = asyncHandler(async (req, res) => {
   });
 });
 
+const getLevel2Categories = asyncHandler(async (req, res) => {
+  const { isActive, search, page = 1, limit = 50 } = req.query;
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  // Build query for level 2 only
+  const query = { level: 2 };
+  if (isActive !== undefined) query.isActive = isActive === 'true';
+  if (search) {
+    query.$text = { $search: search };
+  }
+
+  const categories = await Category.find(query)
+    .populate('parentCategory', 'name slug level')
+    .sort({ sortOrder: 1, name: 1 })
+    .skip(skip)
+    .limit(parseInt(limit));
+
+  const total = await Category.countDocuments(query);
+
+  res.status(200).json({
+    success: true,
+    data: categories,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
+  });
+});
+
+const getLevel3Categories = asyncHandler(async (req, res) => {
+  const { companyId, isActive, search, page = 1, limit = 50 } = req.query;
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  // Build query for level 3 only
+  const query = { level: 3 };
+  if (companyId) query.companyId = companyId;
+  if (isActive !== undefined) query.isActive = isActive === 'true';
+  if (search) {
+    query.$text = { $search: search };
+  }
+
+  const categories = await Category.find(query)
+    .populate('parentCategory', 'name slug level')
+    .sort({ sortOrder: 1, name: 1 })
+    .skip(skip)
+    .limit(parseInt(limit));
+
+  const total = await Category.countDocuments(query);
+
+  res.status(200).json({
+    success: true,
+    data: categories,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
+  });
+});
+
+
+const getCategoriesByIds = asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, message: 'ids array is required in request body' });
+  }
+
+  // Validate all ids
+  try {
+    ids.forEach(id => validateMongoId(id));
+  } catch (err) {
+    return res.status(400).json({ success: false, message: 'One or more ids are invalid' });
+  }
+
+  const categories = await Category.find({ _id: { $in: ids } })
+    .populate('parentCategory', 'name level')
+    .sort({ level: 1, sortOrder: 1, name: 1 });
+
+  res.status(200).json({ success: true, data: categories, count: categories.length });
+});
+
+
 const getLevel3CategoriesByCompany = asyncHandler(async (req, res) => {
   const { companyId } = req.params;
   if (!companyId) {
@@ -99,6 +187,43 @@ const getLevel3CategoriesByCompany = asyncHandler(async (req, res) => {
   const categories = await Category.find({ level: 3, companyId, isActive: true }).sort({ sortOrder: 1, name: 1 });
 
   res.status(200).json({ success: true, data: categories, count: categories.length });
+});
+
+const getLevel3CategoriesByCompanyPaginated = asyncHandler(async (req, res) => {
+  const { companyId } = req.params || req.query.companyId;
+  const { isActive, search, page = 1, limit = 50 } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId parameter is required' });
+  }
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  // Build query for level 3 categories scoped to company
+  const query = { level: 3, companyId };
+  if (isActive !== undefined) query.isActive = isActive === 'true';
+  if (search) {
+    query.$text = { $search: search };
+  }
+
+  const categories = await Category.find(query)
+    .populate('parentCategory', 'name level')
+    .sort({ sortOrder: 1, name: 1 })
+    .skip(skip)
+    .limit(parseInt(limit));
+
+  const total = await Category.countDocuments(query);
+
+  res.status(200).json({
+    success: true,
+    data: categories,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
+  });
 });
 
 const getCategoryPath = asyncHandler(async (req, res) => {
@@ -128,6 +253,29 @@ const createCategory = asyncHandler(async (req, res) => {
       message: 'Validation errors',
       errors: errors.array()
     });
+  }
+
+  // Basic hierarchical validations before creating to give clear errors
+  const { level, parentCategory } = req.body;
+
+  // If creating a level-3 category it must have a companyId
+  if (parseInt(level) === 3 && !req.body.companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required for level 3 categories' });
+  }
+
+  // If parentCategory is provided, ensure it exists and has valid level
+  if (parentCategory) {
+    validateMongoId(parentCategory);
+    const parent = await Category.findById(parentCategory);
+    if (!parent) {
+      return res.status(400).json({ success: false, message: 'Parent category not found' });
+    }
+    if (parent.level >= 3) {
+      return res.status(400).json({ success: false, message: 'Cannot create subcategory under level 3 category' });
+    }
+    if (parseInt(level) !== parent.level + 1) {
+      return res.status(400).json({ success: false, message: 'Invalid category level for given parent' });
+    }
   }
 
   const newImage = req.body.images ? { url: req.body.images[0].url, alt: req.body.images[0].altText } : undefined;
@@ -176,6 +324,50 @@ const updateCategory = asyncHandler(async (req, res) => {
     req.body.image = newImage;
   }
 
+  // Fetch existing category to compute resulting hierarchy and safely validate
+  const existing = await Category.findById(id);
+  if (!existing) {
+    return res.status(404).json({ success: false, message: 'Category not found' });
+  }
+
+  // Determine resulting values after update (fall back to existing)
+  const resultingLevel = req.body.level !== undefined ? parseInt(req.body.level) : existing.level;
+  const resultingParent = req.body.parentCategory !== undefined ? req.body.parentCategory : existing.parentCategory;
+  const resultingCompanyId = req.body.companyId !== undefined ? req.body.companyId : existing.companyId;
+
+  // If resulting level is 3, ensure companyId will be present
+  // For level-3 categories require the caller to provide companyId and it must match the existing one
+  if (resultingLevel === 3) {
+    const providedCompanyId = req.body.companyId || req.query.companyId;
+    if (!providedCompanyId) {
+      return res.status(400).json({ success: false, message: 'companyId is required to modify level 3 categories' });
+    }
+    if (existing.companyId && providedCompanyId !== existing.companyId) {
+      return res.status(403).json({ success: false, message: 'companyId does not match this category' });
+    }
+    // ensure request uses the correct companyId
+    req.body.companyId = existing.companyId || providedCompanyId;
+  }
+
+  // If parentCategory is being set/changed, validate it and ensure hierarchy rules
+  if (resultingParent) {
+    validateMongoId(resultingParent);
+    const parent = await Category.findById(resultingParent);
+    if (!parent) {
+      return res.status(400).json({ success: false, message: 'Parent category not found' });
+    }
+    if (parent.level >= 3) {
+      return res.status(400).json({ success: false, message: 'Cannot set parent under level 3 category' });
+    }
+    if (resultingLevel !== parent.level + 1) {
+      return res.status(400).json({ success: false, message: 'Invalid resulting level for given parent' });
+    }
+  } else if (resultingLevel !== 1 && !resultingParent) {
+    // If not providing parent but level isn't root, that's invalid
+    return res.status(400).json({ success: false, message: 'Non-root categories must have a parentCategory' });
+  }
+
+  // Perform update
   const category = await Category.findByIdAndUpdate(
     id,
     req.body,
@@ -183,15 +375,28 @@ const updateCategory = asyncHandler(async (req, res) => {
   ).populate('parentCategory', 'name slug level');
 
   if (!category) {
-    return res.status(404).json({
-      success: false,
-      message: 'Category not found'
-    });
+    return res.status(404).json({ success: false, message: 'Category not found' });
   }
 
-  // Post-update validation: level 3 categories must have companyId
-  if (category.level === 3 && !category.companyId) {
-    return res.status(400).json({ success: false, message: 'companyId is required for level 3 categories' });
+  // If parent changed, update parent's statistics (decrement old, increment new)
+  const oldParentId = existing.parentCategory ? existing.parentCategory.toString() : null;
+  const newParentId = category.parentCategory ? category.parentCategory.toString() : null;
+
+  if (oldParentId && oldParentId !== newParentId) {
+    try {
+      await Category.findByIdAndUpdate(oldParentId, { $inc: { 'statistics.totalSubcategories': -1 } });
+    } catch (e) {
+      // log but don't fail the request
+      console.error('Failed to decrement old parent subcategory count', e);
+    }
+  }
+
+  if (newParentId && oldParentId !== newParentId) {
+    try {
+      await Category.findByIdAndUpdate(newParentId, { $inc: { 'statistics.totalSubcategories': 1 } });
+    } catch (e) {
+      console.error('Failed to increment new parent subcategory count', e);
+    }
   }
 
   res.status(200).json({
@@ -214,13 +419,9 @@ const deleteCategory = asyncHandler(async (req, res) => {
     });
   }
 
-  // Check if category has products
+  // Check if category has products - products now only reference one category field (level 3)
   const productsCount = await Product.countDocuments({
-    $or: [
-      { category: id },
-      { subcategory: id },
-      { subSubcategory: id }
-    ]
+    category: id
   });
 
   if (productsCount > 0) {
@@ -238,6 +439,9 @@ const deleteCategory = asyncHandler(async (req, res) => {
       message: 'Category not found'
     });
   }
+
+  // If deleting a level-3 category, require companyId param (in query or body) and validate it matches
+
 
   // Delete image file if exists
   if (category.image && category.image.url && category.image.url.startsWith('/uploads/')) {
@@ -286,15 +490,82 @@ const toggleActiveStatus = asyncHandler(async (req, res) => {
   });
 });
 
+const createLevel3Category = asyncHandler(async (req, res) => {
+  const { companyId } = req.params || req.query.companyId;
+  const { name, parentCategory, description, attributes } = req.body;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId parameter is required' });
+  }
+
+  // Check validation errors from express-validator
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation errors',
+      errors: errors.array()
+    });
+  }
+
+  // Validate parentCategory is provided and is level 2
+  if (!parentCategory) {
+    return res.status(400).json({ success: false, message: 'parentCategory is required for level 3 categories' });
+  }
+
+  validateMongoId(parentCategory);
+  const parent = await Category.findById(parentCategory);
+  if (!parent) {
+    return res.status(404).json({ success: false, message: 'Parent category not found' });
+  }
+  if (parent.level !== 2) {
+    return res.status(400).json({ success: false, message: 'Parent category must be level 2' });
+  }
+
+  // Extract image if provided
+  const newImage = req.body.images ? { url: req.body.images[0].url, alt: req.body.images[0].altText } : undefined;
+
+  // Create level 3 category with companyId from body (already validated)
+  const category = new Category({
+    name,
+    parentCategory,
+    description,
+
+    attributes,
+    level: 3,
+    companyId: companyId,
+    image: newImage
+  });
+
+  await category.save();
+
+  // Update parent category's subcategory count
+  await Category.findByIdAndUpdate(
+    parentCategory,
+    { $inc: { 'statistics.totalSubcategories': 1 } }
+  );
+
+  res.status(201).json({
+    success: true,
+    message: 'Level 3 category created successfully',
+    data: category
+  });
+});
+
 module.exports = {
   getAllCategories,
   getCategoryById,
   getCategoryBySlug,
   getCategoryTree,
+  getLevel2Categories,
+  getLevel3Categories,
   getLevel3CategoriesByCompany,
+  getLevel3CategoriesByCompanyPaginated,
   getCategoryPath,
   createCategory,
   updateCategory,
   deleteCategory,
-  toggleActiveStatus
+  toggleActiveStatus,
+  createLevel3Category,
+  getCategoriesByIds
 };

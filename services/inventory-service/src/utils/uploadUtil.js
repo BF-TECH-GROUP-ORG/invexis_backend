@@ -1,11 +1,12 @@
 // Import shared Cloudinary utilities
-const { createUploadMiddleware, handleUploadError } = require('/app/shared/cloudinary');
+const { createUploadMiddleware, handleUploadError, cloudinary } = require('/app/shared/cloudinary');
+const streamifier = require('streamifier');
 
 // Create upload middleware for product images and videos
 const upload = createUploadMiddleware({
   folder: 'products/{productId}',
   allowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'avi', 'webm'],
-  maxFileSize: 50 * 1024 * 1024, // 50MB
+  maxFileSize: 500 * 1024 * 1024, // 500MB
   resourceType: 'auto', // Auto-detect image or video
 }).fields([
   { name: 'images', maxCount: 10 },
@@ -49,4 +50,28 @@ const handleUploads = (req, res, next) => {
   });
 };
 
-module.exports = { handleUploads };
+/**
+ * Upload a buffer to Cloudinary
+ * @param {Buffer} buffer 
+ * @param {string} folder 
+ * @param {string} publicId 
+ * @returns {Promise<object>} Cloudinary upload result
+ */
+const uploadBuffer = (buffer, folder, publicId) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: folder,
+        public_id: publicId,
+        resource_type: 'image'
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+    streamifier.createReadStream(buffer).pipe(uploadStream);
+  });
+};
+
+module.exports = { handleUploads, uploadBuffer, cloudinary };

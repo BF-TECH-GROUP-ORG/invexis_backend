@@ -1,4 +1,4 @@
-const Promotion = require('../models/Promition.models');
+const Promotion = require('../models/Promotion.models');
 const Catalog = require('../models/Catalog.models');
 const Order = require('../models/Order.models');
 const cache = require('../utils/cache');
@@ -6,7 +6,7 @@ const { publish, exchanges } = require('/app/shared/rabbitmq');
 const logger = require('../utils/logger');
 
 // Create a seasonal campaign (Black Friday, Kiku, etc.)
-exports.createSeasonalCampaign = async (req, res, next) => {
+exports.createCampaign = async (req, res, next) => {
     try {
         const { companyId, campaignName, description, campaignType, discountType, discountValue, startDate, endDate, productIds, bannerUrl, targetAudience } = req.body;
 
@@ -40,13 +40,13 @@ exports.createSeasonalCampaign = async (req, res, next) => {
 
         res.json({ success: true, message: 'Campaign created successfully', data: campaign });
     } catch (error) {
-        logger.error('Error in createSeasonalCampaign:', error);
+        logger.error('Error in createCampaign:', error);
         next(error);
     }
 };
 
 // Get all active campaigns
-exports.getActiveCampaigns = async (req, res, next) => {
+exports.listCampaigns = async (req, res, next) => {
     try {
         const { companyId } = req.query;
         const cacheKey = `active_campaigns:${companyId}`;
@@ -64,7 +64,7 @@ exports.getActiveCampaigns = async (req, res, next) => {
         await cache.setJSON(cacheKey, campaigns, 300);
         res.json({ success: true, data: campaigns });
     } catch (error) {
-        logger.error('Error in getActiveCampaigns:', error);
+        logger.error('Error in listCampaigns:', error);
         next(error);
     }
 };
@@ -329,6 +329,214 @@ exports.getPromotionRecommendations = async (req, res, next) => {
         res.json({ success: true, data: filteredRecommendations });
     } catch (error) {
         logger.error('Error in getPromotionRecommendations:', error);
+        next(error);
+    }
+};
+
+// Get campaign details
+exports.getCampaignDetail = async (req, res, next) => {
+    try {
+        const { companyId, campaignId } = req.query;
+        const campaign = await Promotion.findById(campaignId).lean();
+        if (!campaign || campaign.companyId !== companyId) {
+            return res.status(404).json({ success: false, message: 'Campaign not found' });
+        }
+        res.json({ success: true, data: campaign });
+    } catch (error) {
+        logger.error('Error in getCampaignDetail:', error);
+        next(error);
+    }
+};
+
+// Update campaign
+exports.updateCampaign = async (req, res, next) => {
+    try {
+        const { companyId } = req.body;
+        const { campaignId } = req.params;
+        const campaign = await Promotion.findByIdAndUpdate(campaignId, req.body, { new: true });
+        if (!campaign || campaign.companyId !== companyId) {
+            return res.status(404).json({ success: false, message: 'Campaign not found' });
+        }
+        await cache.del(`campaign:${companyId}:${campaignId}`);
+        res.json({ success: true, message: 'Campaign updated', data: campaign });
+    } catch (error) {
+        logger.error('Error in updateCampaign:', error);
+        next(error);
+    }
+};
+
+// Delete campaign
+exports.deleteCampaign = async (req, res, next) => {
+    try {
+        const { companyId } = req.body;
+        const { campaignId } = req.params;
+        const campaign = await Promotion.findByIdAndDelete(campaignId);
+        if (!campaign || campaign.companyId !== companyId) {
+            return res.status(404).json({ success: false, message: 'Campaign not found' });
+        }
+        await cache.del(`campaign:${companyId}:${campaignId}`);
+        res.json({ success: true, message: 'Campaign deleted' });
+    } catch (error) {
+        logger.error('Error in deleteCampaign:', error);
+        next(error);
+    }
+};
+
+// List flash sales
+exports.listFlashSales = async (req, res, next) => {
+    try {
+        const { companyId } = req.query;
+        const cacheKey = `flash_sales:${companyId}`;
+        const cached = await cache.getJSON(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
+        const sales = await Promotion.find({ companyId, type: 'flash_sale' }).lean();
+        await cache.setJSON(cacheKey, sales, 300);
+        res.json({ success: true, data: sales });
+    } catch (error) {
+        logger.error('Error in listFlashSales:', error);
+        next(error);
+    }
+};
+
+// Get flash sale details
+exports.getFlashSaleDetail = async (req, res, next) => {
+    try {
+        const { companyId } = req.query;
+        const { flashSaleId } = req.params;
+        const sale = await Promotion.findById(flashSaleId).lean();
+        if (!sale || sale.companyId !== companyId) {
+            return res.status(404).json({ success: false, message: 'Flash sale not found' });
+        }
+        res.json({ success: true, data: sale });
+    } catch (error) {
+        logger.error('Error in getFlashSaleDetail:', error);
+        next(error);
+    }
+};
+
+// Update flash sale
+exports.updateFlashSale = async (req, res, next) => {
+    try {
+        const { companyId } = req.body;
+        const { flashSaleId } = req.params;
+        const sale = await Promotion.findByIdAndUpdate(flashSaleId, req.body, { new: true });
+        if (!sale || sale.companyId !== companyId) {
+            return res.status(404).json({ success: false, message: 'Flash sale not found' });
+        }
+        await cache.del(`flash_sale:${companyId}:${flashSaleId}`);
+        res.json({ success: true, message: 'Flash sale updated', data: sale });
+    } catch (error) {
+        logger.error('Error in updateFlashSale:', error);
+        next(error);
+    }
+};
+
+// List seasonal promotions
+exports.listSeasonalPromotions = async (req, res, next) => {
+    try {
+        const { companyId } = req.query;
+        const cacheKey = `seasonal_promos:${companyId}`;
+        const cached = await cache.getJSON(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
+        const promos = await Promotion.find({ companyId, type: 'seasonal' }).lean();
+        await cache.setJSON(cacheKey, promos, 300);
+        res.json({ success: true, data: promos });
+    } catch (error) {
+        logger.error('Error in listSeasonalPromotions:', error);
+        next(error);
+    }
+};
+
+// Create seasonal promotion
+exports.createSeasonalPromotion = async (req, res, next) => {
+    try {
+        const { companyId, name, description, discountType, discountValue, startDate, endDate, productIds } = req.body;
+        const promo = await Promotion.create({
+            companyId,
+            name,
+            description,
+            type: 'seasonal',
+            discountType,
+            discountValue,
+            productIds,
+            startDate: new Date(startDate),
+            endDate: new Date(endDate),
+            status: 'scheduled'
+        });
+        res.json({ success: true, message: 'Seasonal promotion created', data: promo });
+    } catch (error) {
+        logger.error('Error in createSeasonalPromotion:', error);
+        next(error);
+    }
+};
+
+// Update seasonal promotion
+exports.updateSeasonalPromotion = async (req, res, next) => {
+    try {
+        const { companyId } = req.body;
+        const { seasonalId } = req.params;
+        const promo = await Promotion.findByIdAndUpdate(seasonalId, req.body, { new: true });
+        if (!promo || promo.companyId !== companyId) {
+            return res.status(404).json({ success: false, message: 'Seasonal promotion not found' });
+        }
+        await cache.del(`seasonal_promo:${companyId}:${seasonalId}`);
+        res.json({ success: true, message: 'Seasonal promotion updated', data: promo });
+    } catch (error) {
+        logger.error('Error in updateSeasonalPromotion:', error);
+        next(error);
+    }
+};
+
+// Apply promotion to multiple products
+exports.applyPromotionBulk = async (req, res, next) => {
+    try {
+        const { companyId, promotionId, productIds } = req.body;
+        const promo = await Promotion.findById(promotionId);
+        if (!promo || promo.companyId !== companyId) {
+            return res.status(404).json({ success: false, message: 'Promotion not found' });
+        }
+        promo.productIds = [...new Set([...promo.productIds, ...productIds])];
+        await promo.save();
+        res.json({ success: true, message: 'Promotion applied to products', data: promo });
+    } catch (error) {
+        logger.error('Error in applyPromotionBulk:', error);
+        next(error);
+    }
+};
+
+// Get campaign analytics
+exports.getCampaignAnalytics = async (req, res, next) => {
+    try {
+        const { companyId, campaignId } = req.query;
+        const cacheKey = `campaign_analytics:${companyId}:${campaignId}`;
+        const cached = await cache.getJSON(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
+        const campaign = await Promotion.findById(campaignId).lean();
+        if (!campaign || campaign.companyId !== companyId) {
+            return res.status(404).json({ success: false, message: 'Campaign not found' });
+        }
+
+        const ordersWithPromo = await Order.countDocuments({
+            companyId,
+            'items.promotionId': campaignId
+        });
+
+        const analyticsData = {
+            campaignId,
+            campaignName: campaign.name,
+            ordersAffected: ordersWithPromo,
+            totalRevenue: 0,
+            conversionRate: 0,
+            roi: 0
+        };
+
+        await cache.setJSON(cacheKey, analyticsData, 3600);
+        res.json({ success: true, data: analyticsData });
+    } catch (error) {
+        logger.error('Error in getCampaignAnalytics:', error);
         next(error);
     }
 };

@@ -14,6 +14,7 @@ const getAllAdjustments = asyncHandler(async (req, res) => {
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   const query = { companyId };
+  if (req.query.shopId) query.shopId = req.query.shopId;
   if (status) query.status = status;
 
   const adjustments = await InventoryAdjustment.find(query)
@@ -53,8 +54,8 @@ const createAdjustment = asyncHandler(async (req, res) => {
 
   const adjustment = new InventoryAdjustment({
     ...req.body,
-    companyId: "testCompany",
-    userId: "req.user.id"
+    companyId: req.user.companyId,
+    userId: req.user.id
   });
   await adjustment.save();
 
@@ -71,7 +72,7 @@ const approveAdjustment = asyncHandler(async (req, res) => {
   }
 
   adjustment.status = 'approved';
-  adjustment.approvedBy = "req.user.id";
+  adjustment.approvedBy = req.user.id;
   await adjustment.save();
 
   res.status(200).json({ success: true, message: 'Adjustment approved successfully', data: adjustment });

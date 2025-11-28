@@ -6,6 +6,8 @@ const { validateMongoId } = require('../utils/validateMongoId');
 const fs = require('fs');
 const path = require('path');
 const { publishProductEvent } = require('../events/productEvents');
+const { scanDel, setCache, getCache, delCache } = require('../utils/redisHelper');
+const logger = require('../utils/logger');
 
 const getAllProducts = asyncHandler(async (req, res) => {
   const {
@@ -15,8 +17,6 @@ const getAllProducts = asyncHandler(async (req, res) => {
     status,
     visibility,
     category,
-    subcategory,
-    subSubcategory,
     brand,
     featured,
     search,
@@ -28,8 +28,14 @@ const getAllProducts = asyncHandler(async (req, res) => {
 
   if (companyId) validateMongoId(companyId);
   if (category) validateMongoId(category);
-  if (subcategory) validateMongoId(subcategory);
-  if (subSubcategory) validateMongoId(subSubcategory);
+
+  // Generate cache key based on query params
+  const cacheKey = `products:${JSON.stringify(req.query)}`;
+  const cachedData = await getCache(cacheKey);
+
+  if (cachedData) {
+    return res.status(200).json(cachedData);
+  }
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -39,8 +45,6 @@ const getAllProducts = asyncHandler(async (req, res) => {
   if (status) query.status = status;
   if (visibility) query.visibility = visibility;
   if (category) query.category = category;
-  if (subcategory) query.subcategory = subcategory;
-  if (subSubcategory) query.subSubcategory = subSubcategory;
   if (brand) query.brand = new RegExp(brand, 'i');
   if (featured !== undefined) query.featured = featured === 'true';
   if (inStock === 'true') query['inventory.quantity'] = { $gt: 0 };
@@ -53,18 +57,20 @@ const getAllProducts = asyncHandler(async (req, res) => {
     if (maxPrice) query['pricing.basePrice'].$lte = parseFloat(maxPrice);
   }
 
-  const products = await Product.find(query)
-    .populate('category', 'name slug level')
-    .populate('subcategory', 'name slug level')
-    .populate('subSubcategory', 'name slug level')
-    .sort(sort)
-    .skip(skip)
-    .limit(parseInt(limit))
-    .select('-auditTrail'); // Exclude audit trail for performance
+  // Use lean() for read-only queries (much faster - returns plain JS objects, not Mongoose documents)
+  const [products, total] = await Promise.all([
+    Product.find(query)
+      .populate('category', 'name slug level')
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .select('-auditTrail')
+      .lean()
+      .exec(),
+    Product.countDocuments(query)
+  ]);
 
-  const total = await Product.countDocuments(query);
-
-  res.status(200).json({
+  const responseData = {
     success: true,
     data: products,
     pagination: {
@@ -73,16 +79,36 @@ const getAllProducts = asyncHandler(async (req, res) => {
       total,
       pages: Math.ceil(total / parseInt(limit))
     }
+  };
+
+  // Cache for 5 minutes (fire-and-forget)
+  setImmediate(() => {
+    setCache(cacheKey, responseData, 300)
+      .catch((err) => logger.error('Cache set failed:', err));
   });
+
+  res.status(200).json(responseData);
 });
 
 const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoId(id);
+
+  const cacheKey = `product:${id}`;
+  const cachedProduct = await getCache(cacheKey);
+
+  if (cachedProduct) {
+    return res.status(200).json({
+      success: true,
+      data: cachedProduct
+    });
+  }
+
+  // Use lean for read-only queries
   const product = await Product.findById(id)
     .populate('category', 'name slug level attributes')
-    .populate('subcategory', 'name slug level attributes')
-    .populate('subSubcategory', 'name slug level attributes');
+    .lean()
+    .exec();
 
   if (!product) {
     return res.status(404).json({
@@ -90,6 +116,12 @@ const getProductById = asyncHandler(async (req, res) => {
       message: 'Product not found'
     });
   }
+
+  // Cache asynchronously (non-blocking)
+  setImmediate(() => {
+    setCache(cacheKey, product, 3600)
+      .catch((err) => logger.error('Cache set failed:', err));
+  });
 
   res.status(200).json({
     success: true,
@@ -99,10 +131,19 @@ const getProductById = asyncHandler(async (req, res) => {
 
 const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
+
+  const cacheKey = `product:slug:${slug}`;
+  const cachedProduct = await getCache(cacheKey);
+
+  if (cachedProduct) {
+    return res.status(200).json({
+      success: true,
+      data: cachedProduct
+    });
+  }
+
   const product = await Product.findOne({ slug })
-    .populate('category', 'name slug level attributes')
-    .populate('subcategory', 'name slug level attributes')
-    .populate('subSubcategory', 'name slug level attributes');
+    .populate('category', 'name slug level attributes');
 
   if (!product) {
     return res.status(404).json({
@@ -110,6 +151,8 @@ const getProductBySlug = asyncHandler(async (req, res) => {
       message: 'Product not found'
     });
   }
+
+  await setCache(cacheKey, product, 3600);
 
   res.status(200).json({
     success: true,
@@ -122,6 +165,13 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
   validateMongoId(categoryId);
 
   const { includeSubcategories = false, page = 1, limit = 20, sort = '-createdAt' } = req.query;
+
+  const cacheKey = `products:category:${categoryId}:${JSON.stringify(req.query)}`;
+  const cachedData = await getCache(cacheKey);
+
+  if (cachedData) {
+    return res.status(200).json(cachedData);
+  }
 
   const pageInt = parseInt(page);
   const limitInt = parseInt(limit);
@@ -146,7 +196,7 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
 
   const paginatedProducts = products.slice(startIndex, endIndex);
 
-  res.status(200).json({
+  const responseData = {
     success: true,
     data: paginatedProducts,
     pagination: {
@@ -155,10 +205,12 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
       total,
       pages: Math.ceil(total / limitInt)
     }
-  });
+  };
+
+  await setCache(cacheKey, responseData, 300);
+
+  res.status(200).json(responseData);
 });
-
-
 
 const createProduct = asyncHandler(async (req, res) => {
   // Check validation errors
@@ -176,46 +228,99 @@ const createProduct = asyncHandler(async (req, res) => {
   delete req.body.images;
   delete req.body.videos;
 
-  // Use pre-generated ID from middleware (if available) or let MongoDB generate one
-  // The ID is pre-generated in middleware to use in Cloudinary upload paths
+  // NOTE: sku, asin, upc, barcode, qrCode, scanId, browseNodeId are auto-generated by Product model pre-save middleware.
   const product = new Product(req.body);
 
-  // Add audit trail entry
+  // Process images
+  product.images = newImages.map((img, index) => ({
+    url: img.url,
+    cloudinary_id: img.cloudinary_id,
+    type: img.type || 'image',
+    format: img.format,
+    size: img.size,
+    altText: img.altText || img.alt,
+    isPrimary: img.isPrimary || (index === 0),
+    sortOrder: img.sortOrder !== undefined ? img.sortOrder : index
+  }));
+
+  product.videoUrls = newVideos.map(v => v.url);
+
+  // Add audit trail
   product.auditTrail.push({
     action: 'create',
     changedBy: req.user?.id || 'system',
     newValue: req.body
   });
 
-  product.images = newImages.map((img, index) => ({
-    url: img.url,
-    alt: img.altText,
-    isPrimary: index === 0,
-    sortOrder: index
-  }));
-
-  product.videoUrls = newVideos.map(v => v.url);
-
+  // Save product (this triggers pre-save middleware for auto-generation)
   await product.save();
 
-  // Update category product counts
-  if (product.category) {
-    validateMongoId(product.category);
-    await Category.findByIdAndUpdate(
-      product.category,
-      { $inc: { 'statistics.totalProducts': 1 } }
-    );
-  }
-
-  // Emit inventory.product.created event
-  await publishProductEvent('inventory.product.created', product.toObject());
-
-  console.log("event published: inventory.product.created");
-
+  // Return response immediately - do not wait for side effects
   res.status(201).json({
     success: true,
     message: 'Product created successfully',
     data: product
+  });
+
+  // ========== BACKGROUND TASKS (non-blocking) ==========
+  // These run after the response is sent to client
+
+  // 1. Generate and upload QR/Barcode images (async, non-critical)
+  if (process.nextTick) {
+    setImmediate(async () => {
+      try {
+        const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
+        const { uploadBuffer } = require('../utils/uploadUtil');
+
+        const productData = JSON.stringify({
+          id: product._id,
+          sku: product.sku,
+          name: product.name
+        });
+
+        const [qrBuffer, barcodeBuffer] = await Promise.all([
+          generateQRCodeBuffer(productData),
+          generateBarcodeBuffer(productData)
+        ]);
+
+        const [qrUpload, barcodeUpload] = await Promise.all([
+          uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode'),
+          uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode')
+        ]);
+
+        // Update product with URLs
+        await Product.updateOne(
+          { _id: product._id },
+          {
+            qrCodeUrl: qrUpload.secure_url,
+            barcodeUrl: barcodeUpload.secure_url
+          }
+        );
+      } catch (err) {
+        logger.error('Background: Failed to generate QR/barcode images:', err);
+      }
+    });
+  }
+
+  // 2. Update category stats (fire-and-forget)
+  if (product.category) {
+    setImmediate(() => {
+      Category.updateOne(
+        { _id: product.category },
+        { $inc: { 'statistics.totalProducts': 1 } }
+      ).catch((err) => logger.error('Background: Category update failed:', err));
+    });
+  }
+
+  // 3. Invalidate caches asynchronously
+  setImmediate(() => {
+    scanDel('products:*').catch((err) => logger.error('Background: Cache invalidation failed:', err));
+  });
+
+  // 4. Emit event asynchronously
+  setImmediate(() => {
+    publishProductEvent('inventory.product.created', product.toObject())
+      .catch((err) => logger.error('Background: Event publish failed:', err));
   });
 });
 
@@ -238,7 +343,8 @@ const updateProduct = asyncHandler(async (req, res) => {
   delete req.body.images;
   delete req.body.videos;
 
-  const oldProduct = await Product.findById(id);
+  // Use lean + findById for fast read (no need for full Mongoose document)
+  const oldProduct = await Product.findById(id).lean();
   if (!oldProduct) {
     return res.status(404).json({
       success: false,
@@ -264,44 +370,63 @@ const updateProduct = asyncHandler(async (req, res) => {
     id,
     req.body,
     { new: true, runValidators: true }
-  ).populate('category subcategory subSubcategory');
+  ).populate('category');
 
   // Add audit trail entry
   product.auditTrail.push({
     action: 'update',
     changedBy: req.user?.id || 'system',
-    oldValue: oldProduct.toObject(),
+    oldValue: oldProduct,
     newValue: req.body
   });
 
   await product.save();
 
-  // Emit inventory.product.updated event
-  await publishProductEvent('inventory.product.updated', product.toObject());
-
-  // If product became exposed (visibility changed to public OR activated while public), notify ecommerce
-  try {
-    const becamePublic = oldProduct.visibility !== product.visibility && product.visibility === 'public';
-    const becameActiveAndPublic = oldProduct.status !== product.status && product.status === 'active' && product.visibility === 'public';
-    if (becamePublic || becameActiveAndPublic) {
-      await publishProductEvent('product.exposed', product.toObject());
-      console.log('event published: product.exposed');
-    }
-  } catch (err) {
-    console.error('Failed to publish product.exposed event', err.message);
-  }
-
+  // Send response immediately
   res.status(200).json({
     success: true,
     message: 'Product updated successfully',
     data: product
+  });
+
+  // ========== BACKGROUND TASKS ==========
+
+  // 1. Cache invalidation (fire-and-forget)
+  setImmediate(() => {
+    Promise.all([
+      delCache(`product:${id}`),
+      delCache(`product:slug:${oldProduct.slug}`),
+      scanDel('products:*')
+    ]).catch((err) => logger.error('Background: Cache cleanup failed:', err));
+  });
+
+  // 2. Emit events (async, non-blocking)
+  setImmediate(() => {
+    publishProductEvent('inventory.product.updated', product.toObject())
+      .catch((err) => logger.error('Background: Event publish failed:', err));
+  });
+
+  // 3. Check visibility change and emit product.exposed if needed
+  setImmediate(() => {
+    try {
+      const becamePublic = oldProduct.visibility !== product.visibility && product.visibility === 'public';
+      const becameActiveAndPublic = oldProduct.status !== product.status && product.status === 'active' && product.visibility === 'public';
+      if (becamePublic || becameActiveAndPublic) {
+        publishProductEvent('product.exposed', product.toObject())
+          .catch((err) => logger.error('Background: product.exposed publish failed:', err));
+      }
+    } catch (err) {
+      logger.error('Failed to check/publish product.exposed event:', err);
+    }
   });
 });
 
 const deleteProduct = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoId(id);
-  const product = await Product.findById(id);
+
+  // Use lean for read-only operation
+  const product = await Product.findById(id).lean();
 
   if (!product) {
     return res.status(404).json({
@@ -310,58 +435,102 @@ const deleteProduct = asyncHandler(async (req, res) => {
     });
   }
 
-  // Delete associated files
-  product.images.forEach(img => {
-    if (img.url && img.url.startsWith('/uploads/')) {
-      const filePath = path.join(__dirname, '..', img.url);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
+  // Delete from database immediately
+  await Product.deleteOne({ _id: id });
+
+  // Send response immediately (don't wait for Cloudinary cleanup)
+  res.status(200).json({
+    success: true,
+    message: 'Product deleted successfully',
+    data: { _id: id }
   });
 
-  product.videoUrls.forEach(url => {
-    if (url && url.startsWith('/uploads/')) {
-      const filePath = path.join(__dirname, '..', url);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
-  });
+  // ========== BACKGROUND TASKS ==========
 
-  product.variations.forEach(variation => {
-    variation.images.forEach(img => {
-      if (img.url && img.url.startsWith('/uploads/')) {
-        const filePath = path.join(__dirname, '..', img.url);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
+  // 1. Delete Cloudinary files (async, non-critical)
+  setImmediate(async () => {
+    try {
+      const { cloudinary } = require('../utils/uploadUtil');
+
+      // Parallel delete operations
+      const deleteOps = [];
+
+      // Delete product images
+      if (product.images && product.images.length > 0) {
+        for (const img of product.images) {
+          if (img.cloudinary_id) {
+            deleteOps.push(
+              cloudinary.uploader.destroy(img.cloudinary_id)
+                .catch((err) => logger.warn(`Failed to delete image ${img.cloudinary_id}:`, err))
+            );
+          }
         }
       }
-    });
+
+      // Delete QR/Barcode folder
+      if (product.qrCodeUrl || product.barcodeUrl) {
+        deleteOps.push(
+          cloudinary.api.delete_resources_by_prefix(`QrBar_Codes/${product._id}`)
+            .catch((err) => logger.warn(`Failed to delete QR/Barcode folder:`, err))
+        );
+      }
+
+      // Delete variation images
+      if (product.variations && product.variations.length > 0) {
+        for (const variation of product.variations) {
+          if (variation.images && variation.images.length > 0) {
+            for (const img of variation.images) {
+              if (img.cloudinary_id) {
+                deleteOps.push(
+                  cloudinary.uploader.destroy(img.cloudinary_id)
+                    .catch((err) => logger.warn(`Failed to delete variation image ${img.cloudinary_id}:`, err))
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // Delete product folder (catch-all)
+      deleteOps.push(
+        cloudinary.api.delete_resources_by_prefix(`products/${product._id}`)
+          .catch((err) => logger.warn(`Failed to delete product folder:`, err))
+      );
+
+      // Execute all deletes in parallel
+      await Promise.all(deleteOps);
+      logger.info(`Background: Cloudinary cleanup completed for product ${id}`);
+    } catch (err) {
+      logger.error('Background: Cloudinary cleanup error:', err);
+    }
   });
 
-  // Add audit trail entry before deletion
-  product.auditTrail.push({
-    action: 'delete',
-    changedBy: req.user?.id || 'system',
-    oldValue: product.toObject()
-  });
-
-  await product.save();
-  await Product.findByIdAndDelete(id);
-
-  // Update category product count
+  // 2. Update category stats (fire-and-forget)
   if (product.category) {
-    validateMongoId(product.category);
-    await Category.findByIdAndUpdate(
-      product.category,
-      { $inc: { 'statistics.totalProducts': -1 } }
-    );
+    setImmediate(() => {
+      Category.updateOne(
+        { _id: product.category },
+        { $inc: { 'statistics.totalProducts': -1 } }
+      ).catch((err) => logger.error('Background: Category decrement failed:', err));
+    });
   }
 
-  // Emit inventory.product.deleted event
-  await publishProductEvent('inventory.product.deleted', { _id: id });
+  // 3. Invalidate caches (async, non-blocking)
+  setImmediate(() => {
+    Promise.all([
+      delCache(`product:${id}`),
+      delCache(`product:slug:${product.slug}`),
+      scanDel('products:*')
+    ]).catch((err) => logger.error('Background: Cache cleanup failed:', err));
+  });
 
+  // 4. Emit delete event (async, non-blocking)
+  setImmediate(() => {
+    publishProductEvent('inventory.product.deleted', { _id: id, ...product })
+      .catch((err) => logger.error('Background: Delete event publish failed:', err));
+  });
+
+  // Send response
   res.status(200).json({
     success: true,
     message: 'Product deleted successfully'
@@ -416,6 +585,7 @@ const updateInventory = asyncHandler(async (req, res) => {
   const StockChange = require('../models/StockChange');
   const stockChange = new StockChange({
     companyId: product.companyId,
+    shopId: product.shopId,
     productId: id,
     variationId,
     warehouseId: null,
@@ -456,6 +626,14 @@ const updateInventory = asyncHandler(async (req, res) => {
     });
     await alert.save();
   }
+
+  // Invalidate caches
+  await delCache(`product:${id}`);
+  await delCache(`product:slug:${product.slug}`);
+  await scanDel('products:*');
+
+  // Emit event
+  await publishProductEvent('inventory.product.updated', product.toObject());
 
   res.status(200).json({
     success: true,
@@ -529,7 +707,7 @@ const getFeaturedProducts = asyncHandler(async (req, res) => {
 
   const products = await Product.find(query)
     .populate('category', 'name slug')
-    .sort({ sortOrder: 1, 'reviewSummary.averageRating': -1 })
+    .sort({ sortOrder: 1, createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
 
@@ -607,6 +785,324 @@ const getOldUnboughtProducts = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: products, count: products.length });
 });
 
+/**
+ * @desc    Smart product creation - merge if exists OR create new
+ * @route   POST /api/v1/products/smart-create
+ * @access  Private
+ */
+const smartCreateProduct = asyncHandler(async (req, res) => {
+  const {
+    name,
+    category,
+    companyId,
+    shopId,
+    quantity = 0,
+    mergeIfExists = false,
+    ignoreWarnings = false,
+    ...otherProductData
+  } = req.body;
+
+  // Validate required fields
+  if (!name || !category || !companyId || !shopId) {
+    return res.status(400).json({
+      success: false,
+      message: 'name, category, companyId, and shopId are required'
+    });
+  }
+
+  validateMongoId(category);
+
+  // ========== STEP 1: Check for existing product ==========
+  const existingProduct = await Product.findOne({
+    name: { $regex: `^${name}$`, $options: 'i' }, // Case-insensitive match
+    category: category,
+    companyId: companyId,
+    shopId: shopId
+  });
+
+  // ========== STEP 2: If exists, analyze compatibility ==========
+  if (existingProduct) {
+    const warnings = [];
+    const conflicts = [];
+
+    // Check SKU compatibility
+    if (req.body.sku && existingProduct.sku && existingProduct.sku !== req.body.sku) {
+      warnings.push({
+        type: 'sku_mismatch',
+        severity: 'medium',
+        message: `Existing product has SKU: "${existingProduct.sku}", you provided: "${req.body.sku}"`
+      });
+    }
+
+    // Check brand compatibility
+    if (req.body.brand && existingProduct.brand && existingProduct.brand !== req.body.brand) {
+      conflicts.push({
+        type: 'brand_mismatch',
+        severity: 'high',
+        message: `Existing product brand: "${existingProduct.brand}", you provided: "${req.body.brand}"`
+      });
+      warnings.push({
+        type: 'brand_mismatch',
+        severity: 'high',
+        message: `Products have different brands - are they really the same product?`
+      });
+    }
+
+    // Check price compatibility
+    if (req.body.pricing?.basePrice && existingProduct.pricing?.basePrice) {
+      const priceDiff = Math.abs(
+        (req.body.pricing.basePrice - existingProduct.pricing.basePrice) /
+        existingProduct.pricing.basePrice * 100
+      );
+      if (priceDiff > 20) { // More than 20% difference
+        warnings.push({
+          type: 'price_mismatch',
+          severity: 'high',
+          message: `Price difference: Existing ${existingProduct.pricing.basePrice}, You provided ${req.body.pricing.basePrice} (${priceDiff.toFixed(1)}% difference)`
+        });
+      }
+    }
+
+    // Check description/specifications
+    if (req.body.description && existingProduct.description) {
+      const existingDesc = existingProduct.description.toLowerCase();
+      const newDesc = req.body.description.toLowerCase();
+      if (existingDesc !== newDesc && !newDesc.includes(existingDesc.substring(0, 20))) {
+        warnings.push({
+          type: 'description_mismatch',
+          severity: 'medium',
+          message: `Product descriptions differ significantly`
+        });
+      }
+    }
+
+    // If there are conflicts and user didn't acknowledge them
+    if (conflicts.length > 0 && !ignoreWarnings) {
+      return res.status(409).json({
+        success: false,
+        action: 'conflict_detected',
+        message: 'Product conflicts detected. Please review and acknowledge warnings.',
+        existingProduct: {
+          id: existingProduct._id,
+          name: existingProduct.name,
+          sku: existingProduct.sku,
+          brand: existingProduct.brand,
+          pricing: existingProduct.pricing,
+          currentQuantity: existingProduct.inventory.quantity,
+          createdAt: existingProduct.createdAt
+        },
+        warnings: warnings,
+        conflicts: conflicts,
+        userAction: 'Please set `ignoreWarnings: true` if you want to proceed with merge, or set `mergeIfExists: false` to create new product'
+      });
+    }
+
+    // ========== STEP 3: User chose to merge ==========
+    if (mergeIfExists) {
+      // Update existing product quantity
+      const previousQuantity = existingProduct.inventory.quantity || 0;
+      const newQuantity = previousQuantity + parseInt(quantity || 0);
+
+      existingProduct.inventory.quantity = newQuantity;
+
+      // Add audit trail entry
+      existingProduct.auditTrail.push({
+        action: 'merge_restock',
+        changedBy: req.user?.id || 'system',
+        oldValue: { quantity: previousQuantity },
+        newValue: { quantity: newQuantity },
+        mergeReason: 'Smart product merge - same name, category, company, shop',
+        timestamp: new Date()
+      });
+
+      // Update other fields if provided and not conflicting
+      if (req.body.description && !req.body.description === existingProduct.description) {
+        existingProduct.description = req.body.description;
+      }
+
+      await existingProduct.save();
+
+      logger.info(
+        `✅ Product merged: "${name}" in ${companyId}:${shopId} - Added ${quantity} units (Total: ${newQuantity})`
+      );
+
+      return res.json({
+        success: true,
+        action: 'merged',
+        message: `Added ${quantity} units to existing product`,
+        data: {
+          productId: existingProduct._id,
+          name: existingProduct.name,
+          sku: existingProduct.sku,
+          previousQuantity,
+          quantityAdded: parseInt(quantity || 0),
+          newTotalQuantity: newQuantity,
+          warnings: warnings,
+          mergedAt: new Date()
+        }
+      });
+    }
+
+    // ========== STEP 4: User chose NOT to merge ==========
+    // Continue to create new product
+    return res.status(409).json({
+      success: false,
+      action: 'merge_suggested',
+      message: 'Similar product exists. Consider merging instead of creating duplicate.',
+      existingProduct: {
+        id: existingProduct._id,
+        name: existingProduct.name,
+        sku: existingProduct.sku,
+        brand: existingProduct.brand,
+        pricing: existingProduct.pricing,
+        currentQuantity: existingProduct.inventory.quantity,
+        createdAt: existingProduct.createdAt
+      },
+      warnings: warnings,
+      userAction: 'Set `mergeIfExists: true` to merge, or accept duplicate with `mergeIfExists: false`'
+    });
+  }
+
+  // ========== STEP 5: No existing product - CREATE NEW ==========
+  const newImages = req.body.images || [];
+  const newVideos = req.body.videos || [];
+  delete req.body.images;
+  delete req.body.videos;
+
+  // Merge all product data
+  const productData = {
+    ...otherProductData,
+    name,
+    category,
+    companyId,
+    shopId,
+    inventory: {
+      quantity: parseInt(quantity || 0),
+      lowStockThreshold: req.body.lowStockThreshold || 10
+    }
+  };
+
+  const product = new Product(productData);
+
+  // Generate and upload Barcode and QR Code images
+  try {
+    const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
+    const { uploadBuffer } = require('../utils/uploadUtil');
+
+    const productData_temp = JSON.stringify({
+      id: product._id,
+      sku: product.sku,
+      name: product.name
+    });
+
+    const qrBuffer = await generateQRCodeBuffer(productData_temp);
+    const barcodeBuffer = await generateBarcodeBuffer(productData_temp);
+
+    const qrUpload = await uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode');
+    const barcodeUpload = await uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode');
+
+    product.qrCodeUrl = qrUpload.secure_url;
+    product.barcodeUrl = barcodeUpload.secure_url;
+  } catch (err) {
+    logger.error('Failed to generate/upload barcode/QR code images:', err);
+  }
+
+  // Add audit trail entry
+  product.auditTrail.push({
+    action: 'create',
+    changedBy: req.user?.id || 'system',
+    newValue: req.body
+  });
+
+  product.images = newImages.map((img, index) => ({
+    url: img.url,
+    cloudinary_id: img.cloudinary_id,
+    type: img.type || 'image',
+    format: img.format,
+    size: img.size,
+    altText: img.altText || img.alt,
+    isPrimary: img.isPrimary || index === 0,
+    sortOrder: img.sortOrder !== undefined ? img.sortOrder : index
+  }));
+
+  product.videoUrls = newVideos.map(v => v.url);
+
+  await product.save();
+
+  // Update category product counts
+  if (product.category) {
+    validateMongoId(product.category);
+    await Category.findByIdAndUpdate(
+      product.category,
+      { $inc: { 'statistics.totalProducts': 1 } }
+    );
+  }
+
+  // Invalidate caches
+  await scanDel('products:*');
+
+  // Emit event
+  await publishProductEvent('inventory.product.created', product.toObject());
+
+  logger.info(`✅ New product created: "${name}" in ${companyId}:${shopId} with ${quantity} units`);
+
+  res.status(201).json({
+    success: true,
+    action: 'created',
+    message: 'New product created successfully',
+    data: product
+  });
+});
+
+/**
+ * @desc    Check if product exists (before deciding merge/create)
+ * @route   GET /api/v1/products/check-duplicate
+ * @access  Private
+ */
+const checkProductDuplicate = asyncHandler(async (req, res) => {
+  const { name, category, companyId, shopId } = req.query;
+
+  if (!name || !category || !companyId || !shopId) {
+    return res.status(400).json({
+      success: false,
+      message: 'name, category, companyId, and shopId query parameters are required'
+    });
+  }
+
+  validateMongoId(category);
+
+  const existingProduct = await Product.findOne({
+    name: { $regex: `^${name}$`, $options: 'i' },
+    category: category,
+    companyId: companyId,
+    shopId: shopId
+  });
+
+  if (existingProduct) {
+    return res.json({
+      success: true,
+      exists: true,
+      product: {
+        id: existingProduct._id,
+        name: existingProduct.name,
+        sku: existingProduct.sku,
+        brand: existingProduct.brand,
+        pricing: existingProduct.pricing,
+        currentQuantity: existingProduct.inventory.quantity,
+        createdAt: existingProduct.createdAt,
+        description: existingProduct.description
+      },
+      recommendation: 'This product already exists. Consider merging instead of creating a duplicate.'
+    });
+  }
+
+  res.json({
+    success: true,
+    exists: false,
+    message: 'No existing product found. Safe to create new product.'
+  });
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -620,5 +1116,7 @@ module.exports = {
   getScheduledProducts,
   getFeaturedProducts,
   searchProducts,
-  getOldUnboughtProducts
+  getOldUnboughtProducts,
+  smartCreateProduct,
+  checkProductDuplicate
 };

@@ -1,19 +1,20 @@
-// migrations/20251015155906_create_enums.js (Fixed: Postgres doesn't support IF NOT EXISTS for CREATE TYPE; use DO block)
+// migrations/20251126_create_enums.js
 /**
  * @param { import("knex").Knex } knex
  * @returns { Promise<void> }
  */
 exports.up = function (knex) {
   return knex.raw(`
-    -- Enums (Safe creation with existence check)
+    -- Gateway types (added Mpesa)
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'gateway_type') THEN
-        CREATE TYPE gateway_type AS ENUM ('stripe', 'mtn_momo', 'airtel_money');
+        CREATE TYPE gateway_type AS ENUM ('stripe', 'mtn_momo', 'airtel_money', 'mpesa');
       END IF;
     END
     $$;
 
+    -- Payment status
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
@@ -22,6 +23,7 @@ exports.up = function (knex) {
     END
     $$;
 
+    -- Transaction type
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_type') THEN
@@ -30,6 +32,7 @@ exports.up = function (knex) {
     END
     $$;
 
+    -- Transaction status
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_status') THEN
@@ -38,14 +41,16 @@ exports.up = function (knex) {
     END
     $$;
 
+    -- Payment method
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_method') THEN
-        CREATE TYPE payment_method AS ENUM ('card', 'mobile_money', 'bank_transfer', 'wallet');
+        CREATE TYPE payment_method AS ENUM ('card', 'mobile_money', 'bank_transfer');
       END IF;
     END
     $$;
 
+    -- Invoice status
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invoice_status') THEN
@@ -56,10 +61,6 @@ exports.up = function (knex) {
   `);
 };
 
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
 exports.down = function (knex) {
   return knex.raw(`
     DROP TYPE IF EXISTS gateway_type CASCADE;

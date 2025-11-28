@@ -7,6 +7,7 @@ const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
+const AlertCronJobWorker = require("./workers/alertCronJob");
 const connectDB = require("./config/db");
 
 const router = require("./routes/index");
@@ -99,10 +100,23 @@ const initializeEventSystem = async () => {
   }
 };
 
+// Initialize Alert Cron Jobs
+const initializeAlertCronJobs = async () => {
+  try {
+    const cronWorker = AlertCronJobWorker.getInstance();
+    await cronWorker.initializeAllJobs();
+    console.log("✅ Alert cron jobs initialized");
+  } catch (error) {
+    console.error("❌ Failed to initialize alert cron jobs:", error);
+    // Continue running even if cron jobs fail
+  }
+};
+
 // Initialize everything on startup
 const initialize = async () => {
   await initializeDatabase();
   await initializeEventSystem();
+  await initializeAlertCronJobs();
 };
 
 module.exports = { app, initialize };

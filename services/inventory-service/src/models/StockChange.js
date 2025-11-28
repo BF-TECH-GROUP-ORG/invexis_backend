@@ -4,6 +4,7 @@ const { Schema } = mongoose;
 
 const stockChangeSchema = new Schema({
   companyId: { type: String, required: true, index: true },
+  shopId: { type: String, required: true, index: true }, // Shop-level tracking for multi-tenant isolation
   productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
   variationId: { type: Schema.Types.ObjectId, default: null, index: true }, // Added for variant-specific logging, aligning with Product variations
   changeType: { type: String, enum: ['restock', 'adjustment', 'sale', 'return'], required: true },
@@ -16,8 +17,10 @@ const stockChangeSchema = new Schema({
   changeDate: { type: Date, default: Date.now, index: true }
 });
 
-// Improved indexes for better querying
+// Improved indexes for better querying with shop-level isolation
+stockChangeSchema.index({ companyId: 1, shopId: 1, changeDate: -1 });
 stockChangeSchema.index({ companyId: 1, changeDate: -1 });
+stockChangeSchema.index({ companyId: 1, shopId: 1, productId: 1 });
 
 stockChangeSchema.pre('save', async function (next) {
   if (this.quantity === 0) {
@@ -90,9 +93,10 @@ stockChangeSchema.pre('save', async function (next) {
 });
 
 // Improved static method with optional filters
-stockChangeSchema.statics.getStockHistory = async function ({ productId, variationId, startDate, endDate, changeType }) {
+stockChangeSchema.statics.getStockHistory = async function ({ productId, variationId, shopId, startDate, endDate, changeType }) {
   const filter = { productId };
   if (variationId) filter.variationId = variationId;
+  if (shopId) filter.shopId = shopId;
   if (changeType) filter.changeType = changeType;
   if (startDate || endDate) {
     filter.changeDate = {};

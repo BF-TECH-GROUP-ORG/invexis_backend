@@ -3,26 +3,84 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const alertSchema = new Schema({
-  companyId: { type: String, required: true, index: true }, // Links to company for multi-tenancy
-  type: { type: String, enum: ['low_stock', 'out_of_stock', 'price_change', 'new_product', 'expired_discount', 'high_returns'], required: true }, // Relevant alert types tied to inventory events
-  productId: { type: Schema.Types.ObjectId, ref: 'Product', default: null, index: true }, // Optional link to specific product
-  categoryId: { type: Schema.Types.ObjectId, ref: 'Category', default: null, index: true }, // Optional link to category for broader alerts
-  threshold: { type: Number, min: 0 }, // Threshold for stock-related alerts
-  message: { type: String, required: true, trim: true }, // Descriptive message for the alert
-  priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' }, // Priority level for sorting/handling
-  isResolved: { type: Boolean, default: false, index: true }, // Status tracking
-  resolvedBy: { type: String, default: null }, // User who resolved it
-  resolvedAt: { type: Date, default: null }, // Timestamp of resolution
+  // Scope: company-level, shop-level, or global
+  companyId: { type: String, required: true, index: true }, // Required for all alerts
+  shopId: { type: String, default: null, index: true }, // Optional: if present, alert is shop-specific; if null, company-level or global
+  scope: {
+    type: String,
+    enum: ['global', 'company', 'shop'],
+    default: 'company',
+    index: true
+  }, // Determines visibility: global=all, company=within company, shop=specific shop
+
+  // Alert type and message
+  type: {
+    type: String,
+    enum: [
+      // Event-based alerts
+      'low_stock',
+      'out_of_stock',
+      'price_change',
+      'new_product',
+      'new_arrival', // Global new product alert
+      'expired_discount',
+      'high_returns',
+      'order_created',
+      'order_shipped',
+      'order_delivered',
+      'inventory_adjustment',
+      'stock_received',
+      // Smart/Scheduled Alerts
+      'daily_summary',
+      'weekly_summary',
+      'monthly_summary',
+      'high_velocity',
+      'dead_stock',
+      'stock_out_prediction'
+    ],
+    required: true
+  },
+  productId: { type: Schema.Types.ObjectId, ref: 'Product', default: null, index: true },
+  categoryId: { type: Schema.Types.ObjectId, ref: 'Category', default: null, index: true },
+  orderId: { type: String, default: null }, // For order-related alerts
+  threshold: { type: Number, min: 0 },
+  message: { type: String, required: true, trim: true },
+  description: { type: String, trim: true }, // Optional longer description
+  data: { type: Object, default: {} }, // Flexible field for structured data
+  priority: { type: String, enum: ['low', 'medium', 'high', 'critical'], default: 'medium' },
+
+  // Resolved status
+  isResolved: { type: Boolean, default: false, index: true },
+  resolvedBy: { type: String, default: null },
+  resolvedAt: { type: Date, default: null },
+
+  // Read/Unread tracking (autonomous)
+  isRead: { type: Boolean, default: false, index: true },
+  readBy: [
+    {
+      userId: { type: String, required: true },
+      role: { type: String, default: 'user' }, // user, admin, manager
+      readAt: { type: Date, default: Date.now }
+    }
+  ],
+  readCount: { type: Number, default: 0 }, // Total number of users who've read this
+
+  // Metadata
   createdAt: { type: Date, default: Date.now, index: true },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  expiresAt: { type: Date, default: null } // Auto-delete old alerts if set
 });
 
 // Improved indexes for better query performance
 alertSchema.index({ companyId: 1, type: 1, createdAt: -1 });
 alertSchema.index({ companyId: 1, isResolved: 1, priority: -1 });
+alertSchema.index({ companyId: 1, shopId: 1, scope: 1, isRead: 1 });
+alertSchema.index({ companyId: 1, isRead: 1, priority: -1, createdAt: -1 });
+alertSchema.index({ scope: 1, isRead: 1, createdAt: -1 }); // For global alerts
+alertSchema.index({ 'readBy.userId': 1 }); // Find which alerts a user has read
 
 // Pre-save middleware with improved validation
-alertSchema.pre('save', function(next) {
+alertSchema.pre('save', function (next) {
   this.updatedAt = new Date();
 
   // Require threshold only for stock-related types
@@ -30,15 +88,32 @@ alertSchema.pre('save', function(next) {
     return next(new Error('Threshold is required for stock-related alerts'));
   }
 
+  // Validate scope
+  if (this.scope === 'shop' && !this.shopId) {
+    return next(new Error('shopId is required when scope is "shop"'));
+  }
+
+  if (this.scope === 'global') {
+    this.companyId = 'global'; // Standardize global alerts
+  }
+
   // Auto-set resolution details if marking as resolved
   if (this.isModified('isResolved') && this.isResolved && !this.resolvedAt) {
     this.resolvedAt = new Date();
-    this.resolvedBy = this.resolvedBy || 'system'; // Fallback to 'system' if no user
+    this.resolvedBy = this.resolvedBy || 'system';
   }
 
-  // Ensure at least one link (product or category) for non-global alerts, but allow global if type allows (e.g., new_product)
-  if (!['new_product', 'expired_discount'].includes(this.type) && !this.productId && !this.categoryId) {
-    return next(new Error('Alert must be linked to a product or category for this type'));
+  // Auto-set read status if all relevant users have read it
+  if (this.readCount > 0 && !this.isRead && this.scope === 'company') {
+    // Note: In real scenario, you may need more complex logic
+  }
+
+  // Ensure at least one link for non-global alerts
+  const globalTypes = ['new_arrival', 'new_product'];
+  if (!globalTypes.includes(this.type) && !this.productId && !this.categoryId && !this.orderId) {
+    if (this.scope !== 'global') {
+      return next(new Error('Alert must be linked to a product, category, or order for this type'));
+    }
   }
 
   next();
@@ -53,6 +128,88 @@ alertSchema.statics.getUnresolvedAlerts = async function (companyId, limit = 50)
     .limit(limit);
 };
 
+// Static method to get unread alerts for a specific scope and user
+alertSchema.statics.getUnreadAlerts = async function (companyId, userId, shopId = null, limit = 50) {
+  const query = { companyId, isRead: false };
+
+  // Determine scope based on shopId
+  if (shopId) {
+    query.$or = [
+      { scope: 'shop', shopId },
+      { scope: 'company' },
+      { scope: 'global' }
+    ];
+  } else {
+    query.$or = [
+      { scope: 'company' },
+      { scope: 'global' }
+    ];
+  }
+
+  return await this.find(query)
+    .populate('productId', 'name slug')
+    .populate('categoryId', 'name slug')
+    .sort({ priority: -1, createdAt: -1 })
+    .limit(limit);
+};
+
+// Static method to get alert history with filters
+alertSchema.statics.getHistory = async function (companyId, filters = {}) {
+  const {
+    shopId = null,
+    type = null,
+    scope = null,
+    startDate = null,
+    endDate = null,
+    isRead = null,
+    priority = null,
+    page = 1,
+    limit = 20
+  } = filters;
+
+  const query = { companyId };
+
+  if (shopId) {
+    query.$or = [
+      { scope: 'shop', shopId },
+      { scope: 'company' },
+      { scope: 'global' }
+    ];
+  }
+  if (type) query.type = type;
+  if (scope) query.scope = scope;
+  if (isRead !== null && isRead !== undefined) query.isRead = isRead === 'true' || isRead === true;
+  if (priority) query.priority = priority;
+
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) query.createdAt.$gte = new Date(startDate);
+    if (endDate) query.createdAt.$lte = new Date(endDate);
+  }
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const [alerts, total] = await Promise.all([
+    this.find(query)
+      .populate('productId', 'name slug')
+      .populate('categoryId', 'name slug')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit)),
+    this.countDocuments(query)
+  ]);
+
+  return {
+    alerts,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
+  };
+};
+
 // Instance method to resolve alert
 alertSchema.methods.resolve = async function (resolvedBy) {
   this.isResolved = true;
@@ -60,6 +217,37 @@ alertSchema.methods.resolve = async function (resolvedBy) {
   this.resolvedAt = new Date();
   this.updatedAt = new Date();
   await this.save();
+};
+
+// Instance method to mark alert as read by a user
+alertSchema.methods.markAsRead = async function (userId, userRole = 'user') {
+  // Check if user already read this
+  const alreadyRead = this.readBy.some(r => r.userId === userId);
+
+  if (!alreadyRead) {
+    this.readBy.push({
+      userId,
+      role: userRole,
+      readAt: new Date()
+    });
+    this.readCount = this.readBy.length;
+  }
+
+  this.isRead = true;
+  this.updatedAt = new Date();
+  await this.save();
+};
+
+// Instance method to mark alert as unread
+alertSchema.methods.markAsUnread = async function () {
+  this.isRead = false;
+  this.updatedAt = new Date();
+  await this.save();
+};
+
+// Instance method to check if a user has read this alert
+alertSchema.methods.isReadByUser = function (userId) {
+  return this.readBy.some(r => r.userId === userId);
 };
 
 module.exports = mongoose.model('Alert', alertSchema);

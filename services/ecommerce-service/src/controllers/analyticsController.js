@@ -5,6 +5,41 @@ const cache = require('../utils/cache');
 const { publish, exchanges } = require('/app/shared/rabbitmq');
 const logger = require('../utils/logger');
 
+// Dashboard Analytics - Main entry point
+exports.getDashboard = async (req, res, next) => {
+    try {
+        const { companyId } = req.query;
+        if (!companyId) {
+            return res.status(400).json({ success: false, message: 'companyId required' });
+        }
+
+        const cacheKey = `dashboard:${companyId}`;
+        const cached = await cache.getJSON(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
+        const totalOrders = await Order.countDocuments({ companyId, isDeleted: false });
+        const totalProducts = await Catalog.countDocuments({ companyId, status: 'active' });
+        const totalReviews = await Review.countDocuments({ companyId });
+
+        const orders = await Order.find({ companyId, isDeleted: false }).lean();
+        const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+        const dashboard = {
+            totalOrders,
+            totalProducts,
+            totalReviews,
+            totalRevenue,
+            avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0
+        };
+
+        await cache.setJSON(cacheKey, dashboard, 3600);
+        res.json({ success: true, data: dashboard });
+    } catch (error) {
+        logger.error('Error in getDashboard:', error);
+        next(error);
+    }
+};
+
 // Sales analytics and dashboard
 exports.getSalesDashboard = async (req, res, next) => {
     try {
@@ -34,7 +69,7 @@ exports.getSalesDashboard = async (req, res, next) => {
         logger.error('Error in getSalesDashboard:', error);
         next(error);
     }
-};
+}
 
 // Top selling products
 exports.getTopSellingProducts = async (req, res, next) => {
@@ -85,6 +120,55 @@ exports.getProductAnalytics = async (req, res, next) => {
     }
 };
 
+// Get detail analytics for a single product
+exports.getProductDetail = async (req, res, next) => {
+    try {
+        const { productId } = req.params;
+        const { companyId } = req.query;
+
+        if (!companyId || !productId) {
+            return res.status(400).json({ success: false, message: 'companyId and productId required' });
+        }
+
+        const cacheKey = `product_detail:${companyId}:${productId}`;
+        const cached = await cache.getJSON(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
+        const product = await Catalog.findOne({ productId, companyId }).lean();
+        if (!product) {
+            return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+
+        const orders = await Order.find({ companyId, 'items.productId': productId }).lean();
+        const reviews = await Review.find({ productId, companyId }).lean();
+
+        const totalSold = orders.reduce((sum, o) => {
+            const item = o.items.find(i => i.productId === productId);
+            return sum + (item?.quantity || 0);
+        }, 0);
+
+        const revenue = orders.reduce((sum, o) => {
+            const item = o.items.find(i => i.productId === productId);
+            return sum + ((item?.price || 0) * (item?.quantity || 0));
+        }, 0);
+
+        const avgRating = reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0;
+
+        const detail = {
+            product,
+            sales: { totalSold, revenue },
+            reviews: { count: reviews.length, avgRating },
+            lastUpdated: new Date()
+        };
+
+        await cache.setJSON(cacheKey, detail, 1800);
+        res.json({ success: true, data: detail });
+    } catch (error) {
+        logger.error('Error in getProductDetail:', error);
+        next(error);
+    }
+};
+
 // Category-wise sales
 exports.getCategorySales = async (req, res, next) => {
     try {
@@ -103,6 +187,50 @@ exports.getCategorySales = async (req, res, next) => {
         res.json({ success: true, data: categorySales });
     } catch (error) {
         logger.error('Error in getCategorySales:', error);
+        next(error);
+    }
+};
+
+// Get analytics for a specific category
+exports.getCategoryAnalytics = async (req, res, next) => {
+    try {
+        const { category } = req.params;
+        const { companyId } = req.query;
+
+        if (!companyId || !category) {
+            return res.status(400).json({ success: false, message: 'companyId and category required' });
+        }
+
+        const cacheKey = `category_analytics:${companyId}:${category}`;
+        const cached = await cache.getJSON(cacheKey);
+        if (cached) return res.json({ success: true, data: cached });
+
+        const products = await Catalog.find({ companyId, categoryId: category }).lean();
+        const orders = await Order.find({
+            companyId,
+            'items.productId': { $in: products.map(p => p.productId) }
+        }).lean();
+
+        const productCount = products.length;
+        const avgPrice = products.length > 0 ? products.reduce((sum, p) => sum + (p.price || 0), 0) / productCount : 0;
+        const totalRevenue = orders.reduce((sum, o) => {
+            return sum + o.items
+                .filter(i => products.some(p => p.productId === i.productId))
+                .reduce((itemSum, item) => itemSum + (item.price * item.quantity), 0);
+        }, 0);
+
+        const analytics = {
+            category,
+            productCount,
+            avgPrice,
+            totalRevenue,
+            products
+        };
+
+        await cache.setJSON(cacheKey, analytics, 3600);
+        res.json({ success: true, data: analytics });
+    } catch (error) {
+        logger.error('Error in getCategoryAnalytics:', error);
         next(error);
     }
 };

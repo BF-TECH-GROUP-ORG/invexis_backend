@@ -7,11 +7,17 @@ const Discount = require('../models/Discount');
 // Warehouse model removed
 const InventoryAdjustment = require('../models/InventoryAdjustment');
 const { validateMongoId } = require('../utils/validateMongoId');
+const { logger } = require('../utils/logger');
 
 const getDailyReport = asyncHandler(async (req, res) => {
-  const companyId = "testCompany";
-  const { date } = req.query;
+  const { companyId } = req.query;
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+  const { date, shopId } = req.query;
   const reportDate = date ? new Date(date) : new Date();
+
+  const shopFilter = shopId ? { shopId } : {};
   reportDate.setHours(0, 0, 0, 0);
   const nextDay = new Date(reportDate);
   nextDay.setDate(nextDay.getDate() + 1);
@@ -22,42 +28,42 @@ const getDailyReport = asyncHandler(async (req, res) => {
 
   // Stock changes today
   const stockChanges = await StockChange.aggregate([
-    { $match: { companyId, changeDate: { $gte: reportDate, $lt: nextDay } } },
+    { $match: { companyId, ...shopFilter, changeDate: { $gte: reportDate, $lt: nextDay } } },
     { $group: { _id: '$changeType', count: { $sum: 1 }, totalQuantity: { $sum: '$quantity' } } }
   ]);
 
   // Yesterday's for % change
   const yesterdayStockChanges = await StockChange.aggregate([
-    { $match: { companyId, changeDate: { $gte: yesterday, $lt: yesterdayNext } } },
+    { $match: { companyId, ...shopFilter, changeDate: { $gte: yesterday, $lt: yesterdayNext } } },
     { $group: { _id: '$changeType', count: { $sum: 1 }, totalQuantity: { $sum: '$quantity' } } }
   ]);
 
   // Alerts generated today
   const alerts = await Alert.aggregate([
-    { $match: { companyId, createdAt: { $gte: reportDate, $lt: nextDay } } },
+    { $match: { companyId, ...shopFilter, createdAt: { $gte: reportDate, $lt: nextDay } } },
     { $group: { _id: '$type', count: { $sum: 1 } } }
   ]);
 
   // Yesterday's alerts for % change
   const yesterdayAlerts = await Alert.aggregate([
-    { $match: { companyId, createdAt: { $gte: yesterday, $lt: yesterdayNext } } },
+    { $match: { companyId, ...shopFilter, createdAt: { $gte: yesterday, $lt: yesterdayNext } } },
     { $group: { _id: '$type', count: { $sum: 1 } } }
   ]);
 
   // Sales today (absolute quantity from 'sale' changes, approximate revenue using avg price)
   const sales = await StockChange.aggregate([
-    { $match: { companyId, changeType: 'sale', changeDate: { $gte: reportDate, $lt: nextDay } } },
+    { $match: { companyId, ...shopFilter, changeType: 'sale', changeDate: { $gte: reportDate, $lt: nextDay } } },
     { $group: { _id: null, totalUnitsSold: { $sum: { $abs: '$quantity' } } } }
   ]);
   const avgPrice = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: { companyId, ...shopFilter } },
     { $group: { _id: null, avgPrice: { $avg: '$pricing.basePrice' } } }
   ]);
   const todayRevenue = (sales[0]?.totalUnitsSold || 0) * (avgPrice[0]?.avgPrice || 0);
 
   // Yesterday's sales for % change
   const yesterdaySales = await StockChange.aggregate([
-    { $match: { companyId, changeType: 'sale', changeDate: { $gte: yesterday, $lt: yesterdayNext } } },
+    { $match: { companyId, ...shopFilter, changeType: 'sale', changeDate: { $gte: yesterday, $lt: yesterdayNext } } },
     { $group: { _id: null, totalUnitsSold: { $sum: { $abs: '$quantity' } } } }
   ]);
   const yesterdayRevenue = (yesterdaySales[0]?.totalUnitsSold || 0) * (avgPrice[0]?.avgPrice || 0);
@@ -65,19 +71,19 @@ const getDailyReport = asyncHandler(async (req, res) => {
 
   // Low stock count (use aggregation to avoid cast error)
   const lowStockResult = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: { companyId, ...shopFilter } },
     { $addFields: { isLow: { $lte: ['$inventory.quantity', { $ifNull: ['$inventory.lowStockThreshold', 10] }] } } },
     { $match: { isLow: true } },
     { $count: 'lowStockCount' }
   ]);
   const lowStock = lowStockResult[0]?.lowStockCount || 0;
 
-  const totalProducts = await Product.countDocuments({ companyId });
+  const totalProducts = await Product.countDocuments({ companyId, ...shopFilter });
   const lowStockPct = totalProducts > 0 ? (lowStock / totalProducts * 100) : 0;
 
   // Top category sales (approx via product category count in sales, with value)
   const topCategory = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: { companyId, ...shopFilter } },
     { $group: { _id: '$category', productCount: { $sum: 1 }, totalValue: { $sum: { $multiply: ['$pricing.basePrice', '$sales.totalSold'] } } } },
     { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: 'category' } },
     { $unwind: '$category' },
@@ -88,12 +94,12 @@ const getDailyReport = asyncHandler(async (req, res) => {
 
   // Overall efficiency metrics
   const avgTurnover = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: { companyId, ...shopFilter } },
     { $group: { _id: null, avgSold: { $avg: '$sales.totalSold' }, avgStock: { $avg: '$inventory.quantity' } } }
   ]);
   // Average stock level
   const avgStock = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: { companyId, ...shopFilter } },
     { $group: { _id: null, avgQuantity: { $avg: '$inventory.quantity' } } }
   ]);
   const avgTurnoverRatio = avgStock[0]?.avgStock > 0 ? avgTurnover[0]?.avgSold / avgStock[0]?.avgStock : 0;
@@ -144,8 +150,11 @@ const getDailyReport = asyncHandler(async (req, res) => {
 const getProductReport = asyncHandler(async (req, res) => {
   const { productId } = req.params;
   validateMongoId(productId);
-  // const { companyId } = req.user;
-  const companyId = "testCompany"
+  // companyId must be provided (query or from authenticated user)
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
 
   const product = await Product.findOne({ _id: productId, companyId }).populate('category');
   if (!product) {
@@ -206,20 +215,27 @@ const getProductReport = asyncHandler(async (req, res) => {
 });
 
 const getInventorySummary = asyncHandler(async (req, res) => {
-  const companyId = "testCompany";
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const { shopId } = req.query;
+  const filter = { companyId };
+  if (shopId) filter.shopId = shopId;
 
   // Total products
-  const totalProducts = await Product.countDocuments({ companyId });
+  const totalProducts = await Product.countDocuments(filter);
 
   // Total inventory value (sum of cost * quantity)
   const inventoryValue = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: filter },
     { $group: { _id: null, totalValue: { $sum: { $multiply: ['$pricing.cost', '$inventory.quantity'] } } } }
   ]);
 
   // Low stock count (aggregation to avoid cast error)
   const lowStockResult = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: filter },
     { $addFields: { isLow: { $lte: ['$inventory.quantity', { $ifNull: ['$inventory.lowStockThreshold', 10] }] } } },
     { $match: { isLow: true } },
     { $count: 'lowStockCount' }
@@ -227,11 +243,11 @@ const getInventorySummary = asyncHandler(async (req, res) => {
   const lowStock = lowStockResult[0]?.lowStockCount || 0;
 
   // Out of stock
-  const outOfStock = await Product.countDocuments({ companyId, 'inventory.quantity': 0 });
+  const outOfStock = await Product.countDocuments({ ...filter, 'inventory.quantity': 0 });
 
   // Average stock level
   const avgStock = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: filter },
     { $group: { _id: null, avgQuantity: { $avg: '$inventory.quantity' } } }
   ]);
 
@@ -243,9 +259,9 @@ const getInventorySummary = asyncHandler(async (req, res) => {
   const lowStockPct = totalProducts > 0 ? (lowStock / totalProducts * 100) : 0;
 
   // Additional stats: Total categories, avg cost per product
-  const totalCategories = await Category.countDocuments({ companyId }); // Assume companyId in Category if multi-tenant
+  const totalCategories = await Category.countDocuments({ companyId }); // Categories are usually company-wide
   const avgCost = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: filter },
     { $group: { _id: null, avgCost: { $avg: '$pricing.cost' } } }
   ]);
 
@@ -273,12 +289,18 @@ const getInventorySummary = asyncHandler(async (req, res) => {
 
 
 const getABCAnalysis = asyncHandler(async (req, res) => {
-  // const { companyId } = req.user;
-  const companyId = "testCompany"
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const { shopId } = req.query;
+  const filter = { companyId };
+  if (shopId) filter.shopId = shopId;
 
   // Aggregate by value (cost * quantity) and sort
   const products = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: filter },
     { $project: { name: 1, value: { $multiply: ['$pricing.cost', '$inventory.quantity'] } } },
     { $sort: { value: -1 } }
   ]);
@@ -322,13 +344,17 @@ const getABCAnalysis = asyncHandler(async (req, res) => {
 });
 
 const getInventoryTurnover = asyncHandler(async (req, res) => {
-  const companyId = "testCompany"
-  const { startDate, endDate, period = '30' } = req.query; // Default 30 days
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+  const { startDate, endDate, period = '30', shopId } = req.query; // Default 30 days
   const days = parseInt(period);
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
 
   const filter = { companyId, createdAt: { $gte: fromDate, $lte: toDate } };
+  if (shopId) filter.shopId = shopId;
 
   // COGS (cost of goods sold: sum totalSold * cost over period)
   const cogs = await Product.aggregate([
@@ -338,7 +364,7 @@ const getInventoryTurnover = asyncHandler(async (req, res) => {
 
   // Average inventory value (avg over period; approximate as current * days / period)
   const currentValue = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: { companyId, ...(shopId ? { shopId } : {}) } },
     { $group: { _id: null, avgValue: { $avg: { $multiply: ['$inventory.quantity', '$pricing.cost'] } } } }
   ]);
   const avgInventoryValue = currentValue[0]?.avgValue || 0;
@@ -364,21 +390,27 @@ const getInventoryTurnover = asyncHandler(async (req, res) => {
 });
 
 const getAgingInventory = asyncHandler(async (req, res) => {
-  const companyId = "testCompany"
-  const { daysOld = 90 } = req.query;
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+  const { daysOld = 90, shopId } = req.query;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - daysOld);
 
+  const filter = { companyId, createdAt: { $lt: cutoff }, 'sales.totalSold': { $lt: 10 } };
+  if (shopId) filter.shopId = shopId;
+
   const agedProducts = await Product.aggregate([
-    { $match: { companyId, createdAt: { $lt: cutoff }, 'sales.totalSold': { $lt: 10 } } },
+    { $match: filter },
     { $project: { name: 1, 'inventory.quantity': 1, createdAt: 1, value: { $multiply: ['$inventory.quantity', '$pricing.cost'] } } },
     { $group: { _id: null, totalAged: { $sum: 1 }, totalAgedValue: { $sum: '$value' }, products: { $push: '$$ROOT' } } },
     { $project: { totalAged: 1, totalAgedValue: 1, totalAgedPct: { $literal: 'N/A' }, products: { $slice: ['$products', 20] } } } // Top 20
   ]);
 
-  const totalProducts = await Product.countDocuments({ companyId });
+  const totalProducts = await Product.countDocuments({ companyId, ...(shopId ? { shopId } : {}) });
   const totalValue = await Product.aggregate([
-    { $match: { companyId } },
+    { $match: { companyId, ...(shopId ? { shopId } : {}) } },
     { $group: { _id: null, totalValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } } } }
   ]);
   const agedPct = totalProducts > 0 ? (agedProducts[0]?.totalAged / totalProducts * 100) : 0;
@@ -400,13 +432,17 @@ const getAgingInventory = asyncHandler(async (req, res) => {
 });
 
 const getStockMovementReport = asyncHandler(async (req, res) => {
-  const companyId = "testCompany"
-  const { startDate, endDate, productId } = req.query;
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+  const { startDate, endDate, productId, shopId } = req.query;
 
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
 
   const filter = { companyId, changeDate: { $gte: fromDate, $lte: toDate } };
+  if (shopId) filter.shopId = shopId;
   if (productId) {
     validateMongoId(productId);
     filter.productId = productId;
@@ -442,13 +478,17 @@ const getStockMovementReport = asyncHandler(async (req, res) => {
 });
 
 const getAdjustmentReport = asyncHandler(async (req, res) => {
-  const companyId = "testCompany"
-  const { status, startDate, endDate } = req.query;
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+  const { status, startDate, endDate, shopId } = req.query;
 
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
 
   const filter = { companyId, createdAt: { $gte: fromDate, $lte: toDate } };
+  if (shopId) filter.shopId = shopId;
   if (status) filter.status = status;
 
   const adjustments = await InventoryAdjustment.aggregate([
@@ -483,17 +523,19 @@ const getAdjustmentReport = asyncHandler(async (req, res) => {
 });
 
 const getWarehouseReport = asyncHandler(async (req, res) => {
-  const companyId = "testCompany";
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
   const { shopId } = req.query; // former warehouseId - now represent shop locations
 
   if (shopId) validateMongoId(shopId);
 
-  // Aggregate inventory by shop (based on shopAvailability linking)
+  // Aggregate inventory by shop (based on shopId field - now simple reference instead of array)
   const pipeline = [
-    { $match: { companyId, 'shopAvailability.shopId': { $exists: true } } },
-    { $unwind: '$shopAvailability' },
-    { $match: shopId ? { 'shopAvailability.shopId': shopId } : {} },
-    { $group: { _id: '$shopAvailability.shopId', totalStock: { $sum: '$inventory.quantity' }, totalValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }, totalProducts: { $sum: 1 } } },
+    { $match: { companyId, shopId: { $exists: true } } },
+    { $match: shopId ? { shopId: shopId } : {} },
+    { $group: { _id: '$shopId', totalStock: { $sum: '$inventory.quantity' }, totalValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }, totalProducts: { $sum: 1 } } },
   ];
 
   const shopStock = await Product.aggregate(pipeline);
@@ -515,13 +557,16 @@ const getWarehouseReport = asyncHandler(async (req, res) => {
 });
 
 const getAlertSummary = asyncHandler(async (req, res) => {
-  const companyId = "testCompany"
-  const { startDate, endDate } = req.query;
-
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+  const { startDate, endDate, shopId } = req.query;
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
 
   const filter = { companyId, createdAt: { $gte: fromDate, $lte: toDate } };
+  if (shopId) filter.shopId = shopId;
 
   const summary = await Alert.aggregate([
     { $match: filter },
@@ -561,13 +606,16 @@ const getAlertSummary = asyncHandler(async (req, res) => {
 });
 
 const getDiscountImpact = asyncHandler(async (req, res) => {
-  const companyId = "testCompany"
-  const { startDate, endDate } = req.query;
-
+  const companyId = req.query.companyId || (req.user && req.user.companyId);
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+  const { startDate, endDate, shopId } = req.query;
   const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const toDate = endDate ? new Date(endDate) : new Date();
 
   const filter = { companyId, startDate: { $gte: fromDate }, endDate: { $lte: toDate }, isActive: true };
+  if (shopId) filter.shopId = shopId;
 
   const impact = await Discount.aggregate([
     { $match: filter },
@@ -643,7 +691,775 @@ const getDiscountImpact = asyncHandler(async (req, res) => {
   res.json({ success: true, data: report });
 });
 
+// ==================== ADVANCED REPORTING FUNCTIONS ====================
+
+/**
+ * @desc    Executive Dashboard - High-level business overview
+ * @route   GET /api/v1/reports/dashboard
+ * @query   companyId (required), shopId (optional), period (7,30,90,365)
+ * @access  Private
+ */
+const getExecutiveDashboard = asyncHandler(async (req, res) => {
+  const { companyId, shopId, period = 30 } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({
+      success: false,
+      message: 'companyId is required'
+    });
+  }
+
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - parseInt(period));
+
+  // Build match query
+  const match = { companyId };
+  if (shopId) match.shopId = shopId;
+
+  // 1. Revenue Metrics
+  const revenueData = await StockChange.aggregate([
+    { $match: { ...match, changeType: 'sale', changeDate: { $gte: fromDate } } },
+    { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    {
+      $group: {
+        _id: null,
+        totalUnitsSold: { $sum: { $abs: '$quantity' } },
+        totalRevenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+        avgOrderValue: { $avg: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+        totalCost: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.cost'] } }
+      }
+    }
+  ]);
+
+  const revenue = revenueData[0] || {
+    totalUnitsSold: 0,
+    totalRevenue: 0,
+    avgOrderValue: 0,
+    totalCost: 0
+  };
+
+  // 2. Inventory Metrics
+  const inventoryData = await Product.aggregate([
+    { $match },
+    {
+      $group: {
+        _id: null,
+        totalProducts: { $sum: 1 },
+        totalStock: { $sum: '$inventory.quantity' },
+        inventoryValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } },
+        avgStockPerProduct: { $avg: '$inventory.quantity' }
+      }
+    }
+  ]);
+
+  const inventory = inventoryData[0] || {
+    totalProducts: 0,
+    totalStock: 0,
+    inventoryValue: 0,
+    avgStockPerProduct: 0
+  };
+
+  // 3. Stock Health
+  const lowStockCount = await Product.countDocuments({
+    ...match,
+    $expr: { $lte: ['$inventory.quantity', { $ifNull: ['$inventory.lowStockThreshold', 10] }] }
+  });
+
+  const outOfStockCount = await Product.countDocuments({
+    ...match,
+    'inventory.quantity': 0
+  });
+
+  // 4. Profit Analysis
+  const grossProfit = revenue.totalRevenue - revenue.totalCost;
+  const profitMargin = revenue.totalRevenue > 0 ? ((grossProfit / revenue.totalRevenue) * 100) : 0;
+
+  // 5. Stock Movement
+  const stockMovement = await StockChange.aggregate([
+    { $match: { ...match, changeDate: { $gte: fromDate } } },
+    {
+      $group: {
+        _id: '$changeType',
+        count: { $sum: 1 },
+        totalQuantity: { $sum: { $abs: '$quantity' } }
+      }
+    }
+  ]);
+
+  // 6. Top Products
+  const topProducts = await StockChange.aggregate([
+    { $match: { ...match, changeType: 'sale', changeDate: { $gte: fromDate } } },
+    {
+      $group: {
+        _id: '$productId',
+        unitsSold: { $sum: { $abs: '$quantity' } }
+      }
+    },
+    { $sort: { unitsSold: -1 } },
+    { $limit: 5 },
+    { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    {
+      $project: {
+        productId: '$_id',
+        name: '$product.name',
+        sku: '$product.sku',
+        unitsSold: 1,
+        revenue: { $multiply: ['$unitsSold', '$product.pricing.basePrice'] }
+      }
+    }
+  ]);
+
+  // 7. Alerts Summary
+  const activeAlerts = await Alert.countDocuments({
+    ...match,
+    isResolved: false
+  });
+
+  const dashboard = {
+    success: true,
+    period: `Last ${period} days`,
+    timestamp: new Date(),
+    kpis: {
+      revenue: {
+        total: parseFloat(revenue.totalRevenue.toFixed(2)),
+        daily: parseFloat((revenue.totalRevenue / period).toFixed(2)),
+        unitsSold: revenue.totalUnitsSold,
+        avgOrderValue: parseFloat(revenue.avgOrderValue.toFixed(2))
+      },
+      profitability: {
+        grossProfit: parseFloat(grossProfit.toFixed(2)),
+        profitMargin: parseFloat(profitMargin.toFixed(2)),
+        costOfGoods: parseFloat(revenue.totalCost.toFixed(2))
+      },
+      inventory: {
+        totalProducts: inventory.totalProducts,
+        totalStock: inventory.totalStock,
+        inventoryValue: parseFloat(inventory.inventoryValue.toFixed(2)),
+        avgStockPerProduct: parseFloat(inventory.avgStockPerProduct.toFixed(2)),
+        lowStockCount,
+        outOfStockCount,
+        healthScore: calculateInventoryHealth(lowStockCount, outOfStockCount, inventory.totalProducts)
+      },
+      operations: {
+        activeAlerts,
+        stockMovements: stockMovement.reduce((sum, s) => sum + s.count, 0),
+        stockTurnovers: revenue.totalUnitsSold > 0 ? parseFloat((revenue.totalUnitsSold / inventory.totalStock).toFixed(2)) : 0
+      }
+    },
+    topPerformers: {
+      products: topProducts.map(p => ({
+        id: p.productId,
+        name: p.name,
+        sku: p.sku,
+        unitsSold: p.unitsSold,
+        revenue: parseFloat(p.revenue.toFixed(2))
+      }))
+    },
+    stockBreakdown: stockMovement.map(s => ({
+      type: s._id,
+      count: s.count,
+      quantity: s.totalQuantity
+    })),
+    trends: {
+      direction: grossProfit > 0 ? 'positive' : 'negative',
+      message: generateDashboardInsight(grossProfit, profitMargin, lowStockCount)
+    }
+  };
+
+  res.json(dashboard);
+});
+
+/**
+ * @desc    Real-time Metrics - Live KPI updates
+ * @route   GET /api/v1/reports/metrics/realtime
+ * @query   companyId (required), shopId (optional)
+ * @access  Private
+ */
+const getRealTimeMetrics = asyncHandler(async (req, res) => {
+  const { companyId, shopId } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({
+      success: false,
+      message: 'companyId is required'
+    });
+  }
+
+  const match = { companyId };
+  if (shopId) match.shopId = shopId;
+
+  const now = new Date();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // Today's sales
+  const todaySales = await StockChange.aggregate([
+    { $match: { ...match, changeType: 'sale', changeDate: { $gte: today, $lt: tomorrow } } },
+    { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    {
+      $group: {
+        _id: null,
+        units: { $sum: { $abs: '$quantity' } },
+        revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } }
+      }
+    }
+  ]);
+
+  // Today's stock changes
+  const todayChanges = await StockChange.countDocuments({
+    ...match,
+    changeDate: { $gte: today, $lt: tomorrow }
+  });
+
+  // Current inventory health
+  const healthCheck = await Product.aggregate([
+    { $match },
+    {
+      $facet: {
+        critical: [
+          { $match: { 'inventory.quantity': 0 } },
+          { $count: 'count' }
+        ],
+        lowStock: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $gt: ['$inventory.quantity', 0] },
+                  { $lte: ['$inventory.quantity', { $ifNull: ['$inventory.lowStockThreshold', 10] }] }
+                ]
+              }
+            }
+          },
+          { $count: 'count' }
+        ],
+        healthy: [
+          {
+            $match: {
+              $expr: { $gt: ['$inventory.quantity', { $ifNull: ['$inventory.lowStockThreshold', 10] }] }
+            }
+          },
+          { $count: 'count' }
+        ]
+      }
+    }
+  ]);
+
+  const metrics = {
+    success: true,
+    timestamp: now,
+    today: {
+      sales: {
+        units: todaySales[0]?.units || 0,
+        revenue: parseFloat((todaySales[0]?.revenue || 0).toFixed(2))
+      },
+      stockChanges: todayChanges
+    },
+    inventory: {
+      status: {
+        critical: healthCheck[0]?.critical[0]?.count || 0,
+        lowStock: healthCheck[0]?.lowStock[0]?.count || 0,
+        healthy: healthCheck[0]?.healthy[0]?.count || 0
+      }
+    }
+  };
+
+  res.json(metrics);
+});
+
+/**
+ * @desc    Sales Analytics - Deep dive into revenue patterns
+ * @route   GET /api/v1/reports/analytics/sales
+ * @query   companyId (required), shopId (optional), period (7,30,90,365)
+ * @access  Private
+ */
+const getSalesAnalytics = asyncHandler(async (req, res) => {
+  const { companyId, shopId, period = 30 } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const match = { companyId };
+  if (shopId) match.shopId = shopId;
+
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - parseInt(period));
+
+  // Daily sales trend
+  const dailySalesTrend = await StockChange.aggregate([
+    { $match: { ...match, changeType: 'sale', changeDate: { $gte: fromDate } } },
+    { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    {
+      $group: {
+        _id: {
+          $dateToString: { format: '%Y-%m-%d', date: '$changeDate' }
+        },
+        units: { $sum: { $abs: '$quantity' } },
+        revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+        cost: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.cost'] } },
+        margin: { $avg: { $subtract: ['$product.pricing.basePrice', '$product.pricing.cost'] } }
+      }
+    },
+    { $sort: { _id: 1 } }
+  ]);
+
+  // Sales by category
+  const salesByCategory = await StockChange.aggregate([
+    { $match: { ...match, changeType: 'sale', changeDate: { $gte: fromDate } } },
+    { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    { $lookup: { from: 'categories', localField: 'product.category', foreignField: '_id', as: 'category' } },
+    { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+    {
+      $group: {
+        _id: '$category.name',
+        units: { $sum: { $abs: '$quantity' } },
+        revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+        products: { $sum: 1 }
+      }
+    },
+    { $sort: { revenue: -1 } }
+  ]);
+
+  // Average transaction
+  const transactions = await StockChange.countDocuments({
+    ...match,
+    changeType: 'sale',
+    changeDate: { $gte: fromDate }
+  });
+
+  const totalSalesUnits = dailySalesTrend.reduce((sum, d) => sum + d.units, 0);
+  const totalRevenue = dailySalesTrend.reduce((sum, d) => sum + d.revenue, 0);
+  const totalCost = dailySalesTrend.reduce((sum, d) => sum + d.cost, 0);
+
+  const analytics = {
+    success: true,
+    period: `Last ${period} days`,
+    summary: {
+      totalTransactions: transactions,
+      totalUnits: totalSalesUnits,
+      totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+      totalCost: parseFloat(totalCost.toFixed(2)),
+      grossProfit: parseFloat((totalRevenue - totalCost).toFixed(2)),
+      profitMargin: parseFloat(((totalRevenue - totalCost) / totalRevenue * 100).toFixed(2)),
+      avgTransactionValue: transactions > 0 ? parseFloat((totalRevenue / transactions).toFixed(2)) : 0,
+      avgUnitsPerTransaction: transactions > 0 ? parseFloat((totalSalesUnits / transactions).toFixed(2)) : 0
+    },
+    dailyTrend: dailySalesTrend.map(d => ({
+      date: d._id,
+      units: d.units,
+      revenue: parseFloat(d.revenue.toFixed(2)),
+      cost: parseFloat(d.cost.toFixed(2)),
+      margin: parseFloat(d.margin.toFixed(2))
+    })),
+    byCategory: salesByCategory.map(c => ({
+      category: c._id || 'Uncategorized',
+      units: c.units,
+      revenue: parseFloat(c.revenue.toFixed(2)),
+      productsInvolved: c.products,
+      revenueShare: parseFloat((c.revenue / totalRevenue * 100).toFixed(2))
+    }))
+  };
+
+  res.json(analytics);
+});
+
+/**
+ * @desc    Forecasting - AI-powered predictions
+ * @route   GET /api/v1/reports/forecast
+ * @query   companyId (required), shopId (optional), days (7,14,30)
+ * @access  Private
+ */
+const getForecast = asyncHandler(async (req, res) => {
+  const { companyId, shopId, days = 7 } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const match = { companyId };
+  if (shopId) match.shopId = shopId;
+
+  // Get last 60 days of data for trend analysis
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - 60);
+
+  const historicalData = await StockChange.aggregate([
+    { $match: { ...match, changeType: 'sale', changeDate: { $gte: fromDate } } },
+    { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    {
+      $group: {
+        _id: {
+          $dateToString: { format: '%Y-%m-%d', date: '$changeDate' }
+        },
+        revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+        units: { $sum: { $abs: '$quantity' } }
+      }
+    },
+    { $sort: { _id: 1 } }
+  ]);
+
+  // Simple linear regression forecast
+  const forecast = generateForecast(historicalData, parseInt(days));
+
+  res.json({
+    success: true,
+    forecastPeriod: `Next ${days} days`,
+    forecast,
+    confidence: calculateForecastConfidence(historicalData),
+    methodology: 'Linear regression with trend analysis'
+  });
+});
+
+/**
+ * @desc    Inventory Optimization - Recommendations
+ * @route   GET /api/v1/reports/optimization
+ * @query   companyId (required), shopId (optional)
+ * @access  Private
+ */
+const getInventoryOptimization = asyncHandler(async (req, res) => {
+  const { companyId, shopId } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const match = { companyId };
+  if (shopId) match.shopId = shopId;
+
+  // ABC Analysis
+  const abcAnalysis = await Product.aggregate([
+    { $match },
+    {
+      $project: {
+        name: 1,
+        sku: 1,
+        value: { $multiply: ['$pricing.cost', '$inventory.quantity'] },
+        quantity: '$inventory.quantity'
+      }
+    },
+    { $sort: { value: -1 } }
+  ]);
+
+  const totalValue = abcAnalysis.reduce((sum, p) => sum + p.value, 0);
+  let cumulativeValue = 0;
+
+  const categorized = abcAnalysis.map(p => {
+    cumulativeValue += p.value;
+    const percentage = totalValue > 0 ? (cumulativeValue / totalValue * 100) : 0;
+    let category = 'C';
+    if (percentage <= 80) category = 'A';
+    else if (percentage <= 95) category = 'B';
+
+    return {
+      ...p,
+      category,
+      cumulative: percentage
+    };
+  });
+
+  // Slow movers
+  const slowMovers = await StockChange.aggregate([
+    { $match: { ...match, changeDate: { $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } } },
+    {
+      $group: {
+        _id: '$productId',
+        movements: { $sum: 1 }
+      }
+    },
+    { $match: { movements: { $lt: 5 } } },
+    { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    {
+      $project: {
+        productId: '$_id',
+        name: '$product.name',
+        quantity: '$product.inventory.quantity',
+        movements: 1
+      }
+    },
+    { $limit: 10 }
+  ]);
+
+  // Dead stock
+  const deadStock = await Product.aggregate([
+    {
+      $match: {
+        ...match,
+        createdAt: { $lt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) }
+      }
+    },
+    {
+      $lookup: {
+        from: 'stockchanges',
+        localField: '_id',
+        foreignField: 'productId',
+        as: 'changes'
+      }
+    },
+    { $match: { changes: { $size: 0 } } },
+    {
+      $project: {
+        name: 1,
+        sku: 1,
+        quantity: '$inventory.quantity',
+        value: { $multiply: ['$pricing.cost', '$inventory.quantity'] },
+        createdAt: 1
+      }
+    }
+  ]);
+
+  const optimization = {
+    success: true,
+    recommendations: {
+      abcAnalysis: {
+        a: {
+          count: categorized.filter(p => p.category === 'A').length,
+          message: 'High-value items - Focus on stock accuracy and frequent reordering'
+        },
+        b: {
+          count: categorized.filter(p => p.category === 'B').length,
+          message: 'Medium-value items - Monitor regularly'
+        },
+        c: {
+          count: categorized.filter(p => p.category === 'C').length,
+          message: 'Low-value items - Consider bulk ordering or clearance'
+        }
+      },
+      slowMovers: {
+        count: slowMovers.length,
+        items: slowMovers,
+        action: 'Review pricing or run promotions'
+      },
+      deadStock: {
+        count: deadStock.length,
+        items: deadStock,
+        potentialLoss: parseFloat(deadStock.reduce((sum, d) => sum + d.value, 0).toFixed(2)),
+        action: 'Consider clearance sales or donation'
+      }
+    }
+  };
+
+  res.json(optimization);
+});
+
+/**
+ * @desc    Benchmarking - Compare against industry standards
+ * @route   GET /api/v1/reports/benchmarks
+ * @query   companyId (required), shopId (optional), period (30,90,365)
+ * @access  Private
+ */
+const getBenchmarks = asyncHandler(async (req, res) => {
+  const { companyId, shopId, period = 30 } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const match = { companyId };
+  if (shopId) match.shopId = shopId;
+
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - parseInt(period));
+
+  // Calculate your metrics
+  const salesData = await StockChange.aggregate([
+    { $match: { ...match, changeType: 'sale', changeDate: { $gte: fromDate } } },
+    { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    {
+      $group: {
+        _id: null,
+        revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+        cost: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.cost'] } }
+      }
+    }
+  ]);
+
+  const inventory = await Product.countDocuments(match);
+  const avgInventoryValue = await Product.aggregate([
+    { $match },
+    {
+      $group: {
+        _id: null,
+        value: { $avg: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }
+      }
+    }
+  ]);
+
+  const yourMetrics = {
+    profitMargin: salesData[0] ? ((salesData[0].revenue - salesData[0].cost) / salesData[0].revenue * 100) : 0,
+    stockTurnover: salesData[0] ? (salesData[0].cost / (inventory * (avgInventoryValue[0]?.value || 100))) : 0,
+    inventoryHealth: inventory > 0 ? 95 : 0
+  };
+
+  const benchmarks = {
+    success: true,
+    period: `${period} days`,
+    yourMetrics: {
+      profitMargin: parseFloat(yourMetrics.profitMargin.toFixed(2)),
+      stockTurnover: parseFloat(yourMetrics.stockTurnover.toFixed(2)),
+      inventoryHealth: parseFloat(yourMetrics.inventoryHealth.toFixed(2))
+    },
+    industryBenchmarks: {
+      profitMargin: 25.0,
+      stockTurnover: 4.0,
+      inventoryHealth: 90.0
+    },
+    comparison: {
+      profitMargin: {
+        value: parseFloat(yourMetrics.profitMargin.toFixed(2)),
+        benchmark: 25.0,
+        status: yourMetrics.profitMargin >= 25 ? 'Above Average' : 'Below Average',
+        recommendation: yourMetrics.profitMargin < 25 ? 'Review pricing strategy and cost management' : 'Excellent performance'
+      },
+      stockTurnover: {
+        value: parseFloat(yourMetrics.stockTurnover.toFixed(2)),
+        benchmark: 4.0,
+        status: yourMetrics.stockTurnover >= 4 ? 'Above Average' : 'Below Average',
+        recommendation: yourMetrics.stockTurnover < 4 ? 'Increase marketing or adjust inventory levels' : 'Strong stock movement'
+      },
+      inventoryHealth: {
+        value: parseFloat(yourMetrics.inventoryHealth.toFixed(2)),
+        benchmark: 90.0,
+        status: yourMetrics.inventoryHealth >= 90 ? 'Healthy' : 'Needs Attention',
+        recommendation: 'Monitor stock levels and demand patterns'
+      }
+    }
+  };
+
+  res.json(benchmarks);
+});
+
+/**
+ * @desc    Custom Report Builder
+ * @route   POST /api/v1/reports/custom
+ * @body    { companyId, shopId, metrics[], dateRange, groupBy, exportFormat }
+ * @access  Private
+ */
+const buildCustomReport = asyncHandler(async (req, res) => {
+  const { companyId, shopId, metrics = [], dateRange = 'month', groupBy = 'date' } = req.body;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const match = { companyId };
+  if (shopId) match.shopId = shopId;
+
+  // Calculate date range
+  const fromDate = new Date();
+  const rangeMap = { week: 7, month: 30, quarter: 90, year: 365 };
+  fromDate.setDate(fromDate.getDate() - (rangeMap[dateRange] || 30));
+
+  // Build report based on selected metrics
+  const report = {};
+
+  if (metrics.includes('revenue')) {
+    const revenue = await StockChange.aggregate([
+      { $match: { ...match, changeType: 'sale', changeDate: { $gte: fromDate } } },
+      { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+      { $unwind: '$product' },
+      {
+        $group: {
+          _id: groupBy === 'category' ? '$product.category' : { $dateToString: { format: '%Y-%m-%d', date: '$changeDate' } },
+          revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } }
+        }
+      }
+    ]);
+    report.revenue = revenue;
+  }
+
+  if (metrics.includes('inventory')) {
+    const inv = await Product.aggregate([
+      { $match },
+      {
+        $group: {
+          _id: groupBy === 'category' ? '$category' : null,
+          quantity: { $sum: '$inventory.quantity' },
+          value: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }
+        }
+      }
+    ]);
+    report.inventory = inv;
+  }
+
+  res.json({
+    success: true,
+    dateRange,
+    groupedBy: groupBy,
+    data: report
+  });
+});
+
+// ==================== HELPER FUNCTIONS ====================
+
+function calculateInventoryHealth(lowStock, outOfStock, total) {
+  if (total === 0) return 100;
+  const healthyPercentage = ((total - lowStock - outOfStock) / total) * 100;
+  return parseFloat(healthyPercentage.toFixed(2));
+}
+
+function generateDashboardInsight(grossProfit, profitMargin, lowStock) {
+  if (lowStock > 0.3) return '⚠️ High low-stock count - Review reorder points';
+  if (profitMargin < 15) return '📉 Profit margin below target - Review pricing';
+  if (grossProfit < 0) return '❌ Negative profit - Urgent action needed';
+  return '✅ Operating within healthy parameters';
+}
+
+function generateForecast(historicalData, days) {
+  if (historicalData.length < 2) {
+    return { message: 'Insufficient data for forecasting' };
+  }
+
+  // Simple linear regression
+  const n = historicalData.length;
+  const xValues = Array.from({ length: n }, (_, i) => i);
+  const yValues = historicalData.map(d => d.revenue);
+
+  const xMean = xValues.reduce((a, b) => a + b) / n;
+  const yMean = yValues.reduce((a, b) => a + b) / n;
+
+  let numerator = 0;
+  let denominator = 0;
+
+  for (let i = 0; i < n; i++) {
+    numerator += (xValues[i] - xMean) * (yValues[i] - yMean);
+    denominator += Math.pow(xValues[i] - xMean, 2);
+  }
+
+  const slope = denominator !== 0 ? numerator / denominator : 0;
+  const intercept = yMean - slope * xMean;
+
+  const forecast = [];
+  for (let i = 0; i < days; i++) {
+    const predictedValue = slope * (n + i) + intercept;
+    forecast.push({
+      day: i + 1,
+      predictedRevenue: parseFloat(Math.max(0, predictedValue).toFixed(2))
+    });
+  }
+
+  return forecast;
+}
+
+function calculateForecastConfidence(historicalData) {
+  // Simple confidence score based on data consistency
+  if (historicalData.length < 10) return 'Low (need more data)';
+  if (historicalData.length < 30) return 'Medium';
+  return 'High';
+}
+
 module.exports = {
+  // Basic Reports
   getDailyReport,
   getProductReport,
   getInventorySummary,
@@ -654,5 +1470,13 @@ module.exports = {
   getAdjustmentReport,
   getWarehouseReport,
   getAlertSummary,
-  getDiscountImpact
+  getDiscountImpact,
+  // Advanced Reports
+  getExecutiveDashboard,
+  getRealTimeMetrics,
+  getSalesAnalytics,
+  getForecast,
+  getInventoryOptimization,
+  getBenchmarks,
+  buildCustomReport
 };

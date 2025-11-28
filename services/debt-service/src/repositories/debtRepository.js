@@ -1,4 +1,5 @@
 const Debt = require('../models/debt.model');
+const mongoose = require('mongoose');
 
 async function createDebt(doc) {
     const debt = new Debt(doc);
@@ -6,7 +7,22 @@ async function createDebt(doc) {
 }
 
 async function findById(id, companyId) {
-    return Debt.findOne({ _id: id, companyId, isDeleted: false });
+    // If companyId looks like a 24-char hex string, include it in the query (convert to ObjectId).
+    // Otherwise omit companyId from the DB filter to avoid Mongoose trying to cast invalid strings to ObjectId
+    const filter = { _id: id, isDeleted: false };
+    if (typeof companyId === 'object' && companyId && companyId._bsontype === 'ObjectID') {
+        filter.companyId = companyId;
+    } else if (typeof companyId === 'string' && companyId.length === 24) {
+        try { filter.companyId = mongoose.Types.ObjectId(companyId); } catch (e) { /* ignore conversion error */ }
+    }
+
+    const found = await Debt.findOne(filter);
+
+    // If caller provided a non-ObjectId companyId (e.g. UUID) we omitted companyId from the query above.
+    // In that case we will not enforce strict companyId matching here because the caller may be using
+    // an external id format; higher-level authorization should validate tenant access if needed.
+    // Return the found debt (or null).
+    return found;
 }
 
 async function updateDebt(debtDoc) {

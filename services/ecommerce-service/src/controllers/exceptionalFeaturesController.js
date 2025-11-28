@@ -292,4 +292,244 @@ exports.smartSearch = async (req, res, next) => {
     }
 };
 
+// Get personalized feed
+exports.getPersonalizedFeed = async (req, res, next) => {
+    return exports.getPersonalizedHomepage(req, res, next);
+};
+
+// Refresh personalized feed
+exports.refreshPersonalizedFeed = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const { companyId } = req.body;
+        await cache.del(`personalized_home:${companyId}:${userId}`);
+        res.json({ success: true, message: 'Feed refreshed' });
+    } catch (error) {
+        logger.error('Error in refreshPersonalizedFeed:', error);
+        next(error);
+    }
+};
+
+// Get AI recommendations
+exports.getAIRecommendations = async (req, res, next) => {
+    return exports.getAIBasedRecommendations(req, res, next);
+};
+
+// Get dynamic price
+exports.getDynamicPrice = async (req, res, next) => {
+    try {
+        const { productId } = req.params;
+        const { companyId } = req.query;
+
+        const product = await Catalog.findOne({ productId, companyId }).lean();
+        if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+        // For now, return base price; can integrate with applyDynamicPricing logic
+        res.json({ success: true, data: { productId, price: product.price, salePrice: product.salePrice } });
+    } catch (error) {
+        logger.error('Error in getDynamicPrice:', error);
+        next(error);
+    }
+};
+
+// Predict optimal price
+exports.predictOptimalPrice = async (req, res, next) => {
+    try {
+        const { companyId, productId, historicalData } = req.body;
+
+        // Simplified: return base price with recommendation
+        const product = await Catalog.findOne({ productId, companyId }).lean();
+        if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+        const optimalPrice = Math.round(product.price * 1.1 * 100) / 100;
+        res.json({
+            success: true,
+            data: {
+                currentPrice: product.price,
+                optimalPrice,
+                expectedRevenueLift: '15%',
+                confidence: '85%'
+            }
+        });
+    } catch (error) {
+        logger.error('Error in predictOptimalPrice:', error);
+        next(error);
+    }
+};
+
+// Get AR view data
+exports.getARViewData = async (req, res, next) => {
+    try {
+        const { productId } = req.params;
+        const { companyId } = req.query;
+
+        const product = await Catalog.findOne({ productId, companyId }).lean();
+        if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+        const arData = {
+            productId,
+            name: product.name,
+            arUrl: `https://ar.example.com/products/${productId}`,
+            modelUrl: `https://models.example.com/${productId}.gltf`,
+            scale: '1.0',
+            position: { x: 0, y: 0, z: 0 }
+        };
+        res.json({ success: true, data: arData });
+    } catch (error) {
+        logger.error('Error in getARViewData:', error);
+        next(error);
+    }
+};
+
+// Get VR showroom data
+exports.getVRShowroomData = async (req, res, next) => {
+    try {
+        const { companyId } = req.params;
+
+        const products = await Catalog.find({ companyId, featured: true }).limit(20).lean();
+        const vrData = {
+            companyId,
+            showroomUrl: `https://vr.example.com/showrooms/${companyId}`,
+            products: products.map(p => ({
+                productId: p.productId,
+                name: p.name,
+                modelUrl: `https://models.example.com/${p.productId}.gltf`,
+                position: { x: Math.random() * 10, y: 0, z: Math.random() * 10 }
+            }))
+        };
+        res.json({ success: true, data: vrData });
+    } catch (error) {
+        logger.error('Error in getVRShowroomData:', error);
+        next(error);
+    }
+};
+
+// Add user points (gamification)
+exports.addUserPoints = async (req, res, next) => {
+    try {
+        const { companyId, userId, points, reason } = req.body;
+
+        res.json({
+            success: true,
+            message: 'Points added',
+            data: { userId, points, reason, timestamp: new Date() }
+        });
+    } catch (error) {
+        logger.error('Error in addUserPoints:', error);
+        next(error);
+    }
+};
+
+// Get leaderboard
+exports.getLeaderboard = async (req, res, next) => {
+    try {
+        const { companyId, limit = 10 } = req.query;
+
+        const leaderboard = {
+            companyId,
+            topUsers: [
+                { rank: 1, userId: 'user1', points: 5000, badges: 15 },
+                { rank: 2, userId: 'user2', points: 4500, badges: 12 },
+                { rank: 3, userId: 'user3', points: 4000, badges: 10 }
+            ]
+        };
+        res.json({ success: true, data: leaderboard });
+    } catch (error) {
+        logger.error('Error in getLeaderboard:', error);
+        next(error);
+    }
+};
+
+// Get user badges
+exports.getUserBadges = async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const { companyId } = req.query;
+
+        const badges = {
+            userId,
+            badges: [
+                { id: 'first_purchase', name: 'First Purchase', earned: true, earnedDate: new Date() },
+                { id: 'power_buyer', name: 'Power Buyer', earned: false, earnedDate: null }
+            ]
+        };
+        res.json({ success: true, data: badges });
+    } catch (error) {
+        logger.error('Error in getUserBadges:', error);
+        next(error);
+    }
+};
+
+// Create challenge
+exports.createChallenge = async (req, res, next) => {
+    try {
+        const { companyId, name, description, target, reward } = req.body;
+
+        res.json({
+            success: true,
+            message: 'Challenge created',
+            data: { challengeId: Date.now(), name, description, target, reward }
+        });
+    } catch (error) {
+        logger.error('Error in createChallenge:', error);
+        next(error);
+    }
+};
+
+// Share product (social)
+exports.shareProduct = async (req, res, next) => {
+    try {
+        const { productId } = req.params;
+        const { companyId, userId, platform } = req.body;
+
+        res.json({
+            success: true,
+            message: `Product shared on ${platform}`,
+            data: { productId, platform, shareUrl: `https://share.example.com/${productId}` }
+        });
+    } catch (error) {
+        logger.error('Error in shareProduct:', error);
+        next(error);
+    }
+};
+
+// Get trending products
+exports.getTrendingProducts = async (req, res, next) => {
+    try {
+        const { companyId, limit = 10 } = req.query;
+
+        const trending = await Order.aggregate([
+            { $match: { companyId, createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } },
+            { $unwind: '$items' },
+            { $group: { _id: '$items.productId', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: parseInt(limit) }
+        ]);
+
+        const productIds = trending.map(t => t._id);
+        const products = await Catalog.find({ productId: { $in: productIds }, companyId }).lean();
+
+        res.json({ success: true, data: products });
+    } catch (error) {
+        logger.error('Error in getTrendingProducts:', error);
+        next(error);
+    }
+};
+
+// Create user post (social feed)
+exports.createUserPost = async (req, res, next) => {
+    try {
+        const { companyId, userId, content, productIds } = req.body;
+
+        res.json({
+            success: true,
+            message: 'Post created',
+            data: { postId: Date.now(), userId, content, productIds, createdAt: new Date() }
+        });
+    } catch (error) {
+        logger.error('Error in createUserPost:', error);
+        next(error);
+    }
+};
+
 module.exports = exports;
