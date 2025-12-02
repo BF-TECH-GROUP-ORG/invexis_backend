@@ -1,6 +1,7 @@
 "use strict";
 
 const { Sale, Invoice } = require("../../models/index.model");
+const { processEventOnce } = require("../../utils/eventDeduplication");
 
 /**
  * Handles payment-related events from payment-service
@@ -13,31 +14,48 @@ module.exports = async function handlePaymentEvent(event) {
 
     console.log(`💳 Processing payment event: ${type}`, data);
 
-    switch (type) {
-      case "payment.completed":
-      case "payment.success":
-        await handlePaymentSuccess(data);
-        break;
+    // Generate event ID for deduplication
+    const traceId = data.traceId || data.trace_id;
+    const fallbackId = data.paymentId || data.saleId || '';
+    const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
 
-      case "payment.failed":
-        await handlePaymentFailed(data);
-        break;
+    // Process event with automatic deduplication
+    const result = await processEventOnce(
+      eventId,
+      type,
+      async () => {
+        switch (type) {
+          case "payment.completed":
+          case "payment.success":
+            await handlePaymentSuccess(data);
+            break;
 
-      case "payment.refunded":
-      case "refund.completed":
-        await handlePaymentRefunded(data);
-        break;
+          case "payment.failed":
+            await handlePaymentFailed(data);
+            break;
 
-      case "payment.pending":
-        await handlePaymentPending(data);
-        break;
+          case "payment.refunded":
+          case "refund.completed":
+            await handlePaymentRefunded(data);
+            break;
 
-      case "payment.cancelled":
-        await handlePaymentCancelled(data);
-        break;
+          case "payment.pending":
+            await handlePaymentPending(data);
+            break;
 
-      default:
-        console.log(`⚠️ Unhandled payment event type: ${type}`);
+          case "payment.cancelled":
+            await handlePaymentCancelled(data);
+            break;
+
+          default:
+            console.log(`⚠️ Unhandled payment event type: ${type}`);
+        }
+      },
+      { eventType: type, timestamp: new Date(), saleId: data.saleId }
+    );
+
+    if (result.duplicate) {
+      console.log(`🔄 Skipped duplicate payment event: ${type}`, { eventId });
     }
   } catch (error) {
     console.error(`❌ Error handling payment event: ${error.message}`);

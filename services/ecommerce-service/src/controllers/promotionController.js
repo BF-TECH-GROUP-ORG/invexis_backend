@@ -3,13 +3,13 @@ const { promotionSchema, paginationSchema } = require('../utils/app');
 
 exports.listPromotions = async (req, res) => {
   try {
-    const { companyId, shopId, status, page, limit } = req.query;
+    const { companyId, status, page, limit } = req.query;
     if (!companyId) return res.status(400).json({ error: 'companyId is required' });
 
     const { error, value } = paginationSchema.validate({ page, limit }, { stripUnknown: true });
     if (error) return res.status(400).json({ errors: error.details.map(d => d.message) });
 
-    const promotions = await listPromotions(companyId, { shopId, active: status === 'active', page: value.page, limit: value.limit });
+    const promotions = await listPromotions(companyId, { active: status === 'active', page: value.page, limit: value.limit });
     res.json(promotions);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -32,7 +32,8 @@ exports.createPromotion = async (req, res) => {
   try {
     const { error, value } = promotionSchema.validate(req.body);
     if (error) return res.status(400).json({ errors: error.details.map(d => d.message) });
-    const { companyId } = req.user;
+    const { companyId } = req.user || req.body;
+    if (!companyId) return res.status(400).json({ error: 'companyId is required' });
     const promotion = await createPromotion(companyId, value);
     res.status(201).json(promotion);
   } catch (err) {
@@ -45,7 +46,8 @@ exports.updatePromotion = async (req, res) => {
     const { error, value } = promotionSchema.validate(req.body);
     if (error) return res.status(400).json({ errors: error.details.map(d => d.message) });
     const { id: promotionId } = req.params;
-    const { companyId } = req.user;
+    const { companyId } = req.user || req.body;
+    if (!companyId) return res.status(400).json({ error: 'companyId is required' });
     const promotion = await updatePromotion(promotionId, companyId, value);
     res.json(promotion);
   } catch (err) {
@@ -56,7 +58,8 @@ exports.updatePromotion = async (req, res) => {
 exports.deletePromotion = async (req, res) => {
   try {
     const { id: promotionId } = req.params;
-    const { companyId } = req.user;
+    const { companyId } = req.user || req.body;
+    if (!companyId) return res.status(400).json({ error: 'companyId is required' });
     const result = await deletePromotion(promotionId, companyId);
     res.json(result);
   } catch (err) {

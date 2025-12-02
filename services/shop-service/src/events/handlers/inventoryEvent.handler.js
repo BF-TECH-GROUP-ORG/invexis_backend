@@ -1,6 +1,7 @@
 "use strict";
 
 const { Shop } = require("../../models/index.model");
+const { processEventOnce } = require("../../utils/eventDeduplication");
 
 /**
  * Handles inventory-related events from inventory-service
@@ -13,29 +14,46 @@ module.exports = async function handleInventoryEvent(event) {
 
     console.log(`📦 Processing inventory event: ${type}`, data);
 
-    switch (type) {
-      case "inventory.low.stock":
-        await handleLowStock(data);
-        break;
+    // Generate event ID for deduplication
+    const traceId = data.traceId || data.trace_id;
+    const fallbackId = data.shopId || data.productId || '';
+    const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
 
-      case "inventory.out.of.stock":
-        await handleOutOfStock(data);
-        break;
+    // Process event with automatic deduplication
+    const result = await processEventOnce(
+      eventId,
+      type,
+      async () => {
+        switch (type) {
+          case "inventory.low.stock":
+            await handleLowStock(data);
+            break;
 
-      case "inventory.restocked":
-        await handleRestocked(data);
-        break;
+          case "inventory.out.of.stock":
+            await handleOutOfStock(data);
+            break;
 
-      case "inventory.shop.linked":
-        await handleShopLinked(data);
-        break;
+          case "inventory.restocked":
+            await handleRestocked(data);
+            break;
 
-      case "inventory.shop.unlinked":
-        await handleShopUnlinked(data);
-        break;
+          case "inventory.shop.linked":
+            await handleShopLinked(data);
+            break;
 
-      default:
-        console.log(`⚠️ Unhandled inventory event type: ${type}`);
+          case "inventory.shop.unlinked":
+            await handleShopUnlinked(data);
+            break;
+
+          default:
+            console.log(`⚠️ Unhandled inventory event type: ${type}`);
+        }
+      },
+      { eventType: type, timestamp: new Date(), shopId: data.shopId }
+    );
+
+    if (result.duplicate) {
+      console.log(`🔄 Skipped duplicate inventory event: ${type}`, { eventId });
     }
   } catch (error) {
     console.error(`❌ Error handling inventory event: ${error.message}`);

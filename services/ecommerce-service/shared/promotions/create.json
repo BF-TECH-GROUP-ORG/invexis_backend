@@ -1,0 +1,16 @@
+{
+    "companyId": "673fabcd9a3322a1bc009912",
+    "shopId": "673facde9a3322a1bc001234",
+    "name": "New Year Flash Sale",
+    "discountType": "percentage",
+    "discountValue": 20,
+    "startAt": "2025-12-30T00:00:00.000Z",
+    "endAt": "2026-01-05T23:59:59.000Z",
+    "relatedProductIds": [
+        "6740abcf9a3e2b6f44001234"
+    ],
+    "status": "active",
+    "visibility": "public",
+    "createdBy": "673fabcd9a3322a1bc009912",
+    "updatedBy": "673fabcd9a3322a1bc009912"
+}

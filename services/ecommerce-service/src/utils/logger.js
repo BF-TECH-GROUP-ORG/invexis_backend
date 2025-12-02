@@ -8,7 +8,7 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.Console(),
-    new winston.transports.File({ filename: '/app/logs/inventory-service.log' })
+    ...(process.env.NODE_ENV !== 'test' ? [new winston.transports.File({ filename: '/app/logs/inventory-service.log' })] : [])
   ]
 });
 

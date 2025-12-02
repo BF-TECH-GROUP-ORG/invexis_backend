@@ -1,0 +1,56 @@
+{
+    "userId": "673fabcd9a3322a1bc009912",
+    "items": [
+        {
+            "productId": "6929cf6211c612b0d09f2ced",
+            "quantity": 2,
+            "priceAtOrder": 15000,
+            "currency": "RWF",
+            "metadata": {
+                "color": "Black",
+                "size": "M"
+            }
+        },
+        {
+            "productId": "6740ac889a3e2b6f44004567",
+            "quantity": 1,
+            "priceAtOrder": 25000,
+            "currency": "RWF",
+            "metadata": {
+                "variant": "2025 Edition"
+            }
+        }
+    ],
+    "subtotal": 55000,
+    "shippingAmount": 2000,
+    "taxes": 1500,
+    "totalAmount": 58500,
+    "currency": "RWF",
+    "status": "pending",
+    "paymentStatus": "unpaid",
+    "payment": {
+        "paymentRef": "gggg",
+        "provider": "gggg",
+        "providerMetadata": {}
+    },
+    "shippingAddress": {
+        "name": "John Doe",
+        "street": "KG 12 Ave",
+        "city": "Kigali",
+        "state": "Gasabo",
+        "postalCode": "00250",
+        "country": "Rwanda",
+        "phone": "+250788123456"
+    },
+    "billingAddress": {
+        "name": "John Doe",
+        "street": "KG 12 Ave",
+        "city": "Kigali",
+        "state": "Gasabo",
+        "postalCode": "00250",
+        "country": "Rwanda",
+        "phone": "+250788123456"
+    },
+    "createdBy": "673fabcd9a3322a1bc009912",
+    "updatedBy": "673fabcd9a3322a1bc009912"
+}

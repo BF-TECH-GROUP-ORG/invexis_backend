@@ -3,6 +3,7 @@
 const Notification = require("../../models/Notification");
 const notificationQueue = require("../../config/queue");
 const logger = require("../../utils/logger");
+const { processEventOnce } = require("../../utils/eventDeduplication");
 
 /**
  * Handles sale and transaction events
@@ -15,25 +16,42 @@ module.exports = async function handleSaleEvent(event, routingKey) {
 
     logger.info(`💰 Processing sale event: ${type}`, data);
 
-    switch (type) {
-      case "sale.created":
-        await handleSaleCreated(data);
-        break;
+    // Generate event ID for deduplication
+    const traceId = data.traceId || data.trace_id;
+    const fallbackId = data.saleId || data.id || '';
+    const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
 
-      case "sale.completed":
-        await handleSaleCompleted(data);
-        break;
+    // Process event with automatic deduplication
+    const result = await processEventOnce(
+      eventId,
+      type,
+      async () => {
+        switch (type) {
+          case "sale.created":
+            await handleSaleCreated(data);
+            break;
 
-      case "sale.cancelled":
-        await handleSaleCancelled(data);
-        break;
+          case "sale.completed":
+            await handleSaleCompleted(data);
+            break;
 
-      case "sale.refunded":
-        await handleSaleRefunded(data);
-        break;
+          case "sale.cancelled":
+            await handleSaleCancelled(data);
+            break;
 
-      default:
-        logger.warn(`⚠️ Unhandled sale event type: ${type}`);
+          case "sale.refunded":
+            await handleSaleRefunded(data);
+            break;
+
+          default:
+            logger.warn(`⚠️ Unhandled sale event type: ${type}`);
+        }
+      },
+      { eventType: type, timestamp: new Date(), saleId: data.saleId }
+    );
+
+    if (result.duplicate) {
+      logger.info(`🔄 Skipped duplicate sale event: ${type}`, { eventId });
     }
   } catch (error) {
     logger.error(`❌ Error handling sale event: ${error.message}`);

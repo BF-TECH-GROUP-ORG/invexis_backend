@@ -21,8 +21,6 @@ const promotionManagementController = require('../controllers/promotionManagemen
 const exceptionalFeaturesController = require('../controllers/exceptionalFeaturesController');
 const notificationController = require('../controllers/notificationController');
 
-// Middleware
-const { authenticate, optionalAuth } = require('../middleware/auth');
 
 // ============================================
 // ROOT ENDPOINT
@@ -59,9 +57,11 @@ router.post('/cart/checkout', cartController.checkoutCart);
 // Catalog routes
 router.get('/products', catalogController.listProducts);
 router.get('/products/:id', catalogController.getProduct);
+router.get('/products/debug/status', catalogController.debugStatus);
 router.post('/products', catalogController.createProduct);
 router.put('/products/:id', catalogController.updateProduct);
 router.delete('/products/:id', catalogController.deleteProduct);
+
 
 // Order routes
 router.get('/orders', orderController.listOrders);
@@ -87,6 +87,7 @@ router.delete('/reviews/:id', reviewController.deleteReview);
 router.get('/wishlist', wishlistController.getWishlist);
 router.post('/wishlist', wishlistController.addOrUpdateWishlist); // strict: full wishlist create/update
 router.post('/wishlist/remove', wishlistController.removeFromWishlist);
+router.delete('/wishlist', wishlistController.deleteWishlist); // Delete entire wishlist
 
 // Featured Banner routes
 router.get('/banners', featuredBannerController.getBanners); // List banners with filters

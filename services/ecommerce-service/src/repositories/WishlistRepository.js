@@ -1,8 +1,8 @@
 const Wishlist = require('../models/Wishlist.models');
 
 class WishlistRepository {
-    async findByUser(companyId, userId) {
-        return Wishlist.findOne({ companyId, userId, isDeleted: false });
+    async findByUser(userId) {
+        return Wishlist.findOne({ userId, isDeleted: { $ne: true } });
     }
 
     async addItem(wishlistId, productId) {
@@ -16,6 +16,10 @@ class WishlistRepository {
     async create(data) {
         const w = new Wishlist(data);
         return w.save();
+    }
+
+    async deleteWishlist(wishlistId) {
+        return Wishlist.findByIdAndUpdate(wishlistId, { isDeleted: true }, { new: true });
     }
 }
 

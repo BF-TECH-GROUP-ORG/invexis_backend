@@ -47,8 +47,7 @@ afterAll(async () => {
 // Example data for each model with unique identifiers
 const uniqueSuffix = Date.now();
 const exampleCart = {
-  companyId: `test-company-${uniqueSuffix}`,
-  shopId: `test-shop-${uniqueSuffix}`,
+  userId: `user1-${uniqueSuffix}`,
   items: [
     { productId: 'prod1', quantity: 2, priceAtAdd: 10, currency: 'USD' }
   ],
@@ -68,7 +67,6 @@ const exampleProduct = {
 const exampleOrder = {
   orderId: `order1-${uniqueSuffix}`,
   userId: `user1-${uniqueSuffix}`,
-  companyId: `test-company-${uniqueSuffix}`,
   items: [
     { productId: 'prod1', quantity: 1, priceAtOrder: 10, currency: 'USD' }
   ],
@@ -97,7 +95,6 @@ const exampleReview = {
 
 const exampleWishlist = {
   userId: `user1-${uniqueSuffix}`,
-  companyId: `test-company-${uniqueSuffix}`,
   items: [{ productId: 'prod1' }]
 };
 
@@ -126,21 +123,21 @@ describe('Ecommerce Service Routes', () => {
     }
     expect(res.status).toBe(200); // Matches actual response
     expect(res.body).toHaveProperty('_id');
-    expect(res.body.companyId).toBe(exampleCart.companyId);
+    expect(res.body.userId).toBe(exampleCart.userId);
   }, 10000);
 
   it('GET /ecommerce/cart', async () => {
-    const res = await request(app).get('/ecommerce/cart').query({ companyId: exampleCart.companyId });
+    const res = await request(app).get('/ecommerce/cart').query({ userId: exampleCart.userId });
     expect(res.status).toBe(200);
   });
 
   it('POST /ecommerce/cart/remove', async () => {
-    const res = await request(app).post('/ecommerce/cart/remove').send({ companyId: exampleCart.companyId, productId: 'prod1' });
+    const res = await request(app).post('/ecommerce/cart/remove').send({ userId: exampleCart.userId, productId: 'prod1' });
     expect(res.status).toBe(200);
   });
 
   it('POST /ecommerce/cart/checkout', async () => {
-    const res = await request(app).post('/ecommerce/cart/checkout').send({ companyId: exampleCart.companyId });
+    const res = await request(app).post('/ecommerce/cart/checkout').send({ userId: exampleCart.userId });
     expect(res.status).toBe(200);
   });
 

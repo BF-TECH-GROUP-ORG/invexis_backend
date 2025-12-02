@@ -1,0 +1,30 @@
+{
+    "userId": "673fabcd9a3322a1bc009912",
+    "items": [
+        {
+            "productId": "6740abcf9a3e2b6f44001234",
+            "quantity": 1,
+            "priceAtAdd": 25000,
+            "currency": "RWF",
+            "discount": 1500,
+            "tax": 500,
+            "metadata": {
+                "color": "Blue",
+                "variant": "2024 Edition"
+            }
+        },
+        {
+            "productId": "6740ac889a3e2b6f44004567",
+            "quantity": 3,
+            "priceAtAdd": 5000,
+            "currency": "RWF",
+            "discount": 0,
+            "tax": 0,
+            "metadata": {}
+        }
+    ],
+    "currency": "RWF",
+    "discount": 2000,
+    "tax": 800,
+    "status": "active"
+}

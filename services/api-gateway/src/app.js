@@ -53,7 +53,7 @@ app.use(
 app.set("trust proxy", 1);
 
 // Body parsing middleware
-app.use(express.json({ }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware

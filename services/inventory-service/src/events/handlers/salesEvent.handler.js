@@ -1,241 +1,320 @@
 /**
- * Sales Event Handler
- * Handles inventory-related events from sales-service
- * Manages stock updates when orders are created, cancelled, or returned
+ * Sales Event Handler - Inventory Service
+ * Handles sales-related events from sales-service
+ * Manages stock updates when sales are created, cancelled, or returned
  */
 
 const Product = require('../../models/Product');
 const { logger } = require('../../utils/logger');
-const producer = require('../../events/producer');
-const ProcessedEvent = require('../../models/ProcessedEvent');
+const { publishProductEvent } = require('../productEvents');
+const { processEventOnce } = require('../../utils/eventDeduplication');
 
 /**
- * Handle order created event - Reduce inventory
+ * Handle sale created event - Decrement stock for sold items
  */
-async function handleOrderCreated(data) {
-  try {
-    console.log(`📦 Processing order created with data:`, JSON.stringify(data, null, 2));
+async function handleSaleCreated(data) {
+  const { saleId, items, traceId, companyId } = data;
 
-    const { orderId, saleId, companyId, items } = data;
+  logger.info(`💰 [sale.created] Processing sale ${saleId}`, { traceId, companyId });
 
-    if (!items || !Array.isArray(items)) {
-      console.warn(`⚠️ Invalid items in order created event. Items:`, items);
-      return;
-    }
-
-    console.log(`📦 Processing order created: ${orderId || saleId} with ${items.length} items`);
-
-    for (const item of items) {
-      const { productId, quantity } = item;
-
-      if (!productId) {
-        console.warn(`⚠️ Item missing productId:`, item);
-        continue;
-      }
-
-      const product = await Product.findById(productId);
-      if (!product) {
-        console.warn(`⚠️ Product not found: ${productId}`);
-        continue;
-      }
-
-      // Reduce inventory
-      const oldQuantity = product.inventory.quantity;
-      product.inventory.quantity = Math.max(0, oldQuantity - quantity);
-
-      await product.save();
-
-      // Publish stock update event so other services (e.g., ecommerce) can sync
-      try {
-        await producer.emit('inventory.product.updated', product.toObject());
-        console.log(`Published inventory.product.updated for ${productId}`);
-      } catch (err) {
-        console.error(`Failed to publish inventory.product.updated for ${productId}:`, err.message || err);
-      }
-
-      console.log(
-        `✅ Inventory reduced for product ${productId}: ${oldQuantity} → ${product.inventory.quantity}`
-      );
-    }
-  } catch (error) {
-    console.error(`❌ Error handling order created:`, error);
-    throw error;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    logger.warn(`⚠️ Sale ${saleId} has no items, skipping stock update`);
+    return { success: true, message: 'No items to process' };
   }
-}
 
-/**
- * Handle order cancelled event - Restore inventory
- */
-async function handleOrderCancelled(data) {
-  try {
-    const { orderId, companyId, items } = data;
+  const results = [];
 
-    if (!items || !Array.isArray(items)) {
-      logger.warn(`⚠️ Invalid items in order cancelled event: ${orderId}`);
-      return;
+  for (const item of items) {
+    const { productId, quantity } = item;
+
+    if (!productId || !quantity) {
+      logger.warn(`⚠️ Invalid item in sale ${saleId}:`, item);
+      continue;
     }
 
-    logger.info(`📦 Processing order cancelled: ${orderId}`);
-
-    for (const item of items) {
-      const { productId, quantity } = item;
-
+    try {
       const product = await Product.findById(productId);
+
       if (!product) {
         logger.warn(`⚠️ Product not found: ${productId}`);
+        results.push({ productId, status: 'not_found' });
         continue;
       }
 
-      // Restore inventory
       const oldQuantity = product.inventory.quantity;
-      product.inventory.quantity = oldQuantity + quantity;
+      const newQuantity = Math.max(0, oldQuantity - quantity);
+
+      product.inventory.quantity = newQuantity;
+
+      // Update availability if out of stock
+      if (newQuantity === 0 && oldQuantity > 0) {
+        product.availability = 'out_of_stock';
+      }
+
+      // Add audit trail
+      product.auditTrail.push({
+        action: 'stock_change',
+        changedBy: 'sales-service',
+        oldValue: { quantity: oldQuantity },
+        newValue: { quantity: newQuantity, reason: `Sale ${saleId}` }
+      });
 
       await product.save();
 
-      // Publish stock update event
-      try {
-        await producer.emit('inventory.product.updated', product.toObject());
-        logger.info(`Published inventory.product.updated for ${productId}`);
-      } catch (err) {
-        logger.error(`Failed to publish inventory.product.updated for ${productId}: ${err.message || err}`);
+      logger.info(`➖ Decremented stock for product ${productId}: ${oldQuantity} → ${newQuantity}`, {
+        saleId,
+        productName: product.name
+      });
+
+      // Emit inventory.product.updated event
+      await publishProductEvent('inventory.product.updated', product.toObject());
+
+      // Emit out of stock event if needed
+      if (newQuantity === 0 && oldQuantity > 0) {
+        await publishProductEvent('inventory.out.of.stock', {
+          _id: product._id,
+          productId: product._id,
+          companyId: product.companyId,
+          productName: product.name,
+          sku: product.sku
+        });
       }
 
-      logger.info(
-        `✅ Inventory restored for product ${productId}: ${oldQuantity} → ${product.inventory.quantity}`
-      );
+      results.push({ productId, status: 'success', oldQuantity, newQuantity });
+    } catch (error) {
+      logger.error(`❌ Error updating stock for product ${productId}:`, error);
+      results.push({ productId, status: 'error', error: error.message });
     }
-  } catch (error) {
-    logger.error(`❌ Error handling order cancelled: ${error.message}`);
-    throw error;
   }
+
+  logger.info(`✅ Sale ${saleId} stock update complete`, {
+    totalItems: items.length,
+    successful: results.filter(r => r.status === 'success').length,
+    failed: results.filter(r => r.status === 'error').length
+  });
+
+  return results;
 }
 
 /**
- * Handle return confirmed event - Restore inventory
+ * Handle sale canceled event - Restore stock for cancelled items
  */
-async function handleReturnConfirmed(data) {
-  try {
-    const { returnId, companyId, items } = data;
+async function handleSaleCanceled(data) {
+  const { saleId, items, reason, traceId, companyId } = data;
 
-    if (!items || !Array.isArray(items)) {
-      logger.warn(`⚠️ Invalid items in return confirmed event: ${returnId}`);
-      return;
+  logger.info(`🚫 [sale.canceled] Processing cancellation for sale ${saleId}`, {
+    reason,
+    traceId,
+    companyId
+  });
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    logger.warn(`⚠️ Sale ${saleId} has no items, skipping stock restoration`);
+    return { success: true, message: 'No items to process' };
+  }
+
+  const results = [];
+
+  for (const item of items) {
+    const { productId, quantity } = item;
+
+    if (!productId || !quantity) {
+      logger.warn(`⚠️ Invalid item in sale ${saleId}:`, item);
+      continue;
     }
 
-    logger.info(`📦 Processing return confirmed: ${returnId}`);
-
-    for (const item of items) {
-      const { productId, quantity } = item;
-
+    try {
       const product = await Product.findById(productId);
+
       if (!product) {
         logger.warn(`⚠️ Product not found: ${productId}`);
+        results.push({ productId, status: 'not_found' });
         continue;
       }
 
-      // Restore inventory
       const oldQuantity = product.inventory.quantity;
-      product.inventory.quantity = oldQuantity + quantity;
+      const newQuantity = oldQuantity + quantity;
+
+      product.inventory.quantity = newQuantity;
+
+      // Update availability if back in stock
+      if (oldQuantity === 0 && newQuantity > 0) {
+        product.availability = 'in_stock';
+      }
+
+      // Add audit trail
+      product.auditTrail.push({
+        action: 'stock_change',
+        changedBy: 'sales-service',
+        oldValue: { quantity: oldQuantity },
+        newValue: { quantity: newQuantity, reason: `Sale ${saleId} canceled: ${reason}` }
+      });
 
       await product.save();
 
-      // Publish stock update event
-      try {
-        await producer.emit('inventory.product.updated', product.toObject());
-        logger.info(`Published inventory.product.updated for returned product ${productId}`);
-      } catch (err) {
-        logger.error(`Failed to publish inventory.product.updated for returned product ${productId}: ${err.message || err}`);
-      }
+      logger.info(`➕ Restored stock for product ${productId}: ${oldQuantity} → ${newQuantity}`, {
+        saleId,
+        productName: product.name
+      });
 
-      logger.info(
-        `✅ Inventory restored for returned product ${productId}: ${oldQuantity} → ${product.inventory.quantity}`
-      );
+      // Emit inventory.product.updated event
+      await publishProductEvent('inventory.product.updated', product.toObject());
+
+      results.push({ productId, status: 'success', oldQuantity, newQuantity });
+    } catch (error) {
+      logger.error(`❌ Error restoring stock for product ${productId}:`, error);
+      results.push({ productId, status: 'error', error: error.message });
     }
-  } catch (error) {
-    logger.error(`❌ Error handling return confirmed: ${error.message}`);
-    throw error;
   }
+
+  logger.info(`✅ Sale ${saleId} cancellation stock restoration complete`, {
+    totalItems: items.length,
+    successful: results.filter(r => r.status === 'success').length,
+    failed: results.filter(r => r.status === 'error').length
+  });
+
+  return results;
 }
 
 /**
- * Main handler function
+ * Handle sale return fully returned event - Restore stock for returned items
+ */
+async function handleSaleReturnFullyReturned(data) {
+  const { returnId, saleId, items, traceId, companyId } = data;
+
+  logger.info(`↩️ [sale.return.fully_returned] Processing return ${returnId} for sale ${saleId}`, {
+    traceId,
+    companyId
+  });
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    logger.warn(`⚠️ Return ${returnId} has no items, skipping stock restoration`);
+    return { success: true, message: 'No items to process' };
+  }
+
+  const results = [];
+
+  for (const item of items) {
+    const { productId, quantity } = item;
+
+    if (!productId || !quantity) {
+      logger.warn(`⚠️ Invalid item in return ${returnId}:`, item);
+      continue;
+    }
+
+    try {
+      const product = await Product.findById(productId);
+
+      if (!product) {
+        logger.warn(`⚠️ Product not found: ${productId}`);
+        results.push({ productId, status: 'not_found' });
+        continue;
+      }
+
+      const oldQuantity = product.inventory.quantity;
+      const newQuantity = oldQuantity + quantity;
+
+      product.inventory.quantity = newQuantity;
+
+      // Update availability if back in stock
+      if (oldQuantity === 0 && newQuantity > 0) {
+        product.availability = 'in_stock';
+      }
+
+      // Add audit trail
+      product.auditTrail.push({
+        action: 'stock_change',
+        changedBy: 'sales-service',
+        oldValue: { quantity: oldQuantity },
+        newValue: { quantity: newQuantity, reason: `Return ${returnId} for sale ${saleId}` }
+      });
+
+      await product.save();
+
+      logger.info(`➕ Restored stock for returned product ${productId}: ${oldQuantity} → ${newQuantity}`, {
+        returnId,
+        saleId,
+        productName: product.name
+      });
+
+      // Emit inventory.product.updated event
+      await publishProductEvent('inventory.product.updated', product.toObject());
+
+      results.push({ productId, status: 'success', oldQuantity, newQuantity });
+    } catch (error) {
+      logger.error(`❌ Error restoring stock for returned product ${productId}:`, error);
+      results.push({ productId, status: 'error', error: error.message });
+    }
+  }
+
+  logger.info(`✅ Return ${returnId} stock restoration complete`, {
+    totalItems: items.length,
+    successful: results.filter(r => r.status === 'success').length,
+    failed: results.filter(r => r.status === 'error').length
+  });
+
+  return results;
+}
+
+/**
+ * Main handler function for sales events
+ * Includes automatic deduplication logic
  */
 module.exports = async function handleSalesEvent(event) {
   try {
-    // Log raw event to understand structure
-    console.log('🔍 RAW EVENT RECEIVED:', JSON.stringify(event, null, 2));
-
-    // Check if event is defined
-    if (!event) {
-      console.error('❌ Event is undefined or null');
-      return;
-    }
-
     const { type, payload, data } = event;
     const eventData = payload || data;
 
-    console.log(`💳 Processing sales event: ${type}`);
-    console.log(`💳 Event data:`, JSON.stringify(eventData, null, 2));
-
     if (!type) {
-      console.error('❌ Event type is missing');
+      logger.error('❌ Event type is missing');
       return;
     }
 
     if (!eventData) {
-      console.error('❌ Event data/payload is missing');
+      logger.error('❌ Event data/payload is missing');
       return;
     }
 
-    // Idempotency: derive a stable key (prefer traceId, fallback to type+entity id)
+    // Generate event ID for deduplication
     const traceId = eventData.traceId || eventData.trace_id;
     const fallbackId = eventData.saleId || eventData.orderId || eventData.returnId || eventData.id || '';
-    const dedupKey = traceId || `${type}:${fallbackId}`;
+    const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
 
-    if (!dedupKey) {
-      logger.warn('⚠️ No deduplication key found for event; proceeding without idempotency');
-    } else {
-      const existing = await ProcessedEvent.findOne({ key: dedupKey });
-      if (existing) {
-        logger.info(`ℹ️ Duplicate event ignored (key=${dedupKey})`);
-        return; // already processed
-      }
+    logger.info(`💰 Processing sales event: ${type}`, { eventId });
+
+    // Process event with automatic deduplication
+    const result = await processEventOnce(
+      eventId,
+      type,
+      async () => {
+        switch (type) {
+          case 'sale.created':
+            return await handleSaleCreated(eventData);
+
+          case 'sale.canceled':
+          case 'sale.cancelled':
+            return await handleSaleCanceled(eventData);
+
+          case 'sale.return.fully_returned':
+          case 'sale.return.confirmed':
+            return await handleSaleReturnFullyReturned(eventData);
+
+          default:
+            logger.warn(`⚠️ Unhandled sales event type: ${type}`);
+            return null;
+        }
+      },
+      { eventType: type, timestamp: new Date(), saleId: eventData.saleId }
+    );
+
+    if (result.duplicate) {
+      logger.info(`🔄 Skipped duplicate sales event: ${type}`, { eventId });
+      return;
     }
 
-    switch (type) {
-      case 'sale.created':
-        await handleOrderCreated(eventData);
-        break;
-
-      case 'sale.canceled':
-      case 'sale.cancelled':
-        await handleOrderCancelled(eventData);
-        break;
-
-      case 'sale.return.confirmed':
-        await handleReturnConfirmed(eventData);
-        break;
-
-      default:
-        console.warn(`⚠️ Unhandled sales event type: ${type}`);
-    }
-
-    // Mark event as processed for idempotency
-    try {
-      if (dedupKey) {
-        await ProcessedEvent.create({ key: dedupKey, type, payloadSummary: { saleId: eventData.saleId, orderId: eventData.orderId } });
-        logger.info(`✅ Marked event processed (key=${dedupKey})`);
-      }
-    } catch (err) {
-      // Ignore duplicate key errors (race), log others
-      if (err.code === 11000) {
-        logger.warn(`⚠️ ProcessedEvent race: key already exists ${dedupKey}`);
-      } else {
-        logger.error(`❌ Failed to persist processed event key ${dedupKey}: ${err.message || err}`);
-      }
-    }
-  } catch (err) {
-    console.error(`❌ Error handling sales event:`, err);
-    throw err;
+    logger.info(`✅ Successfully processed sales event: ${type}`, { eventId });
+  } catch (error) {
+    logger.error(`❌ Error handling sales event: ${error.message}`, error);
+    throw error;
   }
 };

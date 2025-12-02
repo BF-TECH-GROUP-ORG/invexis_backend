@@ -6,6 +6,7 @@
 
 const cache = require('../../utils/cache');
 const logger = require('../../utils/logger');
+const { processEventOnce } = require('../../utils/eventDeduplication');
 
 /**
  * Handle product created event - Cache product
@@ -125,30 +126,48 @@ module.exports = async function handleInventoryEvent(event) {
 
     logger.info(`📦 Processing inventory event: ${type}`);
 
-    switch (type) {
-      case 'inventory.product.created':
-        await handleProductCreated(data);
-        break;
+    // Generate event ID for deduplication
+    const traceId = data.traceId || data.trace_id;
+    const fallbackId = data.productId || data.id || '';
+    const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
 
-      case 'inventory.product.updated':
-        await handleProductUpdated(data);
-        break;
+    // Process event with automatic deduplication
+    const result = await processEventOnce(
+      eventId,
+      type,
+      async () => {
+        switch (type) {
+          case 'inventory.product.created':
+            await handleProductCreated(data);
+            break;
 
-      case 'inventory.product.deleted':
-        await handleProductDeleted(data);
-        break;
+          case 'inventory.product.updated':
+            await handleProductUpdated(data);
+            break;
 
-      case 'inventory.stock.updated':
-        await handleStockUpdated(data);
-        break;
+          case 'inventory.product.deleted':
+            await handleProductDeleted(data);
+            break;
 
-      case 'inventory.out.of.stock':
-        await handleOutOfStock(data);
-        break;
+          case 'inventory.stock.updated':
+            await handleStockUpdated(data);
+            break;
 
-      default:
-        logger.warn(`⚠️ Unhandled inventory event type: ${type}`);
+          case 'inventory.out.of.stock':
+            await handleOutOfStock(data);
+            break;
+
+          default:
+            logger.warn(`⚠️ Unhandled inventory event type: ${type}`);
+        }
+      },
+      { eventType: type, timestamp: new Date(), productId: data.productId }
+    );
+
+    if (result.duplicate) {
+      logger.info(`🔄 Skipped duplicate inventory event: ${type}`, { eventId });
     }
+
   } catch (error) {
     logger.error(`❌ Error handling inventory event: ${error.message}`);
     throw error;

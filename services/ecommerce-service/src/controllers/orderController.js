@@ -4,13 +4,13 @@ const { orderSchema, paginationSchema } = require('../utils/app');
 
 exports.listOrders = async (req, res) => {
   try {
-    const { userId, companyId, status, page, limit } = req.query;
-    if (!userId || !companyId) return res.status(400).json({ error: 'userId and companyId are required' });
+    const { userId, status, page, limit } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     const { error, value } = paginationSchema.validate({ page, limit }, { stripUnknown: true });
     if (error) return res.status(400).json({ errors: error.details.map(d => d.message) });
 
-    const orders = await listOrders(userId, companyId, { status, page: value.page, limit: value.limit });
+    const orders = await listOrders(userId, { status, page: value.page, limit: value.limit });
     res.json(orders);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -20,9 +20,7 @@ exports.listOrders = async (req, res) => {
 exports.getOrder = async (req, res) => {
   try {
     const { id: orderId } = req.params;
-    const { companyId } = req.query;
-    if (!companyId) return res.status(400).json({ error: 'companyId is required' });
-    const order = await getOrder(orderId, companyId);
+    const order = await getOrder(orderId);
     res.json(order);
   } catch (err) {
     res.status(err.message.includes('not found') ? 404 : 500).json({ error: err.message });
@@ -33,8 +31,9 @@ exports.createOrder = async (req, res) => {
   try {
     const { error, value } = orderSchema.validate(req.body);
     if (error) return res.status(400).json({ errors: error.details.map(d => d.message) });
-    const { userId, companyId } = req.user;
-    const order = await createOrder(userId, companyId, value);
+    const { userId } = req.user || req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    const order = await createOrder(userId, value);
     res.status(201).json(order);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -46,8 +45,7 @@ exports.updateOrder = async (req, res) => {
     const { error, value } = orderSchema.validate(req.body);
     if (error) return res.status(400).json({ errors: error.details.map(d => d.message) });
     const { id: orderId } = req.params;
-    const { companyId } = req.user;
-    const order = await updateOrder(orderId, companyId, value);
+    const order = await updateOrder(orderId, value);
     res.json(order);
   } catch (err) {
     res.status(err.message.includes('not found') ? 404 : 400).json({ error: err.message });

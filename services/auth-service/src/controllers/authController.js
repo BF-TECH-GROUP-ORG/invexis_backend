@@ -4,18 +4,22 @@ const tokenService = require('../services/tokenService');
 const LoginHistory = require('../models/LoginHistory.models');
 const { uploadProfileImage } = require('../middleware/upload');
 
-// Helper to compute secure cookie options based on request/proxy/ENV
 function getRefreshCookieOptions(req) {
-    const forwardedProto = (req.headers && req.headers['x-forwarded-proto']) || '';
-    const isSecure = req.secure || forwardedProto.toLowerCase() === 'https' || process.env.NODE_ENV === 'production' || process.env.FORCE_COOKIE_SECURE === 'true';
-    // When cookie must be sent cross-site from a secure origin (e.g. ngrok HTTPS), browsers require SameSite=None and Secure=true
+    const forwardedProto = (req.headers["x-forwarded-proto"] || "").toLowerCase();
+    const isHttps = forwardedProto === "https" || req.secure;
+
+    const inProduction = process.env.NODE_ENV === "production";
+
+    const isSecure = inProduction || isHttps;
+
     return {
         httpOnly: true,
-        secure: !!isSecure,
-        sameSite: isSecure ? 'none' : 'lax',
-        maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+        secure: isSecure,                     // true under ngrok OR https OR production
+        sameSite: isSecure ? "none" : "lax",  // "none" only allowed when secure=true
+        maxAge: 1000 * 60 * 60 * 24 * 30,
     };
 }
+
 
 // Register a new user
 const register = async (req, res) => {
@@ -178,23 +182,35 @@ const googleCallback = async (req, res, next) => {
 const refresh = async (req, res, next) => {
     try {
         const refreshToken = req.cookies.refreshToken;
-        if (!refreshToken) return res.status(401).json({ ok: false, message: 'No refresh token found in cookies' });
+        if (!refreshToken) {
+            return res.status(401).json({
+                ok: false,
+                message: "No refresh token found in cookies",
+            });
+        }
 
         const tokens = await authService.refresh(refreshToken);
 
-        // Set the new refresh token in cookie
-        res.cookie('refreshToken', tokens.refreshToken, getRefreshCookieOptions(req));
+        // Rotate refresh token (VERY IMPORTANT)
+        res.cookie("refreshToken", tokens.refreshToken, getRefreshCookieOptions(req));
 
-        res.json({
+        return res.json({
             ok: true,
             accessToken: tokens.accessToken,
-            expiresIn: 900 // 15 minutes in seconds
+            expiresIn: 900, // 15 min
         });
     } catch (err) {
-        if (err.message === 'Invalid refresh token' || err.message === 'Refresh token expired') {
-            res.clearCookie('refreshToken');
-            return res.status(401).json({ ok: false, message: 'Session expired, please login again' });
+        if (
+            err.message === "Invalid refresh token" ||
+            err.message === "Refresh token expired"
+        ) {
+            res.clearCookie("refreshToken");
+            return res.status(401).json({
+                ok: false,
+                message: "Session expired, please login again",
+            });
         }
+
         next(err);
     }
 };

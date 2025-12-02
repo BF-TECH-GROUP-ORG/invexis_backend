@@ -1,11 +1,11 @@
-const { getWishlist, addOrUpdateWishlist, removeFromWishlist } = require('../services/wishlistService');
+const { getWishlist, addOrUpdateWishlist, removeFromWishlist, deleteWishlist } = require('../services/wishlistService');
 const { wishlistSchema } = require('../utils/app');
 
 exports.getWishlist = async (req, res) => {
   try {
-    const { userId, companyId } = req.query;
-    if (!userId || !companyId) return res.status(400).json({ error: 'userId and companyId are required' });
-    const wishlist = await getWishlist(userId, companyId);
+    const { userId } = req.query || req.user;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    const wishlist = await getWishlist(userId);
     res.json(wishlist);
   } catch (err) {
     res.status(err.message.includes('not found') ? 404 : 500).json({ error: err.message });
@@ -16,8 +16,8 @@ exports.addOrUpdateWishlist = async (req, res) => {
   try {
     const { error, value } = wishlistSchema.validate(req.body);
     if (error) return res.status(400).json({ errors: error.details.map(d => d.message) });
-    const { userId, companyId } = req.user;
-    const wishlist = await addOrUpdateWishlist(userId, companyId, value);
+    const { userId } = req.body || req.user || req.query;
+    const wishlist = await addOrUpdateWishlist(userId, value);
     res.json(wishlist);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -26,10 +26,21 @@ exports.addOrUpdateWishlist = async (req, res) => {
 
 exports.removeFromWishlist = async (req, res) => {
   try {
-    const { userId, companyId, productId } = req.body;
-    if (!userId || !companyId || !productId) return res.status(400).json({ error: 'userId, companyId, and productId are required' });
-    const wishlist = await removeFromWishlist(userId, companyId, { items: [{ productId }] });
+    const { userId, productId } = req.body || req.user || req.query;
+    if (!userId || !productId) return res.status(400).json({ error: 'userId, and productId are required' });
+    const wishlist = await removeFromWishlist(userId, productId);
     res.json(wishlist);
+  } catch (err) {
+    res.status(err.message.includes('not found') ? 404 : 500).json({ error: err.message });
+  }
+};
+
+exports.deleteWishlist = async (req, res) => {
+  try {
+    const { userId } = req.body || req.user || req.query;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    const wishlist = await deleteWishlist(userId);
+    res.json({ message: 'Wishlist deleted successfully', wishlist });
   } catch (err) {
     res.status(err.message.includes('not found') ? 404 : 500).json({ error: err.message });
   }

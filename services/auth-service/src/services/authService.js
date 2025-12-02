@@ -349,12 +349,21 @@ async function login(data, options = {}) {
     }
 }
 
-// Refresh (cached)
 async function refresh(refreshToken) {
-    const { accessToken, refreshToken: newRefresh, sessionId, userId } = await tokenService.refreshTokens(refreshToken);
-    await publishEvent('auth.session.refreshed', { sessionId, userId });
-    return { accessToken, refreshToken: newRefresh };
+    const { accessToken, refreshToken: newRefresh, sessionId, userId } =
+        await tokenService.refreshTokens(refreshToken);
+
+    await publishEvent("auth.session.refreshed", {
+        sessionId,
+        userId,
+    });
+
+    return {
+        accessToken,
+        refreshToken: newRefresh,
+    };
 }
+
 
 // Logout
 async function logout(userId, refreshToken) {

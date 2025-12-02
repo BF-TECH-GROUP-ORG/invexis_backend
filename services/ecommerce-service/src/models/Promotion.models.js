@@ -3,9 +3,10 @@ const mongoose = require("mongoose");
 
 const PromotionSchema = new mongoose.Schema(
     {
-        promotionId: { type: String, required: true, unique: true },
+        companyId: { type: String, required: true, index: true },
+        shopId: { type: String, index: true },
         name: { type: String, required: true },
-        code: { type: String },
+        code: { type: String, unique: true, sparse: true },
         discountType: { type: String, enum: ["percentage", "fixed", "free_shipping"], required: true },
         discountValue: { type: Number, required: true },
         startAt: { type: Date, required: true },

@@ -64,35 +64,53 @@ async function createSession(userId, deviceId = 'unknown', ip, location = {}) {
 async function refreshTokens(refreshToken) {
     const payload = await verifyRefresh(refreshToken);
     const { sid, uid } = payload || {};
-    if (!sid || !uid) throw new Error('Invalid refresh token');
 
-    // Cache lookup first
+    if (!sid || !uid) throw new Error("Invalid refresh token");
+
     const cacheKey = `session:${sid}`;
+
     let session = await redis.get(cacheKey);
     if (session) {
         session = JSON.parse(session);
     } else {
         session = await Session.findById(sid);
-        if (!session) throw new Error('Session not found');
+        if (!session) throw new Error("Session not found");
     }
 
-    if (session.revoked) throw new Error('Session revoked');
+    if (session.revoked) throw new Error("Session revoked");
 
     session.lastActiveAt = new Date();
-    await Session.findByIdAndUpdate(sid, { lastActiveAt: session.lastActiveAt }); // Update DB
-    await redis.set(cacheKey, JSON.stringify(session), 'EX', CACHE_TTLS.session); // Refresh cache
+
+    await Session.findByIdAndUpdate(sid, {
+        lastActiveAt: session.lastActiveAt,
+    });
+
+    await redis.set(cacheKey, JSON.stringify(session), "EX", CACHE_TTLS.session);
 
     const user = await User.findById(uid);
-    if (!user) throw new Error('User not found');
+    if (!user) throw new Error("User not found");
 
     const accessToken = signAccess({ sub: user._id.toString() });
-    const newRefreshToken = signRefresh({ sid: session._id.toString(), uid: user._id.toString() });
+    const newRefreshToken = signRefresh({
+        sid: session._id.toString(),
+        uid: user._id.toString(),
+    });
 
-    // Event
-    await publishRabbitMQ(exchanges.topic, 'auth.session.refreshed', { sessionId: sid, userId: uid }, { headers: { traceId: uuidv4() } });
+    await publishRabbitMQ(
+        exchanges.topic,
+        "auth.session.refreshed",
+        { sessionId: sid, userId: uid },
+        { headers: { traceId: uuidv4() } }
+    );
 
-    return { accessToken, refreshToken: newRefreshToken, sessionId: sid, userId: uid };
+    return {
+        accessToken,
+        refreshToken: newRefreshToken,
+        sessionId: sid,
+        userId: uid,
+    };
 }
+
 
 // Revoke with cache invalidation
 async function revokeSessionByRefresh(refreshToken) {

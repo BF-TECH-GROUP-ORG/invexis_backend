@@ -30,7 +30,6 @@ const PaymentSchema = new mongoose.Schema({
 
 const OrderSchema = new mongoose.Schema(
     {
-        orderId: { type: String, required: true, unique: true },
         userId: { type: String, required: true },
         items: { type: [OrderItemSchema], required: true },
         subtotal: { type: Number, required: true },

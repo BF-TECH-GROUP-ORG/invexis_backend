@@ -7,7 +7,7 @@ async function listPromotions(companyId, opts = {}) {
     const key = `promotions:company:${companyId}:active:${opts.active ? '1' : '0'}`;
     const cached = await cache.getJSON(key);
     if (cached) return cached;
-    const res = opts.active ? await PromotionRepository.findActive(companyId) : await PromotionRepository.findActive(companyId);
+    const res = opts.active ? await PromotionRepository.findActive(companyId) : await PromotionRepository.findAll(companyId);
     await cache.setJSON(key, res, 60);
     return res;
 }
@@ -24,6 +24,13 @@ async function getPromotion(promotionId, companyId) {
 
 async function createPromotion(companyId, data) {
     data.companyId = companyId;
+
+    // Auto-generate promo code if not provided
+    if (!data.code) {
+        const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+        data.code = `PROMO-${randomStr}`;
+    }
+
     const p = await PromotionRepository.create(data);
     try { await publish(exchanges.topic, 'ecommerce.promotion.created', p); } catch (e) { }
     // invalidate company promotions cache

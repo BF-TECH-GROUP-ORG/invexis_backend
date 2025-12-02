@@ -1,162 +1,132 @@
 // app.js
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const session = require('express-session');
-const passport = require('passport');
-// Ensure Passport strategies (Google) are loaded and registered
-require('./config/passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const cookieParser = require('cookie-parser');
-const path = require('path');
-const authRoutes = require('./routes/routes');
-const { authErrorHandler } = require('./middleware/authMiddleware');
-const User = require('./models/User.models');
-const Preference = require('./models/Preference.models');
-const { hashPassword } = require('./utils/hashPassword');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const morgan = require("morgan");
+const helmet = require("helmet");
+const session = require("express-session");
+const passport = require("passport");
+require("./config/passport");
+const cookieParser = require("cookie-parser");
+const authRoutes = require("./routes/routes");
 
-// Shared dependencies with fallbacks
-let redis, connectRabbitMQ, exchanges, publishRabbitMQ;
-try {
-    redis = require('/app/shared/redis.js');
-    const rabbitmq = require('/app/shared/rabbitmq.js');
-    connectRabbitMQ = rabbitmq.connect;
-    exchanges = rabbitmq.exchanges;
-    publishRabbitMQ = rabbitmq.publish;
-} catch (err) {
-    console.warn('Shared dependencies not available, using mock implementations');
-    redis = {
-        set: async () => true,
-        get: async () => null,
-        status: 'ready'
-    };
-    exchanges = { topic: 'mock.topic' };
-    publishRabbitMQ = async () => true;
-}
-
+// --------------------------------------
+// EXPRESS APP
+// --------------------------------------
 const app = express();
 
-// Validate Google OAuth environment variables
-const requiredEnvVars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
-const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
-if (missingEnvVars.length > 0) {
-    throw new Error(`Missing Google OAuth environment variables: ${missingEnvVars.join(', ')}`);
-}
+// --------------------------------------
+// FRONTEND ORIGINS (DEV + PROD)
+// --------------------------------------
+const allowedOrigins = [
+    "http://localhost:3000",
+    process.env.FRONTEND_URL,              // e.g. https://yourdomain.com
+    process.env.FRONTEND_DEV_URL,          // extra env if needed
+];
 
-// ============================================
-// PERMISSIVE CORS FOR DEVELOPMENT
-// ============================================
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
+// --------------------------------------
+// SECURE CORS CONFIGURATION
+// MUST MATCH FRONTEND withCredentials:true
+// --------------------------------------
+app.use(
+    cors({
+        origin: function (origin, callback) {
+            if (!origin) return callback(null, true); // Postman, curl, etc.
 
-    // Allow configured frontend in production; in development echo the request origin
-    const allowedFrontend = process.env.FRONTEND_URL || 'http://localhost:3000';
-    if (origin) {
-        if (process.env.NODE_ENV === 'production') {
-            if (origin === allowedFrontend) {
-                res.setHeader('Access-Control-Allow-Origin', origin);
+            const isAllowed = allowedOrigins.includes(origin);
+
+            // Allow ngrok dynamic subdomains automatically
+            const isNgrok = origin.includes("ngrok-free.app") || origin.includes("ngrok-free.dev");
+
+            if (isAllowed || isNgrok) {
+                return callback(null, true);
             }
-        } else {
-            // In development accept any origin (useful for ngrok, local frontends, etc.)
-            res.setHeader('Access-Control-Allow-Origin', origin);
-        }
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', '*');
-        res.setHeader('Access-Control-Allow-Headers', '*');
-        res.setHeader('Access-Control-Expose-Headers', '*');
-    }
 
-    // Handle preflight
-    if (req.method === 'OPTIONS') {
-        return res.status(204).end();
-    }
+            console.log("❌ Blocked CORS Origin:", origin);
+            return callback(new Error("Not allowed by CORS"));
+        },
 
-    next();
-});
+        credentials: true, // REQUIRED for cookies
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "X-Requested-With",
+            "ngrok-skip-browser-warning",
+        ],
+        exposedHeaders: ["Set-Cookie"],
+    })
+);
 
-// ============================================
+// --------------------------------------
+// HELMET (RELAXED FOR DEV)
+// --------------------------------------
+app.use(
+    helmet({
+        contentSecurityPolicy: false,
+        crossOriginResourcePolicy: false,
+    })
+);
+
+// --------------------------------------
 // MIDDLEWARE
-// ============================================
-
-// Helmet - Security headers (relaxed for development)
-app.use(helmet({
-    crossOriginResourcePolicy: false,
-    contentSecurityPolicy: false
-}));
-
-// Body parsers
-app.use(express.json({ limit: '10mb' }));
+// --------------------------------------
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-
-// Parse cookies so we can read HttpOnly cookies like refreshToken on req.cookies
 app.use(cookieParser());
+app.use(morgan("dev"));
 
-// Logging
-app.use(morgan('dev'));
+// --------------------------------------
+// SESSION (REQUIRED FOR PASSPORT)
+// Refresh token goes inside HttpOnly cookie, not session.
+// --------------------------------------
+app.use(
+    session({
+        secret: process.env.SESSION_SECRET || "change-me-in-prod",
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+        },
+    })
+);
 
-// Session
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'fallback-secret-change-in-production',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        secure: false, // Set to false for development
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
-    }
-}));
-
-// Passport
+// --------------------------------------
+// PASSPORT
+// --------------------------------------
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ============================================
+// --------------------------------------
 // ROUTES
-// ============================================
+// --------------------------------------
+app.use("/auth", authRoutes);
 
-// Auth routes
-app.use('/auth', authRoutes);
-
-// Health check endpoint
-app.get('/health', async (req, res) => {
-    try {
-        const testKey = `health:${Date.now()}`;
-        await redis.set(testKey, 'ok', 'EX', 10);
-        const cacheOk = (await redis.get(testKey)) === 'ok';
-        const eventOk = await publishRabbitMQ(exchanges.topic, 'health.test', { ping: 'pong' });
-        const dbOk = (await User.countDocuments({})) >= 0;
-
-        res.json({
-            status: (cacheOk && eventOk && dbOk) ? 'healthy' : 'degraded',
-            redis: { connected: redis.status === 'ready', test: cacheOk },
-            rabbit: { connected: true, test: eventOk },
-            db: { connected: true, test: dbOk },
-            timestamp: new Date().toISOString()
-        });
-    } catch (err) {
-        res.status(500).json({ status: 'unhealthy', error: err.message });
-    }
+// --------------------------------------
+// HEALTH CHECK
+// --------------------------------------
+app.get("/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ============================================
-// ERROR HANDLERS
-// ============================================
-
-// 404 handler
+// --------------------------------------
+// 404
+// --------------------------------------
 app.use((req, res) => {
-    res.status(404).json({ ok: false, message: 'Route not found' });
+    res.status(404).json({ ok: false, message: "Route not found" });
 });
 
-// Global error handler
+// --------------------------------------
+// ERROR HANDLER
+// --------------------------------------
 app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(err.status || 500).json({
+    console.error("🔥 Global Error:", err.message);
+    res.status(500).json({
         ok: false,
-        message: err.message || 'Internal server error'
+        message: err.message || "Internal server error",
     });
 });
 

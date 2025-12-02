@@ -5,7 +5,7 @@ const UserSchema = new mongoose.Schema({
     // Core Personal (all roles)
     firstName: { type: String, required: true, trim: true, minlength: 2, maxlength: 30 },
     lastName: { type: String, required: true, trim: true, minlength: 2, maxlength: 30 },
-    username: { type: String, unique: true, sparse: true, trim: true, minlength: 3, maxlength: 30 }, // Optional for social-only, but req for email/phone login
+    username: { type: String, sparse: true, trim: true, minlength: 3, maxlength: 30 }, // Optional for social-only, but req for email/phone login
     email: { type: String, unique: true, lowercase: true, sparse: true },
     phone: { type: String, unique: true, sparse: true, match: /^\+?[1-9]\d{1,14}$/ }, // E.164 for all (SMS/analytics)
     profilePicture: { type: String, default: null },
@@ -84,6 +84,33 @@ const UserSchema = new mongoose.Schema({
 
 // Pre-save: Deep role enforcement + hash
 UserSchema.pre("save", async function (next) {
+    // Auto-generate username from first and last name when not provided
+    try {
+        if ((!this.username || this.username.trim() === '') && this.firstName && this.lastName) {
+            const sanitize = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+            let base = `${sanitize(this.firstName)} ${sanitize(this.lastName)}`.slice(0, 30);
+            // Ensure there's no leading/trailing spaces
+            base = base.replace(/(^ | $)/g, '') || 'user';
+
+            const Model = this.constructor;
+            // Find existing usernames that start with the base (case-insensitive)
+            const existing = await Model.find({ username: { $regex: `^${base}(?:\\d+)?$`, $options: 'i' } }).select('username').lean();
+
+            if (!existing || existing.length === 0) {
+                this.username = base;
+            } else {
+                // Compute numeric suffixes and pick next
+                const suffixes = existing.map(e => {
+                    const m = String(e.username).match(new RegExp(`^${base}(\\d+)$`, 'i'));
+                    return m ? parseInt(m[1], 10) : 0;
+                });
+                const max = suffixes.length ? Math.max(...suffixes) : 0;
+                this.username = `${base}${max + 1}`;
+            }
+        }
+    } catch (err) {
+        return next(err);
+    }
     // Only hash password if it's not already hashed
     if (this.isModified('password') && this.password && !this.password.startsWith('$2b$')) {
         this.password = await hashPassword(this.password);
@@ -155,10 +182,6 @@ UserSchema.pre("save", async function (next) {
 
 // Indexes (analytics + perf, strings for companies/shops)
 UserSchema.index({ role: 1, dateOfBirth: 1 }); // Analytics queries
-// UserSchema.index({ companies: 1, shops: 1, role: 1 }); // Removed: cannot index parallel arrays
-UserSchema.index({ email: 1 }, { unique: true });
-UserSchema.index({ phone: 1 }, { unique: true });
-UserSchema.index({ username: 1 }, { unique: true });
 UserSchema.index({ accountStatus: 1, role: 1 });
 
 module.exports = mongoose.model("User", UserSchema);

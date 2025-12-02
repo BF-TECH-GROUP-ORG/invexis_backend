@@ -2,6 +2,7 @@
 
 const { Subscription } = require("../../models/subscription.model");
 const { Company } = require("../../models/company.model");
+const { processEventOnce } = require("../../utils/eventDeduplication");
 
 /**
  * Handles payment and subscription events from payment-service
@@ -14,27 +15,44 @@ module.exports = async function handlePaymentEvent(event) {
 
     console.log(`💳 Processing payment event: ${type}`, data);
 
-    switch (type) {
-      case "payment.subscription.success":
-      case "payment.completed":
-        await handlePaymentSuccess(data);
-        break;
+    // Generate event ID for deduplication
+    const traceId = data.traceId || data.trace_id;
+    const fallbackId = data.paymentId || data.subscriptionId || '';
+    const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
 
-      case "payment.subscription.failed":
-      case "payment.failed":
-        await handlePaymentFailed(data);
-        break;
+    // Process event with automatic deduplication
+    const result = await processEventOnce(
+      eventId,
+      type,
+      async () => {
+        switch (type) {
+          case "payment.subscription.success":
+          case "payment.completed":
+            await handlePaymentSuccess(data);
+            break;
 
-      case "subscription.expired":
-        await handleSubscriptionExpired(data);
-        break;
+          case "payment.subscription.failed":
+          case "payment.failed":
+            await handlePaymentFailed(data);
+            break;
 
-      case "subscription.renewed":
-        await handleSubscriptionRenewed(data);
-        break;
+          case "subscription.expired":
+            await handleSubscriptionExpired(data);
+            break;
 
-      default:
-        console.log(`⚠️ Unhandled payment event type: ${type}`);
+          case "subscription.renewed":
+            await handleSubscriptionRenewed(data);
+            break;
+
+          default:
+            console.log(`⚠️ Unhandled payment event type: ${type}`);
+        }
+      },
+      { eventType: type, timestamp: new Date(), subscriptionId: data.subscriptionId }
+    );
+
+    if (result.duplicate) {
+      console.log(`🔄 Skipped duplicate payment event: ${type}`, { eventId });
     }
   } catch (error) {
     console.error(`❌ Error handling payment event: ${error.message}`);

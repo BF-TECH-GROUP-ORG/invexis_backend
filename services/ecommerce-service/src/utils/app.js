@@ -28,7 +28,7 @@ const timelineSchema = Joi.object({
 
 const paginationSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(10),
+  limit: Joi.number().integer().min(1).max(1000).default(100),
   sortBy: Joi.string().optional(),
   sortOrder: Joi.string().valid('asc', 'desc').default('desc')
 });
@@ -69,7 +69,6 @@ const paymentSchema = Joi.object({
 });
 
 const orderSchema = Joi.object({
-  orderId: Joi.string().required(),
   userId: Joi.string().required(),
   items: Joi.array().items(orderItemSchema).required(),
   subtotal: Joi.number().required(),
@@ -87,7 +86,8 @@ const orderSchema = Joi.object({
 });
 
 const promotionSchema = Joi.object({
-  promotionId: Joi.string().required(),
+  companyId: Joi.string().required(),
+  shopId: Joi.string().optional(),
   name: Joi.string().required(),
   code: Joi.string().optional(),
   discountType: Joi.string().valid('percentage', 'fixed', 'free_shipping').required(),
@@ -189,30 +189,7 @@ const catalogProductSchema = Joi.object({
   updatedBy: Joi.string().optional()
 });
 
-const Cart = require('../models/Cart.models');
-const Catalog = require('../models/Catalog.models');
-const Delivery = require('../models/Delivery.models');
-const FailedEvent = require('../models/FailedEvent.models');
-const FeaturedBanner = require('../models/FeaturedBanner.models');
-const Order = require('../models/Order.models');
-const Outbox = require('../models/Outbox.models');
-const Promotion = require('../models/Promotion.models');
-const Review = require('../models/Review.models');
-const Wishlist = require('../models/Wishlist.models');
-
 module.exports = {
-  // Models
-  Cart,
-  Catalog,
-  Delivery,
-  FailedEvent,
-  FeaturedBanner,
-  Order,
-  Outbox,
-  Promotion,
-  Review,
-  Wishlist,
-
   // Schemas
   cartSchema,
   orderSchema,

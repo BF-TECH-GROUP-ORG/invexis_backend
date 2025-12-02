@@ -4,13 +4,12 @@ const { publish, exchanges } = require('/app/shared/rabbitmq');
 
 const CACHE_TTL = 300; // seconds
 
-function cacheKey(companyId, userId, cartId) {
-    if (userId) return `cart:${companyId}:${userId}`;
-    return `cart:${companyId}:guest:${cartId}`;
+function cacheKey(userId) {
+    return `cart:user:${userId}`;
 }
 
-async function getCart(companyId, userId) {
-    const key = cacheKey(companyId, userId);
+async function getCart(userId) {
+    const key = cacheKey(userId);
     try {
         const cached = await redis.get(key);
         if (cached) return JSON.parse(cached);
@@ -18,7 +17,7 @@ async function getCart(companyId, userId) {
         // fallthrough to DB
     }
 
-    const cart = await CartRepository.findActiveByCompanyAndUser(companyId, userId);
+    const cart = await CartRepository.findByUserId(userId);
     if (!cart) return null;
     try { await redis.set(key, JSON.stringify(cart), 'EX', CACHE_TTL); } catch (e) { }
     return cart;
@@ -26,18 +25,18 @@ async function getCart(companyId, userId) {
 
 async function createCart(data) {
     const cart = await CartRepository.create(data);
-    const key = cacheKey(cart.companyId, cart.userId, cart._id);
+    const key = cacheKey(cart.userId);
     try { await redis.set(key, JSON.stringify(cart), 'EX', CACHE_TTL); } catch (e) { }
     // publish event
     try { await publish(exchanges.topic, 'ecommerce.cart.created', cart); } catch (e) { }
     return cart;
 }
 
-async function addItem(companyId, userId, item) {
+async function addItem(userId, item) {
     // find or create cart
-    let cart = await CartRepository.findActiveByCompanyAndUser(companyId, userId);
+    let cart = await CartRepository.findByUserId(userId);
     if (!cart) {
-        cart = await CartRepository.create({ companyId, userId, items: [item], lastActivity: new Date() });
+        cart = await CartRepository.create({ userId, items: [item], lastActivity: new Date() });
     } else {
         // merge item (simple logic: if same productId, increase quantity)
         const idx = cart.items.findIndex(i => i.productId === item.productId);
@@ -52,33 +51,43 @@ async function addItem(companyId, userId, item) {
     }
 
     // invalidate cache and repopulate
-    const key = cacheKey(companyId, userId, cart._id);
+    const key = cacheKey(userId);
     try { await redis.del(key); await redis.set(key, JSON.stringify(cart), 'EX', CACHE_TTL); } catch (e) { }
     try { await publish(exchanges.topic, 'ecommerce.cart.updated', cart); } catch (e) { }
     return cart;
 }
 
-async function removeItem(companyId, userId, productId) {
-    const cart = await CartRepository.findActiveByCompanyAndUser(companyId, userId);
+async function removeItem(userId, productId) {
+    const cart = await CartRepository.findByUserId(userId);
     if (!cart) return null;
-    const newItems = cart.items.filter(i => i.productId !== productId);
+    const newItems = cart.items.filter(i => i.productId.toString() !== productId.toString());
+
+    // If no items left, delete the cart entirely
+    if (newItems.length === 0) {
+        await CartRepository.delete(cart._id);
+        const key = cacheKey(userId);
+        try { await redis.del(key); } catch (e) { }
+        try { await publish(exchanges.topic, 'ecommerce.cart.deleted', { userId, cartId: cart._id }); } catch (e) { }
+        return null;
+    }
+
     cart.items = newItems;
     cart.lastActivity = new Date();
     const updated = await CartRepository.update(cart._id, cart);
-    const key = cacheKey(companyId, userId, cart._id);
+    const key = cacheKey(userId);
     try { await redis.del(key); await redis.set(key, JSON.stringify(updated), 'EX', CACHE_TTL); } catch (e) { }
     try { await publish(exchanges.topic, 'ecommerce.cart.updated', updated); } catch (e) { }
     return updated;
 }
 
-async function addOrUpdateCart(userId, companyId, value) {
+async function addOrUpdateCart(userId, value) {
     // value expected to be a full cart body or minimal items
     // if items present, we merge/add them
     if (value.items && Array.isArray(value.items) && value.items.length) {
         // apply items one by one using addItem logic
-        let cart = await CartRepository.findActiveByCompanyAndUser(companyId, userId);
+        let cart = await CartRepository.findByUserId(userId);
         if (!cart) {
-            cart = await CartRepository.create({ companyId, userId, items: value.items, lastActivity: new Date() });
+            cart = await CartRepository.create({ userId, items: value.items, lastActivity: new Date() });
         } else {
             for (const it of value.items) {
                 const idx = cart.items.findIndex(i => i.productId === it.productId);
@@ -88,28 +97,28 @@ async function addOrUpdateCart(userId, companyId, value) {
             cart.lastActivity = new Date();
             cart = await CartRepository.update(cart._id, cart);
         }
-        const key = cacheKey(companyId, userId, cart._id);
+        const key = cacheKey(userId);
         try { await redis.del(key); await redis.set(key, JSON.stringify(cart), 'EX', CACHE_TTL); } catch (e) { }
         try { await publish(exchanges.topic, 'ecommerce.cart.updated', cart); } catch (e) { }
         return cart;
     }
 
     // otherwise, create/update full cart document
-    let cart = await CartRepository.findActiveByCompanyAndUser(companyId, userId);
-    if (!cart) cart = await CartRepository.create(Object.assign({ companyId, userId }, value));
+    let cart = await CartRepository.findByUserId(userId);
+    if (!cart) cart = await CartRepository.create(Object.assign({ userId }, value));
     else cart = await CartRepository.update(cart._id, value);
-    const key = cacheKey(companyId, userId, cart._id);
+    const key = cacheKey(userId);
     try { await redis.del(key); await redis.set(key, JSON.stringify(cart), 'EX', CACHE_TTL); } catch (e) { }
     try { await publish(exchanges.topic, 'ecommerce.cart.updated', cart); } catch (e) { }
     return cart;
 }
 
-async function checkoutCart(userId, companyId) {
+async function checkoutCart(userId) {
     // Mark active cart as checked_out and publish an event. Orders creation lives elsewhere.
-    const cart = await CartRepository.findActiveByCompanyAndUser(companyId, userId);
+    const cart = await CartRepository.findByUserId(userId);
     if (!cart) throw new Error('Cart not found');
     const updated = await CartRepository.update(cart._id, { status: 'checked_out', lastActivity: new Date() });
-    const key = cacheKey(companyId, userId, updated._id);
+    const key = cacheKey(userId);
     try { await redis.del(key); } catch (e) { }
     try { await publish(exchanges.topic, 'ecommerce.cart.checked_out', updated); } catch (e) { }
 
@@ -130,7 +139,6 @@ async function checkoutCart(userId, companyId) {
         }
 
         const paymentPayload = {
-            companyId,
             userId: userId || null,
             cartId: updated._id,
             amount,
