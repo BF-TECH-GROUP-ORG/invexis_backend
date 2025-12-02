@@ -8,6 +8,7 @@ const notificationSchema = new mongoose.Schema({
 
     templateName: { type: String, required: true },
     payload: { type: mongoose.Schema.Types.Mixed, default: {} },
+    priority: { type: String, enum: ['low', 'normal', 'high', 'urgent'], default: 'normal' },
 
     // Channel configuration
     channels: {
@@ -101,11 +102,11 @@ notificationSchema.index({ scope: 1, sendAt: 1 });
 notificationSchema.index({ status: 1, sendAt: 1 });
 
 // Instance methods
-notificationSchema.methods.getContentForChannel = function(channel) {
+notificationSchema.methods.getContentForChannel = function (channel) {
     return this.compiledContent?.[channel] || null;
 };
 
-notificationSchema.methods.setChannelDeliveryStatus = function(channel, status, providerId = null, error = null) {
+notificationSchema.methods.setChannelDeliveryStatus = function (channel, status, providerId = null, error = null) {
     if (!this.deliveryStatus) {
         this.deliveryStatus = {};
     }
@@ -127,7 +128,7 @@ notificationSchema.methods.setChannelDeliveryStatus = function(channel, status, 
     this.updateOverallStatus();
 };
 
-notificationSchema.methods.updateOverallStatus = function() {
+notificationSchema.methods.updateOverallStatus = function () {
     const enabledChannels = Object.keys(this.channels).filter(channel => this.channels[channel]);
     const channelStatuses = enabledChannels.map(channel =>
         this.deliveryStatus?.[channel]?.status || 'pending'
@@ -144,13 +145,13 @@ notificationSchema.methods.updateOverallStatus = function() {
     }
 };
 
-notificationSchema.methods.hasContentForChannel = function(channel) {
+notificationSchema.methods.hasContentForChannel = function (channel) {
     return !!(this.compiledContent?.[channel] &&
-             Object.keys(this.compiledContent[channel]).length > 0);
+        Object.keys(this.compiledContent[channel]).length > 0);
 };
 
 // Static methods
-notificationSchema.statics.findPendingForDelivery = function() {
+notificationSchema.statics.findPendingForDelivery = function () {
     return this.find({
         status: { $in: ['pending', 'partial'] },
         sendAt: { $lte: new Date() }

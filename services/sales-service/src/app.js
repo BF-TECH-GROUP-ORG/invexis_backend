@@ -3,7 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 const sequelize = require("./config/db");
-const cors=require('cors')
+const cors = require('cors')
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
@@ -87,7 +87,7 @@ const initializeDatabase = async () => {
     console.log("✅ Database connection established");
 
     // Sync models (create tables if they don't exist)
-    await sequelize.sync({ alter: true });
+    await sequelize.sync({ alter: false });
     console.log("✅ Database models synchronized");
   } catch (error) {
     console.error("❌ Failed to connect to database:", error);
