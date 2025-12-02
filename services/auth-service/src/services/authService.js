@@ -25,6 +25,70 @@ const CACHE_TTLS = {
     rateLimit: 900 // 15min
 };
 
+// ✅ Shop Operating Hours Check
+/**
+ * Check if shop is currently open based on cached hours
+ * @param {Array} operatingHours - Array of {day_of_week, open_time, close_time}
+ * @param {Date} checkTime - Time to check (default: now)
+ * @returns {Object} {isOpen, message, nextOpenTime}
+ */
+function checkShopOpen(operatingHours, checkTime = new Date()) {
+    if (!operatingHours || operatingHours.length === 0) {
+        return { isOpen: true, message: "No hours configured", nextOpenTime: null };
+    }
+
+    const dayOfWeek = checkTime.getDay(); // 0 = Sunday
+    const currentTime = formatTimeForComparison(checkTime);
+
+    // Find today's hours
+    const todayHours = operatingHours.find((h) => h.day_of_week === dayOfWeek);
+
+    if (!todayHours || !todayHours.open_time || !todayHours.close_time) {
+        return { isOpen: false, message: "Closed today", nextOpenTime: null };
+    }
+
+    const openTime = todayHours.open_time;
+    const closeTime = todayHours.close_time;
+
+    // Check if current time is between open and close
+    if (currentTime >= openTime && currentTime < closeTime) {
+        return { isOpen: true, message: "Open now", nextOpenTime: null };
+    }
+
+    // Calculate next open time
+    let nextOpenTime = null;
+    if (currentTime < openTime) {
+        // Opens later today
+        nextOpenTime = new Date(checkTime);
+        const [h, m] = openTime.split(":").map(Number);
+        nextOpenTime.setHours(h, m, 0, 0);
+    } else {
+        // Closed now, find next open day
+        for (let i = 1; i <= 7; i++) {
+            const nextDay = (dayOfWeek + i) % 7;
+            const nextDayHours = operatingHours.find((h) => h.day_of_week === nextDay);
+            if (nextDayHours && nextDayHours.open_time) {
+                nextOpenTime = new Date(checkTime);
+                nextOpenTime.setDate(nextOpenTime.getDate() + i);
+                const [h, m] = nextDayHours.open_time.split(":").map(Number);
+                nextOpenTime.setHours(h, m, 0, 0);
+                break;
+            }
+        }
+    }
+
+    return { isOpen: false, message: "Closed", nextOpenTime };
+}
+
+/**
+ * Format time as HH:MM for comparison
+ */
+function formatTimeForComparison(date) {
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+}
+
 // Caching helpers
 async function getCachedUser(userId, select = '-password -twoFASecret', populate = []) {
     const cacheKey = `user:${userId}`;
@@ -64,6 +128,113 @@ async function publishEvent(event, data, metadata = {}) {
 
 // Setup subscribers for external updates (call once on startup)
 async function setupSubscribers() {
+    // ✅ Shop operating hours updated - cache for login checks
+    await subscribe(
+        { queue: 'auth_shop_hours', exchange: exchanges.topic, pattern: 'shop.operating_hours.*' },
+        async (content, routingKey) => {
+            const { type, data: { shopId, operatingHours } } = content;
+
+            if (type === 'shop.operating_hours.updated') {
+                // Cache hours in Redis for 24 hours
+                const shopHoursKey = `shop:hours:${shopId}`;
+                await redis.set(
+                    shopHoursKey,
+                    JSON.stringify(operatingHours),
+                    'EX',
+                    86400 // 24 hours
+                );
+                console.log(`✅ Cached operating hours for shop ${shopId}`);
+            } else if (type === 'shop.operating_hours.deleted') {
+                // Clear cached hours
+                const shopHoursKey = `shop:hours:${shopId}`;
+                await redis.del(shopHoursKey);
+                console.log(`✅ Cleared cached hours for shop ${shopId}`);
+            }
+        }
+    );
+
+    // ✅ Company status changes (enabled/disabled)
+    await subscribe(
+        { queue: 'auth_company_status', exchange: exchanges.topic, pattern: 'company.status.changed' },
+        async (content, routingKey) => {
+            const { data: { companyId, status } } = content;
+
+            if (status === 'suspended' || status === 'deleted') {
+                // Add to disabled companies set in Redis
+                await redis.sadd('disabled:companies', companyId);
+                console.log(`✅ Marked company ${companyId} as disabled for login blocking`);
+            } else if (status === 'active') {
+                // Remove from disabled companies set
+                await redis.srem('disabled:companies', companyId);
+                console.log(`✅ Enabled company ${companyId} for login`);
+            }
+        }
+    );
+
+    // ✅ Department-User assignments from Company Service
+    await subscribe(
+        { queue: 'auth_department_user', exchange: exchanges.topic, pattern: 'department_user.*' },
+        async (content, routingKey) => {
+            const { type, data: { userId, departmentId, companyId } } = content;
+
+            const user = await User.findById(userId);
+            if (!user) return console.warn(`User ${userId} not found for department update`);
+
+            if (!user.assignedDepartments) user.assignedDepartments = [];
+
+            switch (type) {
+                case 'department_user.assigned':
+                    // Add department if not already present
+                    if (!user.assignedDepartments.includes(departmentId)) {
+                        user.assignedDepartments.push(departmentId);
+                        await user.save();
+                        await invalidateUserCache(userId);
+                        console.log(`✅ Added department ${departmentId} for user ${userId}`);
+                    }
+                    break;
+
+                case 'department_user.removed':
+                    // Remove department
+                    const beforeCount = user.assignedDepartments.length;
+                    user.assignedDepartments = user.assignedDepartments.filter(id => id !== departmentId);
+                    if (user.assignedDepartments.length < beforeCount) {
+                        await user.save();
+                        await invalidateUserCache(userId);
+                        console.log(`✅ Removed department ${departmentId} for user ${userId}`);
+                    }
+                    break;
+
+                case 'department_user.role_changed':
+                    // Role changed within department - ensure department is in list
+                    if (!user.assignedDepartments.includes(departmentId)) {
+                        user.assignedDepartments.push(departmentId);
+                        await user.save();
+                        await invalidateUserCache(userId);
+                    }
+                    console.log(`✅ User ${userId} role changed in department ${departmentId}`);
+                    break;
+
+                case 'department_user.suspended':
+                    // User suspended in department - might remove from active departments
+                    // Note: Keeping in assignedDepartments but could filter out suspended ones
+                    await invalidateUserCache(userId);
+                    console.log(`✅ User ${userId} suspended in department ${departmentId}`);
+                    break;
+
+                case 'department_user.removed_from_company':
+                    // User removed from all departments in company - clear all
+                    user.assignedDepartments = [];
+                    await user.save();
+                    await invalidateUserCache(userId);
+                    console.log(`✅ User ${userId} removed from all company departments`);
+                    break;
+
+                default:
+                    console.warn(`Unknown department_user event type: ${type}`);
+            }
+        }
+    );
+
     // Company updates from external service
     await subscribe(
         { queue: 'auth_company_updates', exchange: exchanges.topic, pattern: 'company.user.*' },
@@ -78,6 +249,8 @@ async function setupSubscribers() {
                 user.companies = user.companies.filter(id => id !== companyId);
             }
             await user.save();
+            // Invalidate cached company admins list for this company (best-effort)
+            try { await redis.del(`company:admins:${companyId}`); } catch (e) { console.warn('Failed to invalidate company admins cache:', e && e.message); }
             await invalidateUserCache(userId);
             await publishEvent('auth.user.tenancy.updated', { userId, companyId, action: 'company' });
             console.log(`Updated company for user ${userId}: ${action} ${companyId}`);
@@ -101,29 +274,6 @@ async function setupSubscribers() {
             await invalidateUserCache(userId);
             await publishEvent('auth.user.tenancy.updated', { userId, shopId, action: 'shop' });
             console.log(`Updated shop for user ${userId}: ${action} ${shopId}`);
-        }
-    );
-
-    // Department updates from shop service
-    await subscribe(
-        { queue: 'auth_department_updates', exchange: exchanges.topic, pattern: 'shop.department.user.*' },
-        async (content, routingKey) => {
-            const { event, data: { userId, departmentId, action } } = content;
-            if (!['shop.department.user.assigned', 'shop.department.user.removed'].includes(event)) return;
-            const user = await User.findById(userId);
-            if (!user) return console.warn(`User ${userId} not found for department update`);
-
-            if (!user.assignedDepartments) user.assignedDepartments = [];
-
-            if (action === 'assigned' && !user.assignedDepartments.includes(departmentId)) {
-                user.assignedDepartments.push(departmentId);
-            } else if (action === 'removed') {
-                user.assignedDepartments = user.assignedDepartments.filter(id => id !== departmentId);
-            }
-            await user.save();
-            await invalidateUserCache(userId);
-            await publishEvent('auth.user.tenancy.updated', { userId, departmentId, action: 'department' });
-            console.log(`Updated department for user ${userId}: ${action} ${departmentId}`);
         }
     );
 
@@ -241,6 +391,13 @@ async function register(data, options = {}) {
     // Cache
     await redis.set(`user:${user._id}`, JSON.stringify(user.toObject({ versionKey: false })), 'EX', CACHE_TTLS.user);
 
+    // If a company_admin was just created, invalidate global company admins cache
+    try {
+        if (user.role === 'company_admin') {
+            await redis.del('company:admins:all');
+        }
+    } catch (e) { console.warn('Failed to invalidate global company admins cache after register:', e && e.message); }
+
     // Generate refreshToken and session for the new user
     const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
     user.sessions.push(session._id);
@@ -282,6 +439,63 @@ async function login(data, options = {}) {
         // User not found or invalid status
         if (!user || user.isDeleted || user.accountStatus !== 'active') {
             return { status: 401, message: 'Invalid credentials' };
+        }
+
+        // ✅ Check if user has assigned companies and verify none are disabled
+        if (user.companies && user.companies.length > 0) {
+            // Cache key for disabled companies set
+            const disabledCompaniesKey = 'disabled:companies';
+            let disabledCompanies = await redis.smembers(disabledCompaniesKey);
+
+            // Check if any of user's companies are disabled
+            const hasDisabledCompany = user.companies.some(companyId =>
+                disabledCompanies.includes(companyId)
+            );
+
+            if (hasDisabledCompany) {
+                return {
+                    status: 403,
+                    message: 'Cannot login - your company has been disabled. Contact administrator.'
+                };
+            }
+        }
+
+        // ✅ Check if user has assigned shops and verify all are currently open
+        if (user.shops && user.shops.length > 0) {
+            const closedShops = [];
+
+            for (const shopId of user.shops) {
+                const shopHoursKey = `shop:hours:${shopId}`;
+                const cachedHours = await redis.get(shopHoursKey);
+
+                if (cachedHours) {
+                    // Hours cached in Redis
+                    const hours = JSON.parse(cachedHours);
+                    const { isOpen, message, nextOpenTime } = checkShopOpen(hours);
+
+                    if (!isOpen) {
+                        closedShops.push({
+                            shopId,
+                            message,
+                            nextOpenTime,
+                        });
+                    }
+                }
+                // If no cached hours, assume shop is always open (no restrictions)
+            }
+
+            if (closedShops.length > 0) {
+                const shopMessages = closedShops
+                    .map((s) => `${s.message}${s.nextOpenTime ? ` (opens ${s.nextOpenTime.toLocaleTimeString()})` : ''}`)
+                    .join('; ');
+
+                return {
+                    status: 423, // 423 Locked (similar to account locked)
+                    message: `Cannot login - your shop is currently closed. ${shopMessages}`,
+                    blockedReason: 'shop_closed',
+                    closedShops,
+                };
+            }
         }
 
         // Account locked
@@ -732,10 +946,21 @@ async function updateUser(adminId, targetUserId, data) {
         if (exists) return { ok: false, status: 409, message: 'Field in use' };
     }
 
+    const oldRole = user.role;
     if (value.password) value.password = await hashPassword(value.password);
     Object.assign(user, value);
     await user.save();
     await invalidateUserCache(targetUserId);
+    // If role changed, invalidate company admins cache for all companies the user belongs to
+    try {
+        if (value.role && value.role !== oldRole && Array.isArray(user.companies)) {
+            for (const cId of user.companies) {
+                try { await redis.del(`company:admins:${cId}`); } catch (e) { /* best-effort */ }
+            }
+            // Also invalidate global company admins cache
+            try { await redis.del('company:admins:all'); } catch (e) { /* best-effort */ }
+        }
+    } catch (e) { console.warn('Error invalidating company admins cache after role change', e && e.message); }
 
     await publishEvent('admin.user.updated', { adminId, targetUserId, changes: Object.keys(value) });
 

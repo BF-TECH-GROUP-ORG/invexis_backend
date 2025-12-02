@@ -3,6 +3,7 @@ const express = require('express');
 const passport = require('passport');
 const router = express.Router();
 const authCtrl = require('../controllers/authController');
+const adminCtrl = require('../controllers/adminController');
 const tokenService = require('../services/tokenService');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
@@ -160,6 +161,12 @@ router.post('/consent/revoke', requireAuth, authCtrl.revokeConsent);
 router.post('/verify/:userId', requireAuth, authCtrl.verify);
 
 router.get('/users', requireAuth, authCtrl.getUsers);
+
+// Get company admins (cached)
+router.get('/users/company-admins/:companyId', requireAuth, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
+
+// Get all company admins regardless of company (cached)
+router.get('/users/company-admins', requireAuth, requireRole('super_admin'), adminCtrl.getAllCompanyAdmins);
 
 router.post('/users', requireAuth, authCtrl.createUser);
 

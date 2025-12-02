@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const shopController = require("../controllers/ShopController");
-const departmentController = require("../controllers/ShopDepartmentController");
+const operatingHoursController = require("../controllers/ShopOperatingHoursController");
 
 
 router.post("/", shopController.createShop);
@@ -12,20 +12,15 @@ router.patch("/:id", shopController.updateShop);
 router.patch("/:id/status", shopController.changeShopStatus);
 router.delete("/:id", shopController.deleteShop);
 
-// Department routes
-router.post("/:shopId/departments", departmentController.createDepartment);
-router.get("/:shopId/departments", departmentController.getDepartments);
-router.get(
-  "/:shopId/departments/:deptId",
-  departmentController.getDepartmentById
-);
-router.patch(
-  "/:shopId/departments/:deptId",
-  departmentController.updateDepartment
-);
-router.delete(
-  "/:shopId/departments/:deptId",
-  departmentController.deleteDepartment
-);
+// ✅ Operating Hours Routes (Event-driven)
+router.get("/:shopId/operating-hours", operatingHoursController.getOperatingHours);
+router.put("/:shopId/operating-hours", operatingHoursController.setOperatingHours);
+router.patch("/:shopId/operating-hours/:dayOfWeek", operatingHoursController.updateDayHours);
+router.delete("/:shopId/operating-hours", operatingHoursController.clearOperatingHours);
+router.get("/:shopId/is-open", operatingHoursController.checkShopOpen);
+
+// ❌ Department management removed - Now handled exclusively by Company Service
+// Shops no longer manage departments
+// Use Company Service endpoints: /company-service/department-users
 
 module.exports = router;

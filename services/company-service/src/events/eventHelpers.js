@@ -222,7 +222,115 @@ const subscriptionEvents = {
   },
 };
 
+const departmentUserEvents = {
+  /**
+   * Create outbox event for user assigned to department
+   */
+  async assigned(userId, departmentId, companyId, role, trx = null) {
+    return await Outbox.create(
+      {
+        type: "department_user.assigned",
+        exchange: "events_topic",
+        routingKey: "department_user.assigned",
+        payload: {
+          userId,
+          departmentId,
+          companyId,
+          role, // 'seller' or 'manager'
+          assignedAt: new Date().toISOString(),
+          traceId: uuidv4(),
+        },
+      },
+      trx
+    );
+  },
+
+  /**
+   * Create outbox event for user role change in department
+   */
+  async roleChanged(userId, departmentId, companyId, role, trx = null) {
+    return await Outbox.create(
+      {
+        type: "department_user.role_changed",
+        exchange: "events_topic",
+        routingKey: "department_user.role_changed",
+        payload: {
+          userId,
+          departmentId,
+          companyId,
+          role,
+          changedAt: new Date().toISOString(),
+          traceId: uuidv4(),
+        },
+      },
+      trx
+    );
+  },
+
+  /**
+   * Create outbox event for user suspended from department
+   */
+  async suspended(userId, departmentId, companyId, trx = null) {
+    return await Outbox.create(
+      {
+        type: "department_user.suspended",
+        exchange: "events_topic",
+        routingKey: "department_user.suspended",
+        payload: {
+          userId,
+          departmentId,
+          companyId,
+          suspendedAt: new Date().toISOString(),
+          traceId: uuidv4(),
+        },
+      },
+      trx
+    );
+  },
+
+  /**
+   * Create outbox event for user removed from department
+   */
+  async removed(userId, departmentId, companyId, trx = null) {
+    return await Outbox.create(
+      {
+        type: "department_user.removed",
+        exchange: "events_topic",
+        routingKey: "department_user.removed",
+        payload: {
+          userId,
+          departmentId,
+          companyId,
+          removedAt: new Date().toISOString(),
+          traceId: uuidv4(),
+        },
+      },
+      trx
+    );
+  },
+
+  /**
+   * Create outbox event for all users removed from company
+   */
+  async removedFromCompany(companyId, trx = null) {
+    return await Outbox.create(
+      {
+        type: "department_user.removed_from_company",
+        exchange: "events_topic",
+        routingKey: "department_user.removed_from_company",
+        payload: {
+          companyId,
+          removedAt: new Date().toISOString(),
+          traceId: uuidv4(),
+        },
+      },
+      trx
+    );
+  },
+};
+
 module.exports = {
   companyEvents,
   subscriptionEvents,
+  departmentUserEvents,
 };

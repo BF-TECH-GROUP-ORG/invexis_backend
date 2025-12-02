@@ -131,47 +131,27 @@ const shopEvents = {
 };
 
 /**
- * Department event helpers
+ * Operating Hours event helpers
  */
-const departmentEvents = {
+const operatingHoursEvents = {
   /**
-   * Department created event
+   * Operating hours created/updated event
+   * Triggers Auth Service to cache shop hours
    */
-  async created(department, shopId, companyId, trx = null) {
+  async updated(shopId, companyId, operatingHours, trx = null) {
     return await Outbox.create(
       {
-        type: "shop.department.created",
+        type: "shop.operating_hours.updated",
         exchange: "events_topic",
-        routingKey: "shop.department.created",
+        routingKey: "shop.operating_hours.updated",
         payload: {
-          departmentId: department.id,
           shopId,
           companyId,
-          name: department.name,
-          capacity: department.capacity,
-          createdAt: new Date().toISOString(),
-          traceId: uuidv4(),
-        },
-      },
-      trx
-    );
-  },
-
-  /**
-   * Department updated event
-   */
-  async updated(department, shopId, companyId, trx = null) {
-    return await Outbox.create(
-      {
-        type: "shop.department.updated",
-        exchange: "events_topic",
-        routingKey: "shop.department.updated",
-        payload: {
-          departmentId: department.id,
-          shopId,
-          companyId,
-          name: department.name,
-          capacity: department.capacity,
+          operatingHours: operatingHours.map((h) => ({
+            day_of_week: h.day_of_week,
+            open_time: h.open_time,
+            close_time: h.close_time,
+          })),
           updatedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -181,16 +161,15 @@ const departmentEvents = {
   },
 
   /**
-   * Department deleted event
+   * Operating hours deleted event
    */
-  async deleted(departmentId, shopId, companyId, trx = null) {
+  async deleted(shopId, companyId, trx = null) {
     return await Outbox.create(
       {
-        type: "shop.department.deleted",
+        type: "shop.operating_hours.deleted",
         exchange: "events_topic",
-        routingKey: "shop.department.deleted",
+        routingKey: "shop.operating_hours.deleted",
         payload: {
-          departmentId,
           shopId,
           companyId,
           deletedAt: new Date().toISOString(),
@@ -202,7 +181,13 @@ const departmentEvents = {
   },
 };
 
+/**
+ * Department event helpers - REMOVED
+ * Departments are now managed exclusively by Company Service
+ * Shop Service no longer handles department management
+ */
+
 module.exports = {
   shopEvents,
-  departmentEvents,
+  operatingHoursEvents,
 };

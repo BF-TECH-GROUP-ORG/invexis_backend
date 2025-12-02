@@ -1,29 +1,22 @@
 /**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
+ * Migration: create_shop_departments_table - DEPRECATED
+ * 
+ * This migration file is kept as a no-op (does nothing) for backward compatibility.
+ * 
+ * REASON FOR DEPRECATION:
+ * Department management has been moved entirely to Company Service.
+ * Shop Service no longer manages departments.
+ * 
+ * The table was created in earlier versions but is no longer used.
+ * This file exists only to prevent migration directory corruption errors.
  */
-exports.up = function(knex) {
-  return knex.schema.createTable('shop_departments', table => {
-    table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-    table.uuid('shop_id').notNullable().references('id').inTable('shops').onDelete('CASCADE');
-    table.string('name', 100).notNullable();
-    table.text('description');
-    table.integer('capacity').notNullable().defaultTo(0);
-    table.timestamp('created_at').defaultTo(knex.fn.now());
-    table.timestamp('updated_at').defaultTo(knex.fn.now());
-    table.uuid('created_by');
-    table.uuid('updated_by');
-    table.timestamp('deleted_at');
 
-    table.unique(['shop_id', 'name']);
-    table.index('shop_id');
-  });
+exports.up = function (knex) {
+    // No-op: Table already exists from earlier migration, nothing to do
+    return Promise.resolve();
 };
 
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> }
- */
 exports.down = function (knex) {
-    return knex.schema.dropTableIfExists('shop_departments');
+    // No-op: Do not drop the table to maintain backward compatibility
+    return Promise.resolve();
 };

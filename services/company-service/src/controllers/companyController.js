@@ -1,10 +1,12 @@
 const asyncHandler = require("express-async-handler");
 const Company = require("../models/company.model");
 const Subscription = require("../models/subscription.model");
+const Department = require("../models/department.model");
 const { subscriptionEvents } = require("../events/eventHelpers");
 const { companyEvents } = require("../events/eventHelpers");
 const db = require("../config");
 const { VALID_TIERS, normalizeTier } = require("../constants/tiers");
+const { DEPARTMENTS, DEPARTMENT_NAMES, DEPARTMENT_DESCRIPTIONS } = require("../constants/departments");
 
 /**
  * @desc    Create a new company
@@ -12,13 +14,19 @@ const { VALID_TIERS, normalizeTier } = require("../constants/tiers");
  * @access  Private (Super Admin)
  */
 const createCompany = asyncHandler(async (req, res) => {
-  const { name, domain, email, phone, country, city, tier, coordinates, category_ids } =
+  const { name, domain, email, phone, country, city, tier, coordinates, category_ids, company_admin_id } =
     req.body;
 
   // Validate required fields
   if (!name) {
     res.status(400);
     throw new Error("Company name is required");
+  }
+
+  // Validate company_admin_id if provided
+  if (company_admin_id && typeof company_admin_id !== 'string') {
+    res.status(400);
+    throw new Error("company_admin_id must be a valid user ID");
   }
 
   // Validate tier if provided
@@ -64,10 +72,27 @@ const createCompany = asyncHandler(async (req, res) => {
         coordinates,
         tier,
         category_ids: category_ids || [],
+        company_admin_id: company_admin_id || null, // Set company admin if provided
         createdBy: req.user?.id || "651f2c80c6b9b5a7cdfe1909",
       },
       trx
     );
+
+    // ✅ Auto-create fixed departments for new company
+    for (const deptType of Object.values(DEPARTMENTS)) {
+      await db(Department.table).insert({
+        id: require("uuid").v4(),
+        company_id: newCompany.id,
+        name: deptType,
+        display_name: DEPARTMENT_NAMES[deptType],
+        description: DEPARTMENT_DESCRIPTIONS[deptType],
+        status: "active",
+        createdBy: req.user?.id || "651f2c80c6b9b5a7cdfe1909",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
     const subscription = await Subscription.create(
       {
         company_id: newCompany.id,
@@ -79,6 +104,7 @@ const createCompany = asyncHandler(async (req, res) => {
       },
       trx
     );
+
     // Create outbox event within transaction (will be published by dispatcher)
     await companyEvents.created(newCompany, trx);
     await subscriptionEvents.created(subscription, trx);

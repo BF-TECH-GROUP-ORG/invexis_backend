@@ -36,7 +36,7 @@ const UserSchema = new mongoose.Schema({
     // Role & Permissions (all)
     role: {
         type: String,
-        enum: ["super_admin", "company_admin", "shop_manager", "worker", "customer"],
+        enum: ["super_admin", "company_admin", "shop_manager", "worker", "customer"], 
         required: true
     },
     permissions: [{ type: String }], // Granular (e.g., 'create_shop')

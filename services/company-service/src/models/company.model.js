@@ -16,6 +16,7 @@ class Company {
     this.tier = normalizeTier(data.tier) || TIERS.BASIC;
     this.category_ids = data.category_ids || [];
     this.status = data.status || "pending_verification";
+    this.company_admin_id = data.company_admin_id || null; // Primary company admin user
     this.metadata =
       data.metadata || {
         verification: {
@@ -225,4 +226,4 @@ class Company {
   }
 }
 
-module.exports=Company;
+module.exports = Company;
