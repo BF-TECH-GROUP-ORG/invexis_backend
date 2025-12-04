@@ -6,6 +6,7 @@
     "password": "Test@123456",
     "role": "super_admin",
     "nationalId": "ABC12345",
+    "dateOfBirth": "1985-01-01",
     "emergencyContact": {
         "name": "Emergency Contact",
         "phone": "+250789123458"

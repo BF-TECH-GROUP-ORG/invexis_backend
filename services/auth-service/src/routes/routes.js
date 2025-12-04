@@ -166,7 +166,7 @@ router.get('/users', requireAuth, authCtrl.getUsers);
 router.get('/users/company-admins/:companyId', requireAuth, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
 
 // Get all company admins regardless of company (cached)
-router.get('/users/company-admins', requireAuth, requireRole('super_admin'), adminCtrl.getAllCompanyAdmins);
+router.get('/users/company-admins', adminCtrl.getAllCompanyAdmins);
 
 router.post('/users', requireAuth, authCtrl.createUser);
 

@@ -8,8 +8,6 @@
     "dateOfBirth": "1985-01-01",
     "gender": "male",
     "nationalId": "COMP12345",
-    "position": "Admin",
-    "department": "management",
     "emergencyContact": {
         "name": "Emergency Contact",
         "phone": "+250789123460"
@@ -25,7 +23,7 @@
         "language": "en",
         "notifications": {
             "email": true,
-            "sms": true,
+            "sms":true,
             "inApp": true
         }
     }

@@ -26,7 +26,6 @@ exports.up = async function (knex) {
     table.string("state");
     table.string("country");
     table.string("postal_code");
-    table.jsonb("coordinates");
     table.string("timezone").defaultTo("UTC");
     table.string("currency").defaultTo("USD");
     table.string("status").defaultTo("active");
@@ -35,7 +34,7 @@ exports.up = async function (knex) {
       .defaultTo("Basic");
     table.timestamp("tier_start_date");
     table.timestamp("tier_end_date");
-    table.string("shop_admin_id");
+    // shop-specific fields removed (shops own operating hours, admins, and radius)
     table.specificType("location", "GEOGRAPHY(POINT, 4326)");
     table.boolean("is_deleted").defaultTo(false);
     table.timestamp("deleted_at");
@@ -44,17 +43,14 @@ exports.up = async function (knex) {
     table.string("deleted_by");
     table.bigInteger("version").defaultTo(1);
 
-    table.time("open_time").defaultTo("08:00");
-    table.time("close_time").defaultTo("21:00");
-    table.boolean("enforce_operating_hours").defaultTo(true);
-
+    // Per-shop operating hours and enforcement are handled by the shop-service.
+    // Company still stores notification_preferences, metadata and feature flags as before.
     table.jsonb("notification_preferences").defaultTo(
       JSON.stringify({ email: true, sms: false, inApp: true })
     );
 
     table.jsonb("metadata").defaultTo("{}");
     table.jsonb("feature_flags").defaultTo("{}");
-    table.integer("service_radius_meters").defaultTo(0);
     table.string("access_level").defaultTo("private");
 
     table.timestamps(true, true);

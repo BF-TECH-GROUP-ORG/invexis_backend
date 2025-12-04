@@ -36,7 +36,7 @@ const UserSchema = new mongoose.Schema({
     // Role & Permissions (all)
     role: {
         type: String,
-        enum: ["super_admin", "company_admin", "shop_manager", "worker", "customer"], 
+        enum: ["super_admin", "company_admin", "shop_manager", "worker", "customer"],
         required: true
     },
     permissions: [{ type: String }], // Granular (e.g., 'create_shop')
@@ -46,7 +46,7 @@ const UserSchema = new mongoose.Schema({
     shops: [{ type: String, default: [] }], // e.g., ['shop-uuid-456'] – updated via events
 
     // Work Details (non-customer only)
-    position: { type: String, default: null, required: function () { return this.role !== 'customer' && this.role !== 'super_admin'; } }, // e.g., 'Admin', 'Manager', 'Sales Rep'
+
     assignedDepartments: [{ type: String, default: [] }], // e.g., ['dept-uuid-789'] – updated via events
     dateJoined: { type: Date, default: Date.now },
     employmentStatus: { type: String, enum: ["active", "on_leave", "suspended", "terminated"], default: "active" },
@@ -125,14 +125,12 @@ UserSchema.pre("save", async function (next) {
             this.emergencyContact = null;
             this.address = null;
             this.assignedDepartments = [];
-            this.position = null;
             if (!this.dateOfBirth && !this.googleId) return next(new Error("Date of birth required for customers (analytics)"));
             break;
         case 'super_admin':
             this.companies = [];
             this.shops = [];
             this.assignedDepartments = [];
-            this.position = null;
             // DOB/phone optional
             break;
         case 'company_admin':
@@ -140,7 +138,6 @@ UserSchema.pre("save", async function (next) {
             if (!this.companies) this.companies = [];
             this.shops = [];
             this.assignedDepartments = [];
-            this.position = this.position || 'Admin';
             if (!this.nationalId) return next(new Error("National ID required"));
             if (!this.dateOfBirth) return next(new Error("Date of birth required"));
             break;
@@ -148,7 +145,6 @@ UserSchema.pre("save", async function (next) {
             if (!this.companies || this.companies.length === 0) return next(new Error("At least one company required"));
             if (!this.shops || this.shops.length === 0) return next(new Error("At least one shop required"));
             // assignedDepartments optional for shop_manager
-            this.position = this.position || 'Manager';
             if (!this.nationalId) return next(new Error("National ID required"));
             if (!this.dateOfBirth) return next(new Error("Date of birth required"));
             break;
@@ -156,7 +152,6 @@ UserSchema.pre("save", async function (next) {
             if (!this.companies || this.companies.length === 0) return next(new Error("At least one company required"));
             if (!this.shops || this.shops.length === 0) return next(new Error("At least one shop required"));
             // assignedDepartments optional for worker
-            this.position = this.position || 'Worker';
             if (!this.nationalId) return next(new Error("National ID required"));
             if (!this.dateOfBirth) return next(new Error("Date of birth required"));
             break;
