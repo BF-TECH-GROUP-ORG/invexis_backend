@@ -32,6 +32,11 @@ module.exports = {
             "channels": ["email", "sms", "in-app"],
             "priority": "medium"
         },
+        "company.allSuspended": {
+            "service": "Notification-Service",
+            "channels": ["email", "sms", "in-app"],
+            "priority": "urgent"
+        },
 
         // --- Shop Events ---
         "shop.created": {

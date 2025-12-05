@@ -66,20 +66,22 @@ async function handleDebtCreated(data) {
         return;
     }
 
-    const notification = await Notification.create({
-        companyId,
-        userId: null,
-        type: "debt_created",
-        title: "New debt recorded",
-        body: `A new debt (${debtId}) was created for company ${companyId}`,
-        templateName: "debt_created",
-        payload: { debtId, companyId, shopId, customerId },
-        scope: "company",
-        channels: { email: false, sms: false, push: false, inApp: true }
-    });
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Queued debt.created notification for debt ${debtId}`);
+        await dispatchBroadcastEvent({
+            event: "debt.created",
+            data: { debtId, companyId, shopId, customerId, ...data },
+            companyId,
+            templateName: "debt_created",
+            scope: "company"
+        });
+
+        logger.info(`✅ Queued debt.created notification for debt ${debtId}`);
+    } catch (error) {
+        logger.error(`❌ Error dispatching debt.created:`, error.message);
+        throw error;
+    }
 }
 
 async function handleRepaymentCreated(data) {
@@ -89,106 +91,117 @@ async function handleRepaymentCreated(data) {
         return;
     }
 
-    const notification = await Notification.create({
-        companyId,
-        userId: null,
-        type: "debt_repayment",
-        title: "Repayment recorded",
-        body: `A repayment (${repaymentId || 'unknown'}) was recorded for debt ${debtId}`,
-        templateName: "debt_repayment",
-        payload: { debtId, repaymentId, amountPaid, companyId },
-        scope: "company",
-        channels: { email: false, sms: false, push: false, inApp: true }
-    });
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Queued repayment notification for debt ${debtId}`);
+        await dispatchBroadcastEvent({
+            event: "debt.repayment.created",
+            data: { debtId, repaymentId, amountPaid, companyId, ...data },
+            companyId,
+            templateName: "debt_repayment",
+            scope: "company"
+        });
+
+        logger.info(`✅ Queued repayment notification for debt ${debtId}`);
+    } catch (error) {
+        logger.error(`❌ Error dispatching debt.repayment.created:`, error.message);
+        throw error;
+    }
 }
 
 async function handleDebtFullyPaid(data) {
     const { debtId, companyId } = data || {};
     if (!companyId || !debtId) return;
 
-    const notification = await Notification.create({
-        companyId,
-        userId: null,
-        type: "debt_fully_paid",
-        title: "Debt fully paid",
-        body: `Debt ${debtId} has been fully paid.`,
-        templateName: "debt_fully_paid",
-        payload: { debtId, companyId },
-        scope: "company",
-        channels: { email: false, sms: false, push: false, inApp: true }
-    });
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Queued debt.fully_paid notification for debt ${debtId}`);
+        await dispatchBroadcastEvent({
+            event: "debt.fully_paid",
+            data: { debtId, companyId, ...data },
+            companyId,
+            templateName: "debt_fully_paid",
+            scope: "company"
+        });
+
+        logger.info(`✅ Queued debt.fully_paid notification for debt ${debtId}`);
+    } catch (error) {
+        logger.error(`❌ Error dispatching debt.fully_paid:`, error.message);
+        throw error;
+    }
 }
 
 async function handleDebtStatusUpdated(data) {
     const { debtId, status, companyId } = data || {};
     if (!companyId || !debtId) return;
 
-    const notification = await Notification.create({
-        companyId,
-        userId: null,
-        type: "debt_status_updated",
-        title: `Debt status updated: ${status}`,
-        body: `Debt ${debtId} status changed to ${status}.`,
-        templateName: "debt_status_updated",
-        payload: { debtId, status, companyId },
-        scope: "company",
-        channels: { email: false, sms: false, push: false, inApp: true }
-    });
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Queued debt.status.updated notification for debt ${debtId}`);
+        await dispatchBroadcastEvent({
+            event: "debt.status.updated",
+            data: { debtId, status, companyId, ...data },
+            companyId,
+            templateName: "debt_status_updated",
+            scope: "company"
+        });
+
+        logger.info(`✅ Queued debt.status.updated notification for debt ${debtId}`);
+    } catch (error) {
+        logger.error(`❌ Error dispatching debt.status.updated:`, error.message);
+        throw error;
+    }
 }
 
 async function handleDebtReminder(type, data) {
-    // Examples: debt.reminder.upcoming.7, debt.reminder.overdue.3, debt.reminder.final, debt.reminder.manual
+    // Examples: debt.reminder.upcoming.7, debt.reminder.overdue.3, debt.reminder.final
     const { debtId, companyId, daysUntilDue, overdueDays, totalAmount } = data || {};
     if (!companyId || !debtId) return;
 
-    const title = type.includes("overdue") ? "Debt overdue reminder" : "Debt reminder";
-    const body = type.includes("overdue")
-        ? `Debt ${debtId} is overdue by ${overdueDays || 'N/A'} days.`
-        : `Debt ${debtId} is due in ${daysUntilDue || 'N/A'} days.`;
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-    const notification = await Notification.create({
-        companyId,
-        userId: null,
-        type: "debt_reminder",
-        title,
-        body,
-        templateName: "debt_reminder",
-        payload: { debtId, companyId, daysUntilDue, overdueDays, totalAmount, reminderType: type },
-        scope: "company",
-        channels: { email: false, sms: false, push: false, inApp: true }
-    });
+        // Map dynamic reminder keys to base event keys for channel mapping
+        let baseEvent = "debt.reminder.upcoming";
+        if (type.includes("overdue")) {
+            baseEvent = "debt.reminder.overdue";
+        }
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Queued ${type} notification for debt ${debtId}`);
+        await dispatchBroadcastEvent({
+            event: baseEvent,
+            data: { debtId, companyId, daysUntilDue, overdueDays, totalAmount, reminderType: type, ...data },
+            companyId,
+            templateName: "debt_reminder",
+            scope: "company"
+        });
+
+        logger.info(`✅ Queued ${type} notification for debt ${debtId}`);
+    } catch (error) {
+        logger.error(`❌ Error dispatching ${type}:`, error.message);
+        throw error;
+    }
 }
 
 async function handleDebtOverdue(data) {
     const { debtId, companyId, overdueDays } = data || {};
     if (!companyId || !debtId) return;
 
-    const notification = await Notification.create({
-        companyId,
-        userId: null,
-        type: "debt_overdue",
-        title: "Debt overdue",
-        body: `Debt ${debtId} is overdue by ${overdueDays || 'N/A'} days.`,
-        templateName: "debt_overdue",
-        payload: { debtId, companyId, overdueDays },
-        scope: "company",
-        channels: { email: false, sms: false, push: false, inApp: true }
-    });
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Queued debt.overdue notification for debt ${debtId}`);
+        await dispatchBroadcastEvent({
+            event: "debt.overdue",
+            data: { debtId, companyId, overdueDays, ...data },
+            companyId,
+            templateName: "debt_overdue",
+            scope: "company"
+        });
+
+        logger.info(`✅ Queued debt.overdue notification for debt ${debtId}`);
+    } catch (error) {
+        logger.error(`❌ Error dispatching debt.overdue:`, error.message);
+        throw error;
+    }
 }
 
 async function handleDebtUpdated(data) {

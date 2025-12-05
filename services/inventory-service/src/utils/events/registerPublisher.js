@@ -23,7 +23,7 @@ const registerPublishers = async (publisherConfigs) => {
 
     const event = {
       id: metadata?.id || Date.now().toString(),
-      source: "company-service",
+      source: "inventory-service",
       type: routingKey,
       data: payload,
       emittedAt: new Date().toISOString(),
