@@ -63,19 +63,25 @@ module.exports = async function handleSaleEvent(event, routingKey) {
  * Handle sale creation
  */
 async function handleSaleCreated(data) {
-  const { saleId, companyId, amount, createdBy, customerEmail, customerPhone } = data;
+  const { saleId, companyId, totalAmount, soldBy, customerEmail, customerPhone } = data;
 
   if (!saleId || !companyId) {
     logger.warn("⚠️ Sale created event missing required fields");
     return;
   }
 
+  // Validate that we have a recipient (soldBy field)
+  if (!soldBy) {
+    logger.warn(`⚠️ Sale ${saleId} missing soldBy field, cannot dispatch notification`);
+    return;
+  }
+
   try {
-    logger.info(`💰 New sale created: #${saleId} (${amount})`);
+    logger.info(`💰 New sale created: #${saleId} (${totalAmount})`);
 
     const { dispatchEvent } = require("../../services/dispatcher");
 
-    // Determine channels
+    // Determine channels based on available contact info
     const channels = {
       email: !!customerEmail,
       push: true,
@@ -92,9 +98,11 @@ async function handleSaleCreated(data) {
       data: {
         email: customerEmail,
         phone: customerPhone,
+        saleId,
+        totalAmount,
         ...data,
       },
-      recipients: [createdBy],
+      recipients: [soldBy],
       companyId,
       templateName: "sale_created",
       channels

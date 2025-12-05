@@ -10,7 +10,7 @@ module.exports = [
       { key: "sale.created", description: "A new sale was created" },
       { key: "sale.updated", description: "Sale details updated" },
       { key: "sale.completed", description: "Sale successfully completed" },
-      { key: "sale.canceled", description: "Sale was canceled" },
+      { key: "sale.cancelled", description: "Sale was cancelled" },
       { key: "sale.status.changed", description: "Sale status changed" },
     ],
   },

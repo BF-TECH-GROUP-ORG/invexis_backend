@@ -23,6 +23,9 @@ const saleEvents = {
           shopId: sale.shopId,
           customerId: sale.customerId,
           customerName: sale.customerName,
+          customerPhone: sale.customerPhone,
+          customerEmail: sale.customerEmail,
+          soldBy: sale.soldBy,
           totalAmount: sale.totalAmount,
           status: sale.status,
           paymentStatus: sale.paymentStatus,
@@ -67,12 +70,12 @@ const saleEvents = {
   /**
    * Create outbox event for sale cancellation
    */
-  async canceled(saleId, companyId, reason = "", trx = null) {
+  async cancelled(saleId, companyId, reason = "", trx = null) {
     return await Outbox.create(
       {
-        type: "sale.canceled",
+        type: "sale.cancelled",
         exchange: "events_topic",
-        routingKey: "sale.canceled",
+        routingKey: "sale.cancelled",
         payload: {
           saleId,
           companyId,
@@ -188,12 +191,12 @@ const invoiceEvents = {
   /**
    * Create outbox event for invoice cancellation
    */
-  async canceled(invoiceId, saleId, companyId, reason = "", trx = null) {
+  async cancelled(invoiceId, saleId, companyId, reason = "", trx = null) {
     return await Outbox.create(
       {
-        type: "invoice.canceled",
+        type: "invoice.cancelled",
         exchange: "events_topic",
-        routingKey: "invoice.canceled",
+        routingKey: "invoice.cancelled",
         payload: {
           invoiceId,
           saleId,
