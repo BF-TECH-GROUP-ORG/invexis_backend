@@ -1,5 +1,5 @@
 const redisWrapper = require('/app/shared/redis');
-const logger = require('./logger');
+const { logger } = require('./logger');
 
 /**
  * Helper to get the underlying ioredis client
@@ -45,7 +45,6 @@ const scanDel = async (pattern) => {
         });
     } catch (error) {
         logger.error(`Redis scanDel error for pattern ${pattern}:`, error);
-        // Don't throw; fail silently to avoid blocking product operations
     }
 };
 

@@ -36,6 +36,10 @@ module.exports = async function handleAuthEvent(event, routingKey) {
         await handleUserDeleted(data);
         break;
 
+      case "verification.requested":
+        await handleVerificationRequested(data);
+        break;
+
       default:
         logger.warn(`⚠️ Unhandled auth event type: ${type}`);
     }
@@ -49,7 +53,7 @@ module.exports = async function handleAuthEvent(event, routingKey) {
  * Handle user creation
  */
 async function handleUserCreated(data) {
-  const { userId, email, phone, companyId } = data;
+  const { userId, email, phone, companyId, preferences } = data;
 
   if (!userId || !email) {
     logger.warn("⚠️ User created event missing required fields");
@@ -61,11 +65,17 @@ async function handleUserCreated(data) {
 
     const { dispatchEvent } = require("../../services/dispatcher");
 
-    // Determine channels
+    // Default preferences if not provided
+    const userPrefs = preferences || {};
+    const notifPrefs = userPrefs.notifications || {};
+
+    // Determine channels based on preferences
     const channels = {
-      email: !!email,
+      // Email enabled by default if not explicitly disabled
+      email: !!email && (notifPrefs.email !== false),
       inApp: true,
-      sms: !!phone
+      // SMS disabled by default unless explicitly enabled
+      sms: !!phone && (notifPrefs.sms === true)
     };
 
     if (!phone) {
@@ -88,6 +98,68 @@ async function handleUserCreated(data) {
     logger.info(`✅ User creation notification dispatched for user ${userId}`);
   } catch (error) {
     logger.error(`❌ Error creating user notification:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Handle verification request (OTP)
+ */
+async function handleVerificationRequested(data) {
+  const { userId, type, details, otp, preferences, role } = data;
+  const { email, phone } = details || {};
+
+  if (!userId || !otp) {
+    logger.warn("⚠️ Verification event missing required fields");
+    return;
+  }
+
+  try {
+    logger.info(`🔐 Verification requested for ${userId} via ${type}`);
+
+    const { dispatchEvent } = require("../../services/dispatcher");
+
+    // Default preferences
+    const userPrefs = preferences || {};
+    const notifPrefs = userPrefs.notifications || {};
+
+    // Precise channel selection for OTP
+    const channels = {
+      inApp: true, // Always send real-time OTP
+      email: type === 'email' && !!email && (notifPrefs.email !== false),
+      sms: type === 'phone' && !!phone // SMS mandates explicit phone verification flow, usually overrides pref if it's the requested method, but adhering to pref-aware logic:
+      // If user requested phone verification, we MUST send SMS regardless of general preference? 
+      // Logic: If I click "Verify Phone", I expect an SMS. 
+      // So for verification.requested where type IS phone, we force SMS true.
+      // But let's respect the "preference-based" request from user prompt. 
+      // Prompt says: "send them those otps for them to verify based on preferences"
+      // AND "inApp needs to be in realtime... all other user types need to verify either one of phone or email".
+      // If I request phone verification, I implicitly want an SMS. Use type-based logic + preferences fallback.
+    };
+
+    // Force channel if it matches the verification type requested
+    if (type === 'email') channels.email = true;
+    if (type === 'phone') channels.sms = true;
+
+    await dispatchEvent({
+      event: "verification.requested",
+      data: {
+        otp,
+        email,
+        phone,
+        role,
+        ...data,
+        companyId: data.companyId || 'system'
+      },
+      companyId: data.companyId || 'system',
+      recipients: [userId],
+      templateName: "otp",
+      channels
+    });
+
+    logger.info(`✅ Verification (${type}) dispatched for user ${userId}. Channels: ${JSON.stringify(channels)}`);
+  } catch (error) {
+    logger.error(`❌ Error dispatching verification:`, error.message);
     throw error;
   }
 }

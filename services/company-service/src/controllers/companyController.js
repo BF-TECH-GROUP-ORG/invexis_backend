@@ -6,6 +6,7 @@ const { subscriptionEvents } = require("../events/eventHelpers");
 const { companyEvents } = require("../events/eventHelpers");
 const db = require("../config");
 const { VALID_TIERS, normalizeTier } = require("../constants/tiers");
+const { getCache, setCache, delCache } = require('../utils/redisHelper');
 const { DEPARTMENTS, DEPARTMENT_NAMES, DEPARTMENT_DESCRIPTIONS } = require("../constants/departments");
 
 /**
@@ -147,12 +148,26 @@ const getAllCompanies = asyncHandler(async (req, res) => {
 const getCompanyById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
+  // Try cache first
+  const cacheKey = `company:${id}`;
+  const cachedCompany = await getCache(cacheKey);
+
+  if (cachedCompany) {
+    return res.json({
+      success: true,
+      data: cachedCompany,
+    });
+  }
+
   const company = await Company.findCompanyById(id);
 
   if (!company) {
     res.status(404);
     throw new Error("Company not found");
   }
+
+  // Set cache (1 hour)
+  await setCache(cacheKey, company, 3600);
 
   res.json({
     success: true,
@@ -224,6 +239,9 @@ const updateCompany = asyncHandler(async (req, res) => {
     return updated;
   });
 
+  // Invalidate cache
+  await delCache(`company:${id}`);
+
   res.json({
     success: true,
     data: updatedCompany,
@@ -251,6 +269,9 @@ const deleteCompany = asyncHandler(async (req, res) => {
     // Create outbox event within transaction (will be published by dispatcher)
     await companyEvents.deleted(id, trx);
   });
+
+  // Invalidate cache
+  await delCache(`company:${id}`);
 
   res.json({
     success: true,
@@ -306,6 +327,9 @@ const changeCompanyStatus = asyncHandler(async (req, res) => {
     await companyEvents.statusChanged(id, status, trx);
   });
 
+  // Invalidate cache
+  await delCache(`company:${id}`);
+
   res.json({
     success: true,
     message: `Company status changed to ${status}`,
@@ -341,6 +365,9 @@ const changeCompanyTier = asyncHandler(async (req, res) => {
     // Create outbox event within transaction (will be published by dispatcher)
     await companyEvents.tierChanged(id, normalizedTier, trx);
   });
+
+  // Invalidate cache
+  await delCache(`company:${id}`);
 
   res.json({
     success: true,
@@ -407,6 +434,9 @@ const reactivateCompany = asyncHandler(async (req, res) => {
 
     return result;
   });
+
+  // Invalidate cache
+  await delCache(`company:${id}`);
 
   res.json({
     success: true,
@@ -481,6 +511,9 @@ const addCompanyCategories = asyncHandler(async (req, res) => {
     return updated;
   });
 
+  // Invalidate cache
+  await delCache(`company:${id}`);
+
   res.json({
     success: true,
     message: "Categories added successfully",
@@ -523,6 +556,9 @@ const removeCompanyCategories = asyncHandler(async (req, res) => {
     return updated;
   });
 
+  // Invalidate cache
+  await delCache(`company:${id}`);
+
   res.json({
     success: true,
     message: "Categories removed successfully",
@@ -564,6 +600,9 @@ const setCompanyCategories = asyncHandler(async (req, res) => {
 
     return updated;
   });
+
+  // Invalidate cache
+  await delCache(`company:${id}`);
 
   res.json({
     success: true,
@@ -654,6 +693,9 @@ const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
     return fresh;
   });
 
+  // Invalidate cache
+  await delCache(`company:${id}`);
+
   res.json({
     success: true,
     message: "Verification documents uploaded successfully",
@@ -732,6 +774,9 @@ const reviewCompanyVerification = asyncHandler(async (req, res) => {
 
     return fresh;
   });
+
+  // Invalidate cache
+  await delCache(`company:${id}`);
 
   res.json({
     success: true,
