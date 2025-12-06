@@ -21,6 +21,7 @@ const companyEvents = {
         payload: {
           companyId: company.id,
           adminId: company.createdBy,
+          companyAdminId: company.company_admin_id, // Explicit company admin ID
           name: company.name,
           email: company.email,
           phone: company.phone,  // Added for SMS notifications
