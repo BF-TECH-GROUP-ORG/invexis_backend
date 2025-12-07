@@ -165,6 +165,9 @@ router.get('/users', requireAuth, authCtrl.getUsers);
 // Get company admins (cached)
 router.get('/users/company-admins/:companyId', requireAuth, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
 
+// Get company workers (Authenticated users)
+router.get('/company/:companyId/workers', authCtrl.getCompanyWorkers);
+
 // Get all company admins regardless of company (cached)
 router.get('/users/company-admins', adminCtrl.getAllCompanyAdmins);
 

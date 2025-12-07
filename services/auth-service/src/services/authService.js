@@ -1051,14 +1051,28 @@ async function updateUser(adminId, userId, data) {
 async function deleteUser(adminId, userId) { return deleteAccount(userId); }
 async function getUserById(adminId, userId) { return { user: await getCachedUser(userId) }; }
 async function acceptConsent(userId, data) {
-    // Logic similar to register consent
     return { message: 'Consent accepted' };
 }
 
 
+
+// Get company workers
+async function getCompanyWorkers(companyId) {
+    // Find users with role 'worker' and the specific companyId in their companies array
+    // Also ensuring they are not deleted
+    const users = await User.find({
+        role: 'worker',
+        companies: companyId,
+        isDeleted: { $ne: true }
+    }).select('-password -twoFASecret -loginHistory -sessions'); // Exclude sensitive fields
+
+    return users;
+}
+
 module.exports = {
     register,
     login,
+    refresh,
     updateProfile,
     changePassword,
     verify,
@@ -1086,5 +1100,6 @@ module.exports = {
     updateUser,
     deleteUser,
     getUserById,
-    acceptConsent
+    acceptConsent,
+    getCompanyWorkers
 };

@@ -40,7 +40,7 @@ const {
 
 // Middleware to extract and validate companyId
 router.use('/companies/:companyId', (req, res, next) => {
-    const { companyId } = req.params;
+    const { companyId } = req.params || req.query || req.body;
     if (!companyId) {
         return res.status(400).json({
             success: false,

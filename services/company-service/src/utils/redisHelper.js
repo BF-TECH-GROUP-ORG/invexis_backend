@@ -1,5 +1,5 @@
 const redisWrapper = require('/app/shared/redis');
-const { logger } = require('./logger');
+const logger = require('./logger');
 
 /**
  * Helper to get the underlying ioredis client

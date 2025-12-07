@@ -19,10 +19,11 @@ const app = express();
 // FRONTEND ORIGINS (DEV + PROD)
 // --------------------------------------
 const allowedOrigins = [
-    "http://localhost:3000",
-    process.env.FRONTEND_URL,              // e.g. https://yourdomain.com
-    process.env.FRONTEND_DEV_URL,          // extra env if needed
-];
+    "http://localhost:3001",
+    'http://localhost:40999',
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_DEV_URL,
+].filter(Boolean);
 
 // --------------------------------------
 // SECURE CORS CONFIGURATION
@@ -34,20 +35,18 @@ app.use(
             if (!origin) return callback(null, true); // Postman, curl, etc.
 
             const isAllowed = allowedOrigins.includes(origin);
-
-            // Allow ngrok dynamic subdomains automatically
-            const isNgrok = origin.includes("ngrok-free.app") || origin.includes("ngrok-free.dev");
+            const isNgrok = origin && (origin.includes("ngrok-free.app") || origin.includes("ngrok-free.dev"));
 
             if (isAllowed || isNgrok) {
-                return callback(null, true);
+                return callback(null, origin); // Reflect the origin explicitly
             }
 
-            console.log("❌ Blocked CORS Origin:", origin);
+            console.error("❌ Blocked CORS Origin:", origin);
             return callback(new Error("Not allowed by CORS"));
         },
 
         credentials: true, // REQUIRED for cookies
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: [
             "Content-Type",
             "Authorization",
@@ -55,6 +54,7 @@ app.use(
             "ngrok-skip-browser-warning",
         ],
         exposedHeaders: ["Set-Cookie"],
+        optionsSuccessStatus: 200,
     })
 );
 
