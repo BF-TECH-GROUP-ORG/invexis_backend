@@ -50,7 +50,7 @@ class Company {
   static async deleteCompany(id, actor) {
     await db(this.table)
       .where("id", id)
-      .update({ status: "deleted", updatedAt: new Date(), updatedBy: actor });
+      .update({ isDeleted:true, updatedAt: new Date(), updatedBy: actor });
   }
   static async changeCompanyStatus(id, status, actor) {
     await db(this.table)

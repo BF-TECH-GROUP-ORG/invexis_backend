@@ -5,15 +5,16 @@
  */
 
 const Product = require('../../models/Product');
+const StockChange = require('../../models/StockChange');
 const { logger } = require('../../utils/logger');
 const { publishProductEvent } = require('../productEvents');
 const { processEventOnce } = require('../../utils/eventDeduplication');
 
 /**
- * Handle sale created event - Decrement stock for sold items
+ * Handle sale created event - Decrement stock via StockChange
  */
 async function handleSaleCreated(data) {
-  const { saleId, items, traceId, companyId } = data;
+  const { saleId, items, traceId, companyId, shopId, soldBy } = data; // shopId is usually in sale.created
 
   logger.info(`💰 [sale.created] Processing sale ${saleId}`, { traceId, companyId });
 
@@ -33,7 +34,7 @@ async function handleSaleCreated(data) {
     }
 
     try {
-      const product = await Product.findById(productId);
+      const product = await Product.findOne({ _id: productId, companyId });
 
       if (!product) {
         logger.warn(`⚠️ Product not found: ${productId}`);
@@ -41,36 +42,37 @@ async function handleSaleCreated(data) {
         continue;
       }
 
-      const oldQuantity = product.inventory.quantity;
-      const newQuantity = Math.max(0, oldQuantity - quantity);
+      const previousStock = product.inventory.quantity;
+      // For sales, quantity must be negative in StockChange logic (checking line 32 of StockChange.js)
+      const changeQty = -Math.abs(quantity);
+      const newStock = previousStock + changeQty;
 
-      product.inventory.quantity = newQuantity;
-
-      // Update availability if out of stock
-      if (newQuantity === 0 && oldQuantity > 0) {
-        product.availability = 'out_of_stock';
-      }
-
-      // Add audit trail
-      product.auditTrail.push({
-        action: 'stock_change',
-        changedBy: 'sales-service',
-        oldValue: { quantity: oldQuantity },
-        newValue: { quantity: newQuantity, reason: `Sale ${saleId}` }
+      // Create StockChange
+      const stockChange = new StockChange({
+        companyId,
+        shopId: shopId || product.shopId,
+        productId,
+        changeType: 'sale',
+        quantity: changeQty,
+        previousStock,
+        newStock, // Explicitly set, though pre-save calculates it too
+        reason: `Sale ${saleId}`,
+        userId: soldBy || 'system',
+        changeDate: new Date()
       });
 
-      await product.save();
+      await stockChange.save(); // This triggers pre-save which updates product stock
 
-      logger.info(`➖ Decremented stock for product ${productId}: ${oldQuantity} → ${newQuantity}`, {
+      logger.info(`➖ Stock deducted for product ${productId}: ${previousStock} → ${newStock}`, {
         saleId,
         productName: product.name
       });
 
       // Emit inventory.product.updated event
-      await publishProductEvent('inventory.product.updated', product.toObject());
+      await publishProductEvent('inventory.product.updated', await Product.findById(productId));
 
       // Emit out of stock event if needed
-      if (newQuantity === 0 && oldQuantity > 0) {
+      if (newStock === 0 && previousStock > 0) {
         await publishProductEvent('inventory.out.of.stock', {
           _id: product._id,
           productId: product._id,
@@ -80,27 +82,21 @@ async function handleSaleCreated(data) {
         });
       }
 
-      results.push({ productId, status: 'success', oldQuantity, newQuantity });
+      results.push({ productId, status: 'success', oldQuantity: previousStock, newQuantity });
     } catch (error) {
       logger.error(`❌ Error updating stock for product ${productId}:`, error);
       results.push({ productId, status: 'error', error: error.message });
     }
   }
 
-  logger.info(`✅ Sale ${saleId} stock update complete`, {
-    totalItems: items.length,
-    successful: results.filter(r => r.status === 'success').length,
-    failed: results.filter(r => r.status === 'error').length
-  });
-
   return results;
 }
 
 /**
- * Handle sale canceled event - Restore stock for cancelled items
+ * Handle sale canceled event - Restore stock via StockChange
  */
 async function handleSaleCanceled(data) {
-  const { saleId, items, reason, traceId, companyId } = data;
+  const { saleId, items, reason, traceId, companyId } = data; // shopId might be missing
 
   logger.info(`🚫 [sale.canceled] Processing cancellation for sale ${saleId}`, {
     reason,
@@ -119,65 +115,54 @@ async function handleSaleCanceled(data) {
     const { productId, quantity } = item;
 
     if (!productId || !quantity) {
-      logger.warn(`⚠️ Invalid item in sale ${saleId}:`, item);
       continue;
     }
 
     try {
-      const product = await Product.findById(productId);
-
+      const product = await Product.findOne({ _id: productId, companyId });
       if (!product) {
-        logger.warn(`⚠️ Product not found: ${productId}`);
         results.push({ productId, status: 'not_found' });
         continue;
       }
 
-      const oldQuantity = product.inventory.quantity;
-      const newQuantity = oldQuantity + quantity;
+      const previousStock = product.inventory.quantity;
+      const changeQty = Math.abs(quantity); // Positive for restoration
+      const newStock = previousStock + changeQty;
 
-      product.inventory.quantity = newQuantity;
-
-      // Update availability if back in stock
-      if (oldQuantity === 0 && newQuantity > 0) {
-        product.availability = 'in_stock';
-      }
-
-      // Add audit trail
-      product.auditTrail.push({
-        action: 'stock_change',
-        changedBy: 'sales-service',
-        oldValue: { quantity: oldQuantity },
-        newValue: { quantity: newQuantity, reason: `Sale ${saleId} canceled: ${reason}` }
+      // Create StockChange (changeType: 'restock' or 'adjustment' - using 'restock' implies positive)
+      const stockChange = new StockChange({
+        companyId,
+        shopId: product.shopId, // Fallback to product's shopId
+        productId,
+        changeType: 'restock',
+        quantity: changeQty,
+        previousStock,
+        newStock,
+        reason: `Sale ${saleId} canceled: ${reason}`,
+        userId: 'system',
+        changeDate: new Date()
       });
 
-      await product.save();
+      await stockChange.save();
 
-      logger.info(`➕ Restored stock for product ${productId}: ${oldQuantity} → ${newQuantity}`, {
-        saleId,
-        productName: product.name
+      logger.info(`➕ Stock restored for product ${productId}: ${previousStock} → ${newStock}`, {
+        saleId
       });
 
-      // Emit inventory.product.updated event
-      await publishProductEvent('inventory.product.updated', product.toObject());
+      await publishProductEvent('inventory.product.updated', await Product.findById(productId));
 
-      results.push({ productId, status: 'success', oldQuantity, newQuantity });
+      results.push({ productId, status: 'success', oldQuantity: previousStock, newQuantity });
     } catch (error) {
       logger.error(`❌ Error restoring stock for product ${productId}:`, error);
       results.push({ productId, status: 'error', error: error.message });
     }
   }
 
-  logger.info(`✅ Sale ${saleId} cancellation stock restoration complete`, {
-    totalItems: items.length,
-    successful: results.filter(r => r.status === 'success').length,
-    failed: results.filter(r => r.status === 'error').length
-  });
-
   return results;
 }
 
 /**
- * Handle sale return fully returned event - Restore stock for returned items
+ * Handle sale return fully returned event - Restore stock via StockChange
  */
 async function handleSaleReturnFullyReturned(data) {
   const { returnId, saleId, items, traceId, companyId } = data;
@@ -188,7 +173,6 @@ async function handleSaleReturnFullyReturned(data) {
   });
 
   if (!items || !Array.isArray(items) || items.length === 0) {
-    logger.warn(`⚠️ Return ${returnId} has no items, skipping stock restoration`);
     return { success: true, message: 'No items to process' };
   }
 
@@ -197,61 +181,47 @@ async function handleSaleReturnFullyReturned(data) {
   for (const item of items) {
     const { productId, quantity } = item;
 
-    if (!productId || !quantity) {
-      logger.warn(`⚠️ Invalid item in return ${returnId}:`, item);
-      continue;
-    }
+    if (!productId || !quantity) continue;
 
     try {
-      const product = await Product.findById(productId);
-
+      const product = await Product.findOne({ _id: productId, companyId });
       if (!product) {
-        logger.warn(`⚠️ Product not found: ${productId}`);
         results.push({ productId, status: 'not_found' });
         continue;
       }
 
-      const oldQuantity = product.inventory.quantity;
-      const newQuantity = oldQuantity + quantity;
+      const previousStock = product.inventory.quantity;
+      const changeQty = Math.abs(quantity);
+      const newStock = previousStock + changeQty;
 
-      product.inventory.quantity = newQuantity;
-
-      // Update availability if back in stock
-      if (oldQuantity === 0 && newQuantity > 0) {
-        product.availability = 'in_stock';
-      }
-
-      // Add audit trail
-      product.auditTrail.push({
-        action: 'stock_change',
-        changedBy: 'sales-service',
-        oldValue: { quantity: oldQuantity },
-        newValue: { quantity: newQuantity, reason: `Return ${returnId} for sale ${saleId}` }
+      const stockChange = new StockChange({
+        companyId,
+        shopId: product.shopId,
+        productId,
+        changeType: 'return',
+        quantity: changeQty,
+        previousStock,
+        newStock,
+        reason: `Return ${returnId} for sale ${saleId}`,
+        userId: 'system',
+        changeDate: new Date()
       });
 
-      await product.save();
+      await stockChange.save();
 
-      logger.info(`➕ Restored stock for returned product ${productId}: ${oldQuantity} → ${newQuantity}`, {
+      logger.info(`➕ Stock restored for returned product ${productId}: ${previousStock} → ${newStock}`, {
         returnId,
-        saleId,
-        productName: product.name
+        saleId
       });
 
-      // Emit inventory.product.updated event
-      await publishProductEvent('inventory.product.updated', product.toObject());
+      await publishProductEvent('inventory.product.updated', await Product.findById(productId));
 
-      results.push({ productId, status: 'success', oldQuantity, newQuantity });
+      results.push({ productId, status: 'success', oldQuantity: previousStock, newQuantity });
     } catch (error) {
       logger.error(`❌ Error restoring stock for returned product ${productId}:`, error);
       results.push({ productId, status: 'error', error: error.message });
     }
   }
-
-  logger.info(`✅ Return ${returnId} stock restoration complete`, {
-    totalItems: items.length,
-    successful: results.filter(r => r.status === 'success').length,
-    failed: results.filter(r => r.status === 'error').length
-  });
 
   return results;
 }

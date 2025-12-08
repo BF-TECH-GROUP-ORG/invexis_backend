@@ -107,11 +107,34 @@ const createShop = asyncHandler(async (req, res) => {
  * @access  Private (Company User)
  */
 const getShops = asyncHandler(async (req, res) => {
-  const companyId = req.user?.companyId || req.body.companyId || req.query.companyId;
-  if (!companyId) {
-    res.status(400);
-    throw new Error("Company ID is required");
+  // DEBUG: Log all possible sources of companyId
+  console.log('🔍 DEBUG getShops - req.query:', JSON.stringify(req.query));
+  console.log('🔍 DEBUG getShops - req.body:', JSON.stringify(req.body));
+  console.log('🔍 DEBUG getShops - req.params:', JSON.stringify(req.params));
+  console.log('🔍 DEBUG getShops - req.user:', req.user);
+
+  // Extract companyId and ensure it's a string, not an object
+  let companyId = req.query.companyId || req.body.companyId || req.params.companyId;
+
+  console.log('🔍 DEBUG getShops - extracted companyId:', companyId);
+  console.log('🔍 DEBUG getShops - companyId type:', typeof companyId);
+
+  // If companyId is an object, try to extract the actual ID
+  if (typeof companyId === 'object' && companyId !== null) {
+    console.log('⚠️  WARNING: companyId is an object, attempting to extract ID');
+    console.log('🔍 DEBUG getShops - companyId object:', JSON.stringify(companyId));
+    companyId = companyId.id || companyId.companyId || companyId.company_id;
+    console.log('🔍 DEBUG getShops - extracted from object:', companyId);
   }
+
+  // Validate companyId is a string
+  if (!companyId || typeof companyId !== 'string') {
+    console.error('❌ ERROR: Invalid companyId -', companyId, 'type:', typeof companyId);
+    res.status(400);
+    throw new Error(`Valid Company ID (string) is required. Received: ${typeof companyId}`);
+  }
+
+  console.log('✅ Using companyId:', companyId);
 
   const { limit = 50, offset = 0, status } = req.query;
 
@@ -150,7 +173,7 @@ const getShopById = asyncHandler(async (req, res) => {
   }
 
   // Verify company ownership
-  const companyId = req.user?.companyId || req.body.companyId|| req.query.companyId;
+  const companyId = req.user?.companyId || req.body.companyId || req.query.companyId;
   if (shop.company_id !== companyId) {
     res.status(403);
     throw new Error("Unauthorized: Shop does not belong to your company");

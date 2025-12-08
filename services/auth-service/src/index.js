@@ -45,7 +45,13 @@ const startServer = async () => {
             await connectDB();
 
             // Connect to RabbitMQ
-            await connectRabbitMQ()
+            await connectRabbitMQ();
+            try {
+                const { startConsumers } = require('./events/consumer');
+                await startConsumers();
+            } catch (err) {
+                console.error('Failed to initialize consumers:', err);
+            }
 
             // Connect to Redis
             await redis.connect();

@@ -1,6 +1,7 @@
 const { Op, DataTypes } = require("sequelize");
 const InvoicePdfService = require("../services/invoicePdf.service.js");
 const knownUserService = require("../services/knownUser.service");
+const { getCache, setCache, delCache, scanDel } = require('../utils/redisHelper');
 const {
   saleEvents,
   invoiceEvents,
@@ -160,6 +161,23 @@ const createSale = async (req, res) => {
 
     await t.commit();
 
+    // Invalidate caches (async fire-and-forget)
+    setImmediate(async () => {
+      try {
+        if (companyId) {
+          await Promise.all([
+            scanDel(`sales:list:${companyId}:*`),
+            scanDel(`sales:report:${companyId}:*`),
+            delCache(`sales:top:${companyId}:*`),
+            scanDel(`sales:trend:${companyId}:*`),
+            scanDel(`sales:list:*`), // Fallback for general lists
+          ]);
+        }
+      } catch (e) {
+        console.error("Cache invalidation error", e);
+      }
+    });
+
     // Generate PDF asynchronously (don't block response)
     try {
       console.log("🎯 Attempting to generate PDF for invoice:", invoice.invoiceId);
@@ -183,18 +201,23 @@ const createSale = async (req, res) => {
 
     const responseData = {
       sale: sale.toJSON ? sale.toJSON() : sale,
-      items: saleItems.map(item => item.toJSON ? item.toJSON() : item),
+      items: saleItems.map((item) => (item.toJSON ? item.toJSON() : item)),
       invoice: {
         ...(invoice.toJSON ? invoice.toJSON() : invoice),
         pdfUrl: invoice.pdfUrl || `/invoices/pdf/${invoice.invoiceId}`,
       },
     };
 
-    console.log('✅ Response being sent:', JSON.stringify(responseData, null, 2));
+    console.log(
+      "✅ Response being sent:",
+      JSON.stringify(responseData, null, 2)
+    );
 
     return res.status(201).json(responseData);
   } catch (error) {
-    await t.rollback();
+    if (!t.finished) {
+      await t.rollback();
+    }
     console.error("createSale error:", error);
     return res
       .status(500)
@@ -205,6 +228,12 @@ const createSale = async (req, res) => {
 const getSale = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Cache check
+    const cacheKey = `sale:${id}`;
+    const cachedSale = await getCache(cacheKey);
+    if (cachedSale && typeof cachedSale === "object") return res.json(cachedSale);
+
     const sale = await Sale.findByPk(id, {
       include: [
         { model: SalesItem, as: "items" },
@@ -215,6 +244,9 @@ const getSale = async (req, res) => {
     });
 
     if (!sale) return res.status(404).json({ message: "Sale not found" });
+
+    // Set cache
+    await setCache(cacheKey, sale.toJSON(), 1800); // 30m
 
     return res.json(sale);
   } catch (error) {
@@ -241,6 +273,15 @@ const updateSale = async (req, res) => {
     if (!sale) return res.status(404).json({ message: "Sale not found" });
 
     await sale.update(payload);
+
+    // Invalidate
+    setImmediate(async () => {
+      await delCache(`sale:${id}`);
+      if (sale.companyId) {
+        await scanDel(`sales:list:${sale.companyId}:*`);
+        await scanDel(`sales:report:${sale.companyId}:*`);
+      }
+    });
 
     return res.json({ message: "Sale updated", sale: sale.toJSON() });
   } catch (error) {
@@ -401,6 +442,15 @@ const updateSaleContents = async (req, res) => {
 
     await t.commit();
 
+    // Invalidate
+    setImmediate(async () => {
+      await delCache(`sale:${id}`);
+      if (sale && sale.companyId) {
+        await scanDel(`sales:list:${sale.companyId}:*`);
+        await scanDel(`sales:report:${sale.companyId}:*`);
+      }
+    });
+
     // Fetch updated sale with items
     const updatedSale = await Sale.findByPk(id, {
       include: [{ model: SalesItem, as: "items" }]
@@ -428,7 +478,19 @@ const deleteSale = async (req, res) => {
     const sale = await Sale.findByPk(id);
     if (!sale) return res.status(404).json({ message: "Sale not found" });
 
+    const companyId = sale.companyId;
+
     await sale.destroy(); // cascade configured on model associations will clean items/logs
+
+    // Invalidate
+    setImmediate(async () => {
+      await delCache(`sale:${id}`);
+      if (companyId) {
+        await scanDel(`sales:list:${companyId}:*`);
+        await scanDel(`sales:report:${companyId}:*`);
+      }
+    });
+
     return res.json({ message: "Sale deleted" });
   } catch (error) {
     console.error("deleteSale error:", error);
@@ -512,6 +574,13 @@ const createReturn = async (req, res) => {
 const listSales = async (req, res) => {
   try {
     const { companyId } = req.query;
+
+    if (companyId) {
+      const cacheKey = `sales:list:${companyId}`; // In reality should include pagination bits in key
+      const cached = await getCache(cacheKey);
+      if (cached) return res.json(cached);
+    }
+
     const where = companyId ? { companyId } : {};
     const sales = await Sale.findAll({
       where,
@@ -521,6 +590,11 @@ const listSales = async (req, res) => {
       ],
       order: [["createdAt", "DESC"]],
     });
+
+    if (companyId) {
+      await setCache(`sales:list:${companyId}`, sales, 300); // 5m
+    }
+
     return res.json(sales);
   } catch (error) {
     console.error("listSales error:", error);
@@ -584,6 +658,10 @@ const salesReport = async (req, res) => {
   try {
     const { startDate, endDate, companyId } = req.query;
 
+    const cacheKey = `sales:report:${companyId}:${startDate}:${endDate}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.json(cached);
+
     const where = {};
     if (companyId) where.companyId = companyId;
     if (startDate && endDate) {
@@ -611,6 +689,8 @@ const salesReport = async (req, res) => {
       ],
     });
 
+    await setCache(cacheKey, report[0] || {}, 600); // 10m
+
     return res.json(report[0] || {});
   } catch (error) {
     console.error("salesReport error:", error);
@@ -621,6 +701,10 @@ const salesReport = async (req, res) => {
 const topSellingProducts = async (req, res) => {
   try {
     const { companyId, limit = 5 } = req.query;
+
+    const cacheKey = `sales:top:${companyId}:${limit}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.json(cached);
 
     const products = await SalesItem.findAll({
       include: [
@@ -645,6 +729,8 @@ const topSellingProducts = async (req, res) => {
       raw: true, // Return plain objects instead of model instances
     });
 
+    await setCache(cacheKey, products, 3600); // 1h
+
     return res.json(products);
   } catch (error) {
     console.error("topSellingProducts error:", error);
@@ -655,6 +741,11 @@ const topSellingProducts = async (req, res) => {
 const revenueTrend = async (req, res) => {
   try {
     const { companyId } = req.query;
+
+    const cacheKey = `sales:trend:${companyId}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.json(cached);
+
     const where = companyId ? { companyId } : {};
 
     const trend = await Sale.findAll({
@@ -676,6 +767,8 @@ const revenueTrend = async (req, res) => {
       group: ["month"],
       order: [[Sale.sequelize.literal("month"), "ASC"]],
     });
+
+    await setCache(cacheKey, trend, 3600); // 1h
 
     return res.json(trend);
   } catch (error) {

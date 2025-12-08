@@ -544,6 +544,18 @@ const updateFcmToken = async (req, res, next) => {
     }
 };
 
+
+// Get company workers
+const getCompanyWorkers = async (req, res, next) => {
+    try {
+        const companyId = req.params.companyId || req.query.companyId || req.body.companyId || (req.user && req.user.companyId);
+        const workers = await authService.getCompanyWorkers(companyId);
+        res.json({ ok: true, workers });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     register,
     login,
@@ -578,5 +590,6 @@ module.exports = {
     getUserById,
     acceptConsent,
     getCurrentUser,
-    updateFcmToken
+    updateFcmToken,
+    getCompanyWorkers
 };

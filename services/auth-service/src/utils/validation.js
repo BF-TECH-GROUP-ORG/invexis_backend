@@ -13,23 +13,23 @@ const baseUserSchema = Joi.object({
     role: Joi.string().valid("super_admin", "company_admin", "shop_manager", "worker", "customer").required(),
     permissions: Joi.array().items(Joi.string()).optional(),
     // External strings (UUID-like)
-    companies: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['company-uuid-123']
-    shops: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['shop-uuid-456']
-    position: Joi.string().max(100).optional(),
-    assignedDepartments: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['dept-uuid-789']
+    companies: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['company-uuid-123']
+    shops: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['shop-uuid-456']
+    position: Joi.string().trim().max(100).optional(),
+    assignedDepartments: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['dept-uuid-789']
     employmentStatus: Joi.string().valid("active", "on_leave", "suspended", "terminated").default("active"),
     emergencyContact: Joi.object({
-        name: Joi.string().min(2).max(50).optional(),
-        phone: Joi.string().pattern(/^\+?[1-9]\d{1,14}$/).optional()
+        name: Joi.string().trim().min(2).max(50).optional(),
+        phone: Joi.string().trim().pattern(/^\+?[1-9]\d{1,14}$/).optional()
     }).optional(),
     address: Joi.object({
-        street: Joi.string().max(100).optional(),
-        city: Joi.string().max(50).optional(),
-        state: Joi.string().max(50).optional(),
-        postalCode: Joi.string().max(20).optional(),
-        country: Joi.string().max(50).optional()
+        street: Joi.string().trim().max(100).optional(),
+        city: Joi.string().trim().max(50).optional(),
+        state: Joi.string().trim().max(50).optional(),
+        postalCode: Joi.string().trim().max(20).optional(),
+        country: Joi.string().trim().max(50).optional()
     }).optional(),
-    notes: Joi.array().items(Joi.string()).optional(),
+    notes: Joi.array().items(Joi.string().trim()).optional(),
     preferences: Joi.object({
         theme: Joi.string().valid("light", "dark", "system").default("system"),
         language: Joi.string().default("en"),
@@ -53,7 +53,7 @@ const baseUserSchema = Joi.object({
 // Register (role-conditional, strings)
 const registerSchema = baseUserSchema.keys({
     dateOfBirth: Joi.date().max('now').required(), // Req for customer; optional else
-    nationalId: Joi.string().pattern(/^[A-Z0-9]{5,20}$/).optional() // Req non-customer
+    nationalId: Joi.string().trim().pattern(/^[A-Z0-9]{5,20}$/).optional() // Req non-customer
 }).custom((value, helpers) => {
     // Role-specific prompts/reqs
     if (value.role === 'customer') {
@@ -105,20 +105,20 @@ const registerSchema = baseUserSchema.keys({
 
 // Login schema (unchanged)
 const loginSchema = Joi.object({
-    identifier: Joi.string().required().label('Email, Phone, or Username'),
+    identifier: Joi.string().trim().required().label('Email, Phone, or Username'),
     password: Joi.string().min(8).required(),
-    otp: Joi.string().length(6).optional() // For 2FA
+    otp: Joi.string().trim().length(6).optional() // For 2FA
 });
 
 // Update profile (partial, strings)
 const updateProfileSchema = baseUserSchema.keys({
-    firstName: Joi.string().min(2).max(30).optional(),
-    lastName: Joi.string().min(2).max(30).optional(),
+    firstName: Joi.string().trim().min(2).max(30).optional(),
+    lastName: Joi.string().trim().min(2).max(30).optional(),
     dateOfBirth: Joi.date().max('now').optional(), // Analytics update
-    phone: Joi.string().pattern(/^\+?[1-9]\d{1,14}$/).optional(),
+    phone: Joi.string().trim().pattern(/^\+?[1-9]\d{1,14}$/).optional(),
     // No role/password change
-    companies: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // External updates
-    shops: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(),
+    companies: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // External updates
+    shops: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(),
     preferences: Joi.object({
         theme: Joi.string().valid("light", "dark", "system").optional(),
         language: Joi.string().optional(),
@@ -133,12 +133,12 @@ const updateProfileSchema = baseUserSchema.keys({
 // Update user (admin, full, strings)
 const updateUserSchema = baseUserSchema.keys({
     // All optional for partial
-    email: Joi.string().email({ tlds: { allow: false } }).optional(),
-    phone: Joi.string().pattern(/^\+?[1-9]\d{1,14}$/).optional(),
-    username: Joi.string().alphanum().min(3).max(30).optional(),
-    nationalId: Joi.string().pattern(/^[A-Z0-9]{5,20}$/).optional(),
-    companies: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // External sync
-    shops: Joi.array().items(Joi.string().pattern(/^[a-z0-9-]{5,50}$/i)).optional(),
+    email: Joi.string().trim().email({ tlds: { allow: false } }).optional(),
+    phone: Joi.string().trim().pattern(/^\+?[1-9]\d{1,14}$/).optional(),
+    username: Joi.string().trim().alphanum().min(3).max(30).optional(),
+    nationalId: Joi.string().trim().pattern(/^[A-Z0-9]{5,20}$/).optional(),
+    companies: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // External sync
+    shops: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(),
     // ... other fields optional
 }).min(1);
 

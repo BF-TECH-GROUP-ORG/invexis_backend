@@ -42,12 +42,12 @@ const UserSchema = new mongoose.Schema({
     permissions: [{ type: String }], // Granular (e.g., 'create_shop')
 
     // Multi-Tenancy (strings from external services; conditional)
-    companies: [{ type: String, default: [] }], // e.g., ['company-uuid-123'] – updated via events
-    shops: [{ type: String, default: [] }], // e.g., ['shop-uuid-456'] – updated via events
+    companies: [{ type: String, trim: true, default: [] }], // e.g., ['company-uuid-123'] – updated via events
+    shops: [{ type: String, trim: true, default: [] }], // e.g., ['shop-uuid-456'] – updated via events
 
     // Work Details (non-customer only)
 
-    assignedDepartments: [{ type: String, default: [] }], // e.g., ['dept-uuid-789'] – updated via events
+    assignedDepartments: [{ type: String, trim: true, default: [] }], // e.g., ['dept-uuid-789'] – updated via events
     dateJoined: { type: Date, default: Date.now },
     employmentStatus: { type: String, enum: ["active", "on_leave", "suspended", "terminated"], default: "active" },
 
