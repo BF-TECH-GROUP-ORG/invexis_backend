@@ -13,7 +13,6 @@
     "amqplib": "^0.10.9",
     "bwip-js": "^4.8.0",
     "cloudinary": "^1.41.3",
-    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.21.2",
     "express-validator": "^7.2.1",

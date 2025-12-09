@@ -266,27 +266,26 @@ const createProduct = asyncHandler(async (req, res) => {
   // These run after the response is sent to client
 
   // 1. Generate and upload QR/Barcode images (async, non-critical)
+  // Uses full product payload (base64-encoded) stored in product.qrPayload and product.barcodePayload
   if (process.nextTick) {
     setImmediate(async () => {
       try {
         const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
         const { uploadBuffer } = require('../utils/uploadUtil');
 
-        const productData = JSON.stringify({
-          id: product._id,
-          sku: product.sku,
-          name: product.name
-        });
+        // Use the full encoded product payload from the model (contains complete product data as base64)
+        const qrPayload = product.qrPayload || product.qrCode;
+        const barcodePayload = product.barcodePayload || product.barcode;
 
         const [qrBuffer, barcodeBuffer] = await Promise.all([
-          generateQRCodeBuffer(productData),
-          generateBarcodeBuffer(productData)
+          generateQRCodeBuffer(qrPayload),
+          generateBarcodeBuffer(barcodePayload)
         ]);
 
         const [qrUpload, barcodeUpload] = await Promise.all([
           uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode'),
           uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode')
-        ]);
+        ]); 
 
         // Update product with URLs
         await Product.updateOne(
@@ -391,7 +390,40 @@ const updateProduct = asyncHandler(async (req, res) => {
 
   // ========== BACKGROUND TASKS ==========
 
-  // 1. Cache invalidation (fire-and-forget)
+  // 1. Regenerate QR/Barcode images if product data changed (async, non-critical)
+  setImmediate(async () => {
+    try {
+      const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
+      const { uploadBuffer } = require('../utils/uploadUtil');
+
+      // Use the updated full encoded product payload from the model
+      const qrPayload = product.qrPayload || product.qrCode;
+      const barcodePayload = product.barcodePayload || product.barcode;
+
+      const [qrBuffer, barcodeBuffer] = await Promise.all([
+        generateQRCodeBuffer(qrPayload),
+        generateBarcodeBuffer(barcodePayload)
+      ]);
+
+      const [qrUpload, barcodeUpload] = await Promise.all([
+        uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode'),
+        uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode')
+      ]);
+
+      // Update product with new URLs
+      await Product.updateOne(
+        { _id: product._id },
+        {
+          qrCodeUrl: qrUpload.secure_url,
+          barcodeUrl: barcodeUpload.secure_url
+        }
+      );
+    } catch (err) {
+      logger.error('Background: Failed to regenerate QR/barcode images on update:', err);
+    }
+  });
+
+  // 2. Cache invalidation (fire-and-forget)
   setImmediate(() => {
     Promise.all([
       delCache(`product:${id}`),
@@ -400,13 +432,13 @@ const updateProduct = asyncHandler(async (req, res) => {
     ]).catch((err) => logger.error('Background: Cache cleanup failed:', err));
   });
 
-  // 2. Emit events (async, non-blocking)
+  // 3. Emit events (async, non-blocking)
   setImmediate(() => {
     publishProductEvent('inventory.product.updated', product.toObject())
       .catch((err) => logger.error('Background: Event publish failed:', err));
   });
 
-  // 3. Check visibility change and emit product.exposed if needed
+  // 4. Check visibility change and emit product.exposed if needed
   setImmediate(() => {
     try {
       const becamePublic = oldProduct.visibility !== product.visibility && product.visibility === 'public';
@@ -1103,6 +1135,81 @@ const checkProductDuplicate = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Decode and retrieve full product data from QR/barcode scan
+ * @route   POST /api/v1/products/scan
+ * @access  Public
+ * @param   {string} payload - Base64-encoded payload from QR code or barcode
+ */
+const scanProduct = asyncHandler(async (req, res) => {
+  const { payload } = req.body;
+
+  if (!payload) {
+    return res.status(400).json({
+      success: false,
+      message: 'payload (base64-encoded QR/barcode data) is required'
+    });
+  }
+
+  try {
+    // Decode base64 payload to get full product object
+    const decodedBuffer = Buffer.from(payload, 'base64');
+    const decodedString = decodedBuffer.toString('utf-8');
+    const productData = JSON.parse(decodedString);
+
+    // Return the decoded product data with metadata
+    res.status(200).json({
+      success: true,
+      message: 'Product data decoded successfully from scan',
+      data: productData,
+      scannedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      message: 'Failed to decode QR/barcode payload. Ensure it is a valid base64-encoded product JSON.',
+      error: err.message
+    });
+  }
+});
+
+/**
+ * @desc    Look up product by barcode/QR code value
+ * @route   GET /api/v1/products/lookup/:barcode
+ * @access  Public
+ */
+const lookupByBarcode = asyncHandler(async (req, res) => {
+  const { barcode } = req.params;
+
+  if (!barcode) {
+    return res.status(400).json({
+      success: false,
+      message: 'barcode parameter is required'
+    });
+  }
+
+  const product = await Product.findOne({
+    $or: [
+      { barcode: barcode },
+      { sku: barcode.toUpperCase() },
+      { scanId: barcode }
+    ]
+  });
+
+  if (!product) {
+    return res.status(404).json({
+      success: false,
+      message: `Product not found for barcode: ${barcode}`
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Product found by barcode',
+    data: product
+  });
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -1118,5 +1225,7 @@ module.exports = {
   searchProducts,
   getOldUnboughtProducts,
   smartCreateProduct,
-  checkProductDuplicate
+  checkProductDuplicate,
+  scanProduct,
+  lookupByBarcode
 };

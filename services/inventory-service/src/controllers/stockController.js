@@ -215,7 +215,7 @@ const stockIn = asyncHandler(async (req, res) => {
  * POST /v1/stock-operations/stock-out
  */
 const stockOut = asyncHandler(async (req, res) => {
-    const { scanData, quantity, reason, changeType = 'sale', userId, companyId, shopId } = req.body;
+    const { scanData, quantity, reason = "sold", changeType = 'sale', userId, companyId, shopId } = req.body;
 
     // Validation
     if (!scanData || !quantity) {

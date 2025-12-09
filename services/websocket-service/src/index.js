@@ -5,7 +5,6 @@ const compression = require('compression');
 const helmet = require('helmet');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
 const { initAdapter } = require('./config/adapter');
 const logger = require('./utils/logger');
 const { redis, rabbitmq, healthCheck } = require('./config/shared');
@@ -19,7 +18,7 @@ const server = createServer(app);
 // Security & perf middleware
 app.use(helmet());
 app.use(compression());
-app.use(cors({ origin: process.env.CORS_ORIGINS?.split(',') || ['*'] }));
+// CORS is handled at the API gateway. Keep Socket.IO CORS config (below) if direct socket connections are required.
 
 // Socket.IO configuration
 const io = new Server(server, {

@@ -37,6 +37,20 @@ const createServiceProxy = (serviceName, serviceUrl, options = {}) => {
       console.log(
         `✅ [${serviceName}] ${proxyRes.statusCode} ${req.method} ${req.originalUrl}`
       );
+
+      // Ensure Set-Cookie from backend is scoped to the gateway host
+      try {
+        const setCookie = proxyRes.headers && proxyRes.headers['set-cookie'];
+        if (setCookie && Array.isArray(setCookie) && setCookie.length) {
+          // Remove any Domain attribute so cookie is issued for gateway host
+          const rewritten = setCookie.map((c) => c.replace(/;?\s*Domain=[^;]+/i, ''));
+          // Replace on the proxy response so downstream receives rewritten cookies
+          proxyRes.headers['set-cookie'] = rewritten;
+        }
+      } catch (e) {
+        // don't break proxy on header rewrite errors
+        console.warn('Cookie rewrite failed:', e && e.message);
+      }
     },
     onError: (err, req, res) => {
       console.error(`❌ [${serviceName}] Proxy error:`, err.message);

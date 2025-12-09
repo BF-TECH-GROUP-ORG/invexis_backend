@@ -3,7 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 const sequelize = require("./config/db");
-const cors = require('cors')
+// CORS handled by api-gateway; do not enable here
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
@@ -19,8 +19,7 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
-// CORS middleware
-app.use(cors());
+// CORS handled by api-gateway
 
 // Request logging middleware
 app.use((req, res, next) => {
