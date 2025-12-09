@@ -12,10 +12,9 @@ async function processBatch() {
 
         for (const ev of events) {
             try {
-                // publish to rabbitmq via global publisher if available
-                if (global && typeof global.rabbitmqPublish === 'function') {
-                    await global.rabbitmqPublish(ev.eventType.toLowerCase().replace(/_/g, '.'), ev.payload);
-                }
+                // publish to rabbitmq
+                const { emit } = require('../events/producer');
+                await emit(ev.eventType || ev.routingKey, ev.payload);
                 await eventRepo.markProcessed(ev._id);
             } catch (err) {
                 console.warn('Failed to publish event, will retry later', err && err.message ? err.message : err);

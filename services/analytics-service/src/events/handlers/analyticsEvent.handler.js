@@ -4,6 +4,11 @@ const AnalyticsEvent = require("../../models/AnalyticsEvent.model");
 
 const handleAnalyticsEvent = async (event, routingKey) => {
     try {
+        // Ignore health check events
+        if (routingKey.startsWith('health.')) {
+            return;
+        }
+
         // Analytics service might want to track specific business metrics or everything
         // For now, let's track everything that reaches here.
 

@@ -2,89 +2,34 @@
 
 /**
  * Redis Client Manager for API Gateway
- * 
- * Handles:
- *  - Redis connection with automatic reconnection
- *  - Health monitoring and logging
- *  - Cache invalidation methods
- *  - Graceful fallback when Redis unavailable
+ * Wraps the shared Redis module to provide compatible interface and extra utilities.
  */
 
-const Redis = require("ioredis");
-
-const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
-const REDIS_MAX_RETRIES = 5;
-const REDIS_RETRY_DELAY = 1000; // milliseconds
-
-let redisClient = null;
-let isConnected = false;
+const sharedRedis = require("/app/shared/redis");
 
 /**
  * Initialize Redis connection
+ * (Shared module connects automatically, this is for compatibility/logging)
  */
 function initRedis() {
-  if (redisClient) {
-    return redisClient;
+  if (!sharedRedis.client) {
+    sharedRedis.connect();
   }
-
-  try {
-    redisClient = new Redis(REDIS_URL, {
-      maxRetriesPerRequest: REDIS_MAX_RETRIES,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * REDIS_RETRY_DELAY, 30000);
-        console.log(`🔄 Redis reconnection attempt ${times}, waiting ${delay}ms...`);
-        return delay;
-      },
-      enableReadyCheck: true,
-      enableOfflineQueue: true,
-      connectTimeout: 5000,
-    });
-
-    // Connection events
-    redisClient.on("connect", () => {
-      isConnected = true;
-      console.log("✅ Redis connected");
-    });
-
-    redisClient.on("ready", () => {
-      console.log("✅ Redis ready");
-    });
-
-    redisClient.on("error", (err) => {
-      console.error("❌ Redis error:", err.message);
-    });
-
-    redisClient.on("close", () => {
-      isConnected = false;
-      console.warn("⚠️ Redis connection closed");
-    });
-
-    redisClient.on("reconnecting", () => {
-      console.log("🔄 Redis reconnecting...");
-    });
-
-    return redisClient;
-  } catch (error) {
-    console.error("❌ Failed to initialize Redis:", error.message);
-    return null;
-  }
+  return sharedRedis.client;
 }
 
 /**
- * Get Redis client, initializing if needed
+ * Get Redis client (ioredis instance)
  */
 function getRedisClient() {
-  if (!redisClient) {
-    initRedis();
-  }
-  return redisClient;
+  return sharedRedis.client;
 }
 
 /**
  * Check Redis connection status
  */
 function isRedisConnected() {
-  return isConnected && redisClient !== null;
+  return sharedRedis.isConnected;
 }
 
 /**
@@ -166,7 +111,7 @@ async function getCacheStats() {
     const info = await client.info("stats");
     const dbSize = await client.dbsize();
     return {
-      connected: isConnected,
+      connected: sharedRedis.isConnected,
       dbSize,
       info,
     };
@@ -181,8 +126,8 @@ async function getCacheStats() {
  */
 async function healthCheck() {
   const client = getRedisClient();
-  if (!client) {
-    return { status: "disconnected", message: "Redis client not initialized" };
+  if (!client || !sharedRedis.isConnected) {
+    return { status: "disconnected", message: "Redis client not connected" };
   }
 
   try {
@@ -190,7 +135,7 @@ async function healthCheck() {
     const dbSize = await client.dbsize();
     return {
       status: "healthy",
-      connected: isConnected,
+      connected: true,
       dbSize,
       timestamp: new Date().toISOString(),
     };
@@ -198,7 +143,7 @@ async function healthCheck() {
     return {
       status: "unhealthy",
       error: error.message,
-      connected: isConnected,
+      connected: false,
       timestamp: new Date().toISOString(),
     };
   }
@@ -208,14 +153,7 @@ async function healthCheck() {
  * Graceful shutdown
  */
 async function shutdown() {
-  if (redisClient) {
-    try {
-      await redisClient.quit();
-      console.log("✅ Redis connection closed gracefully");
-    } catch (error) {
-      console.error("❌ Error closing Redis:", error.message);
-    }
-  }
+  await sharedRedis.close();
 }
 
 module.exports = {
@@ -228,3 +166,4 @@ module.exports = {
   healthCheck,
   shutdown,
 };
+

@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
+const { connect: connectRabbitMQ } = require("../../../shared/rabbitmq");
 
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
@@ -9,7 +9,7 @@ const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 const sequelize = require("./config/database");
 
 const app = express();
-const PORT = process.env.PORT || 9002; // Default to 9002 for analytics
+const PORT = process.env.PORT || 8002; // Default to 9002 for analytics
 
 // Middleware
 app.use(express.json());

@@ -9,7 +9,7 @@ const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 const mongoose = require("mongoose");
 
 const app = express();
-const PORT = process.env.PORT || 9001; // Default to 9001 for audit
+const PORT = process.env.PORT || 8003; // Default to 9003 for audit (as per docker-compose)
 
 // Middleware
 app.use(express.json());
@@ -38,6 +38,9 @@ app.use((req, res) => {
     });
 });
 
+// API Routes
+app.use("/api/audit", require("./routes/AuditRoutes"));
+
 // Error handling
 app.use((err, req, res, next) => {
     console.error("Error:", err.message);
@@ -50,7 +53,9 @@ app.use((err, req, res, next) => {
 // Initialize Database (MongoDB)
 const initializeDatabase = async () => {
     try {
-        await mongoose.connect(process.env.MONGO_URI || "mongodb://mongo:27017/audit-service");
+        // Default to Docker Compose value
+        const mongoUri = process.env.DB_MONGO || "mongodb://root:invexispass@mongodb:27017/auditdb?authSource=admin";
+        await mongoose.connect(mongoUri);
         console.log("✅ MongoDB connected");
     } catch (error) {
         console.error("❌ MongoDB connection failed:", error);

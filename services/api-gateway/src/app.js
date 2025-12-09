@@ -20,7 +20,7 @@ const {
   authenticateToken,
 } = require("./routes/proxy");
 const { limiter, authLimiter } = require("./utils/rateLimiter");
-// const { connect } = require("/app/shared/redis.js");
+const redisClient = require("/app/shared/redis");
 const { initSubscriptionEventConsumer, createCacheInvalidationEndpoint } = require("./events/subscriptionEventConsumer");
 const {
   checkSubscriptionStatus,
@@ -31,8 +31,8 @@ const {
 
 const app = express();
 
-// Initialize Redis for subscription/rate limit caching
-// connect();
+// Redis is initialized via require("/app/shared/redis")
+
 
 // Security middleware
 app.use(helmet()); // Set security HTTP headers

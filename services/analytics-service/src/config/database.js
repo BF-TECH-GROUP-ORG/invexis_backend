@@ -1,11 +1,19 @@
 const { Sequelize } = require("sequelize");
 
+// Default to Docker Compose values
+const DB_NAME = process.env.DB_NAME || "analyticsdb";
+const DB_USER = process.env.DB_USER || "invexis";
+const DB_PASSWORD = process.env.DB_PASSWORD || "invexispass";
+const DB_HOST = process.env.DB_HOST || "analytics-postgres";
+const DB_PORT = process.env.DB_PORT || 5432;
+
 const sequelize = new Sequelize(
-    process.env.DB_NAME || "analytics_db",
-    process.env.DB_USER || "postgres",
-    process.env.DB_PASSWORD || "postgres",
+    DB_NAME,
+    DB_USER,
+    DB_PASSWORD,
     {
-        host: process.env.DB_HOST || "postgres", // or timescaledb if separate service
+        host: DB_HOST,
+        port: DB_PORT,
         dialect: "postgres",
         logging: false,
         pool: {
