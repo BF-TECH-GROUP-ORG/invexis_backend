@@ -40,16 +40,6 @@ app.use(mongoSanitize()); // Sanitize data against NoSQL injection
 app.use(xss()); // Sanitize data against XSS
 
 // CORS configuration
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With","ngrok-skip-browser-warning"],
-    credentials: true,
-  })
-);
-
-// Trust proxy (for rate limiting behind reverse proxy)
 app.set("trust proxy", 1);
 
 // Body parsing middleware
@@ -59,6 +49,25 @@ app.use(express.urlencoded({ extended: true }));
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);
+  next();
+});
+const allowedOrigins = ["http://localhost:3000", "https://yourdomain.com"];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
   next();
 });
 
@@ -99,9 +108,9 @@ app.use("/socket.io", websocketProxy);
 
 // General websocket routes
 app.use("/api/websocket", websocketProxy);
- /**
+/**
 these routes will be applied when uncommented during freemium implementation
- * app.use("/api/auth", authLimiter, authProxy);
+* app.use("/api/auth", authLimiter, authProxy);
 
 // Protected services (require authentication - enforced by services themselves)
 app.use("/api/company", companyProxy);
@@ -122,7 +131,7 @@ app.use("/socket.io", websocketProxy);
 app.use("/api/websocket", websocketProxy);
 
 */
- app.use("/api/auth", authLimiter, authProxy);
+app.use("/api/auth", authLimiter, authProxy);
 
 // Protected services (require authentication - enforced by services themselves)
 app.use("/api/company", companyProxy);

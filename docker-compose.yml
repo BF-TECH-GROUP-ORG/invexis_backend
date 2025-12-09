@@ -106,7 +106,7 @@ services:
 
   # PostgreSQL for analytics-service
   analytics-postgres:
-    image: postgres:15
+    image: timescale/timescaledb:latest-pg16
     container_name: invexis-analytics-postgres
     restart: unless-stopped
     environment:
