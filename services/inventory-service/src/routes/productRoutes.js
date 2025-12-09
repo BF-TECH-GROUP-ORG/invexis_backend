@@ -16,7 +16,9 @@ const {
   searchProducts,
   getOldUnboughtProducts,
   smartCreateProduct,
-  checkProductDuplicate
+  checkProductDuplicate,
+  scanProduct,
+  lookupByBarcode
 } = require('../controllers/productController');
 const { protect } = require('../middleware/auth');
 const { handleUploads } = require('../utils/uploadUtil');
@@ -36,6 +38,10 @@ router.get('/get/scheduled', getScheduledProducts);
 router.get('/get/featured', getFeaturedProducts);
 router.get('/search/product', searchProducts);
 router.get('/old/unbought', getOldUnboughtProducts);
+
+// QR Code & Barcode Scanning
+router.post('/scan', scanProduct);
+router.get('/lookup/:barcode', lookupByBarcode);
 
 // Smart Product Creation
 router.post('/smart-create', protect, smartCreateProduct);

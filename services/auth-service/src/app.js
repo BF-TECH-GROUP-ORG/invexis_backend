@@ -1,7 +1,6 @@
 // app.js
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
 const morgan = require("morgan");
 const helmet = require("helmet");
 const session = require("express-session");
@@ -15,48 +14,6 @@ const authRoutes = require("./routes/routes");
 // --------------------------------------
 const app = express();
 
-// --------------------------------------
-// FRONTEND ORIGINS (DEV + PROD)
-// --------------------------------------
-const allowedOrigins = [
-    "http://localhost:3001",
-    'http://localhost:40999',
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_DEV_URL,
-].filter(Boolean);
-
-// --------------------------------------
-// SECURE CORS CONFIGURATION
-// MUST MATCH FRONTEND withCredentials:true
-// --------------------------------------
-app.use(
-    cors({
-        origin: function (origin, callback) {
-            if (!origin) return callback(null, true); // Postman, curl, etc.
-
-            const isAllowed = allowedOrigins.includes(origin);
-            const isNgrok = origin && (origin.includes("ngrok-free.app") || origin.includes("ngrok-free.dev"));
-
-            if (isAllowed || isNgrok) {
-                return callback(null, origin); // Reflect the origin explicitly
-            }
-
-            console.error("❌ Blocked CORS Origin:", origin);
-            return callback(new Error("Not allowed by CORS"));
-        },
-
-        credentials: true, // REQUIRED for cookies
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: [
-            "Content-Type",
-            "Authorization",
-            "X-Requested-With",
-            "ngrok-skip-browser-warning",
-        ],
-        exposedHeaders: ["Set-Cookie"],
-        optionsSuccessStatus: 200,
-    })
-);
 
 // --------------------------------------
 // HELMET (RELAXED FOR DEV)
@@ -71,7 +28,7 @@ app.use(
 // --------------------------------------
 // MIDDLEWARE
 // --------------------------------------
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(morgan("dev"));

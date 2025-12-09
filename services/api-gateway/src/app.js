@@ -39,7 +39,69 @@ app.use(helmet()); // Set security HTTP headers
 app.use(mongoSanitize()); // Sanitize data against NoSQL injection
 app.use(xss()); // Sanitize data against XSS
 
-// CORS configuration
+// CORS configuration (centralized) with dynamic origin management
+const corsManager = require('./utils/corsManager');
+
+// INTERNAL API key for protected internal endpoints (manage origins)
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || null;
+
+// Initialize corsManager from env var
+corsManager.init(process.env.CORS_ORIGIN || '*').then(list => {
+  console.log('corsManager initialized with origins:', list);
+}).catch(err => console.warn('corsManager init failed', err && err.message));
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow non-browser requests (tools, server-to-server) when origin is undefined
+      if (!origin) return callback(null, true);
+      const allowed = corsManager.getOrigins();
+      if (allowed.indexOf('*') !== -1) return callback(null, true);
+      if (allowed.indexOf(origin) !== -1) return callback(null, true);
+      return callback(new Error('CORS policy: Origin not allowed'));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "ngrok-skip-browser-warning", "X-CSRF-Token"],
+    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+  })
+);
+
+// Internal endpoints to manage allowed origins (protected by INTERNAL_API_KEY)
+const internalRouter = express.Router();
+internalRouter.use(express.json());
+
+function requireInternalKey(req, res, next) {
+  const key = req.headers['x-internal-secret'] || req.query.internal_key || req.body.internal_key;
+  if (!INTERNAL_API_KEY) return res.status(403).json({ error: 'Internal API not configured' });
+  if (!key || key !== INTERNAL_API_KEY) return res.status(403).json({ error: 'Forbidden' });
+  return next();
+}
+
+internalRouter.use(requireInternalKey);
+
+internalRouter.get('/cors-origins', (req, res) => {
+  res.json({ origins: corsManager.getOrigins() });
+});
+
+internalRouter.post('/cors-origins', async (req, res) => {
+  const { origin } = req.body;
+  if (!origin) return res.status(400).json({ error: 'origin required' });
+  const ok = await corsManager.addOrigin(origin);
+  return res.status(ok ? 200 : 500).json({ ok, origins: corsManager.getOrigins() });
+});
+
+internalRouter.delete('/cors-origins', async (req, res) => {
+  const origin = req.body.origin || req.query.origin;
+  if (!origin) return res.status(400).json({ error: 'origin required' });
+  const ok = await corsManager.removeOrigin(origin);
+  return res.status(ok ? 200 : 404).json({ ok, origins: corsManager.getOrigins() });
+});
+
+app.use('/internal', internalRouter);
+
+// Trust proxy (for rate limiting behind reverse proxy)
 app.set("trust proxy", 1);
 
 // Body parsing middleware

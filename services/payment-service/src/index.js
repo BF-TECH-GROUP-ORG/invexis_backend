@@ -3,7 +3,6 @@
 
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const { db, testConnection, closeConnection } = require('./config/db');
@@ -29,10 +28,7 @@ try {
 app.use(helmet());
 
 // CORS configuration
-app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
-    credentials: true
-}));
+// CORS handled centrally at api-gateway. Do not enable here.
 
 // Request logging
 app.use(morgan('dev'));

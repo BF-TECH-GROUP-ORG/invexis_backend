@@ -6,7 +6,6 @@ const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 // Import routes
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
-const cors = require("cors");
 
 const router = require('./routes/index')
 

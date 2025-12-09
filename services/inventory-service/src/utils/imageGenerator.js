@@ -32,7 +32,7 @@ const generateBarcodeBuffer = async (text) => {
             bcid: 'code128',       // Barcode type
             text: text,            // Text to encode
             scale: 5,              // Increased scale for better scanning
-            height: 15,            // Increased height
+            height: 5,            // Increased height
             includetext: true,     // Show human-readable text
             textxalign: 'center',
             backgroundcolor: 'ffffff', // White background
