@@ -125,13 +125,35 @@ const createCompany = asyncHandler(async (req, res) => {
  */
 const getAllCompanies = asyncHandler(async (req, res) => {
   const { status, tier, limit = 50, offset = 0 } = req.query;
+  
+  // Create cache key from query parameters
+  const cacheKey = `companies:${status || 'all'}:${tier || 'all'}:${limit}:${offset}`;
+  
+  // Try cache first
+  try {
+    const cachedCompanies = await getCache(cacheKey);
+    if (cachedCompanies) {
+      console.log(`[CACHE HIT] Companies list - ${cacheKey}`);
+      return res.json({
+        success: true,
+        count: cachedCompanies.length,
+        data: cachedCompanies,
+      });
+    }
+  } catch (e) {
+    console.warn('Redis get failed (non-blocking):', e && e.message);
+  }
 
+  // DB fallback if not cached
   const companies = await Company.findAllCompanies({
     status,
     tier,
     limit: parseInt(limit),
     offset: parseInt(offset),
   });
+
+  // Cache the result (fire-and-forget, 10min TTL)
+  setCache(cacheKey, companies, 600).catch(() => {});
 
   res.json({
     success: true,
@@ -150,15 +172,20 @@ const getCompanyById = asyncHandler(async (req, res) => {
 
   // Try cache first
   const cacheKey = `company:${id}`;
-  const cachedCompany = await getCache(cacheKey);
-
-  if (cachedCompany) {
-    return res.json({
-      success: true,
-      data: cachedCompany,
-    });
+  try {
+    const cachedCompany = await getCache(cacheKey);
+    if (cachedCompany) {
+      console.log(`[CACHE HIT] Company ${id}`);
+      return res.json({
+        success: true,
+        data: cachedCompany,
+      });
+    }
+  } catch (e) {
+    console.warn('Redis get failed (non-blocking):', e && e.message);
   }
 
+  // DB fallback if not cached
   const company = await Company.findCompanyById(id);
 
   if (!company) {
@@ -166,8 +193,8 @@ const getCompanyById = asyncHandler(async (req, res) => {
     throw new Error("Company not found");
   }
 
-  // Set cache (1 hour)
-  await setCache(cacheKey, company, 3600);
+  // Set cache (fire-and-forget, 1 hour TTL)
+  setCache(cacheKey, company, 3600).catch(() => {});
 
   res.json({
     success: true,
@@ -182,13 +209,32 @@ const getCompanyById = asyncHandler(async (req, res) => {
  */
 const getCompanyByDomain = asyncHandler(async (req, res) => {
   const domain = req.params.domain;
-  console.log(domain)
+  const cacheKey = `company:domain:${domain}`;
+  
+  // Try cache first
+  try {
+    const cachedCompany = await getCache(cacheKey);
+    if (cachedCompany) {
+      console.log(`[CACHE HIT] Company by domain ${domain}`);
+      return res.json({
+        success: true,
+        data: cachedCompany,
+      });
+    }
+  } catch (e) {
+    console.warn('Redis get failed (non-blocking):', e && e.message);
+  }
+  
+  // DB fallback if not cached
   const company = await Company.findCompanyByDomain(domain);
 
   if (!company) {
     res.status(404);
     throw new Error("Company not found");
   }
+
+  // Set cache (fire-and-forget, 1 hour TTL)
+  setCache(cacheKey, company, 3600).catch(() => {});
 
   res.json({
     success: true,
@@ -239,8 +285,10 @@ const updateCompany = asyncHandler(async (req, res) => {
     return updated;
   });
 
-  // Invalidate cache
-  await delCache(`company:${id}`);
+  // Invalidate caches (fire-and-forget)
+  delCache(`company:${id}`).catch(() => {});
+  delCache('companies:active').catch(() => {});
+  delCache(`company:domain:${updatedCompany.domain}`).catch(() => {});
 
   res.json({
     success: true,
@@ -270,8 +318,10 @@ const deleteCompany = asyncHandler(async (req, res) => {
     await companyEvents.deleted(id, trx);
   });
 
-  // Invalidate cache
-  await delCache(`company:${id}`);
+  // Invalidate caches (fire-and-forget)
+  delCache(`company:${id}`).catch(() => {});
+  delCache('companies:active').catch(() => {});
+  delCache(`company:domain:${company.domain}`).catch(() => {});
 
   res.json({
     success: true,
@@ -327,8 +377,10 @@ const changeCompanyStatus = asyncHandler(async (req, res) => {
     await companyEvents.statusChanged(id, status, trx);
   });
 
-  // Invalidate cache
-  await delCache(`company:${id}`);
+  // Invalidate caches (fire-and-forget)
+  delCache(`company:${id}`).catch(() => {});
+  delCache('companies:active').catch(() => {});
+  delCache(`company:domain:${company.domain}`).catch(() => {});
 
   res.json({
     success: true,
@@ -366,8 +418,9 @@ const changeCompanyTier = asyncHandler(async (req, res) => {
     await companyEvents.tierChanged(id, normalizedTier, trx);
   });
 
-  // Invalidate cache
-  await delCache(`company:${id}`);
+  // Invalidate caches (fire-and-forget)
+  delCache(`company:${id}`).catch(() => {});
+  delCache('companies:active').catch(() => {});
 
   res.json({
     success: true,
@@ -381,7 +434,28 @@ const changeCompanyTier = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const getActiveCompanies = asyncHandler(async (req, res) => {
+  const cacheKey = 'companies:active';
+  
+  // Try cache first
+  try {
+    const cachedCompanies = await getCache(cacheKey);
+    if (cachedCompanies) {
+      console.log('[CACHE HIT] Active companies');
+      return res.json({
+        success: true,
+        count: cachedCompanies.length,
+        data: cachedCompanies,
+      });
+    }
+  } catch (e) {
+    console.warn('Redis get failed (non-blocking):', e && e.message);
+  }
+  
+  // DB fallback if not cached
   const companies = await Company.getActiveCompanies();
+
+  // Set cache (fire-and-forget, 5min TTL for active roster)
+  setCache(cacheKey, companies, 300).catch(() => {});
 
   res.json({
     success: true,
@@ -435,8 +509,10 @@ const reactivateCompany = asyncHandler(async (req, res) => {
     return result;
   });
 
-  // Invalidate cache
-  await delCache(`company:${id}`);
+  // Invalidate caches (fire-and-forget)
+  delCache(`company:${id}`).catch(() => {});
+  delCache('companies:active').catch(() => {});
+  delCache(`company:domain:${reactivated.domain}`).catch(() => {});
 
   res.json({
     success: true,
@@ -617,7 +693,8 @@ const setCompanyCategories = asyncHandler(async (req, res) => {
  * @access  Private (Company Admin or Super Admin)
  */
 const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+
+  const id = req.params.id || req.body.id || req.query.id;
 
   // Check if files were uploaded
   if (!req.files || req.files.length === 0) {
@@ -625,14 +702,22 @@ const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
     throw new Error("No files uploaded. Please upload at least one document.");
   }
 
-  const company = await Company.findCompanyById(id);
+  const cacheKey = `company:${id}`;
+  // Try cache first (fast path)
+  let company = await getCache(cacheKey);
   if (!company) {
-    res.status(404);
-    throw new Error("Company not found");
+    company = await Company.findCompanyById(id);
+    if (!company) {
+      res.status(404);
+      throw new Error("Company not found");
+    }
+    // Warm cache asynchronously (don't block response)
+    setCache(cacheKey, company, 3600).catch(() => {});
   }
 
   const userId = req.user?.id || null;
 
+  // Parse metadata only when needed
   let metadata = company.metadata || {};
   if (typeof metadata === "string") {
     try {
@@ -648,19 +733,18 @@ const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
     : [];
 
   const nowIso = new Date().toISOString();
+  const ts = Date.now();
 
-  // Process uploaded files from Cloudinary
+  // Build new documents array (fast, in-memory)
   const newDocs = req.files.map((file, index) => {
-    // Get document type from form data if provided
     const docTypeField = `documentType_${index}`;
     const docNotesField = `documentNotes_${index}`;
-
     return {
-      id: `doc_${Date.now()}_${index}`,
+      id: `doc_${ts}_${index}`,
       type: req.body[docTypeField] || file.mimetype,
       name: file.originalname,
-      url: file.path, // Cloudinary URL (secure_url)
-      cloudinary_public_id: file.filename, // Cloudinary public ID
+      url: file.path,
+      cloudinary_public_id: file.filename,
       size: file.size,
       mimetype: file.mimetype,
       format: file.format,
@@ -671,31 +755,63 @@ const uploadCompanyVerificationDocs = asyncHandler(async (req, res) => {
     };
   });
 
+  // Update metadata (batch) and persist with a single fast DB call
   metadata.verification = {
     ...existingVerification,
     status: "pending",
     documents: [...existingDocs, ...newDocs],
   };
 
-  const updatedCompany = await db.transaction(async (trx) => {
-    await trx("companies")
-      .where({ id })
-      .update({
-        metadata,
-        updatedBy: userId,
-        updatedAt: new Date(),
-      });
-
-    const fresh = await trx("companies").where({ id }).first();
-
-    await companyEvents.updated(fresh, trx);
-
-    return fresh;
+  // Perform a minimal, single UPDATE (no heavy transactions) for speed
+  await db("companies").where({ id }).update({
+    metadata,
+    updatedBy: userId,
+    updatedAt: new Date(),
   });
 
-  // Invalidate cache
-  await delCache(`company:${id}`);
+  // Refresh company (read-after-write) from DB for response
+  const updatedCompany = await Company.findCompanyById(id);
 
+  // Fire-and-forget: publish an event to RabbitMQ so background workers can
+  // process any heavier work (audit, outbox creation, notifications)
+  (async () => {
+    try {
+      let rabbitmq;
+      try {
+        rabbitmq = require('/app/shared/rabbitmq.js');
+      } catch (err) {
+        try {
+          rabbitmq = require('/app/shared/rabbitmq.js');
+        } catch (err2) {
+          rabbitmq = null;
+        }
+      }
+
+      if (rabbitmq) {
+        rabbitmq.publish({
+          exchange: 'events_topic',
+          routingKey: 'company.verification_docs.uploaded',
+          content: {
+            type: 'company.verification_docs.uploaded',
+            data: {
+              companyId: id,
+              uploadedBy: userId,
+              uploadedAt: nowIso,
+              uploadedCount: newDocs.length,
+              docs: newDocs.map(d => ({ id: d.id, cloudinary_public_id: d.cloudinary_public_id, url: d.url }))
+            }
+          }
+        }).catch(e => console.warn('Publish failed (non-blocking):', e && e.message));
+      }
+    } catch (err) {
+      console.warn('Async publish error:', err && err.message);
+    }
+  })();
+
+  // Invalidate cache asynchronously
+  delCache(cacheKey).catch(() => {});
+
+  // Respond quickly with updated company and uploaded file metadata
   res.json({
     success: true,
     message: "Verification documents uploaded successfully",

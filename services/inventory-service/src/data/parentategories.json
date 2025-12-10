@@ -1,0 +1,341 @@
+[
+ {
+  "name": "Electronics",
+  "description": "All electronic devices and accessories",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 1,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Electronics - Buy Phones, Laptops, TVs & More",
+    "metaDescription": "Shop smartphones, laptops, TVs, cameras, audio devices, smart home tech and accessories.",
+    "keywords": ["electronics", "phones", "laptops", "tv", "camera"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Clothing & Fashion",
+  "description": "Apparel, footwear and fashion accessories",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 2,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Clothing & Fashion",
+    "metaDescription": "Men’s, women’s and kids’ clothing, footwear, jewelry and accessories.",
+    "keywords": ["clothing", "fashion", "apparel"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Food & Beverages",
+  "description": "Groceries, drinks and food items",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 3,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Food & Beverages",
+    "metaDescription": "Fresh produce, meat, dairy, grains, snacks, beverages and more.",
+    "keywords": ["food", "beverages", "grocery"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Agriculture & Farming",
+  "description": "Seeds, fertilizers, tools and farming supplies",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 4,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Agriculture & Farming",
+    "metaDescription": "Farming tools, irrigation, fertilizers, seeds and farming essentials.",
+    "keywords": ["agriculture", "farming", "seeds"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Construction & Building Materials",
+  "description": "Materials and tools for construction",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 5,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Construction & Building Materials",
+    "metaDescription": "Cement, tools, electricals, plumbing and construction materials.",
+    "keywords": ["construction", "building materials", "tools"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Furniture & Home",
+  "description": "Furniture and home decoration items",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 6,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Furniture & Home",
+    "metaDescription": "Home furniture, decor, organization and home essentials.",
+    "keywords": ["furniture", "home decor", "home"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Vehicles & Auto Parts",
+  "description": "Cars, bikes, spare parts and accessories",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 7,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Vehicles & Auto Parts",
+    "metaDescription": "Vehicles, auto parts, lubricants, tires and transport equipment.",
+    "keywords": ["vehicles", "auto parts", "cars"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Beauty & Personal Care",
+  "description": "Cosmetics, skincare and personal hygiene",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 8,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Beauty & Personal Care",
+    "metaDescription": "Skin care, hair care, hygiene products and beauty tools.",
+    "keywords": ["beauty", "personal care", "skincare"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Home & Kitchen Appliances",
+  "description": "Large and small home appliances",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 9,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Home & Kitchen Appliances",
+    "metaDescription": "Appliances for kitchen, cleaning, heating and cooling.",
+    "keywords": ["appliances", "kitchen appliances"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Tools, Hardware & Industrial",
+  "description": "Hand tools, power tools and industrial equipment",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 10,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Tools, Hardware & Industrial",
+    "metaDescription": "Tools, machinery, hardware supplies and industrial equipment.",
+    "keywords": ["tools", "hardware", "industrial"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ 
+ {
+  "name": "Health & Medical Supplies",
+  "description": "Medical equipment and health products",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 11,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Health & Medical Supplies",
+    "metaDescription": "Medical tools, diagnostics, safety items and wellness products.",
+    "keywords": ["health", "medical", "supplies"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ 
+ {
+  "name": "Mining & Extractives",
+  "description": "Minerals, ores, quarry materials and mining equipment",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 12,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Mining & Extractives",
+    "metaDescription": "Mineral ores, quarry products, mining machinery and extractive industry supplies.",
+    "keywords": ["mining", "ores", "minerals", "extractives"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ 
+ {
+  "name": "Arts, Crafts & Stationery",
+  "description": "Art supplies, stationery and creative items",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 13,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Arts, Crafts & Stationery",
+    "metaDescription": "Art tools, stationery, paper goods, books and craft supplies.",
+    "keywords": ["arts", "crafts", "stationery"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Sports & Outdoors",
+  "description": "Sports gear, fitness and outdoor equipment",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 14,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Sports & Outdoors",
+    "metaDescription": "Equipment for sports, fitness, camping and outdoor activities.",
+    "keywords": ["sports", "outdoors", "fitness"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Baby & Kids",
+  "description": "Baby essentials, toys and kids products",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 15,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Baby & Kids",
+    "metaDescription": "Baby supplies, kids furniture, toys and children’s essentials.",
+    "keywords": ["baby", "kids", "toys"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Pets & Animals",
+  "description": "Pet food, accessories and animal care supplies",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 16,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Pets & Animals",
+    "metaDescription": "Pet food, grooming, medication and animal equipment.",
+    "keywords": ["pets", "animals", "pet food"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Jewelry & Precious Metals",
+  "description": "Gold, silver, gems and premium jewelry",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 17,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Jewelry & Precious Metals",
+    "metaDescription": "Jewelry, precious metals, gems and luxury accessories.",
+    "keywords": ["jewelry", "gold", "silver"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Energy & Utilities",
+  "description": "Fuel, solar, generators and electrical components",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 18,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Energy & Utilities",
+    "metaDescription": "Gas, solar, generators, batteries and electrical items.",
+    "keywords": ["energy", "utilities", "solar"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Services",
+  "description": "Repair, delivery, cleaning and professional services",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 19,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Services",
+    "metaDescription": "Repair, logistics, maintenance, cleaning and professional services.",
+    "keywords": ["services", "repair", "cleaning"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Media & Entertainment",
+  "description": "Books, music, games and movies",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 20,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Media & Entertainment",
+    "metaDescription": "Books, films, games, musical instruments and entertainment products.",
+    "keywords": ["media", "entertainment", "books"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ },
+ {
+  "name": "Real Estate",
+  "description": "Land, residential and commercial properties",
+  "level": 1,
+  "parentCategory": null,
+  "isActive": true,
+  "sortOrder": 21,
+  "image": { "url": "", "alt": "" },
+  "seo": {
+    "metaTitle": "Real Estate",
+    "metaDescription": "Land for sale, rentals, commercial and residential properties.",
+    "keywords": ["real estate", "land", "property"]
+  },
+  "statistics": { "totalProducts": 0, "totalSubcategories": 0 },
+  "attributes": []
+ }
+]

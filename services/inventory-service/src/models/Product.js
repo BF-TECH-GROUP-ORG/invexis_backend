@@ -142,6 +142,14 @@ const productSchema = new Schema(
       required: true,
       index: true,
     },
+    // Store the level-2 category (parent of selected level-3 category) to help
+    // determine which rich fields/specs to show in product forms.
+    categoryL2: {
+      type: Schema.Types.ObjectId,
+      ref: 'Category',
+      default: null,
+      index: true,
+    },
 
     /* ------------------------------ Pricing ------------------------------- */
     pricing: {
@@ -198,6 +206,15 @@ const productSchema = new Schema(
         value: Schema.Types.Mixed,
       },
 
+    ],
+
+    /* ------------------------------ Structured Specs ---------------------- */
+    // Flexible key/value specs used to store category-specific fields (e.g. size, color, model)
+    specs: [
+      {
+        name: { type: String, required: true },
+        value: Schema.Types.Mixed,
+      }
     ],
 
     /* ------------------------------ Media --------------------------------- */

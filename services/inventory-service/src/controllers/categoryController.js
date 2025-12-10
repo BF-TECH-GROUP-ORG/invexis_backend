@@ -552,6 +552,218 @@ const createLevel3Category = asyncHandler(async (req, res) => {
   });
 });
 
+const seedCategories = asyncHandler(async (req, res) => {
+  // Public seed endpoint — intentionally simple and idempotent.
+
+  // Try multiple candidate locations to load the JSON files (covers different run contexts)
+  let parentsData = [];
+  let subsData = [];
+  const tried = [];
+  const errors = [];
+
+  const candidates = [
+    path.join(__dirname, '..', 'data'),
+    path.join(__dirname, '..', '..', 'shared', 'bodies', 'categories'),
+    path.resolve(process.cwd(), 'services', 'inventory-service', 'shared', 'bodies', 'categories'),
+    path.resolve(process.cwd(), 'invexis_backend', 'services', 'inventory-service', 'shared', 'bodies', 'categories'),
+    path.resolve(process.cwd(), 'services', 'inventory-service', 'shared', 'bodies'),
+  ];
+
+  const tryLoad = (basePath, fileName) => {
+    const p = path.join(basePath, fileName);
+    tried.push(p);
+    try {
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, 'utf8');
+        return JSON.parse(raw);
+      }
+    } catch (err) {
+      errors.push({ path: p, message: err.message });
+    }
+    return null;
+  };
+
+  for (const base of candidates) {
+    if (!parentsData) parentsData = [];
+    if (!subsData) subsData = [];
+    if (!parentsData.length) {
+      const loaded = tryLoad(base, 'parentategories.json');
+      if (Array.isArray(loaded) && loaded.length) parentsData = loaded;
+    }
+    if (!subsData.length) {
+      const loaded = tryLoad(base, 'subCategory.json');
+      if (Array.isArray(loaded) && loaded.length) subsData = loaded;
+    }
+    if (parentsData.length && subsData.length) break;
+  }
+
+  if (!Array.isArray(parentsData)) parentsData = [];
+  if (!Array.isArray(subsData)) subsData = [];
+
+  if (!parentsData.length && !subsData.length) {
+    return res.status(500).json({ success: false, message: 'Category source files not found or empty', tried, errors, debug: { parentsCount: parentsData.length, subsCount: subsData.length } });
+  }
+
+  // Delete ALL categories and drop the collection to clear all indexes
+  // This ensures no E11000 duplicate key errors on the unique slug index
+  // WARNING: this will remove all level 1/2/3 categories and may orphan product references.
+  let deletedAllCount = 0;
+  try {
+    const existingCount = await Category.countDocuments({});
+    if (existingCount > 0) {
+      const delResult = await Category.deleteMany({});
+      deletedAllCount = delResult.deletedCount || 0;
+    }
+    // Drop the entire collection to remove all indexes (including unique slug index)
+    // Then mongoose will recreate indexes on first insert
+    await Category.collection.drop();
+  } catch (dropErr) {
+    // Collection may not exist yet, continue anyway
+    console.log('Drop collection info:', dropErr.message);
+  }
+
+  // Debug info for troubleshooting: include lengths and sample names
+  const parentSample = Array.isArray(parentsData) ? parentsData.slice(0, 5).map(p => p.name || '') : [];
+  const subSample = Array.isArray(subsData) ? subsData.slice(0, 5).map(s => s.name || '') : [];
+
+  const slugify = (name) => {
+    return name
+      .toString()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
+
+  // Ensure slug is unique by appending numeric suffix if needed
+  const ensureUniqueSlug = async (baseSlug) => {
+    let candidate = baseSlug;
+    let i = 1;
+    while (true) {
+      const found = await Category.findOne({ slug: candidate });
+      if (!found) return candidate;
+      candidate = `${baseSlug}-${i}`;
+      i += 1;
+    }
+  };
+
+  const summary = {
+    parentsInserted: 0,
+    parentsSkipped: 0,
+    subsInserted: 0,
+    subsSkipped: 0,
+    missingParents: [],
+    deletedAll: 0,
+  };
+
+  // map parent name (lowercase) -> ObjectId
+  const parentMap = {};
+
+  // Insert or map level-1 parents
+  for (const p of parentsData) {
+    const name = (p.name || '').trim();
+    if (!name) continue;
+    const baseSlug = slugify(name);
+    const slug = await ensureUniqueSlug(baseSlug);
+    let existing = await Category.findOne({ slug, level: 1 });
+    if (existing) {
+      parentMap[name.toLowerCase()] = existing._id;
+      summary.parentsSkipped++;
+      continue;
+    }
+
+    const newParent = new Category({
+      name,
+      slug,
+      description: p.description || '',
+      level: 1,
+      parentCategory: null,
+      isActive: typeof p.isActive === 'boolean' ? p.isActive : true,
+      sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : 0,
+      image: p.image || {},
+      seo: p.seo || {},
+      statistics: p.statistics || { totalProducts: 0, totalSubcategories: 0 },
+      attributes: p.attributes || []
+    });
+
+    await newParent.save();
+    parentMap[name.toLowerCase()] = newParent._id;
+    summary.parentsInserted++;
+  }
+
+  // Insert level-2 subcategories under parents
+  for (const s of subsData) {
+    const name = (s.name || '').trim();
+    const parentName = (s.parentCategoryName || '').trim();
+    if (!name || !parentName) continue;
+    const parentKey = parentName.toLowerCase();
+    let parentId = parentMap[parentKey];
+    if (!parentId) {
+      // try to find parent by slug as fallback
+      const parentSlug = slugify(parentName);
+      const parentDoc = await Category.findOne({ slug: parentSlug, level: 1 });
+      if (parentDoc) parentId = parentDoc._id;
+    }
+
+    if (!parentId) {
+      summary.missingParents.push(parentName);
+      continue;
+    }
+
+    const baseSlug = slugify(name);
+    // For level-2 categories, include parent name in slug to ensure global uniqueness
+    // e.g., "clothing-watches" vs "jewelry-watches"
+    const parentSlugPart = slugify(parentName);
+    const level2BaseSlug = `${parentSlugPart}-${baseSlug}`;
+    const slug = await ensureUniqueSlug(level2BaseSlug);
+    
+    const existingSub = await Category.findOne({ slug, parentCategory: parentId, level: 2 });
+    if (existingSub) {
+      summary.subsSkipped++;
+      continue;
+    }
+
+    // Auto-generate missing fields for level-2 categories
+    const generatedDescription = s.description || `${name} — products and items categorized under ${parentName}`;
+    const generatedSeo = s.seo || {
+      metaTitle: `${name} | ${parentName}`,
+      metaDescription: `${generatedDescription}`,
+      keywords: [slugify(parentName), slugify(name)]
+    };
+    const generatedImage = s.image || { url: '', alt: name };
+    const generatedAttributes = Array.isArray(s.attributes) ? s.attributes : [];
+    const generatedStatistics = s.statistics || { totalProducts: 0, totalSubcategories: 0 };
+
+    const newSub = new Category({
+      name,
+      slug,
+      description: generatedDescription,
+      level: 2,
+      parentCategory: parentId,
+      isActive: typeof s.isActive === 'boolean' ? s.isActive : true,
+      sortOrder: typeof s.sortOrder === 'number' ? s.sortOrder : (s.sortOrder || 0),
+      image: generatedImage,
+      seo: generatedSeo,
+      attributes: generatedAttributes,
+      statistics: generatedStatistics
+    });
+
+    await newSub.save();
+    summary.subsInserted++;
+  }
+
+  // Recompute and update parent statistics.totalSubcategories
+  for (const [nameLower, id] of Object.entries(parentMap)) {
+    const count = await Category.countDocuments({ parentCategory: id });
+    await Category.findByIdAndUpdate(id, { 'statistics.totalSubcategories': count });
+  }
+
+  // include deleted count in summary
+  summary.deletedAll = typeof deletedAllCount === 'number' ? deletedAllCount : 0;
+
+  res.status(200).json({ success: true, summary, debug: { parentsCount: parentsData.length, subsCount: subsData.length, parentSample, subSample } });
+});
+
 module.exports = {
   getAllCategories,
   getCategoryById,
@@ -566,6 +778,7 @@ module.exports = {
   updateCategory,
   deleteCategory,
   toggleActiveStatus,
+  seedCategories,
   createLevel3Category,
   getCategoriesByIds
 };

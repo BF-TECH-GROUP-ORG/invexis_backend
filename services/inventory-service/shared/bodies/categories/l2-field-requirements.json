@@ -1,0 +1,1929 @@
+{
+  "fieldDefinitions": {
+    "description": "Comprehensive mapping of Level-2 categories to their specific required and optional fields. Each L2 category inherits common product fields (name, description, pricing, images, brand). This file defines SPECIALTY fields unique to each category that must be captured during product registration.",
+    "commonFields": [
+      "name",
+      "shortDescription",
+      "longDescription",
+      "brand",
+      "price",
+      "images",
+      "sku",
+      "quantity"
+    ]
+  },
+  "categories": {
+    "Electronics": {
+      "Phones & Tablets": {
+        "required": [
+          "model",
+          "brand",
+          "processor",
+          "ram_gb",
+          "storage_gb",
+          "screen_size_inches",
+          "os_type"
+        ],
+        "optional": [
+          "camera_megapixels",
+          "battery_capacity_mah",
+          "display_type",
+          "warranty_months",
+          "connectivity_types",
+          "expandable_storage"
+        ]
+      },
+      "Computers & Laptops": {
+        "required": [
+          "model",
+          "brand",
+          "processor",
+          "ram_gb",
+          "storage_gb",
+          "screen_size_inches",
+          "os_type"
+        ],
+        "optional": [
+          "gpu_type",
+          "gpu_memory_gb",
+          "battery_life_hours",
+          "weight_kg",
+          "warranty_months",
+          "keyboard_layout",
+          "touchpad_type"
+        ]
+      },
+      "Televisions & Displays": {
+        "required": [
+          "screen_size_inches",
+          "resolution_type",
+          "panel_type",
+          "refresh_rate_hz",
+          "brightness_nits"
+        ],
+        "optional": [
+          "hdr_support",
+          "smart_tv",
+          "refresh_rate_hz",
+          "warranty_months",
+          "connector_types",
+          "weight_kg"
+        ]
+      },
+      "Cameras & Photography": {
+        "required": [
+          "camera_type",
+          "megapixels",
+          "sensor_size",
+          "iso_range",
+          "shutter_speed_range"
+        ],
+        "optional": [
+          "lens_mount",
+          "video_resolution",
+          "autofocus_points",
+          "battery_capacity",
+          "weight_g",
+          "warranty_months"
+        ]
+      },
+      "Audio Equipment": {
+        "required": [
+          "equipment_type",
+          "frequency_range_hz",
+          "impedance_ohms",
+          "sensitivity_db"
+        ],
+        "optional": [
+          "driver_size_mm",
+          "connector_type",
+          "wireless_technology",
+          "battery_hours",
+          "warranty_months",
+          "weight_g"
+        ]
+      },
+      "Wearables": {
+        "required": [
+          "device_type",
+          "compatibility_os",
+          "battery_life_days",
+          "display_type"
+        ],
+        "optional": [
+          "water_resistance_rating",
+          "health_sensors",
+          "connectivity_types",
+          "strap_size",
+          "warranty_months"
+        ]
+      },
+      "Smart Home Devices": {
+        "required": [
+          "device_type",
+          "compatibility_platforms",
+          "connectivity_protocol",
+          "power_source"
+        ],
+        "optional": [
+          "automation_features",
+          "voice_control_support",
+          "mobile_app_support",
+          "warranty_months",
+          "installation_required"
+        ]
+      },
+      "Networking Devices": {
+        "required": [
+          "device_type",
+          "frequency_bands",
+          "transfer_speed_mbps",
+          "range_meters"
+        ],
+        "optional": [
+          "ports_count",
+          "security_standards",
+          "dual_band",
+          "warranty_months",
+          "poe_support"
+        ]
+      },
+      "Electronics Accessories": {
+        "required": [
+          "accessory_type",
+          "compatibility_devices",
+          "connector_type"
+        ],
+        "optional": [
+          "cable_length_meters",
+          "power_rating_watts",
+          "warranty_months",
+          "warranty_years"
+        ]
+      },
+      "Office Electronics": {
+        "required": [
+          "equipment_type",
+          "power_source",
+          "connectivity_type"
+        ],
+        "optional": [
+          "speed_ppm",
+          "volume_db",
+          "warranty_months",
+          "toner_cartridge_type",
+          "monthly_duty_cycle"
+        ]
+      },
+      "Gaming Electronics": {
+        "required": [
+          "device_type",
+          "compatible_games",
+          "ram_gb",
+          "storage_gb",
+          "gpu_memory_gb"
+        ],
+        "optional": [
+          "refresh_rate_hz",
+          "response_time_ms",
+          "wireless_technology",
+          "warranty_months",
+          "cooling_system"
+        ]
+      }
+    },
+    "Clothing & Fashion": {
+      "Men's Clothing": {
+        "required": [
+          "size",
+          "color",
+          "material",
+          "fit_type"
+        ],
+        "optional": [
+          "sleeve_length",
+          "pattern_type",
+          "care_instructions",
+          "manufacturing_country"
+        ]
+      },
+      "Women's Clothing": {
+        "required": [
+          "size",
+          "color",
+          "material",
+          "fit_type"
+        ],
+        "optional": [
+          "sleeve_length",
+          "neckline_type",
+          "pattern_type",
+          "care_instructions",
+          "manufacturing_country"
+        ]
+      },
+      "Kids Clothing": {
+        "required": [
+          "size",
+          "age_range",
+          "color",
+          "material"
+        ],
+        "optional": [
+          "fit_type",
+          "gender_type",
+          "pattern_type",
+          "care_instructions"
+        ]
+      },
+      "Footwear": {
+        "required": [
+          "size",
+          "shoe_type",
+          "material",
+          "color",
+          "sole_type"
+        ],
+        "optional": [
+          "closure_type",
+          "heel_height_cm",
+          "gender_type",
+          "care_instructions",
+          "manufacturing_country"
+        ]
+      },
+      "Bags & Luggage": {
+        "required": [
+          "bag_type",
+          "material",
+          "color",
+          "capacity_liters"
+        ],
+        "optional": [
+          "dimensions_cm",
+          "weight_kg",
+          "compartments",
+          "warranty_years",
+          "water_resistant"
+        ]
+      },
+      "Jewelry": {
+        "required": [
+          "jewelry_type",
+          "metal",
+          "material_purity",
+          "size"
+        ],
+        "optional": [
+          "gemstone_type",
+          "gemstone_count",
+          "carat_weight",
+          "hallmark_certifications",
+          "warranty_years"
+        ]
+      },
+      "Watches": {
+        "required": [
+          "watch_type",
+          "movement_type",
+          "case_material",
+          "dial_color",
+          "water_resistance_meters"
+        ],
+        "optional": [
+          "brand_watch",
+          "band_material",
+          "crystal_type",
+          "warranty_years",
+          "chronograph"
+        ]
+      },
+      "Eyewear": {
+        "required": [
+          "eyewear_type",
+          "lens_type",
+          "frame_material",
+          "frame_color",
+          "size"
+        ],
+        "optional": [
+          "lens_color",
+          "uv_protection",
+          "prescription_available",
+          "mirror_coating",
+          "warranty_years"
+        ]
+      },
+      "Fashion Accessories": {
+        "required": [
+          "accessory_type",
+          "material",
+          "color",
+          "size"
+        ],
+        "optional": [
+          "pattern_type",
+          "care_instructions",
+          "warranty_years",
+          "water_resistant"
+        ]
+      }
+    },
+    "Food & Beverages": {
+      "Fresh Produce": {
+        "required": [
+          "product_type",
+          "weight_kg",
+          "origin_country"
+        ],
+        "optional": [
+          "organic_certified",
+          "ripeness_level",
+          "shelf_life_days",
+          "certifications"
+        ]
+      },
+      "Meat & Seafood": {
+        "required": [
+          "meat_type",
+          "cut_type",
+          "weight_kg",
+          "storage_temperature"
+        ],
+        "optional": [
+          "farming_type",
+          "origin_country",
+          "shelf_life_days",
+          "certifications",
+          "halal_certified"
+        ]
+      },
+      "Dairy & Eggs": {
+        "required": [
+          "product_type",
+          "weight_kg",
+          "storage_temperature",
+          "expiry_date"
+        ],
+        "optional": [
+          "pasteurized",
+          "organic_certified",
+          "fat_percentage",
+          "certifications"
+        ]
+      },
+      "Dry Foods & Grains": {
+        "required": [
+          "product_type",
+          "weight_kg",
+          "shelf_life_months"
+        ],
+        "optional": [
+          "organic_certified",
+          "gluten_free",
+          "origin_country",
+          "certifications",
+          "storage_instructions"
+        ]
+      },
+      "Snacks": {
+        "required": [
+          "snack_type",
+          "weight_kg",
+          "serving_size_g",
+          "packaging_type"
+        ],
+        "optional": [
+          "allergen_information",
+          "organic_certified",
+          "shelf_life_months",
+          "certifications",
+          "nutritional_info"
+        ]
+      },
+      "Beverages (Alcohol-Free)": {
+        "required": [
+          "beverage_type",
+          "volume_ml",
+          "packaging_type",
+          "shelf_life_months"
+        ],
+        "optional": [
+          "ingredients_highlight",
+          "sugar_free",
+          "organic_certified",
+          "certifications"
+        ]
+      },
+      "Alcoholic Drinks": {
+        "required": [
+          "drink_type",
+          "alcohol_percentage",
+          "volume_ml",
+          "origin_country",
+          "age_years"
+        ],
+        "optional": [
+          "grape_variety",
+          "vintage_year",
+          "tasting_notes",
+          "shelf_life_years",
+          "storage_temperature"
+        ]
+      },
+      "Frozen Foods": {
+        "required": [
+          "product_type",
+          "weight_kg",
+          "storage_temperature",
+          "shelf_life_months"
+        ],
+        "optional": [
+          "cooking_instructions",
+          "serving_size",
+          "allergen_information",
+          "organic_certified"
+        ]
+      },
+      "Bakery & Pastry": {
+        "required": [
+          "product_type",
+          "weight_kg",
+          "shelf_life_days",
+          "freshly_baked"
+        ],
+        "optional": [
+          "allergen_information",
+          "ingredients_highlight",
+          "certifications",
+          "storage_instructions"
+        ]
+      },
+      "Cooking Ingredients & Spices": {
+        "required": [
+          "ingredient_type",
+          "weight_kg",
+          "origin_country"
+        ],
+        "optional": [
+          "organic_certified",
+          "purity_percentage",
+          "shelf_life_months",
+          "storage_instructions",
+          "certifications"
+        ]
+      }
+    },
+    "Agriculture & Farming": {
+      "Seeds": {
+        "required": [
+          "seed_type",
+          "plant_type",
+          "quantity_count",
+          "germination_percentage"
+        ],
+        "optional": [
+          "seed_age_months",
+          "shelf_life_months",
+          "storage_temperature",
+          "growing_season",
+          "certifications"
+        ]
+      },
+      "Fertilizers": {
+        "required": [
+          "fertilizer_type",
+          "npk_ratio",
+          "weight_kg",
+          "application_method"
+        ],
+        "optional": [
+          "organic_certified",
+          "coverage_area_sqm",
+          "shelf_life_months",
+          "storage_instructions"
+        ]
+      },
+      "Farming Tools": {
+        "required": [
+          "tool_type",
+          "material",
+          "handle_length_cm"
+        ],
+        "optional": [
+          "weight_kg",
+          "warranty_years",
+          "ergonomic_designed",
+          "weather_resistant"
+        ]
+      },
+      "Animal Feed": {
+        "required": [
+          "animal_type",
+          "feed_type",
+          "weight_kg",
+          "protein_percentage"
+        ],
+        "optional": [
+          "ingredient_composition",
+          "shelf_life_months",
+          "storage_temperature",
+          "certifications"
+        ]
+      },
+      "Irrigation Equipment": {
+        "required": [
+          "equipment_type",
+          "material",
+          "flow_rate_lpm",
+          "coverage_area_sqm"
+        ],
+        "optional": [
+          "pressure_psi",
+          "durability_years",
+          "weather_resistant",
+          "warranty_years"
+        ]
+      },
+      "Pesticides": {
+        "required": [
+          "pesticide_type",
+          "target_pest",
+          "volume_liters",
+          "concentration_percentage",
+          "safety_precautions"
+        ],
+        "optional": [
+          "organic_certified",
+          "shelf_life_months",
+          "application_method",
+          "storage_temperature"
+        ]
+      },
+      "Gardening Supplies": {
+        "required": [
+          "supply_type",
+          "material",
+          "quantity"
+        ],
+        "optional": [
+          "weather_resistant",
+          "warranty_years",
+          "usage_instructions"
+        ]
+      },
+      "Harvested Crops": {
+        "required": [
+          "crop_type",
+          "weight_kg",
+          "harvest_date",
+          "origin_country"
+        ],
+        "optional": [
+          "organic_certified",
+          "shelf_life_days",
+          "storage_temperature",
+          "certifications"
+        ]
+      }
+    },
+    "Construction & Building Materials": {
+      "Bricks & Blocks": {
+        "required": [
+          "brick_type",
+          "material",
+          "dimensions_mm",
+          "quantity",
+          "compressive_strength_mpa"
+        ],
+        "optional": [
+          "color",
+          "weight_per_unit_kg",
+          "certifications",
+          "supplier_location"
+        ]
+      },
+      "Cement & Concrete": {
+        "required": [
+          "product_type",
+          "weight_kg",
+          "grade",
+          "coverage_area_sqm"
+        ],
+        "optional": [
+          "water_cement_ratio",
+          "shelf_life_months",
+          "curing_time_days",
+          "certifications"
+        ]
+      },
+      "Sand & Gravel": {
+        "required": [
+          "material_type",
+          "grain_size_mm",
+          "weight_kg",
+          "purity_percentage"
+        ],
+        "optional": [
+          "color",
+          "source_location",
+          "certifications"
+        ]
+      },
+      "Roofing Materials": {
+        "required": [
+          "material_type",
+          "coverage_sqm",
+          "thickness_mm",
+          "color"
+        ],
+        "optional": [
+          "weight_per_sqm_kg",
+          "durability_years",
+          "weather_resistant",
+          "certifications"
+        ]
+      },
+      "Plumbing Materials": {
+        "required": [
+          "component_type",
+          "material",
+          "size_diameter_inches",
+          "quantity"
+        ],
+        "optional": [
+          "pressure_rating_psi",
+          "temperature_rating_celsius",
+          "certifications",
+          "weight_kg"
+        ]
+      },
+      "Electrical Supplies": {
+        "required": [
+          "component_type",
+          "voltage_rating",
+          "current_rating_amps",
+          "quantity"
+        ],
+        "optional": [
+          "frequency_hz",
+          "temperature_rating_celsius",
+          "certifications",
+          "color_options"
+        ]
+      },
+      "Paints & Finishes": {
+        "required": [
+          "paint_type",
+          "finish_type",
+          "volume_liters",
+          "coverage_sqm_per_liter",
+          "color"
+        ],
+        "optional": [
+          "dry_time_hours",
+          "durability_years",
+          "water_resistant",
+          "certifications"
+        ]
+      },
+      "Doors & Windows": {
+        "required": [
+          "item_type",
+          "material",
+          "dimensions_mm",
+          "color"
+        ],
+        "optional": [
+          "sound_insulation_db",
+          "thermal_insulation_r_value",
+          "weather_resistant",
+          "certifications",
+          "installation_required"
+        ]
+      },
+      "Tiles & Flooring": {
+        "required": [
+          "tile_type",
+          "material",
+          "dimensions_mm",
+          "quantity_sqm",
+          "color"
+        ],
+        "optional": [
+          "slip_resistance_rating",
+          "durability_class",
+          "weight_per_sqm_kg",
+          "certifications"
+        ]
+      },
+      "Construction Tools": {
+        "required": [
+          "tool_type",
+          "material",
+          "power_source"
+        ],
+        "optional": [
+          "power_watts",
+          "weight_kg",
+          "warranty_years",
+          "safety_certifications"
+        ]
+      }
+    },
+    "Furniture & Home": {
+      "Living Room Furniture": {
+        "required": [
+          "furniture_type",
+          "material",
+          "dimensions_cm",
+          "color"
+        ],
+        "optional": [
+          "seating_capacity",
+          "upholstery_type",
+          "assembly_required",
+          "warranty_years",
+          "weight_kg"
+        ]
+      },
+      "Bedroom Furniture": {
+        "required": [
+          "furniture_type",
+          "material",
+          "dimensions_cm",
+          "color"
+        ],
+        "optional": [
+          "storage_capacity",
+          "assembly_required",
+          "warranty_years",
+          "weight_kg"
+        ]
+      },
+      "Office Furniture": {
+        "required": [
+          "furniture_type",
+          "material",
+          "dimensions_cm",
+          "color"
+        ],
+        "optional": [
+          "ergonomic_features",
+          "adjustability",
+          "assembly_required",
+          "warranty_years"
+        ]
+      },
+      "Outdoor Furniture": {
+        "required": [
+          "furniture_type",
+          "material",
+          "dimensions_cm",
+          "color"
+        ],
+        "optional": [
+          "weather_resistant",
+          "seating_capacity",
+          "assembly_required",
+          "warranty_years"
+        ]
+      },
+      "Kitchen Furniture": {
+        "required": [
+          "furniture_type",
+          "material",
+          "dimensions_cm",
+          "color"
+        ],
+        "optional": [
+          "storage_capacity",
+          "assembly_required",
+          "warranty_years",
+          "certification"
+        ]
+      },
+      "Home Decor": {
+        "required": [
+          "decor_type",
+          "material",
+          "color",
+          "dimensions_cm"
+        ],
+        "optional": [
+          "style_theme",
+          "installation_required",
+          "warranty_years"
+        ]
+      },
+      "Storage & Organization": {
+        "required": [
+          "storage_type",
+          "material",
+          "capacity_liters",
+          "dimensions_cm"
+        ],
+        "optional": [
+          "number_of_shelves",
+          "assembly_required",
+          "warranty_years",
+          "weight_capacity_kg"
+        ]
+      },
+      "Mattresses & Bedding": {
+        "required": [
+          "product_type",
+          "material",
+          "size",
+          "firmness_level",
+          "thickness_cm"
+        ],
+        "optional": [
+          "warranty_years",
+          "hypoallergenic",
+          "waterproof",
+          "weight_kg"
+        ]
+      }
+    },
+    "Vehicles & Auto Parts": {
+      "Cars": {
+        "required": [
+          "make",
+          "model",
+          "year",
+          "vehicle_condition",
+          "mileage_km",
+          "engine_cc",
+          "transmission_type",
+          "fuel_type"
+        ],
+        "optional": [
+          "body_color",
+          "body_type",
+          "registration_status",
+          "service_history",
+          "warranty_months"
+        ]
+      },
+      "Motorcycles": {
+        "required": [
+          "make",
+          "model",
+          "year",
+          "condition",
+          "mileage_km",
+          "engine_cc",
+          "fuel_type"
+        ],
+        "optional": [
+          "color",
+          "bike_type",
+          "service_history",
+          "warranty_months"
+        ]
+      },
+      "Scooters & Bicycles": {
+        "required": [
+          "vehicle_type",
+          "make",
+          "model",
+          "condition",
+          "mileage_km",
+          "wheel_size_inches"
+        ],
+        "optional": [
+          "color",
+          "gear_type",
+          "braking_system",
+          "warranty_months"
+        ]
+      },
+      "Auto Spare Parts": {
+        "required": [
+          "part_type",
+          "vehicle_compatibility",
+          "condition",
+          "material"
+        ],
+        "optional": [
+          "manufacturer",
+          "warranty_months",
+          "installation_required"
+        ]
+      },
+      "Tires & Wheels": {
+        "required": [
+          "type",
+          "size",
+          "vehicle_type",
+          "quantity",
+          "condition"
+        ],
+        "optional": [
+          "brand",
+          "tread_depth_mm",
+          "warranty_months",
+          "weight_kg"
+        ]
+      },
+      "Batteries": {
+        "required": [
+          "battery_type",
+          "voltage",
+          "capacity_ah",
+          "vehicle_type",
+          "condition"
+        ],
+        "optional": [
+          "brand",
+          "warranty_months",
+          "weight_kg"
+        ]
+      },
+      "Oils & Lubricants": {
+        "required": [
+          "product_type",
+          "viscosity_grade",
+          "volume_liters",
+          "vehicle_type"
+        ],
+        "optional": [
+          "synthetic",
+          "certifications",
+          "shelf_life_months"
+        ]
+      },
+      "Vehicle Accessories": {
+        "required": [
+          "accessory_type",
+          "vehicle_type",
+          "material",
+          "color"
+        ],
+        "optional": [
+          "compatibility_models",
+          "installation_required",
+          "warranty_months"
+        ]
+      }
+    },
+    "Beauty & Personal Care": {
+      "Skin Care": {
+        "required": [
+          "product_type",
+          "skin_type_target",
+          "volume_ml",
+          "active_ingredient"
+        ],
+        "optional": [
+          "spf_rating",
+          "dermatologist_tested",
+          "shelf_life_months",
+          "certifications"
+        ]
+      },
+      "Hair Care": {
+        "required": [
+          "product_type",
+          "hair_type_target",
+          "volume_ml",
+          "active_ingredient"
+        ],
+        "optional": [
+          "fragrance_type",
+          "sulfate_free",
+          "shelf_life_months",
+          "certifications"
+        ]
+      },
+      "Personal Hygiene": {
+        "required": [
+          "product_type",
+          "volume_ml",
+          "quantity"
+        ],
+        "optional": [
+          "active_ingredient",
+          "hypoallergenic",
+          "shelf_life_months",
+          "certifications"
+        ]
+      },
+      "Fragrances": {
+        "required": [
+          "fragrance_type",
+          "volume_ml",
+          "concentration_percentage",
+          "scent_notes"
+        ],
+        "optional": [
+          "longevity_hours",
+          "sillage_rating",
+          "shelf_life_months",
+          "certifications"
+        ]
+      },
+      "Makeup": {
+        "required": [
+          "product_type",
+          "shade",
+          "skin_type_target"
+        ],
+        "optional": [
+          "coverage_level",
+          "finish_type",
+          "shelf_life_months",
+          "certifications"
+        ]
+      },
+      "Beauty Tools": {
+        "required": [
+          "tool_type",
+          "material",
+          "power_source"
+        ],
+        "optional": [
+          "battery_life_hours",
+          "warranty_years",
+          "heating_settings"
+        ]
+      }
+    },
+    "Home & Kitchen Appliances": {
+      "Small Appliances": {
+        "required": [
+          "appliance_type",
+          "power_watts",
+          "voltage",
+          "capacity_liters"
+        ],
+        "optional": [
+          "material",
+          "warranty_years",
+          "energy_rating",
+          "certifications"
+        ]
+      },
+      "Large Appliances": {
+        "required": [
+          "appliance_type",
+          "dimensions_cm",
+          "power_watts",
+          "capacity_kg_liters"
+        ],
+        "optional": [
+          "warranty_years",
+          "energy_rating",
+          "installation_required",
+          "certifications"
+        ]
+      },
+      "Kitchen Appliances": {
+        "required": [
+          "appliance_type",
+          "power_watts",
+          "voltage",
+          "capacity"
+        ],
+        "optional": [
+          "material",
+          "warranty_years",
+          "energy_rating",
+          "certifications"
+        ]
+      },
+      "Heating & Cooling Devices": {
+        "required": [
+          "device_type",
+          "power_watts",
+          "coverage_area_sqm",
+          "control_type"
+        ],
+        "optional": [
+          "energy_rating",
+          "warranty_years",
+          "noise_level_db",
+          "certifications"
+        ]
+      },
+      "Cleaning Appliances": {
+        "required": [
+          "appliance_type",
+          "power_watts",
+          "capacity_liters",
+          "tank_capacity"
+        ],
+        "optional": [
+          "warranty_years",
+          "cordless",
+          "noise_level_db",
+          "certifications"
+        ]
+      }
+    },
+    "Tools, Hardware & Industrial": {
+      "Hand Tools": {
+        "required": [
+          "tool_type",
+          "material",
+          "size"
+        ],
+        "optional": [
+          "weight_kg",
+          "warranty_years",
+          "precision_rating"
+        ]
+      },
+      "Power Tools": {
+        "required": [
+          "tool_type",
+          "power_watts",
+          "power_source",
+          "voltage"
+        ],
+        "optional": [
+          "weight_kg",
+          "warranty_years",
+          "rpm",
+          "safety_certifications"
+        ]
+      },
+      "Industrial Machines": {
+        "required": [
+          "machine_type",
+          "power_watts",
+          "dimensions_cm",
+          "capacity"
+        ],
+        "optional": [
+          "material",
+          "warranty_years",
+          "installation_required",
+          "certifications"
+        ]
+      },
+      "Safety Equipment": {
+        "required": [
+          "equipment_type",
+          "material",
+          "size",
+          "certification_standard"
+        ],
+        "optional": [
+          "color",
+          "quantity",
+          "shelf_life_years",
+          "usage_instructions"
+        ]
+      },
+      "Hardware Supplies": {
+        "required": [
+          "supply_type",
+          "material",
+          "size",
+          "quantity"
+        ],
+        "optional": [
+          "finish_type",
+          "weight_kg",
+          "certifications"
+        ]
+      },
+      "Measuring Tools": {
+        "required": [
+          "tool_type",
+          "measurement_range",
+          "unit_type",
+          "accuracy_mm"
+        ],
+        "optional": [
+          "material",
+          "warranty_years",
+          "display_type",
+          "certifications"
+        ]
+      }
+    },
+    "Health & Medical Supplies": {
+      "First Aid": {
+        "required": [
+          "supply_type",
+          "quantity",
+          "expiry_date"
+        ],
+        "optional": [
+          "usage_instructions",
+          "certifications",
+          "shelf_life_months"
+        ]
+      },
+      "Medical Equipment": {
+        "required": [
+          "equipment_type",
+          "measurement_range",
+          "accuracy_level",
+          "power_source"
+        ],
+        "optional": [
+          "warranty_years",
+          "display_type",
+          "certifications",
+          "calibration_required"
+        ]
+      },
+      "Supplements": {
+        "required": [
+          "supplement_type",
+          "quantity",
+          "weight_per_dose_g",
+          "serving_size"
+        ],
+        "optional": [
+          "expiry_date",
+          "certifications",
+          "ingredient_list",
+          "shelf_life_months"
+        ]
+      },
+      "Protective Equipment": {
+        "required": [
+          "equipment_type",
+          "material",
+          "size",
+          "quantity"
+        ],
+        "optional": [
+          "certification_standard",
+          "shelf_life_years",
+          "usage_instructions",
+          "color"
+        ]
+      },
+      "Diagnostic Tools": {
+        "required": [
+          "tool_type",
+          "measurement_range",
+          "accuracy_level",
+          "power_source"
+        ],
+        "optional": [
+          "warranty_years",
+          "display_type",
+          "certifications",
+          "calibration_required"
+        ]
+      }
+    },
+    "Arts, Crafts & Stationery": {
+      "Art Supplies": {
+        "required": [
+          "supply_type",
+          "material",
+          "color",
+          "quantity"
+        ],
+        "optional": [
+          "size_dimensions",
+          "usage_type",
+          "certifications"
+        ]
+      },
+      "School Supplies": {
+        "required": [
+          "supply_type",
+          "grade_level",
+          "quantity",
+          "material"
+        ],
+        "optional": [
+          "color",
+          "size_dimensions",
+          "certifications"
+        ]
+      },
+      "Office Stationery": {
+        "required": [
+          "item_type",
+          "quantity",
+          "size_dimensions"
+        ],
+        "optional": [
+          "color",
+          "material",
+          "weight_per_unit_g"
+        ]
+      },
+      "Craft Materials": {
+        "required": [
+          "material_type",
+          "weight_kg",
+          "color",
+          "quantity"
+        ],
+        "optional": [
+          "usage_type",
+          "texture_type",
+          "certifications"
+        ]
+      },
+      "Books": {
+        "required": [
+          "book_type",
+          "author",
+          "isbn",
+          "pages",
+          "language"
+        ],
+        "optional": [
+          "publication_year",
+          "edition",
+          "binding_type",
+          "dimensions_cm"
+        ]
+      }
+    },
+    "Sports & Outdoors": {
+      "Sports Equipment": {
+        "required": [
+          "equipment_type",
+          "sport_type",
+          "material",
+          "size"
+        ],
+        "optional": [
+          "weight_kg",
+          "warranty_years",
+          "usage_level",
+          "certifications"
+        ]
+      },
+      "Fitness Equipment": {
+        "required": [
+          "equipment_type",
+          "material",
+          "dimensions_cm",
+          "weight_capacity_kg"
+        ],
+        "optional": [
+          "warranty_years",
+          "assembly_required",
+          "usage_level",
+          "certifications"
+        ]
+      },
+      "Outdoor Gear": {
+        "required": [
+          "gear_type",
+          "material",
+          "capacity_liters_kg",
+          "color"
+        ],
+        "optional": [
+          "weather_resistant",
+          "weight_kg",
+          "warranty_years",
+          "certifications"
+        ]
+      },
+      "Cycles & Accessories": {
+        "required": [
+          "item_type",
+          "material",
+          "size",
+          "color"
+        ],
+        "optional": [
+          "weight_kg",
+          "warranty_years",
+          "compatibility",
+          "certifications"
+        ]
+      },
+      "Camping Gear": {
+        "required": [
+          "gear_type",
+          "material",
+          "capacity_people",
+          "dimensions_cm"
+        ],
+        "optional": [
+          "weather_resistant",
+          "weight_kg",
+          "warranty_years",
+          "certifications"
+        ]
+      }
+    },
+    "Baby & Kids": {
+      "Baby Essentials": {
+        "required": [
+          "product_type",
+          "age_range_months",
+          "material",
+          "safety_certifications"
+        ],
+        "optional": [
+          "color",
+          "weight_capacity_kg",
+          "assembly_required",
+          "warranty_years"
+        ]
+      },
+      "Toys & Games": {
+        "required": [
+          "toy_type",
+          "age_range_years",
+          "material",
+          "safety_certifications"
+        ],
+        "optional": [
+          "educational_value",
+          "number_of_pieces",
+          "battery_required",
+          "warranty_years"
+        ]
+      },
+      "Kids Furniture": {
+        "required": [
+          "furniture_type",
+          "size",
+          "material",
+          "age_range_years"
+        ],
+        "optional": [
+          "color",
+          "weight_capacity_kg",
+          "assembly_required",
+          "warranty_years"
+        ]
+      },
+      "School Items": {
+        "required": [
+          "item_type",
+          "quantity",
+          "size",
+          "grade_level"
+        ],
+        "optional": [
+          "color",
+          "material",
+          "certifications"
+        ]
+      }
+    },
+    "Pets & Animals": {
+      "Pet Food": {
+        "required": [
+          "pet_type",
+          "food_type",
+          "weight_kg",
+          "life_stage"
+        ],
+        "optional": [
+          "ingredient_highlight",
+          "shelf_life_months",
+          "certifications",
+          "special_diet_type"
+        ]
+      },
+      "Pet Accessories": {
+        "required": [
+          "accessory_type",
+          "pet_type",
+          "material",
+          "size"
+        ],
+        "optional": [
+          "color",
+          "durability_rating",
+          "washable",
+          "warranty_years"
+        ]
+      },
+      "Animal Medicine": {
+        "required": [
+          "medicine_type",
+          "animal_type",
+          "dosage",
+          "expiry_date"
+        ],
+        "optional": [
+          "active_ingredient",
+          "shelf_life_months",
+          "storage_temperature",
+          "certifications"
+        ]
+      },
+      "Animal Equipment": {
+        "required": [
+          "equipment_type",
+          "animal_type",
+          "material",
+          "size"
+        ],
+        "optional": [
+          "weight_capacity_kg",
+          "durability_rating",
+          "warranty_years",
+          "certifications"
+        ]
+      }
+    },
+    "Jewelry & Precious Metals": {
+      "Gold Items": {
+        "required": [
+          "item_type",
+          "gold_purity",
+          "weight_g",
+          "carat_value"
+        ],
+        "optional": [
+          "hallmark_certification",
+          "gemstone_included",
+          "warranty_years",
+          "origin_country"
+        ]
+      },
+      "Silver Items": {
+        "required": [
+          "item_type",
+          "silver_purity",
+          "weight_g",
+          "hallmark"
+        ],
+        "optional": [
+          "design_pattern",
+          "gemstone_included",
+          "warranty_years",
+          "origin_country"
+        ]
+      },
+      "Precious Stones": {
+        "required": [
+          "stone_type",
+          "weight_carat",
+          "color",
+          "clarity_grade"
+        ],
+        "optional": [
+          "cut_quality",
+          "origin_country",
+          "certification_body",
+          "treatment_type"
+        ]
+      },
+      "Watches": {
+        "required": [
+          "watch_type",
+          "movement_type",
+          "case_material",
+          "water_resistance_meters"
+        ],
+        "optional": [
+          "brand",
+          "band_material",
+          "crystal_type",
+          "warranty_years"
+        ]
+      },
+      "Jewelry Accessories": {
+        "required": [
+          "accessory_type",
+          "material",
+          "weight_g",
+          "size"
+        ],
+        "optional": [
+          "gemstone_type",
+          "warranty_years",
+          "design_pattern",
+          "origin_country"
+        ]
+      }
+    },
+    "Energy & Utilities": {
+      "Gas & Fuel": {
+        "required": [
+          "fuel_type",
+          "volume_liters",
+          "quality_grade",
+          "origin_country"
+        ],
+        "optional": [
+          "shelf_life_months",
+          "certification",
+          "safety_precautions"
+        ]
+      },
+      "Solar Equipment": {
+        "required": [
+          "equipment_type",
+          "power_watts",
+          "efficiency_percentage",
+          "dimensions_cm"
+        ],
+        "optional": [
+          "warranty_years",
+          "installation_required",
+          "certifications"
+        ]
+      },
+      "Batteries": {
+        "required": [
+          "battery_type",
+          "voltage",
+          "capacity_mah_ah",
+          "quantity"
+        ],
+        "optional": [
+          "chemistry_type",
+          "warranty_years",
+          "shelf_life_years",
+          "certifications"
+        ]
+      },
+      "Generators": {
+        "required": [
+          "generator_type",
+          "power_capacity_kw",
+          "fuel_type",
+          "dimensions_cm"
+        ],
+        "optional": [
+          "warranty_years",
+          "noise_level_db",
+          "installation_required",
+          "certifications"
+        ]
+      },
+      "Electrical Components": {
+        "required": [
+          "component_type",
+          "voltage_rating",
+          "current_rating_amps",
+          "material"
+        ],
+        "optional": [
+          "frequency_hz",
+          "certifications",
+          "quantity"
+        ]
+      }
+    },
+    "Services": {
+      "Repair Services": {
+        "required": [
+          "service_type",
+          "item_type",
+          "estimated_duration_hours",
+          "service_location"
+        ],
+        "optional": [
+          "warranty_months",
+          "technician_expertise",
+          "parts_replacement_included"
+        ]
+      },
+      "Delivery Services": {
+        "required": [
+          "delivery_type",
+          "location_coverage",
+          "estimated_time_hours",
+          "item_category"
+        ],
+        "optional": [
+          "insurance_included",
+          "tracking_available",
+          "warranty_satisfaction"
+        ]
+      },
+      "Cleaning Services": {
+        "required": [
+          "service_type",
+          "area_size_sqm",
+          "frequency",
+          "service_location"
+        ],
+        "optional": [
+          "eco_friendly",
+          "insurance_included",
+          "warranty_satisfaction"
+        ]
+      },
+      "Professional Services": {
+        "required": [
+          "service_type",
+          "expertise_level",
+          "estimated_duration_hours",
+          "service_location"
+        ],
+        "optional": [
+          "certification",
+          "warranty_months",
+          "insurance_included"
+        ]
+      },
+      "Manufacturing Services": {
+        "required": [
+          "service_type",
+          "material_type",
+          "production_capacity_units",
+          "lead_time_days"
+        ],
+        "optional": [
+          "quality_standards",
+          "certifications",
+          "warranty_months"
+        ]
+      }
+    },
+    "Media & Entertainment": {
+      "Books": {
+        "required": [
+          "book_type",
+          "author",
+          "isbn",
+          "pages",
+          "language"
+        ],
+        "optional": [
+          "publication_year",
+          "edition",
+          "binding_type",
+          "genre"
+        ]
+      },
+      "Music": {
+        "required": [
+          "media_type",
+          "artist",
+          "genre",
+          "duration_minutes"
+        ],
+        "optional": [
+          "release_year",
+          "record_label",
+          "track_count",
+          "quality_rating"
+        ]
+      },
+      "Video Games": {
+        "required": [
+          "game_type",
+          "platform",
+          "genre",
+          "release_year"
+        ],
+        "optional": [
+          "rating_system",
+          "multiplayer_support",
+          "dlc_available",
+          "minimum_specs"
+        ]
+      },
+      "Movies": {
+        "required": [
+          "movie_type",
+          "genre",
+          "duration_minutes",
+          "release_year"
+        ],
+        "optional": [
+          "director",
+          "rating_system",
+          "audio_languages",
+          "subtitle_options"
+        ]
+      },
+      "Instruments": {
+        "required": [
+          "instrument_type",
+          "material",
+          "size",
+          "sound_quality_level"
+        ],
+        "optional": [
+          "brand",
+          "warranty_years",
+          "tuning_required",
+          "certifications"
+        ]
+      }
+    },
+    "Real Estate": {
+      "Land": {
+        "required": [
+          "land_type",
+          "area_sqm",
+          "location",
+          "zoning_type"
+        ],
+        "optional": [
+          "legal_status",
+          "soil_quality",
+          "water_access",
+          "certifications"
+        ]
+      },
+      "Residential Buildings": {
+        "required": [
+          "building_type",
+          "total_area_sqm",
+          "bedrooms",
+          "bathrooms",
+          "location",
+          "age_years"
+        ],
+        "optional": [
+          "parking_spaces",
+          "furnishing_status",
+          "legal_status",
+          "certifications"
+        ]
+      },
+      "Commercial Buildings": {
+        "required": [
+          "building_type",
+          "total_area_sqm",
+          "floors",
+          "location",
+          "age_years"
+        ],
+        "optional": [
+          "parking_spaces",
+          "elevator_count",
+          "legal_status",
+          "certifications"
+        ]
+      }
+    },
+    "Mining & Extractives": {
+      "Minerals": {
+        "required": [
+          "mineral_type",
+          "purity_percentage",
+          "weight_kg",
+          "color"
+        ],
+        "optional": [
+          "origin_country",
+          "crystal_form",
+          "certifications"
+        ]
+      },
+      "Mining Equipment": {
+        "required": [
+          "equipment_type",
+          "material",
+          "capacity_ton_per_hour",
+          "power_watts"
+        ],
+        "optional": [
+          "warranty_years",
+          "maintenance_schedule",
+          "certifications"
+        ]
+      },
+      "Mining Tools": {
+        "required": [
+          "tool_type",
+          "material",
+          "size",
+          "weight_kg"
+        ],
+        "optional": [
+          "durability_rating",
+          "warranty_years",
+          "safety_certifications"
+        ]
+      },
+      "Safety Gear": {
+        "required": [
+          "gear_type",
+          "material",
+          "size",
+          "safety_rating"
+        ],
+        "optional": [
+          "color",
+          "warranty_years",
+          "certifications"
+        ]
+      },
+      "Raw Ores": {
+        "required": [
+          "ore_type",
+          "purity_percentage",
+          "weight_kg",
+          "origin_country"
+        ],
+        "optional": [
+          "sample_analysis",
+          "certifications",
+          "extraction_method"
+        ]
+      }
+    }
+  }
+}

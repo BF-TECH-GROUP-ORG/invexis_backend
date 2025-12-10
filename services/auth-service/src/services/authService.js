@@ -92,14 +92,29 @@ function formatTimeForComparison(date) {
 // Caching helpers
 async function getCachedUser(userId, select = '-password -twoFASecret', populate = []) {
     const cacheKey = `user:${userId}`;
-    let userJson = await redis.get(cacheKey);
-    if (userJson) return JSON.parse(userJson);
-
-    const user = await User.findById(userId).select(select).populate(populate);
+    
+    // Try Redis cache first
+    try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            console.log(`[CACHE HIT] User ${userId}`);
+            return JSON.parse(cached);
+        }
+    } catch (e) {
+        console.warn('Redis get failed (non-blocking):', e && e.message);
+    }
+    
+    // DB fallback if not in cache
+    let query = User.findById(userId).select(select);
+    if (populate && populate.length > 0) query = query.populate(populate);
+    
+    const user = await query.lean();
     if (!user) return null;
-    userJson = user.toObject({ versionKey: false });
-    await redis.set(cacheKey, JSON.stringify(userJson), 'EX', CACHE_TTLS.user);
-    return userJson;
+    
+    // Cache the result (fire-and-forget)
+    redis.set(cacheKey, JSON.stringify(user), 'EX', CACHE_TTLS.user).catch(() => {});
+    
+    return user;
 }
 
 async function invalidateUserCache(userId) {
@@ -278,6 +293,33 @@ async function setupSubscribers() {
     );
 
     console.log('AuthService: Subscribers set up for external tenancy updates');
+}
+
+// === Cache Invalidation Helper ===
+/**
+ * Invalidate user-related caches in Redis (fire-and-forget)
+ * @param {String} userId - User ID to invalidate
+ * @param {String[]} cacheTypes - Types of caches to invalidate (user, sessions, consents, all)
+ */
+function invalidateUserCache(userId, cacheTypes = ['all']) {
+    if (cacheTypes.includes('all') || cacheTypes.includes('user')) {
+        redis.del(`user:${userId}`).catch(() => {});
+    }
+    if (cacheTypes.includes('all') || cacheTypes.includes('sessions')) {
+        redis.del(`sessions:${userId}`).catch(() => {});
+    }
+    if (cacheTypes.includes('all') || cacheTypes.includes('consents')) {
+        redis.del(`consents:${userId}`).catch(() => {});
+    }
+}
+
+/**
+ * Invalidate company-related caches (fire-and-forget)
+ * @param {String} companyId - Company ID to invalidate
+ */
+function invalidateCompanyCache(companyId) {
+    redis.del(`company_workers:${companyId}`).catch(() => {});
+    redis.del(`company:${companyId}`).catch(() => {});
 }
 
 // === Core Functions ===
@@ -591,13 +633,74 @@ async function refresh(refreshToken) {
 }
 
 
-// Logout
+// Logout - Revoke current session and clear tokens
 async function logout(userId, refreshToken) {
-    if (refreshToken) await tokenService.revokeSessionByRefresh(refreshToken);
-    if (userId) {
-        await publishEvent('user.logged_out', { userId });
+    try {
+        // Revoke the specific session by refresh token
+        if (refreshToken) {
+            const revoked = await tokenService.revokeSessionByRefresh(refreshToken);
+            if (!revoked) {
+                console.warn(`Failed to revoke session for user ${userId}`);
+            }
+        }
+        
+        // Invalidate user cache to force re-auth on next request
+        if (userId) {
+            await invalidateUserCache(userId);
+            await publishEvent('user.logged_out', { userId });
+        }
+        
+        return { message: 'Logged out successfully' };
+    } catch (err) {
+        console.error('Logout error:', err);
+        throw err;
     }
-    return { message: 'Logged out' };
+}
+
+// Logout from all devices/sessions
+async function logoutAll(userId) {
+    try {
+        // Get all active sessions for user
+        const sessions = await Session.find({ userId, revoked: false });
+        
+        // Revoke all sessions
+        const revokedCount = sessions.length;
+        await Session.updateMany(
+            { userId, revoked: false },
+            { revoked: true }
+        );
+        
+        // Remove all sessions from user's sessions array
+        await User.findByIdAndUpdate(
+            userId,
+            { sessions: [] }
+        );
+        
+        // Clear all sessions from cache
+        if (revokedCount > 0) {
+            await Promise.all(
+                sessions.map(s => redis.del(`session:${s._id}`))
+            );
+        }
+        
+        // Invalidate user cache
+        await invalidateUserCache(userId);
+        
+        // Publish event
+        await publishEvent('user.logged_out_all_devices', { 
+            userId,
+            revokedCount,
+            timestamp: new Date()
+        });
+        
+        return { 
+            message: `Logged out from all ${revokedCount} device(s) successfully`,
+            revokedCount
+        };
+    } catch (err) {
+        console.error('Logout all error:', err);
+        throw err;
+    }
 }
 
 // Update Profile (invalidate cache)
@@ -982,7 +1085,8 @@ async function deleteAccount(userId) {
 
     user.isDeleted = true;
     user.deletedAt = new Date();
-    user.accountStatus = 'deleted';
+    // Use permitted enum value for accountStatus
+    user.accountStatus = 'deactivated';
     await user.save();
 
     // Revoke sessions
@@ -1014,20 +1118,117 @@ async function checkConsentCompliance(termsVer, privacyVer) {
 
 // Get Sessions
 async function getSessions(userId) {
-    const sessions = await Session.find({ userId, isValid: true }).sort({ lastAccess: -1 });
-    return { sessions };
+    // Get all active (non-revoked) sessions for user
+    const cacheKey = `sessions:${userId}`;
+    
+    // Try cache first
+    try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            console.log(`[CACHE HIT] Sessions for ${userId}`);
+            return { sessions: JSON.parse(cached) };
+        }
+    } catch (e) {
+        console.warn('Redis get failed (non-blocking):', e && e.message);
+    }
+    
+    // DB fallback
+    const sessions = await Session.find({ userId, revoked: false })
+        .select('-refreshTokenHash') // Don't expose token hashes
+        .sort({ lastActiveAt: -1 });
+    
+    const sessionData = sessions.map(s => ({
+        _id: s._id,
+        deviceId: s.deviceId,
+        ip: s.ip,
+        location: s.location,
+        lastActiveAt: s.lastActiveAt,
+        createdAt: s.createdAt
+    }));
+    
+    // Cache for 5 minutes
+    redis.set(cacheKey, JSON.stringify(sessionData), 'EX', 300).catch(() => {});
+    
+    return { sessions: sessionData };
 }
 
-// Revoke Session
+// Revoke Session - Mark session as revoked and clean up
 async function revokeSession(userId, sessionId) {
-    await Session.updateOne({ _id: sessionId, userId }, { isValid: false });
-    await invalidateUserCache(userId);
-    return { message: 'Session revoked' };
+    try {
+        // Mark session as revoked
+        const session = await Session.findByIdAndUpdate(
+            sessionId, 
+            { revoked: true },
+            { new: true }
+        );
+        
+        if (!session) {
+            return { 
+                ok: false, 
+                status: 404, 
+                message: 'Session not found' 
+            };
+        }
+        
+        // Verify session belongs to user
+        if (session.userId.toString() !== userId.toString()) {
+            return { 
+                ok: false, 
+                status: 403, 
+                message: 'Unauthorized to revoke this session' 
+            };
+        }
+        
+        // Remove session from user's sessions array
+        await User.findByIdAndUpdate(
+            userId,
+            { $pull: { sessions: sessionId } }
+        );
+        
+        // Clear session from cache
+        await redis.del(`session:${sessionId}`);
+        
+        // Invalidate user cache
+        await invalidateUserCache(userId);
+        
+        // Publish event
+        await publishEvent('user.session.revoked', { 
+            userId, 
+            sessionId,
+            timestamp: new Date()
+        });
+        
+        return { 
+            ok: true,
+            message: 'Session revoked successfully' 
+        };
+    } catch (err) {
+        console.error('Error revoking session:', err);
+        throw err;
+    }
 }
 
 // Get Consents
 async function getConsents(userId) {
-    const consents = await Consent.find({ userId }).sort({ createdAt: -1 });
+    const cacheKey = `consents:${userId}`;
+    
+    // Try cache first
+    try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            console.log(`[CACHE HIT] Consents for ${userId}`);
+            return { consents: JSON.parse(cached) };
+        }
+    } catch (e) {
+        console.warn('Redis get failed (non-blocking):', e && e.message);
+    }
+    
+    // DB fallback
+    const consents = await Consent.find({ userId }).sort({ createdAt: -1 }).lean();
+    
+    // Cache for 1 hour
+    redis.set(cacheKey, JSON.stringify(consents), 'EX', 3600).catch(() => {});
+    
     return { consents };
 }
 
@@ -1038,8 +1239,27 @@ async function getCurrentUser(userId) {
 
 // Admin Users CRUD (Simplified stubs to respect file length/complexity, expanding if needed)
 async function getUsers(adminId, role, query) {
-    // internal implementation
-    const users = await User.find(query).limit(50);
+    // Create cache key from role and query
+    const cacheKey = `users:${role}:${JSON.stringify(query || {})}`;
+    
+    // Try cache first
+    try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            console.log(`[CACHE HIT] Users list for role=${role}`);
+            return { users: JSON.parse(cached) };
+        }
+    } catch (e) {
+        console.warn('Redis get failed (non-blocking):', e && e.message);
+    }
+    
+    // DB fallback with index usage
+    const q = query || {};
+    const users = await User.find({ ...q, role }).select('-password -twoFASecret').limit(50).lean();
+    
+    // Cache for 10 minutes
+    redis.set(cacheKey, JSON.stringify(users), 'EX', 600).catch(() => {});
+    
     return { users };
 }
 async function createUser(adminId, data) { return { message: 'Use register' }; } // admins should use register or internal
@@ -1049,7 +1269,106 @@ async function updateUser(adminId, userId, data) {
     return { user: u };
 }
 async function deleteUser(adminId, userId) { return deleteAccount(userId); }
+
+// Delete worker from company
+// Publishes event for company-service to handle department removal
+async function deleteWorkerFromCompany(adminId, companyId, workerId) {
+    try {
+        // Find the worker
+        const worker = await User.findById(workerId);
+        if (!worker) {
+            return {
+                ok: false,
+                status: 404,
+                message: 'Worker not found'
+            };
+        }
+
+        // Verify worker is associated with the company
+        if (!worker.companies || !worker.companies.includes(companyId)) {
+            return {
+                ok: false,
+                status: 403,
+                message: 'Worker is not associated with this company'
+            };
+        }
+
+        // Publish event for company-service to handle department removal
+        let rabbitmq;
+        try {
+            rabbitmq = require('/app/shared/rabbitmq.js');
+        } catch (error) {
+            try {
+                rabbitmq = require('../../../shared/rabbitmq.js');
+            } catch (err) {
+                console.warn('RabbitMQ not available, continuing without event publish');
+                rabbitmq = null;
+            }
+        }
+
+        if (rabbitmq) {
+            await rabbitmq.publish({
+                exchange: 'events_topic',
+                routingKey: 'auth.worker_removal_requested',
+                content: {
+                    type: 'auth.worker_removal_requested',
+                    payload: {
+                        workerId,
+                        companyId,
+                        requestedBy: adminId,
+                        requestedAt: new Date().toISOString()
+                    }
+                }
+            });
+            console.log(`Published worker removal event for ${workerId} from company ${companyId}`);
+        }
+
+        // If this is the worker's last company, delete the account instead
+        if (Array.isArray(worker.companies) && worker.companies.length === 1 && worker.companies[0].toString() === companyId.toString()) {
+            // Delete account (soft-delete) to satisfy User model validation that requires at least one company
+            const deletionResult = await deleteAccount(workerId);
+
+            return {
+                ok: true,
+                message: 'Worker removed from company and account deleted (was last company).',
+                data: {
+                    workerId: workerId,
+                    companyId: companyId,
+                    accountDeleted: true,
+                    deletionResult
+                }
+            };
+        }
+
+        // Remove company from user's companies array and save (safe because at least one remains)
+        worker.companies = worker.companies.filter(c => c.toString() !== companyId.toString());
+        await worker.save();
+
+        // Invalidate caches (fire-and-forget)
+        invalidateUserCache(workerId, ['all']);
+        invalidateCompanyCache(companyId);
+
+        return {
+            ok: true,
+            message: 'Worker removal initiated. Departments will be removed asynchronously.',
+            data: {
+                workerId: workerId,
+                companyId: companyId,
+                remainingCompanies: worker.companies.length
+            }
+        };
+    } catch (error) {
+        console.error('Error deleting worker from company:', error);
+        return {
+            ok: false,
+            status: 500,
+            message: 'Failed to remove worker from company'
+        };
+    }
+}
+
 async function getUserById(adminId, userId) { return { user: await getCachedUser(userId) }; }
+
 async function acceptConsent(userId, data) {
     return { message: 'Consent accepted' };
 }
@@ -1058,20 +1377,38 @@ async function acceptConsent(userId, data) {
 
 // Get company workers
 async function getCompanyWorkers(companyId) {
+    const cacheKey = `company_workers:${companyId}`;
+    
+    // Try cache first
+    try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            console.log(`[CACHE HIT] Workers for company ${companyId}`);
+            return JSON.parse(cached);
+        }
+    } catch (e) {
+        console.warn('Redis get failed (non-blocking):', e && e.message);
+    }
+    
     // Find users with role 'worker' and the specific companyId in their companies array
     // Also ensuring they are not deleted
     const users = await User.find({
         role: 'worker',
         companies: companyId,
         isDeleted: { $ne: true }
-    }).select('-password -twoFASecret -loginHistory -sessions'); // Exclude sensitive fields
+    }).select('-password -twoFASecret -loginHistory -sessions').lean(); // Exclude sensitive fields
 
+    // Cache for 5 minutes
+    redis.set(cacheKey, JSON.stringify(users), 'EX', 300).catch(() => {});
+    
     return users;
 }
 
 module.exports = {
     register,
     login,
+    logout,
+    logoutAll,
     refresh,
     updateProfile,
     changePassword,
@@ -1099,6 +1436,7 @@ module.exports = {
     createUser,
     updateUser,
     deleteUser,
+    deleteWorkerFromCompany,
     getUserById,
     acceptConsent,
     getCompanyWorkers

@@ -112,7 +112,8 @@ categorySchema.index({ isActive: 1, sortOrder: 1 });
 
 // Middleware to generate slug
 categorySchema.pre('save', function (next) {
-  if (this.isModified('name')) {
+  // Only generate slug if not provided and name is set
+  if (!this.slug && this.name) {
     this.slug = this.name
       .toLowerCase()
       .replace(/[^a-zA-Z0-9]/g, '-')
