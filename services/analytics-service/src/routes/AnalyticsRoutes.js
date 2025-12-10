@@ -7,6 +7,7 @@ const ReportController = require("../controllers/ReportController");
 router.get("/events/types", AnalyticsController.getEventTypes);
 router.get("/stats", AnalyticsController.getEventStats);
 
+
 // Enhanced Reports
 router.get("/reports/sales/revenue", ReportController.getRevenueReport);
 router.get("/reports/sales/payment-methods", ReportController.getPaymentMethodStats);

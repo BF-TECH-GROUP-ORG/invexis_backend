@@ -108,6 +108,7 @@ services:
   analytics-postgres:
     image: timescale/timescaledb:latest-pg16
     container_name: invexis-analytics-postgres
+    command: ["postgres", "-c", "listen_addresses=*"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: invexis

@@ -241,7 +241,7 @@ const analyticsProxy = createServiceProxy(
  * Routes: /api/audit/* → http://audit-service:8003/*
  */
 const auditProxy = createServiceProxy("AUDIT", services.AUDIT_SERVICE, {
-  pathRewrite: { "^/api/audit": "" },
+  pathRewrite: { "^/api/audit": "/audit" },
 });
 
 /**
@@ -267,7 +267,7 @@ const websocketProxy = createServiceProxy(
     // Add specific handling for Socket.IO
     onProxyReq: (proxyReq, req, res) => {
       console.log(`🔀 [WEBSOCKET] ${req.method} ${req.originalUrl} → ${services.WEBSOCKET_SERVICE}${req.url}`);
-      
+
       // Forward user info if available
       if (req.user) {
         proxyReq.setHeader("X-User-Id", req.user.id);

@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { connect: connectRabbitMQ } = require("../../../shared/rabbitmq");
+const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
@@ -30,16 +30,16 @@ app.get("/health", (req, res) => {
     });
 });
 
-// 404 handler
-app.use((req, res) => {
+// API Routes
+app.use("/", require("./routes/AnalyticsRoutes"));
+
+// 404 handler (must be after routes)
+app.use((req, res, next) => {
     res.status(404).json({
         success: false,
         message: "Route not found",
     });
 });
-
-// API Routes
-app.use("/api/analytics", require("./routes/AnalyticsRoutes"));
 
 // Error handling
 app.use((err, req, res, next) => {
