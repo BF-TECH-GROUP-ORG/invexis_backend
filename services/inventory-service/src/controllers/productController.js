@@ -2,7 +2,6 @@ const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
-const { getFieldsForL2Name } = require('../services/categoryFieldService');
 const { validateMongoId } = require('../utils/validateMongoId');
 const fs = require('fs');
 const path = require('path');
@@ -222,41 +221,6 @@ const createProduct = asyncHandler(async (req, res) => {
       message: 'Validation errors',
       errors: errors.array()
     });
-  }
-
-  // Validate category is present and is level-3
-  const categoryId = req.body.category;
-  if (!categoryId) return res.status(400).json({ success: false, message: 'category is required' });
-  try {
-    validateMongoId(categoryId);
-  } catch (err) {
-    return res.status(400).json({ success: false, message: 'Invalid category id' });
-  }
-
-  const categoryDoc = await Category.findById(categoryId).exec();
-  if (!categoryDoc) return res.status(404).json({ success: false, message: 'Category not found' });
-  if (categoryDoc.level !== 3) return res.status(400).json({ success: false, message: 'Products must be assigned to a level-3 category' });
-
-  // Set categoryL2 automatically from the selected level-3 category's parent
-  const parentL2Id = categoryDoc.parentCategory;
-  if (!parentL2Id) return res.status(500).json({ success: false, message: 'Parent level-2 category missing for selected category' });
-  req.body.categoryL2 = parentL2Id;
-
-  // Validate required fields from category-field-mapping (if available)
-  const parentL2Doc = await Category.findById(parentL2Id).lean().exec();
-  // getFieldsForL2Name may be async now (DB lookup); call accordingly
-  const mapping = await getFieldsForL2Name(parentL2Doc ? parentL2Doc.name : null);
-  if (mapping && Array.isArray(mapping.fields)) {
-    const providedSpecs = Array.isArray(req.body.specs) ? req.body.specs : [];
-    const providedAttrs = Array.isArray(req.body.attributes) ? req.body.attributes : [];
-    const providedMap = {};
-    providedSpecs.forEach(s => { if (s && s.name) providedMap[s.name] = s.value; });
-    providedAttrs.forEach(a => { if (a && a.name) providedMap[a.name] = a.value; });
-
-    const missing = mapping.fields.filter(f => f.required).map(f => f.name).filter(n => providedMap[n] === undefined || providedMap[n] === null || providedMap[n] === '');
-    if (missing.length) {
-      return res.status(400).json({ success: false, message: 'Missing required category-specific fields', missing });
-    }
   }
 
   const newImages = req.body.images || [];
