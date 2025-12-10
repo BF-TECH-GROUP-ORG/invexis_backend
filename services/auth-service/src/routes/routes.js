@@ -127,6 +127,7 @@ router.get('/google/callback',
 // Session Management
 router.post('/refresh', authCtrl.refresh);
 router.post('/logout', requireAuth, authCtrl.logout);
+router.post('/logout-all', requireAuth, authCtrl.logoutAll);
 router.get('/sessions', requireAuth, authCtrl.getSessions);
 router.delete('/sessions/:sessionId', requireAuth, authCtrl.revokeSession);
 
@@ -167,6 +168,9 @@ router.get('/users/company-admins/:companyId', requireAuth, requireRole('super_a
 
 // Get company workers (Authenticated users)
 router.get('/company/:companyId/workers', authCtrl.getCompanyWorkers);
+
+// Delete worker from company
+router.delete('/company/:companyId/workers/:workerId', requireAuth, authCtrl.deleteWorkerFromCompany);
 
 // Get all company admins regardless of company (cached)
 router.get('/users/company-admins', adminCtrl.getAllCompanyAdmins);

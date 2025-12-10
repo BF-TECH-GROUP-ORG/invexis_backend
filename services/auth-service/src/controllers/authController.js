@@ -215,19 +215,77 @@ const refresh = async (req, res, next) => {
     }
 };
 
-// Logout
+// Logout - Clear session, revoke tokens, and remove cookies
 const logout = async (req, res, next) => {
     try {
         const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
-        await authService.logout(req.user ? req.user._id : null, refreshToken);
-        res.clearCookie('refreshToken');
-        res.json({ ok: true });
+        const userId = req.user ? req.user._id : null;
+        
+        // Call logout service to revoke session
+        const result = await authService.logout(userId, refreshToken);
+        
+        // Clear refresh token cookie
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict'
+        });
+        
+        // Clear access token if in cookie
+        res.clearCookie('accessToken', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict'
+        });
+        
+        // Return success response
+        res.json({ 
+            ok: true, 
+            message: result.message 
+        });
     } catch (err) {
         next(err);
     }
 };
 
-// Verify email/phone
+// Logout from all devices/sessions
+const logoutAll = async (req, res, next) => {
+    try {
+        const userId = req.user ? req.user._id : null;
+        
+        if (!userId) {
+            return res.status(401).json({
+                ok: false,
+                message: 'User not authenticated'
+            });
+        }
+        
+        const result = await authService.logoutAll(userId);
+        
+        // Clear refresh token cookie
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict'
+        });
+        
+        // Clear access token if in cookie
+        res.clearCookie('accessToken', {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict'
+        });
+        
+        // Return success response
+        res.json({ 
+            ok: true, 
+            message: result.message,
+            revokedSessions: result.revokedCount
+        });
+    } catch (err) {
+        next(err);
+    }
+};// Verify email/phone
 const verify = async (req, res) => {
     const userId = req.params.userId || (req.user && req.user._id);
     const result = await authService.verify(userId, req.body);
@@ -392,8 +450,27 @@ const getSessions = async (req, res, next) => {
 const revokeSession = async (req, res, next) => {
     try {
         const { sessionId } = req.params;
-        const out = await authService.revokeSession(req.user._id, sessionId);
-        res.json({ ok: true, ...out });
+        
+        if (!sessionId) {
+            return res.status(400).json({
+                ok: false,
+                message: 'sessionId parameter is required'
+            });
+        }
+        
+        const result = await authService.revokeSession(req.user._id, sessionId);
+        
+        if (!result.ok) {
+            return res.status(result.status || 400).json({
+                ok: false,
+                message: result.message
+            });
+        }
+        
+        res.json({ 
+            ok: true, 
+            message: result.message 
+        });
     } catch (err) {
         next(err);
     }
@@ -477,11 +554,48 @@ const deleteUser = async (req, res, next) => {
     }
 };
 
+// Delete worker from company
+const deleteWorkerFromCompany = async (req, res, next) => {
+    try {
+        const companyId = req.params.companyId || req.query.companyId || req.body.companyId;
+        const workerId = req.params.workerId || req.query.workerId || req.body.workerId;
+
+        if (!companyId || !workerId) {
+            return res.status(400).json({
+                ok: false,
+                message: 'companyId and workerId are required'
+            });
+        }
+
+        const result = await authService.deleteWorkerFromCompany(
+            req.user.id,
+            companyId,
+            workerId
+        );
+
+        if (!result.ok) {
+            return res.status(result.status || 400).json({
+                ok: false,
+                message: result.message
+            });
+        }
+
+        res.json({
+            ok: true,
+            message: result.message,
+            data: result.data
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+
 // Get user by ID (admin)
 const getUserById = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const out = await authService.getUserById(req.user._id, id);
+        const out = await authService.getUserById(req.user.id, id);
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -494,7 +608,7 @@ const acceptConsent = async (req, res, next) => {
         if (!req.user) {
             return res.status(401).json({ ok: false, message: 'Authentication required' });
         }
-        const out = await authService.acceptConsent(req.user._id, {
+        const out = await authService.acceptConsent(req.user.id, {
             ...req.body,
             ip: req.ip,
             device: req.get('User-Agent')
@@ -564,6 +678,7 @@ module.exports = {
     googleCallback,
     refresh,
     logout,
+    logoutAll,
     verify,
     setup2FA,
     verify2FASetup,
@@ -587,6 +702,7 @@ module.exports = {
     createUser,
     updateUser,
     deleteUser,
+    deleteWorkerFromCompany,
     getUserById,
     acceptConsent,
     getCurrentUser,

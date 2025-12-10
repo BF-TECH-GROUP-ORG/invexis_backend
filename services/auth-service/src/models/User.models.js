@@ -178,5 +178,12 @@ UserSchema.pre("save", async function (next) {
 // Indexes (analytics + perf, strings for companies/shops)
 UserSchema.index({ role: 1, dateOfBirth: 1 }); // Analytics queries
 UserSchema.index({ accountStatus: 1, role: 1 });
+UserSchema.index({ email: 1 }); // Login lookups
+UserSchema.index({ phone: 1 }); // Communication lookups
+UserSchema.index({ companies: 1 }); // Worker filtering by company
+UserSchema.index({ isDeleted: 1 }); // Soft-delete filtering
+UserSchema.index({ role: 1, accountStatus: 1 }); // Admin filtering
+UserSchema.index({ companies: 1, isDeleted: 1 }); // Company workers query
+UserSchema.index({ shops: 1 }); // Shop manager filtering
 
 module.exports = mongoose.model("User", UserSchema);

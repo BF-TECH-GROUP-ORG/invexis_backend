@@ -159,6 +159,39 @@ class DepartmentUser {
             .where({ department_id: departmentId, status: "active" })
             .select("*");
     }
+
+    /**
+     * Count users in a department (all statuses)
+     */
+    static async countByDepartment(departmentId) {
+        const result = await db(this.table)
+            .where({ department_id: departmentId })
+            .count("id as count")
+            .first();
+        return result?.count || 0;
+    }
+
+    /**
+     * Count active users in a department
+     */
+    static async countActiveByDepartment(departmentId) {
+        const result = await db(this.table)
+            .where({ department_id: departmentId, status: "active" })
+            .count("id as count")
+            .first();
+        return result?.count || 0;
+    }
+
+    /**
+     * Count users with specific role in department
+     */
+    static async countByDepartmentAndRole(departmentId, role) {
+        const result = await db(this.table)
+            .where({ department_id: departmentId, role, status: "active" })
+            .count("id as count")
+            .first();
+        return result?.count || 0;
+    }
 }
 
 module.exports = DepartmentUser;

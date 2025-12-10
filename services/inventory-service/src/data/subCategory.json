@@ -1,0 +1,175 @@
+
+[
+ 
+  { "name": "Phones & Tablets", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 1 },
+  { "name": "Computers & Laptops", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 2 },
+  { "name": "Televisions & Displays", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 3 },
+  { "name": "Cameras & Photography", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 4 },
+  { "name": "Audio Equipment", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 5 },
+  { "name": "Wearables", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 6 },
+  { "name": "Smart Home Devices", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 7 },
+  { "name": "Networking Devices", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 8 },
+  { "name": "Electronics Accessories", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 9 },
+  { "name": "Office Electronics", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 10 },
+  { "name": "Gaming Electronics", "level": 2, "parentCategoryName": "Electronics", "sortOrder": 11 },
+
+
+  { "name": "Men’s Clothing", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 1 },
+  { "name": "Women’s Clothing", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 2 },
+  { "name": "Kids Clothing", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 3 },
+  { "name": "Footwear", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 4 },
+  { "name": "Bags & Luggage", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 5 },
+  { "name": "Jewelry", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 6 },
+  { "name": "Watches", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 7 },
+  { "name": "Eyewear", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 8 },
+  { "name": "Fashion Accessories", "level": 2, "parentCategoryName": "Clothing & Fashion", "sortOrder": 9 },
+
+
+  { "name": "Fresh Produce", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 1 },
+  { "name": "Meat & Seafood", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 2 },
+  { "name": "Dairy & Eggs", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 3 },
+  { "name": "Dry Foods & Grains", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 4 },
+  { "name": "Snacks", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 5 },
+  { "name": "Beverages (Alcohol-Free)", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 6 },
+  { "name": "Alcoholic Drinks", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 7 },
+  { "name": "Frozen Foods", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 8 },
+  { "name": "Bakery & Pastry", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 9 },
+  { "name": "Cooking Ingredients & Spices", "level": 2, "parentCategoryName": "Food & Beverages", "sortOrder": 10 },
+
+
+  { "name": "Seeds", "level": 2, "parentCategoryName": "Agriculture & Farming", "sortOrder": 1 },
+  { "name": "Fertilizers", "level": 2, "parentCategoryName": "Agriculture & Farming", "sortOrder": 2 },
+  { "name": "Farming Tools", "level": 2, "parentCategoryName": "Agriculture & Farming", "sortOrder": 3 },
+  { "name": "Animal Feed", "level": 2, "parentCategoryName": "Agriculture & Farming", "sortOrder": 4 },
+  { "name": "Irrigation Equipment", "level": 2, "parentCategoryName": "Agriculture & Farming", "sortOrder": 5 },
+  { "name": "Pesticides", "level": 2, "parentCategoryName": "Agriculture & Farming", "sortOrder": 6 },
+  { "name": "Gardening Supplies", "level": 2, "parentCategoryName": "Agriculture & Farming", "sortOrder": 7 },
+  { "name": "Harvested Crops", "level": 2, "parentCategoryName": "Agriculture & Farming", "sortOrder": 8 },
+
+
+  { "name": "Bricks & Blocks", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 1 },
+  { "name": "Cement & Concrete", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 2 },
+  { "name": "Sand & Gravel", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 3 },
+  { "name": "Roofing Materials", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 4 },
+  { "name": "Plumbing Materials", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 5 },
+  { "name": "Electrical Supplies", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 6 },
+  { "name": "Paints & Finishes", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 7 },
+  { "name": "Doors & Windows", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 8 },
+  { "name": "Tiles & Flooring", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 9 },
+  { "name": "Construction Tools", "level": 2, "parentCategoryName": "Construction & Building Materials", "sortOrder": 10 },
+
+  
+  { "name": "Living Room Furniture", "level": 2, "parentCategoryName": "Furniture & Home", "sortOrder": 1 },
+  { "name": "Bedroom Furniture", "level": 2, "parentCategoryName": "Furniture & Home", "sortOrder": 2 },
+  { "name": "Office Furniture", "level": 2, "parentCategoryName": "Furniture & Home", "sortOrder": 3 },
+  { "name": "Outdoor Furniture", "level": 2, "parentCategoryName": "Furniture & Home", "sortOrder": 4 },
+  { "name": "Kitchen Furniture", "level": 2, "parentCategoryName": "Furniture & Home", "sortOrder": 5 },
+  { "name": "Home Decor", "level": 2, "parentCategoryName": "Furniture & Home", "sortOrder": 6 },
+  { "name": "Storage & Organization", "level": 2, "parentCategoryName": "Furniture & Home", "sortOrder": 7 },
+  { "name": "Mattresses & Bedding", "level": 2, "parentCategoryName": "Furniture & Home", "sortOrder": 8 },
+
+  
+  { "name": "Cars", "level": 2, "parentCategoryName": "Vehicles & Auto Parts", "sortOrder": 1 },
+  { "name": "Motorcycles", "level": 2, "parentCategoryName": "Vehicles & Auto Parts", "sortOrder": 2 },
+  { "name": "Scooters & Bicycles", "level": 2, "parentCategoryName": "Vehicles & Auto Parts", "sortOrder": 3 },
+  { "name": "Auto Spare Parts", "level": 2, "parentCategoryName": "Vehicles & Auto Parts", "sortOrder": 4 },
+  { "name": "Tires & Wheels", "level": 2, "parentCategoryName": "Vehicles & Auto Parts", "sortOrder": 5 },
+  { "name": "Batteries", "level": 2, "parentCategoryName": "Vehicles & Auto Parts", "sortOrder": 6 },
+  { "name": "Oils & Lubricants", "level": 2, "parentCategoryName": "Vehicles & Auto Parts", "sortOrder": 7 },
+  { "name": "Vehicle Accessories", "level": 2, "parentCategoryName": "Vehicles & Auto Parts", "sortOrder": 8 },
+
+  
+  { "name": "Skin Care", "level": 2, "parentCategoryName": "Beauty & Personal Care", "sortOrder": 1 },
+  { "name": "Hair Care", "level": 2, "parentCategoryName": "Beauty & Personal Care", "sortOrder": 2 },
+  { "name": "Personal Hygiene", "level": 2, "parentCategoryName": "Beauty & Personal Care", "sortOrder": 3 },
+  { "name": "Fragrances", "level": 2, "parentCategoryName": "Beauty & Personal Care", "sortOrder": 4 },
+  { "name": "Makeup", "level": 2, "parentCategoryName": "Beauty & Personal Care", "sortOrder": 5 },
+  { "name": "Beauty Tools", "level": 2, "parentCategoryName": "Beauty & Personal Care", "sortOrder": 6 },
+
+  
+  { "name": "Small Appliances", "level": 2, "parentCategoryName": "Home & Kitchen Appliances", "sortOrder": 1 },
+  { "name": "Large Appliances", "level": 2, "parentCategoryName": "Home & Kitchen Appliances", "sortOrder": 2 },
+  { "name": "Kitchen Appliances", "level": 2, "parentCategoryName": "Home & Kitchen Appliances", "sortOrder": 3 },
+  { "name": "Heating & Cooling Devices", "level": 2, "parentCategoryName": "Home & Kitchen Appliances", "sortOrder": 4 },
+  { "name": "Cleaning Appliances", "level": 2, "parentCategoryName": "Home & Kitchen Appliances", "sortOrder": 5 },
+
+  
+  { "name": "Hand Tools", "level": 2, "parentCategoryName": "Tools, Hardware & Industrial", "sortOrder": 1 },
+  { "name": "Power Tools", "level": 2, "parentCategoryName": "Tools, Hardware & Industrial", "sortOrder": 2 },
+  { "name": "Industrial Machines", "level": 2, "parentCategoryName": "Tools, Hardware & Industrial", "sortOrder": 3 },
+  { "name": "Safety Equipment", "level": 2, "parentCategoryName": "Tools, Hardware & Industrial", "sortOrder": 4 },
+  { "name": "Hardware Supplies", "level": 2, "parentCategoryName": "Tools, Hardware & Industrial", "sortOrder": 5 },
+  { "name": "Measuring Tools", "level": 2, "parentCategoryName": "Tools, Hardware & Industrial", "sortOrder": 6 },
+
+  
+  { "name": "First Aid", "level": 2, "parentCategoryName": "Health & Medical Supplies", "sortOrder": 1 },
+  { "name": "Medical Equipment", "level": 2, "parentCategoryName": "Health & Medical Supplies", "sortOrder": 2 },
+  { "name": "Supplements", "level": 2, "parentCategoryName": "Health & Medical Supplies", "sortOrder": 3 },
+  { "name": "Protective Equipment", "level": 2, "parentCategoryName": "Health & Medical Supplies", "sortOrder": 4 },
+  { "name": "Diagnostic Tools", "level": 2, "parentCategoryName": "Health & Medical Supplies", "sortOrder": 5 },
+
+  
+  { "name": "Art Supplies", "level": 2, "parentCategoryName": "Arts, Crafts & Stationery", "sortOrder": 1 },
+  { "name": "School Supplies", "level": 2, "parentCategoryName": "Arts, Crafts & Stationery", "sortOrder": 2 },
+  { "name": "Office Stationery", "level": 2, "parentCategoryName": "Arts, Crafts & Stationery", "sortOrder": 3 },
+  { "name": "Craft Materials", "level": 2, "parentCategoryName": "Arts, Crafts & Stationery", "sortOrder": 4 },
+  { "name": "Books", "level": 2, "parentCategoryName": "Arts, Crafts & Stationery", "sortOrder": 5 },
+
+  
+  { "name": "Sports Equipment", "level": 2, "parentCategoryName": "Sports & Outdoors", "sortOrder": 1 },
+  { "name": "Fitness Equipment", "level": 2, "parentCategoryName": "Sports & Outdoors", "sortOrder": 2 },
+  { "name": "Outdoor Gear", "level": 2, "parentCategoryName": "Sports & Outdoors", "sortOrder": 3 },
+  { "name": "Cycles & Accessories", "level": 2, "parentCategoryName": "Sports & Outdoors", "sortOrder": 4 },
+  { "name": "Camping Gear", "level": 2, "parentCategoryName": "Sports & Outdoors", "sortOrder": 5 },
+
+  
+  { "name": "Baby Essentials", "level": 2, "parentCategoryName": "Baby & Kids", "sortOrder": 1 },
+  { "name": "Toys & Games", "level": 2, "parentCategoryName": "Baby & Kids", "sortOrder": 2 },
+  { "name": "Kids Furniture", "level": 2, "parentCategoryName": "Baby & Kids", "sortOrder": 3 },
+  { "name": "School Items", "level": 2, "parentCategoryName": "Baby & Kids", "sortOrder": 4 },
+
+  
+  { "name": "Pet Food", "level": 2, "parentCategoryName": "Pets & Animals", "sortOrder": 1 },
+  { "name": "Pet Accessories", "level": 2, "parentCategoryName": "Pets & Animals", "sortOrder": 2 },
+  { "name": "Animal Medicine", "level": 2, "parentCategoryName": "Pets & Animals", "sortOrder": 3 },
+  { "name": "Animal Equipment", "level": 2, "parentCategoryName": "Pets & Animals", "sortOrder": 4 },
+
+  
+  { "name": "Gold Items", "level": 2, "parentCategoryName": "Jewelry & Precious Metals", "sortOrder": 1 },
+  { "name": "Silver Items", "level": 2, "parentCategoryName": "Jewelry & Precious Metals", "sortOrder": 2 },
+  { "name": "Precious Stones", "level": 2, "parentCategoryName": "Jewelry & Precious Metals", "sortOrder": 3 },
+  { "name": "Watches", "level": 2, "parentCategoryName": "Jewelry & Precious Metals", "sortOrder": 4 },
+  { "name": "Jewelry Accessories", "level": 2, "parentCategoryName": "Jewelry & Precious Metals", "sortOrder": 5 },
+
+ 
+  { "name": "Gas & Fuel", "level": 2, "parentCategoryName": "Energy & Utilities", "sortOrder": 1 },
+  { "name": "Solar Equipment", "level": 2, "parentCategoryName": "Energy & Utilities", "sortOrder": 2 },
+  { "name": "Batteries", "level": 2, "parentCategoryName": "Energy & Utilities", "sortOrder": 3 },
+  { "name": "Generators", "level": 2, "parentCategoryName": "Energy & Utilities", "sortOrder": 4 },
+  { "name": "Electrical Components", "level": 2, "parentCategoryName": "Energy & Utilities", "sortOrder": 5 },
+
+  
+  { "name": "Repair Services", "level": 2, "parentCategoryName": "Services", "sortOrder": 1 },
+  { "name": "Delivery Services", "level": 2, "parentCategoryName": "Services", "sortOrder": 2 },
+  { "name": "Cleaning Services", "level": 2, "parentCategoryName": "Services", "sortOrder": 3 },
+  { "name": "Professional Services", "level": 2, "parentCategoryName": "Services", "sortOrder": 4 },
+  { "name": "Manufacturing Services", "level": 2, "parentCategoryName": "Services", "sortOrder": 5 },
+
+  
+  { "name": "Books", "level": 2, "parentCategoryName": "Media & Entertainment", "sortOrder": 1 },
+  { "name": "Music", "level": 2, "parentCategoryName": "Media & Entertainment", "sortOrder": 2 },
+  { "name": "Video Games", "level": 2, "parentCategoryName": "Media & Entertainment", "sortOrder": 3 },
+  { "name": "Movies", "level": 2, "parentCategoryName": "Media & Entertainment", "sortOrder": 4 },
+  { "name": "Instruments", "level": 2, "parentCategoryName": "Media & Entertainment", "sortOrder": 5 },
+
+  
+  { "name": "Land", "level": 2, "parentCategoryName": "Real Estate", "sortOrder": 1 },
+  { "name": "Residential Buildings", "level": 2, "parentCategoryName": "Real Estate", "sortOrder": 2 },
+  { "name": "Commercial Buildings", "level": 2, "parentCategoryName": "Real Estate", "sortOrder": 3 },
+
+  { "name": "Minerals", "level": 2, "parentCategoryName": "Mining & Extractives", "sortOrder": 1 },
+  { "name": "Mining Equipment", "level": 2, "parentCategoryName": "Mining & Extractives", "sortOrder": 2 },
+  { "name": "Mining Tools", "level": 2, "parentCategoryName": "Mining & Extractives", "sortOrder": 3 },
+  { "name": "Safety Gear", "level": 2, "parentCategoryName": "Mining & Extractives", "sortOrder": 4 },
+  { "name": "Raw Ores", "level": 2, "parentCategoryName": "Mining & Extractives", "sortOrder": 5 }
+]

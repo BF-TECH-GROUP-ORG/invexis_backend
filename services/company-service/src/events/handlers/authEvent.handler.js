@@ -36,6 +36,10 @@ module.exports = async function handleAuthEvent(event) {
         await handleAllUsersSuspended(data);
         break;
 
+      case "auth.worker_removal_requested":
+        await handleWorkerRemovalRequested(data);
+        break;
+
       default:
         console.log(`⚠️ Unhandled auth event type: ${type}`);
     }
@@ -204,6 +208,64 @@ async function handleAllUsersSuspended(data) {
       `❌ Error suspending all users from company ${companyId}:`,
       error.message
     );
+    throw error;
+  }
+}
+
+/**
+ * Handle worker removal from company
+ * Remove user from all departments in company and emit event back to auth-service
+ */
+async function handleWorkerRemovalRequested(data) {
+  const { workerId, companyId, requestedBy } = data;
+
+  if (!workerId || !companyId) {
+    console.warn("⚠️ Worker removal event missing workerId or companyId");
+    return;
+  }
+
+  try {
+    const DepartmentUser = require("../../models/departmentUser.model");
+
+    console.log(`🗑️ Worker removal requested: ${workerId} from company ${companyId}`);
+
+    // Get all departments user is in (for this company)
+    const departments = await DepartmentUser.findByUserAndCompany(workerId, companyId);
+
+    if (departments.length === 0) {
+      console.log(`ℹ️ User ${workerId} has no department assignments in company ${companyId}`);
+    } else {
+      // Remove from all departments
+      for (const dept of departments) {
+        await DepartmentUser.remove(workerId, dept.department_id);
+      }
+      console.log(`✅ User ${workerId} removed from ${departments.length} departments in company ${companyId}`);
+    }
+
+    // Emit event to confirm removal (for audit/sync)
+    try {
+      const rabbitmq = require('/app/shared/rabbitmq.js') || require('../../../shared/rabbitmq.js');
+      await rabbitmq.publish({
+        exchange: 'events_topic',
+        routingKey: 'company.worker_removal_completed',
+        content: {
+          type: 'company.worker_removal_completed',
+          payload: {
+            workerId,
+            companyId,
+            departmentsRemoved: departments.length,
+            completedAt: new Date().toISOString(),
+            completedBy: 'company-service'
+          }
+        }
+      });
+      console.log(`✅ Published worker removal completed event`);
+    } catch (error) {
+      console.warn(`⚠️ Could not publish removal completed event:`, error.message);
+    }
+
+  } catch (error) {
+    console.error(`❌ Error handling worker removal: ${error.message}`);
     throw error;
   }
 }

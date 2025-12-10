@@ -7,6 +7,7 @@ const dashboardConfigRoutes = require("./dashboardConfigRoutes");
 const discountRoutes = require("./discountRoutes");
 const alertRoutes = require("./alertRoutes");
 const categoryRoutes = require("./categoryRoutes");
+
 const stockRoutes = require("./stockRoutes");
 const organizationRoutes = require("./organizationRoutes");
 

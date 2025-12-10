@@ -16,6 +16,7 @@ const {
   updateCategory,
   deleteCategory,
   toggleActiveStatus,
+  seedCategories,
   createLevel3Category
 } = require('../controllers/categoryController');
 
@@ -38,6 +39,8 @@ router.get('/path/:id', getCategoryPath);
 router.get('/:id', getCategoryById);
 
 router.post('/', createCategory);
+// Admin seed endpoint - optional protection via CATEGORY_SEED_SECRET header 'x-category-seed-secret'
+router.post('/admin/seed/categories', seedCategories);
 // Dedicated route to create level-3 categories for a company
 router.post('/company/:companyId/level3', createLevel3Category);
 router.put('/:id', updateCategory);
