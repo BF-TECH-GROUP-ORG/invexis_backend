@@ -6,6 +6,8 @@ const { validateMongoId } = require('../utils/validateMongoId');
 const { publishProductEvent } = require('../events/productEvents');
 const redis = require('/app/shared/redis');
 const { scanDel } = require('../utils/redisHelper');
+const ProductVariation = require('../models/ProductVariation');
+const ProductStock = require('../models/ProductStock');
 
 // ==================== STOCK OPERATIONS (Stock In/Out) ====================
 
@@ -14,7 +16,7 @@ const { scanDel } = require('../utils/redisHelper');
  * POST /v1/stock-operations/lookup
  */
 const getProductByScan = asyncHandler(async (req, res) => {
-    const { scanData } = req.body;
+    const { scanData, productId } = req.body;
 
     if (!scanData) {
         return res.status(400).json({
@@ -23,26 +25,24 @@ const getProductByScan = asyncHandler(async (req, res) => {
         });
     }
 
+    // Allow direct productId input or scanData (sku / id)
     let product;
-
-    // Try to find by ID first
-    if (scanData.id) {
-        try {
+    let variation;
+    if (productId) {
+        validateMongoId(productId);
+        product = await Product.findById(productId).populate('category', 'name slug').populate('pricingId');
+    } else if (scanData) {
+        if (scanData.id) {
             validateMongoId(scanData.id);
-            product = await Product.findById(scanData.id)
-                .populate('category', 'name slug');
-        } catch (err) {
-            console.error('Error finding by ID:', err.message);
-        }
-    }
-
-    // If not found by ID, try SKU. prefer variation-level sku
-    if (!product && scanData.sku) {
-        product = await Product.findOne({ 'variations.sku': scanData.sku })
-            .populate('category', 'name slug');
-        if (!product) {
-            product = await Product.findOne({ sku: scanData.sku })
-                .populate('category', 'name slug');
+            product = await Product.findById(scanData.id).populate('category', 'name slug').populate('pricingId');
+        } else if (scanData.sku) {
+            // Try variation first (canonical)
+            variation = await ProductVariation.findOne({ sku: scanData.sku }).lean();
+            if (variation) {
+                product = await Product.findById(variation.productId).populate('category', 'name slug').populate('pricingId');
+            } else {
+                product = await Product.findOne({ sku: scanData.sku }).populate('category', 'name slug').populate('pricingId');
+            }
         }
     }
 
@@ -54,41 +54,42 @@ const getProductByScan = asyncHandler(async (req, res) => {
     }
 
     // Build response data. If variation matched, return variation-level stock
+    // build response with populated pricing and stock information
     const responseData = {
         id: product._id,
         name: product.name,
-        price: product.pricing.basePrice,
-        currency: product.pricing.currency,
+        price: product.pricingId?.basePrice || null,
+        currency: product.pricingId?.currency || null,
         images: product.images,
         qrCodeUrl: product.qrCodeUrl,
         barcodeUrl: product.barcodeUrl,
     };
 
-    if (scanData.sku) {
-        const variation = product.variations && product.variations.find(v => v.sku === scanData.sku);
-        if (variation) {
-            responseData.sku = variation.sku;
-            // Return merged attributes: product-level defaults overridden by variation values
-            try {
-                responseData.variation = product.getEffectiveAttributesForSku(variation.sku);
-            } catch (err) {
-                // Fallback to raw variation attributes if helper fails
-                responseData.variation = variation.attributes || [];
-            }
-            responseData.currentStock = variation.stockQty;
-            responseData.lowStockThreshold = product.inventory.lowStockThreshold;
-            responseData.stockStatus = variation.stockQty <= 0 ? (product.inventory.allowBackorder ? 'backorder' : 'out-of-stock') : (variation.stockQty <= product.inventory.lowStockThreshold ? 'low-stock' : 'in-stock');
-        } else {
-            responseData.sku = product.sku;
-            responseData.currentStock = product.inventory.quantity;
-            responseData.lowStockThreshold = product.inventory.lowStockThreshold;
-            responseData.stockStatus = product.stockStatus;
-        }
+    // Determine variation-level info if we resolved a variation earlier or can find one
+    if (!variation && scanData && scanData.sku) {
+        variation = await ProductVariation.findOne({ sku: scanData.sku }).lean();
+    }
+
+    if (variation) {
+        responseData.sku = variation.sku;
+        responseData.variation = variation;
+        responseData.currentStock = variation.stockQty || 0;
+        const stockSettings = await ProductStock.findOne({ productId: product._id }).lean();
+        const lowThresh = stockSettings?.lowStockThreshold ?? 5;
+        const allowBackorder = stockSettings?.allowBackorder ?? false;
+        responseData.lowStockThreshold = lowThresh;
+        responseData.stockStatus = responseData.currentStock <= 0 ? (allowBackorder ? 'backorder' : 'out-of-stock') : (responseData.currentStock <= lowThresh ? 'low-stock' : 'in-stock');
     } else {
         responseData.sku = product.sku;
-        responseData.currentStock = product.inventory.quantity;
-        responseData.lowStockThreshold = product.inventory.lowStockThreshold;
-        responseData.stockStatus = product.stockStatus;
+        const agg = await ProductVariation.aggregate([
+            { $match: { productId: product._id } },
+            { $group: { _id: null, total: { $sum: '$stockQty' } } }
+        ]);
+        const total = agg[0]?.total || 0;
+        responseData.currentStock = total;
+        const stockSettings2 = await ProductStock.findOne({ productId: product._id }).lean();
+        responseData.lowStockThreshold = stockSettings2?.lowStockThreshold ?? 5;
+        responseData.stockStatus = total <= 0 ? (stockSettings2?.allowBackorder ? 'backorder' : 'out-of-stock') : (total <= (stockSettings2?.lowStockThreshold ?? 5) ? 'low-stock' : 'in-stock');
     }
 
     res.status(200).json({ success: true, data: responseData });
@@ -99,115 +100,91 @@ const getProductByScan = asyncHandler(async (req, res) => {
  * POST /v1/stock-operations/stock-in
  */
 const stockIn = asyncHandler(async (req, res) => {
-    const { scanData, quantity, reason, userId, companyId, shopId } = req.body;
+    const { scanData, productId, quantity, reason, userId, companyId, shopId } = req.body;
 
     // Validation
-    if (!scanData || !quantity) {
-        return res.status(400).json({
-            success: false,
-            message: 'Scan data and quantity are required'
-        });
+    if ((!scanData && !productId) || !quantity) {
+        return res.status(400).json({ success: false, message: 'Either scan data or productId and quantity are required' });
+    }
+    if (!Number.isFinite(Number(quantity)) || Number(quantity) <= 0) {
+        return res.status(400).json({ success: false, message: 'Quantity must be a positive number' });
     }
 
-    if (quantity <= 0) {
-        return res.status(400).json({
-            success: false,
-            message: 'Quantity must be greater than 0'
-        });
-    }
-
-    // Find product. Prefer variation-level sku
-    let product;
-    let variation;
-    if (scanData.id) {
-        validateMongoId(scanData.id);
-        product = await Product.findById(scanData.id);
-    } else if (scanData.sku) {
-        product = await Product.findOne({ 'variations.sku': scanData.sku });
-        if (product) {
-            variation = product.variations.find(v => v.sku === scanData.sku);
-        } else {
-            product = await Product.findOne({ sku: scanData.sku });
+    // Resolve product & variation
+    let product = null;
+    let variation = null;
+    if (productId) {
+        validateMongoId(productId);
+        product = await Product.findById(productId);
+    } else if (scanData) {
+        if (scanData.id) {
+            validateMongoId(scanData.id);
+            product = await Product.findById(scanData.id);
+        } else if (scanData.sku) {
+            variation = await ProductVariation.findOne({ sku: scanData.sku }).lean();
+            if (variation) {
+                product = await Product.findById(variation.productId);
+            } else {
+                product = await Product.findOne({ sku: scanData.sku });
+            }
         }
     }
 
-    if (!product) {
-        return res.status(404).json({
-            success: false,
-            message: 'Product not found'
-        });
-    }
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+    if (companyId && product.companyId !== companyId) return res.status(403).json({ success: false, message: 'Product does not belong to this company' });
 
-    // Verify company ownership if companyId provided
-    if (companyId && product.companyId !== companyId) {
-        return res.status(403).json({
-            success: false,
-            message: 'Product does not belong to this company'
-        });
-    }
+    // Previous stock
+    const prevAgg = variation
+        ? { total: variation.stockQty || 0 }
+        : (await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]))[0] || { total: 0 };
+    const previous = prevAgg.total || 0;
 
-    let previousStock, newStock;
-    if (variation) {
-        previousStock = variation.stockQty || 0;
-        newStock = previousStock + quantity;
-        variation.stockQty = newStock;
-        // Recalculate aggregate
-        product.inventory.quantity = (product.variations || []).reduce((s, v) => s + (v.stockQty || 0), 0);
-    } else {
-        previousStock = product.inventory.quantity;
-        newStock = previousStock + quantity;
-        product.inventory.quantity = newStock;
-    }
-
-    // Create stock change record
-    const stockChange = new StockChange({
+    // Build StockChange payload (StockChange pre-save will apply atomic update)
+    const scPayload = {
         companyId: product.companyId,
-        shopId: shopId || product.shopId || 'default', // Use provided shopId, product shopId, or default
+        shopId: shopId || product.shopId || 'default',
         productId: product._id,
-        changeType: 'restock',
-        quantity: quantity,
-        previousStock: previousStock,
-        newStock: newStock,
+        variationId: variation ? variation._id : null,
+        type: 'restock',
+        qty: Math.abs(Number(quantity)),
+        previous: previous,
         reason: reason || 'Stock in operation',
         userId: userId || 'system'
-    });
+    };
 
-    await stockChange.save();
+    try {
+        await StockChange.create(scPayload);
+    } catch (err) {
+        logger.error('StockChange.create error (stockIn):', err.message || err);
+        throw err;
+    }
 
-    product.availability = product.inventory.quantity > 0 ? 'in_stock' : 'out_of_stock';
+    // Recompute totals
+    const updatedVariation = variation ? await ProductVariation.findById(variation._id).lean() : null;
+    const aggAfter = await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]);
+    const totalAfter = aggAfter[0]?.total || 0;
 
-    // Add audit trail
-    product.auditTrail.push({
-        action: 'stock_change',
-        changedBy: userId || 'system',
-        oldValue: variation ? { sku: variation.sku, quantity: previousStock } : { quantity: previousStock },
-        newValue: variation ? { sku: variation.sku, quantity: newStock, operation: 'stock-in' } : { quantity: newStock, operation: 'stock-in' }
-    });
+    // Persist audit
+    try {
+        await require('../models/ProductAudit').create({
+            productId: product._id,
+            action: 'stock_change',
+            changedBy: userId || 'system',
+            oldValue: variation ? { sku: variation.sku, quantity: previous } : { quantity: previous },
+            newValue: variation ? { sku: variation.sku, quantity: updatedVariation?.stockQty || 0, operation: 'stock-in' } : { quantity: totalAfter, operation: 'stock-in' },
+            timestamp: new Date()
+        });
+    } catch (e) {
+        logger.warn('Failed to persist ProductAudit (stockIn):', e.message || e);
+    }
 
-    await product.save();
-
-    // Invalidate caches
+    // Invalidate caches & emit event
     await redis.del(`product:${product._id}`);
     await redis.del(`product:slug:${product.slug}`);
     await scanDel('products:*');
+    await publishProductEvent('inventory.product.updated', { productId: product._id, variationId: variation ? variation._id : null, previous, current: totalAfter });
 
-    // Emit event
-    await publishProductEvent('inventory.product.updated', product.toObject());
-
-    res.status(200).json({
-        success: true,
-        message: 'Stock added successfully',
-        data: {
-            productId: product._id,
-            productName: product.name,
-            sku: variation ? variation.sku : product.sku,
-            previousStock,
-            newStock,
-            quantityAdded: quantity,
-            operation: 'stock-in',
-            stockStatus: variation ? (variation.stockQty <= 0 ? (product.inventory.allowBackorder ? 'backorder' : 'out-of-stock') : (variation.stockQty <= product.inventory.lowStockThreshold ? 'low-stock' : 'in-stock')) : product.stockStatus
-        }
-    });
+    res.status(200).json({ success: true, message: 'Stock added successfully', data: { productId: product._id, productName: product.name, sku: variation ? variation.sku : product.sku, previousStock: previous, newStock: totalAfter, quantityAdded: Number(quantity), operation: 'stock-in' } });
 });
 
 /**
@@ -215,137 +192,105 @@ const stockIn = asyncHandler(async (req, res) => {
  * POST /v1/stock-operations/stock-out
  */
 const stockOut = asyncHandler(async (req, res) => {
-    const { scanData, quantity, reason = "sold", changeType = 'sale', userId, companyId, shopId } = req.body;
+    const { scanData, productId, quantity, reason = "sold", changeType = 'sale', userId, companyId, shopId } = req.body;
 
     // Validation
-    if (!scanData || !quantity) {
-        return res.status(400).json({
-            success: false,
-            message: 'Scan data and quantity are required'
-        });
-    }
+    if ((!scanData && !productId) || !quantity) return res.status(400).json({ success: false, message: 'Either scan data or productId and quantity are required' });
+    if (!Number.isFinite(Number(quantity)) || Number(quantity) <= 0) return res.status(400).json({ success: false, message: 'Quantity must be a positive number' });
 
-    if (quantity <= 0) {
-        return res.status(400).json({
-            success: false,
-            message: 'Quantity must be greater than 0'
-        });
-    }
-
-    // Find product. Prefer variation-level sku
-    let product;
-    let variation;
-    if (scanData.id) {
-        validateMongoId(scanData.id);
-        product = await Product.findById(scanData.id);
-    } else if (scanData.sku) {
-        product = await Product.findOne({ 'variations.sku': scanData.sku });
-        if (product) {
-            variation = product.variations.find(v => v.sku === scanData.sku);
-        } else {
-            product = await Product.findOne({ sku: scanData.sku });
+    // Resolve product & variation
+    let product = null;
+    let variation = null;
+    if (productId) {
+        validateMongoId(productId);
+        product = await Product.findById(productId);
+    } else if (scanData) {
+        if (scanData.id) {
+            validateMongoId(scanData.id);
+            product = await Product.findById(scanData.id);
+        } else if (scanData.sku) {
+            variation = await ProductVariation.findOne({ sku: scanData.sku }).lean();
+            if (variation) {
+                product = await Product.findById(variation.productId);
+            } else {
+                product = await Product.findOne({ sku: scanData.sku });
+            }
         }
     }
 
-    if (!product) {
-        return res.status(404).json({
-            success: false,
-            message: 'Product not found'
-        });
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+    if (companyId && product.companyId !== companyId) return res.status(403).json({ success: false, message: 'Product does not belong to this company' });
+
+    // Previous stock
+    const prevAgg = variation
+        ? { total: variation.stockQty || 0 }
+        : (await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]))[0] || { total: 0 };
+    const previous = prevAgg.total || 0;
+
+    // Check stock availability (respect backorder settings)
+    const stockSettings = await ProductStock.findOne({ productId: product._id }).lean();
+    if (previous < Number(quantity) && !(stockSettings?.allowBackorder)) {
+        return res.status(400).json({ success: false, message: `Insufficient stock. Available: ${previous}, Requested: ${quantity}` });
     }
 
-    // Verify company ownership if companyId provided
-    if (companyId && product.companyId !== companyId) {
-        return res.status(403).json({
-            success: false,
-            message: 'Product does not belong to this company'
-        });
-    }
-
-    let previousStock = variation ? (variation.stockQty || 0) : product.inventory.quantity;
-
-    // Check if sufficient stock
-    if (previousStock < quantity) {
-        return res.status(400).json({
-            success: false,
-            message: `Insufficient stock. Available: ${previousStock}, Requested: ${quantity}`
-        });
-    }
-
-    const newStock = previousStock - quantity;
-
-    // Create stock change record
-    const stockChange = new StockChange({
+    const scPayload = {
         companyId: product.companyId,
-        shopId: shopId || product.shopId || 'default', // Use provided shopId, product shopId, or default
+        shopId: shopId || product.shopId || 'default',
         productId: product._id,
-        changeType: changeType === 'sale' ? 'sale' : 'adjustment',
-        quantity: -quantity, // Negative for stock out
-        previousStock: previousStock,
-        newStock: newStock,
+        variationId: variation ? variation._id : null,
+        type: changeType === 'sale' ? 'sale' : 'adjustment',
+        qty: -Math.abs(Number(quantity)),
+        previous: previous,
         reason: reason || `Stock out - ${changeType}`,
         userId: userId || 'system'
-    });
+    };
 
-    await stockChange.save();
-
-    // Update variation or product inventory
-    if (variation) {
-        variation.stockQty = newStock;
-        product.inventory.quantity = (product.variations || []).reduce((s, v) => s + (v.stockQty || 0), 0);
-    } else {
-        product.inventory.quantity = newStock;
+    try {
+        await StockChange.create(scPayload);
+    } catch (err) {
+        logger.error('StockChange.create error (stockOut):', err.message || err);
+        throw err;
     }
-    product.availability = product.inventory.quantity > 0 ? 'in_stock' : 'out_of_stock';
 
-    // Add audit trail
-    product.auditTrail.push({
-        action: 'stock_change',
-        changedBy: userId || 'system',
-        oldValue: variation ? { sku: variation.sku, quantity: previousStock } : { quantity: previousStock },
-        newValue: variation ? { sku: variation.sku, quantity: newStock, operation: 'stock-out' } : { quantity: newStock, operation: 'stock-out' }
-    });
+    // Recompute totals
+    const updatedVariation = variation ? await ProductVariation.findById(variation._id).lean() : null;
+    const aggAfter = await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]);
+    const totalAfter = aggAfter[0]?.total || 0;
 
-    await product.save();
-
-    // Check for low stock alert
-    let lowStockAlert = false;
-    if (product.inventory.quantity <= product.inventory.lowStockThreshold) {
-        lowStockAlert = true;
-        const Alert = require('../models/Alert');
-        const alert = new Alert({
-            companyId: product.companyId,
-            type: 'low_stock',
+    // Persist audit
+    try {
+        await require('../models/ProductAudit').create({
             productId: product._id,
-            threshold: product.inventory.lowStockThreshold,
-            message: `Stock for product ${product.name} is low: ${product.inventory.quantity}`
+            action: 'stock_change',
+            changedBy: userId || 'system',
+            oldValue: variation ? { sku: variation.sku, quantity: previous } : { quantity: previous },
+            newValue: variation ? { sku: variation.sku, quantity: updatedVariation?.stockQty || 0, operation: 'stock-out' } : { quantity: totalAfter, operation: 'stock-out' },
+            timestamp: new Date()
         });
-        await alert.save();
+    } catch (e) {
+        logger.warn('Failed to persist ProductAudit (stockOut):', e.message || e);
     }
 
-    // Invalidate caches
+    // Trigger low stock alert
+    let lowStockAlert = false;
+    try {
+        const lowThresh = stockSettings?.lowStockThreshold ?? 5;
+        if (totalAfter <= lowThresh) {
+            lowStockAlert = true;
+            const Alert = require('../models/Alert');
+            await Alert.create({ companyId: product.companyId, type: 'low_stock', productId: product._id, threshold: lowThresh, message: `Stock for product ${product.name} is low: ${totalAfter}` });
+        }
+    } catch (e) {
+        logger.warn('Low stock alert check failed (stockOut):', e.message || e);
+    }
+
+    // Invalidate caches & emit event
     await redis.del(`product:${product._id}`);
     await redis.del(`product:slug:${product.slug}`);
     await scanDel('products:*');
+    await publishProductEvent('inventory.product.updated', { productId: product._id, variationId: variation ? variation._id : null, previous, current: totalAfter });
 
-    // Emit event
-    await publishProductEvent('inventory.product.updated', product.toObject());
-
-    res.status(200).json({
-        success: true,
-        message: 'Stock removed successfully',
-        data: {
-            productId: product._id,
-            productName: product.name,
-            sku: variation ? variation.sku : product.sku,
-            previousStock,
-            newStock,
-            quantityRemoved: quantity,
-            operation: 'stock-out',
-            stockStatus: product.stockStatus,
-            lowStockAlert
-        }
-    });
+    res.status(200).json({ success: true, message: 'Stock removed successfully', data: { productId: product._id, productName: product.name, sku: variation ? variation.sku : product.sku, previousStock: previous, newStock: (updatedVariation?.stockQty ?? totalAfter), quantityRemoved: Number(quantity), operation: 'stock-out', stockStatus: totalAfter <= 0 ? 'out-of-stock' : (totalAfter <= (stockSettings?.lowStockThreshold ?? 5) ? 'low-stock' : 'in-stock'), lowStockAlert } });
 });
 
 /**
@@ -369,102 +314,84 @@ const bulkStockIn = asyncHandler(async (req, res) => {
 
     for (const item of items) {
         try {
-            const { scanData, quantity, reason } = item;
+            const { scanData, productId: itemProductId, quantity, reason } = item;
 
-            if (!scanData || !quantity || quantity <= 0) {
-                results.failed.push({
-                    scanData,
-                    error: 'Invalid scan data or quantity'
-                });
+            if ((!scanData && !itemProductId) || !quantity || Number(quantity) <= 0) {
+                results.failed.push({ scanData: item.scanData, error: 'Invalid scan data or quantity' });
                 continue;
             }
 
-            // Find product (prefer variation-level SKU)
-            let product;
-            let variation;
-            if (scanData.id) {
-                validateMongoId(scanData.id);
-                product = await Product.findById(scanData.id);
-            } else if (scanData.sku) {
-                product = await Product.findOne({ 'variations.sku': scanData.sku });
-                if (product) {
-                    variation = product.variations.find(v => v.sku === scanData.sku);
-                } else {
-                    product = await Product.findOne({ sku: scanData.sku });
+            // Resolve product & variation
+            let product = null;
+            let variation = null;
+            if (itemProductId) {
+                validateMongoId(itemProductId);
+                product = await Product.findById(itemProductId);
+            } else if (scanData) {
+                if (scanData.id) {
+                    validateMongoId(scanData.id);
+                    product = await Product.findById(scanData.id);
+                } else if (scanData.sku) {
+                    variation = await ProductVariation.findOne({ sku: scanData.sku }).lean();
+                    if (variation) {
+                        product = await Product.findById(variation.productId);
+                    } else {
+                        product = await Product.findOne({ sku: scanData.sku });
+                    }
                 }
             }
 
             if (!product) {
-                results.failed.push({
-                    scanData,
-                    error: 'Product not found'
-                });
+                results.failed.push({ scanData: item.scanData, error: 'Product not found' });
                 continue;
             }
 
-            // Verify company ownership
             if (companyId && product.companyId !== companyId) {
-                results.failed.push({
-                    scanData,
-                    productName: product.name,
-                    error: 'Product does not belong to this company'
-                });
+                results.failed.push({ scanData: item.scanData, productName: product.name, error: 'Product does not belong to this company' });
                 continue;
             }
 
-            let previousStock = variation ? (variation.stockQty || 0) : product.inventory.quantity;
-            const newStock = previousStock + quantity;
+            // Compute previous
+            const prevAgg = variation
+                ? { total: variation.stockQty || 0 }
+                : (await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]))[0] || { total: 0 };
+            const previous = prevAgg.total || 0;
 
-            // Create stock change record
-            const stockChange = new StockChange({
+            // Create stock change (let StockChange pre-save update variation atomically)
+            const scPayload = {
                 companyId: product.companyId,
-                shopId: shopId || product.shopId || 'default', // Use provided shopId, product shopId, or default
+                shopId: shopId || product.shopId || 'default',
                 productId: product._id,
-                changeType: 'restock',
-                quantity: quantity,
-                previousStock: previousStock,
-                newStock: newStock,
+                variationId: variation ? variation._id : null,
+                type: 'restock',
+                qty: Math.abs(Number(quantity)),
+                previous: previous,
                 reason: reason || 'Bulk stock in operation',
                 userId: userId || 'system'
-            });
+            };
 
-            await stockChange.save();
-
-            // Update product (variation-aware)
-            if (variation) {
-                variation.stockQty = newStock;
-                product.inventory.quantity = (product.variations || []).reduce((s, v) => s + (v.stockQty || 0), 0);
-            } else {
-                product.inventory.quantity = newStock;
+            try {
+                await StockChange.create(scPayload);
+            } catch (err) {
+                results.failed.push({ scanData: item.scanData, error: err.message || String(err) });
+                continue;
             }
-            product.availability = product.inventory.quantity > 0 ? 'in_stock' : 'out_of_stock';
-            product.auditTrail.push({
-                action: 'stock_change',
-                changedBy: userId || 'system',
-                oldValue: variation ? { sku: variation.sku, quantity: previousStock } : { quantity: previousStock },
-                newValue: variation ? { sku: variation.sku, quantity: newStock, operation: 'bulk-stock-in' } : { quantity: newStock, operation: 'bulk-stock-in' }
-            });
 
-            await product.save();
+            // Recompute totals
+            const aggAfter = await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]);
+            const totalAfter = aggAfter[0]?.total || 0;
+
+            // Audit
+            try { await require('../models/ProductAudit').create({ productId: product._id, action: 'stock_change', changedBy: userId || 'system', oldValue: variation ? { sku: variation.sku, quantity: previous } : { quantity: previous }, newValue: variation ? { sku: variation.sku, quantity: undefined, operation: 'bulk-stock-in' } : { quantity: totalAfter, operation: 'bulk-stock-in' } }); } catch (e) {}
 
             // Invalidate cache
             await redis.del(`product:${product._id}`);
             await redis.del(`product:slug:${product.slug}`);
 
-            results.successful.push({
-                productId: product._id,
-                productName: product.name,
-                sku: variation ? variation.sku : product.sku,
-                previousStock,
-                newStock,
-                quantityAdded: quantity
-            });
+            results.successful.push({ productId: product._id, productName: product.name, sku: variation ? variation.sku : product.sku, previousStock: previous, newStock: totalAfter, quantityAdded: Number(quantity) });
 
         } catch (err) {
-            results.failed.push({
-                scanData: item.scanData,
-                error: err.message
-            });
+            results.failed.push({ scanData: item.scanData, error: err.message });
         }
     }
 
@@ -499,128 +426,99 @@ const bulkStockOut = asyncHandler(async (req, res) => {
 
     for (const item of items) {
         try {
-            const { scanData, quantity, reason, changeType = 'sale' } = item;
+            const { scanData, productId: itemProductId, quantity, reason, changeType = 'sale' } = item;
 
-            if (!scanData || !quantity || quantity <= 0) {
-                results.failed.push({
-                    scanData,
-                    error: 'Invalid scan data or quantity'
-                });
+            if ((!scanData && !itemProductId) || !quantity || Number(quantity) <= 0) {
+                results.failed.push({ scanData: item.scanData, error: 'Invalid scan data or quantity' });
                 continue;
             }
 
-            // Find product (prefer variation-level SKU)
-            let product;
-            let variation;
-            if (scanData.id) {
-                validateMongoId(scanData.id);
-                product = await Product.findById(scanData.id);
-            } else if (scanData.sku) {
-                product = await Product.findOne({ 'variations.sku': scanData.sku });
-                if (product) {
-                    variation = product.variations.find(v => v.sku === scanData.sku);
-                } else {
-                    product = await Product.findOne({ sku: scanData.sku });
+            // Resolve product & variation
+            let product = null;
+            let variation = null;
+            if (itemProductId) {
+                validateMongoId(itemProductId);
+                product = await Product.findById(itemProductId);
+            } else if (scanData) {
+                if (scanData.id) {
+                    validateMongoId(scanData.id);
+                    product = await Product.findById(scanData.id);
+                } else if (scanData.sku) {
+                    variation = await ProductVariation.findOne({ sku: scanData.sku }).lean();
+                    if (variation) {
+                        product = await Product.findById(variation.productId);
+                    } else {
+                        product = await Product.findOne({ sku: scanData.sku });
+                    }
                 }
             }
 
             if (!product) {
-                results.failed.push({
-                    scanData,
-                    error: 'Product not found'
-                });
+                results.failed.push({ scanData: item.scanData, error: 'Product not found' });
                 continue;
             }
 
-            // Verify company ownership
             if (companyId && product.companyId !== companyId) {
-                results.failed.push({
-                    scanData,
-                    productName: product.name,
-                    error: 'Product does not belong to this company'
-                });
+                results.failed.push({ scanData: item.scanData, productName: product.name, error: 'Product does not belong to this company' });
                 continue;
             }
 
-            let previousStock = variation ? (variation.stockQty || 0) : product.inventory.quantity;
+            // Compute previous
+            const prevAgg = variation
+                ? { total: variation.stockQty || 0 }
+                : (await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]))[0] || { total: 0 };
+            const previous = prevAgg.total || 0;
 
             // Check sufficient stock
-            if (previousStock < quantity) {
-                results.failed.push({
-                    scanData,
-                    productName: product.name,
-                    error: `Insufficient stock. Available: ${previousStock}, Requested: ${quantity}`
-                });
+            const stockSettings = await ProductStock.findOne({ productId: product._id }).lean();
+            if (previous < Number(quantity) && !(stockSettings?.allowBackorder)) {
+                results.failed.push({ scanData: item.scanData, productName: product.name, error: `Insufficient stock. Available: ${previous}, Requested: ${quantity}` });
                 continue;
             }
 
-            const newStock = previousStock - quantity;
-
-            // Create stock change record
-            const stockChange = new StockChange({
+            // Create stock change
+            const scPayload = {
                 companyId: product.companyId,
+                shopId: shopId || product.shopId || 'default',
                 productId: product._id,
-                changeType: changeType === 'sale' ? 'sale' : 'adjustment',
-                quantity: -quantity,
-                previousStock: previousStock,
-                newStock: newStock,
+                variationId: variation ? variation._id : null,
+                type: changeType === 'sale' ? 'sale' : 'adjustment',
+                qty: -Math.abs(Number(quantity)),
+                previous: previous,
                 reason: reason || `Bulk stock out - ${changeType}`,
                 userId: userId || 'system'
-            });
+            };
 
-            await stockChange.save();
-
-            // Update product (variation-aware)
-            if (variation) {
-                variation.stockQty = newStock;
-                product.inventory.quantity = (product.variations || []).reduce((s, v) => s + (v.stockQty || 0), 0);
-            } else {
-                product.inventory.quantity = newStock;
+            try {
+                await StockChange.create(scPayload);
+            } catch (err) {
+                results.failed.push({ scanData: item.scanData, error: err.message || String(err) });
+                continue;
             }
-            product.availability = product.inventory.quantity > 0 ? 'in_stock' : 'out_of_stock';
-            product.auditTrail.push({
-                action: 'stock_change',
-                changedBy: userId || 'system',
-                oldValue: variation ? { sku: variation.sku, quantity: previousStock } : { quantity: previousStock },
-                newValue: variation ? { sku: variation.sku, quantity: newStock, operation: 'bulk-stock-out' } : { quantity: newStock, operation: 'bulk-stock-out' }
-            });
 
-            await product.save();
+            // Recompute totals
+            const aggAfter = await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]);
+            const totalAfter = aggAfter[0]?.total || 0;
 
-            // Check for low stock alert
+            // Low stock alert
             let lowStockAlert = false;
-            if (product.inventory.quantity <= product.inventory.lowStockThreshold) {
-                lowStockAlert = true;
-                const Alert = require('../models/Alert');
-                const alert = new Alert({
-                    companyId: product.companyId,
-                    type: 'low_stock',
-                    productId: product._id,
-                    threshold: product.inventory.lowStockThreshold,
-                    message: `Stock for product ${product.name} is low: ${product.inventory.quantity}`
-                });
-                await alert.save();
-            }
+            try {
+                const lowThresh = stockSettings?.lowStockThreshold ?? 5;
+                if (totalAfter <= lowThresh) {
+                    lowStockAlert = true;
+                    const Alert = require('../models/Alert');
+                    await Alert.create({ companyId: product.companyId, type: 'low_stock', productId: product._id, threshold: lowThresh, message: `Stock for product ${product.name} is low: ${totalAfter}` });
+                }
+            } catch (e) {}
 
             // Invalidate cache
             await redis.del(`product:${product._id}`);
             await redis.del(`product:slug:${product.slug}`);
 
-            results.successful.push({
-                productId: product._id,
-                productName: product.name,
-                sku: variation ? variation.sku : product.sku,
-                previousStock,
-                newStock,
-                quantityRemoved: quantity,
-                lowStockAlert
-            });
+            results.successful.push({ productId: product._id, productName: product.name, sku: variation ? variation.sku : product.sku, previousStock: previous, newStock: totalAfter, quantityRemoved: Number(quantity), lowStockAlert });
 
         } catch (err) {
-            results.failed.push({
-                scanData: item.scanData,
-                error: err.message
-            });
+            results.failed.push({ scanData: item.scanData, error: err.message });
         }
     }
 

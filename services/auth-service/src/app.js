@@ -9,11 +9,34 @@ require("./config/passport");
 const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/routes");
 
+// ✅ Performance monitoring
+const performanceMonitor = (req, res, next) => {
+    const startTime = Date.now();
+    const originalSend = res.send;
+
+    res.send = function (data) {
+        const duration = Date.now() - startTime;
+        const isSlow = duration > 50; // SLA: 50ms
+        
+        if (isSlow) {
+            console.warn(`[SLOW] ${req.method} ${req.path} took ${duration}ms`);
+        }
+        
+        res.set('X-Response-Time', `${duration}ms`);
+        return originalSend.call(this, data);
+    };
+
+    next();
+};
+
 // --------------------------------------
 // EXPRESS APP
 // --------------------------------------
 const app = express();
 
+
+// ✅ Add performance monitoring first
+app.use(performanceMonitor);
 
 // --------------------------------------
 // HELMET (RELAXED FOR DEV)

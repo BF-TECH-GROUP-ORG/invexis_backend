@@ -215,43 +215,47 @@ const refresh = async (req, res, next) => {
     }
 };
 
-// Logout - Clear session, revoke tokens, and remove cookies
-const logout = async (req, res, next) => {
+// ✅ Logout - Optimized for speed (SYNCHRONOUS - no async/await)
+const logout = (req, res, next) => {
     try {
+        const startTime = Date.now();
         const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
-        const userId = req.user ? req.user._id : null;
+        const userId = req.userId; // ✅ Set by requireAuth (no DB lookup needed)
         
-        // Call logout service to revoke session
-        const result = await authService.logout(userId, refreshToken);
+        console.log(`[LOGOUT] Starting logout for user ${userId}`);
         
-        // Clear refresh token cookie
+        // ✅ Fire-and-forget logout (don't await)
+        // Note: logout() returns Promise but we don't wait for it
+        authService.logout(userId, refreshToken);
+        
+        // Clear cookies immediately (synchronous)
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
-        
-        // Clear access token if in cookie
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
         
-        // Return success response
+        // Return immediately - SYNCHRONOUSLY
         res.json({ 
             ok: true, 
-            message: result.message 
+            message: 'Logged out successfully' 
         });
+        
+        console.log(`[LOGOUT] Logout completed in ${Date.now() - startTime}ms`);
     } catch (err) {
         next(err);
     }
 };
 
-// Logout from all devices/sessions
-const logoutAll = async (req, res, next) => {
+// ✅ Logout from all devices/sessions - Optimized (SYNCHRONOUS - no async/await)
+const logoutAll = (req, res, next) => {
     try {
-        const userId = req.user ? req.user._id : null;
+        const userId = req.userId; // ✅ Set by requireAuth (no DB lookup needed)
         
         if (!userId) {
             return res.status(401).json({
@@ -260,27 +264,27 @@ const logoutAll = async (req, res, next) => {
             });
         }
         
-        const result = await authService.logoutAll(userId);
+        // ✅ Fire-and-forget logout (don't await)
+        // Note: logoutAll() returns Promise but we don't wait for it
+        authService.logoutAll(userId);
         
-        // Clear refresh token cookie
+        // Clear cookies immediately
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
-        
-        // Clear access token if in cookie
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
         
-        // Return success response
+        // Return immediately - SYNCHRONOUSLY
         res.json({ 
             ok: true, 
-            message: result.message,
-            revokedSessions: result.revokedCount
+            message: 'Logged out from all devices',
+            revokedSessions: 0 // Unknown at response time
         });
     } catch (err) {
         next(err);

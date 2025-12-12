@@ -89,37 +89,40 @@ function formatTimeForComparison(date) {
     return `${hours}:${minutes}`;
 }
 
-// Caching helpers
+// ✅ Caching helpers - Optimized
 async function getCachedUser(userId, select = '-password -twoFASecret', populate = []) {
     const cacheKey = `user:${userId}`;
     
-    // Try Redis cache first
+    // Try Redis cache first (fast path)
     try {
         const cached = await redis.get(cacheKey);
         if (cached) {
-            console.log(`[CACHE HIT] User ${userId}`);
             return JSON.parse(cached);
         }
     } catch (e) {
-        console.warn('Redis get failed (non-blocking):', e && e.message);
+        // Redis error - continue to DB
     }
     
     // DB fallback if not in cache
-    let query = User.findById(userId).select(select);
+    let query = User.findById(userId).select(select).lean();
     if (populate && populate.length > 0) query = query.populate(populate);
     
-    const user = await query.lean();
+    const user = await query;
     if (!user) return null;
     
-    // Cache the result (fire-and-forget)
-    redis.set(cacheKey, JSON.stringify(user), 'EX', CACHE_TTLS.user).catch(() => {});
+    // ✅ Cache async (fire-and-forget, don't block)
+    redis.set(cacheKey, JSON.stringify(user), 'EX', CACHE_TTLS.user)
+        .catch(() => {});
     
     return user;
 }
 
 async function invalidateUserCache(userId) {
-    await redis.del(`user:${userId}`);
-    await redis.del(`sessions:${userId}`);
+    // ✅ Parallel invalidation (don't wait for both)
+    return Promise.all([
+        redis.del(`user:${userId}`),
+        redis.del(`sessions:${userId}`)
+    ]).catch(() => {});
 }
 
 async function rateLimit(key, max = 10, window = CACHE_TTLS.rateLimit) {
@@ -574,7 +577,8 @@ async function login(data, options = {}) {
             if (user.failedLoginAttempts >= 5) {
                 user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
             }
-            await user.save();
+            // ✅ Fire-and-forget: Don't await user save on failed login
+            user.save().catch(err => console.warn('Failed to save user on login failure:', err.message));
             await invalidateUserCache(user._id);
             console.log('Failed login attempts:', user.failedLoginAttempts);
             return { status: 401, message: 'Invalid credentials' };
@@ -589,27 +593,48 @@ async function login(data, options = {}) {
             method = '2fa';
         }
 
+        // ✅ Prepare all updates in parallel
         user.failedLoginAttempts = 0;
         user.lastLoginAt = new Date();
-        await user.save();
-        await invalidateUserCache(user._id);
+        
+        // ✅ Create session and history in parallel, don't await yet
+        const sessionPromise = tokenService.createSession(user._id, options.device, options.ip, options.location);
+        const historyPromise = LoginHistory.create({ 
+            userId: user._id, 
+            ip: options.ip, 
+            device: options.device, 
+            location: options.location, 
+            method, 
+            successful: true, 
+            riskScore: 0 
+        });
 
-        const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
+        // ✅ Wait for session and history creation
+        const [{ refreshToken, session }, history] = await Promise.all([sessionPromise, historyPromise]);
+
+        // ✅ Batch user updates: push both session and history in single save
         user.sessions.push(session._id);
-        await user.save();
-
-        const history = new LoginHistory({ userId: user._id, ip: options.ip, device: options.device, location: options.location, method, successful: true, riskScore: 0 });
-        await history.save();
         user.loginHistory.push(history._id);
         await user.save();
 
-        await publishEvent('user.logged_in', { userId: user._id, role: user.role, method, ip: options.ip, device: options.device });
+        // ✅ Fire-and-forget: Cache invalidation and event publishing don't block response
+        invalidateUserCache(user._id)
+            // .catch(err => console.warn('Cache invalidation failed:', err.message));
+
+        publishEvent('user.logged_in', { userId: user._id, role: user.role, method, ip: options.ip, device: options.device })
+            // .catch(err => console.warn('Event publish failed:', err.message));
+
+        // ✅ Return user object without additional DB lookup (already in memory)
+        // Remove sensitive fields from in-memory user object
+        const userResponse = user.toObject ? user.toObject() : user;
+        delete userResponse.password;
+        delete userResponse.twoFASecret;
 
         return {
             ok: true,
             accessToken: tokenService.signAccess({ sub: user._id.toString() }),
             refreshToken: refreshToken,
-            user: await getCachedUser(user._id, '-password')
+            user: userResponse
         };
     } catch (error) {
         console.error('Login error:', error);
@@ -633,23 +658,27 @@ async function refresh(refreshToken) {
 }
 
 
-// Logout - Revoke current session and clear tokens
+// ✅ Logout - Optimized for speed (async event publishing)
 async function logout(userId, refreshToken) {
     try {
-        // Revoke the specific session by refresh token
+        // ✅ Fire-and-forget: All operations happen in background
+        // Don't await session revocation (network I/O to MongoDB)
         if (refreshToken) {
-            const revoked = await tokenService.revokeSessionByRefresh(refreshToken);
-            if (!revoked) {
-                console.warn(`Failed to revoke session for user ${userId}`);
-            }
+            tokenService.revokeSessionByRefresh(refreshToken)
+                .catch(err => console.warn(`Session revoke failed: ${err.message}`));
         }
         
-        // Invalidate user cache to force re-auth on next request
         if (userId) {
-            await invalidateUserCache(userId);
-            await publishEvent('user.logged_out', { userId });
+            // Fire-and-forget cache invalidation
+            invalidateUserCache(userId)
+                .catch(err => console.warn(`Cache cleanup failed: ${err.message}`));
+            
+            // Fire-and-forget event publishing
+            publishEvent('user.logged_out', { userId })
+                .catch(err => console.warn('Event publish failed:', err.message));
         }
         
+        // Return immediately - all cleanup happens in background
         return { message: 'Logged out successfully' };
     } catch (err) {
         console.error('Logout error:', err);
@@ -657,41 +686,46 @@ async function logout(userId, refreshToken) {
     }
 }
 
-// Logout from all devices/sessions
+// ✅ Logout from all devices/sessions - Optimized for speed
 async function logoutAll(userId) {
     try {
-        // Get all active sessions for user
-        const sessions = await Session.find({ userId, revoked: false });
+        // ✅ Batch operations: Parallel DB updates instead of sequential
+        const [sessions] = await Promise.all([
+            Session.find({ userId, revoked: false }).lean().select('_id'),
+            // Start revocation in background (don't wait)
+            Session.updateMany(
+                { userId, revoked: false },
+                { revoked: true }
+            ).catch(err => console.warn('Session revoke failed:', err.message))
+        ]);
         
-        // Revoke all sessions
         const revokedCount = sessions.length;
-        await Session.updateMany(
-            { userId, revoked: false },
-            { revoked: true }
-        );
         
-        // Remove all sessions from user's sessions array
-        await User.findByIdAndUpdate(
-            userId,
-            { sessions: [] }
-        );
+        // ✅ Parallel invalidations + update (fire-and-forget where possible)
+        const promises = [
+            User.findByIdAndUpdate(
+                userId,
+                { sessions: [] },
+                { new: false } // Don't need returned doc
+            ),
+            invalidateUserCache(userId)
+        ];
         
-        // Clear all sessions from cache
+        // ✅ Cache deletion in background (fire-and-forget)
         if (revokedCount > 0) {
-            await Promise.all(
-                sessions.map(s => redis.del(`session:${s._id}`))
-            );
+            redis.del(...sessions.map(s => `session:${s._id}`))
+                .catch(err => console.warn('Cache cleanup failed:', err.message));
         }
         
-        // Invalidate user cache
-        await invalidateUserCache(userId);
-        
-        // Publish event
-        await publishEvent('user.logged_out_all_devices', { 
+        // ✅ Event publishing fire-and-forget
+        publishEvent('user.logged_out_all_devices', { 
             userId,
             revokedCount,
             timestamp: new Date()
-        });
+        }).catch(err => console.warn('Event publish failed:', err.message));
+        
+        // Wait only for critical operations
+        await Promise.all(promises);
         
         return { 
             message: `Logged out from all ${revokedCount} device(s) successfully`,

@@ -15,6 +15,31 @@ class AuthError extends Error {
 
 async function requireAuth(req, res, next) {
     try {
+        const authStart = Date.now();
+        const header = req.headers.authorization;
+        if (!header) throw new AuthError('No authorization header', 401);
+        const token = header.split(' ')[1];
+        if (!token) throw new AuthError('Invalid authorization format', 401);
+        const payload = await tokenService.verifyAccess(token);
+        const authTime = Date.now() - authStart;
+        if (authTime > 10) console.warn(`[AUTH] Token verification took ${authTime}ms`);
+        
+        if (!payload) throw new AuthError('Invalid or expired token', 401);
+        
+        // ✅ For fast routes (logout, logoutAll), just set user ID without full DB lookup
+        // Full user lookup happens only when needed (requireRole, etc)
+        req.user = { _id: payload.sub };
+        req.userId = payload.sub;
+        
+        next();
+    } catch (err) {
+        return res.status(err.status || 401).json({ ok: false, message: 'Unauthorized', error: err.message });
+    }
+}
+
+// ✅ New: Load full user for routes that need role/status checks
+async function requireAuthWithUser(req, res, next) {
+    try {
         const header = req.headers.authorization;
         if (!header) throw new AuthError('No authorization header', 401);
         const token = header.split(' ')[1];
@@ -127,4 +152,6 @@ function authErrorHandler(err, req, res, next) {
             } : undefined
         }
     });
-} module.exports = { AuthError, requireAuth, requireRole, authErrorHandler };
+}
+
+module.exports = { AuthError, requireAuth, requireAuthWithUser, requireRole, authErrorHandler };

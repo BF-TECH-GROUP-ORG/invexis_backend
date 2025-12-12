@@ -370,12 +370,14 @@ exports.deleteCampaign = async (req, res, next) => {
     try {
         const { companyId } = req.body;
         const { campaignId } = req.params;
-        const campaign = await Promotion.findByIdAndDelete(campaignId);
+        const campaign = await Promotion.findById(campaignId);
         if (!campaign || campaign.companyId !== companyId) {
             return res.status(404).json({ success: false, message: 'Campaign not found' });
         }
+        // Soft-delete the campaign
+        await Promotion.updateOne({ _id: campaignId }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
         await cache.del(`campaign:${companyId}:${campaignId}`);
-        res.json({ success: true, message: 'Campaign deleted' });
+        res.json({ success: true, message: 'Campaign soft-deleted' });
     } catch (error) {
         logger.error('Error in deleteCampaign:', error);
         next(error);

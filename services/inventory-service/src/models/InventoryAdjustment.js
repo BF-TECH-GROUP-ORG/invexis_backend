@@ -15,6 +15,9 @@ const inventoryAdjustmentSchema = new Schema({
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   approvedBy: { type: String, default: null },
   approvedAt: { type: Date, default: null },
+  rejectedBy: { type: String, default: null },
+  rejectedAt: { type: Date, default: null },
+  rejectionReason: { type: String, default: null, trim: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

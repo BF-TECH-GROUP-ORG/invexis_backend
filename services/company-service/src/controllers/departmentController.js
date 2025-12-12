@@ -53,16 +53,27 @@ const getDepartmentsByCompany = async (req, res) => {
         // Get all departments for this company
         const departments = await Department.findByCompany(companyId);
 
+        // ✅ Optimized: Batch fetch user counts instead of N+1 queries
+        const db = require("../config");
+        const userCountsMap = await db("department_users")
+            .select("department_id")
+            .count("* as count")
+            .where("status", "active")
+            .whereIn("department_id", departments.map(d => d.id))
+            .groupBy("department_id")
+            .then(rows => {
+                const map = {};
+                rows.forEach(row => {
+                    map[row.department_id] = parseInt(row.count) || 0;
+                });
+                return map;
+            });
+
         // Enrich with user counts
-        const enrichedDepartments = await Promise.all(
-            departments.map(async (dept) => {
-                const userCount = await DepartmentUser.countActiveByDepartment(dept.id);
-                return {
-                    ...dept,
-                    activeUserCount: userCount
-                };
-            })
-        );
+        const enrichedDepartments = departments.map(dept => ({
+            ...dept,
+            activeUserCount: userCountsMap[dept.id] || 0
+        }));
 
         // Cache the result (fire-and-forget, 5min TTL)
         setCache(cacheKey, enrichedDepartments, 300).catch(() => {});
@@ -139,11 +150,18 @@ const getDepartmentById = async (req, res) => {
         // Cache the result (fire-and-forget, 5min TTL)
         setCache(cacheKey, department, 300).catch(() => {});
 
-        // Get active user count
-        const activeUserCount = await DepartmentUser.countActiveByDepartment(departmentId);
+        // ✅ Optimized: Get both counts with single query
+        const db = require("../config");
+        const counts = await db("department_users")
+            .select(
+                db.raw("COUNT(*) FILTER (WHERE status = 'active') as active_count"),
+                db.raw("COUNT(*) as total_count")
+            )
+            .where("department_id", departmentId)
+            .first();
 
-        // Get total user count
-        const totalUserCount = await DepartmentUser.countByDepartment(departmentId);
+        const activeUserCount = parseInt(counts?.active_count) || 0;
+        const totalUserCount = parseInt(counts?.total_count) || 0;
 
         res.status(200).json({
             ok: true,

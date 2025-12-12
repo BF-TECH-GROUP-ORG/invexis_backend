@@ -1,0 +1,84 @@
+{
+  "companyId": "507f1f77bcf86cd799439011",
+  "shopId": "507f1f77bcf86cd799439012",
+  "name": "Samsung Galaxy S24 Ultra - 256GB",
+  "description": "Premium flagship smartphone with advanced AI features, 6.8-inch AMOLED display, and 200MP camera system.",
+  "brand": "Samsung",
+  "manufacturer": "Samsung Electronics",
+  "tags": ["smartphone", "flagship", "android", "5g"],
+  "categoryId": "507f1f77bcf86cd799439100",
+  "condition": "new",
+  "availability": "in_stock",
+  "status": "active",
+  "visibility": "public",
+  "isFeatured": true,
+  "sortOrder": 1,
+  "supplierName": "Samsung Direct",
+  "pricing": {
+    "basePrice": 999.99,
+    "salePrice": 899.99,
+    "listPrice": 1099.99,
+    "cost": 450.00,
+    "currency": "USD",
+    "priceTiers": [
+      {
+        "minQuantity": 10,
+        "price": 899.99,
+        "currency": "USD"
+      },
+      {
+        "minQuantity": 50,
+        "price": 849.99,
+        "currency": "USD"
+      }
+    ]
+  },
+  "images": [
+    {
+      "url": "https://cdn.example.com/products/s24-ultra-front.jpg",
+      "alt": "Samsung Galaxy S24 Ultra - Front",
+      "isPrimary": true,
+      "sortOrder": 1
+    },
+    {
+      "url": "https://cdn.example.com/products/s24-ultra-back.jpg",
+      "alt": "Samsung Galaxy S24 Ultra - Back",
+      "isPrimary": false,
+      "sortOrder": 2
+    }
+  ],
+  "videoUrls": [
+    "https://youtube.com/watch?v=samsung-s24-ultra"
+  ],
+  "specs": [
+    {
+      "name": "model",
+      "value": "Samsung Galaxy S24 Ultra"
+    },
+    {
+      "name": "processor",
+      "value": "Snapdragon 8 Gen 3 Leading Version"
+    },
+    {
+      "name": "ram_gb",
+      "value": 12
+    }
+],
+  "seo": {
+    "metaTitle": "Samsung Galaxy S24 Ultra 256GB - Premium Android Phone",
+    "metaDescription": "Buy Samsung Galaxy S24 Ultra 256GB with advanced AI features, 200MP camera, and 6.8-inch AMOLED display.",
+    "keywords": [
+      "samsung",
+      "galaxy s24 ultra",
+      "flagship smartphone",
+      "5g",
+      "android"
+    ]
+  },
+  "inventory": {
+    "trackQuantity": true,
+    "quantity": 500,
+    "lowStockThreshold": 20,
+    "allowBackorder": false
+  }
+}

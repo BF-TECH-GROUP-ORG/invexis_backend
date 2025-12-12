@@ -11,9 +11,23 @@ const registerPublishers = async (publisherConfigs) => {
   await connect();
   console.log("🚀 Publishers initialized");
 
+  // Support both array-style and object-style configs (legacy)
+  let configs = publisherConfigs;
+  if (!Array.isArray(publisherConfigs) && publisherConfigs && typeof publisherConfigs === 'object') {
+    // Convert object of { key: config } into array where each entry has exchange and events array
+    configs = Object.keys(publisherConfigs).map((k) => {
+      const c = publisherConfigs[k] || {};
+      return {
+        exchange: c.exchange,
+        events: [{ key: c.routingKey || k }],
+        description: c.description || ''
+      };
+    });
+  }
+
   const publishEvent = async (routingKey, payload = {}, metadata = {}) => {
-    const config = publisherConfigs.find((c) =>
-      c.events.some((e) => e.key === routingKey)
+    const config = configs.find((c) =>
+      Array.isArray(c.events) && c.events.some((e) => e.key === routingKey)
     );
 
     if (!config) {

@@ -22,7 +22,8 @@
           "ram_gb",
           "storage_gb",
           "screen_size_inches",
-          "os_type"
+          "os_type",
+          "serial_number"
         ],
         "optional": [
           "camera_megapixels",
@@ -31,7 +32,23 @@
           "warranty_months",
           "connectivity_types",
           "expandable_storage"
-        ]
+        ],
+        "fieldMeta": {
+          "model": { "type": "string", "scope": "product|variation", "dbPath": "specs.model" },
+          "brand": { "type": "string", "scope": "product", "dbPath": "specs.brand" },
+          "processor": { "type": "string", "scope": "product|variation", "dbPath": "specs.processor" },
+          "ram_gb": { "type": "number", "scope": "variation|product", "dbPath": "specs.ram_gb" },
+          "storage_gb": { "type": "number", "scope": "variation|product", "dbPath": "specs.storage_gb" },
+          "screen_size_inches": { "type": "number", "scope": "product", "dbPath": "specs.screen_size_inches" },
+          "os_type": { "type": "string", "scope": "product", "dbPath": "specs.os_type" },
+
+          "camera_megapixels": { "type": "number", "scope": "variation|product", "dbPath": "specs.camera_megapixels" },
+          "battery_capacity_mah": { "type": "number", "scope": "product|variation", "dbPath": "specs.battery_capacity_mah" },
+          "display_type": { "type": "string", "scope": "product", "dbPath": "specs.display_type" },
+          "warranty_months": { "type": "number", "scope": "product", "dbPath": "specs.warranty_months" },
+          "connectivity_types": { "type": "array", "scope": "product", "dbPath": "specs.connectivity_types" },
+          "expandable_storage": { "type": "boolean", "scope": "product", "dbPath": "specs.expandable_storage" }
+        }
       },
       "Computers & Laptops": {
         "required": [
@@ -41,7 +58,8 @@
           "ram_gb",
           "storage_gb",
           "screen_size_inches",
-          "os_type"
+          "os_type",
+          "serial_number"
         ],
         "optional": [
           "gpu_type",

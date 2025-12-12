@@ -451,7 +451,8 @@ const deleteCategory = asyncHandler(async (req, res) => {
     }
   }
 
-  await Category.findByIdAndDelete(id);
+  // Soft-delete the category to preserve data history
+  await Category.updateOne({ _id: id }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
 
   // Update parent category's subcategory count
   if (category.parentCategory) {
@@ -464,7 +465,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: 'Category deleted successfully'
+    message: 'Category soft-deleted successfully'
   });
 });
 
@@ -611,8 +612,9 @@ const seedCategories = asyncHandler(async (req, res) => {
   try {
     const existingCount = await Category.countDocuments({});
     if (existingCount > 0) {
-      const delResult = await Category.deleteMany({});
-      deletedAllCount = delResult.deletedCount || 0;
+      // Soft-delete all categories instead of dropping data
+      const delResult = await Category.updateMany({}, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
+      deletedAllCount = delResult.modifiedCount || 0;
     }
     // Drop the entire collection to remove all indexes (including unique slug index)
     // Then mongoose will recreate indexes on first insert

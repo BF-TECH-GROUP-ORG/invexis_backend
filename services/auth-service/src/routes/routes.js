@@ -126,8 +126,8 @@ router.get('/google/callback',
 
 // Session Management
 router.post('/refresh', authCtrl.refresh);
-router.post('/logout', requireAuth, authCtrl.logout);
-router.post('/logout-all', requireAuth, authCtrl.logoutAll);
+router.post('/logout', requireAuth, authCtrl.logout); // ✅ Fast route: only needs user ID
+router.post('/logout-all', requireAuth, authCtrl.logoutAll); // ✅ Fast route: only needs user ID
 router.get('/sessions', requireAuth, authCtrl.getSessions);
 router.delete('/sessions/:sessionId', requireAuth, authCtrl.revokeSession);
 

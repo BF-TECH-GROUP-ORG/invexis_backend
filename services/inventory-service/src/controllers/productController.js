@@ -2,10 +2,18 @@ const asyncHandler = require('express-async-handler');
 const { validationResult } = require('express-validator');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const categoryValidationService = require('../services/categoryValidationService');
+const ProductPricing = require('../models/ProductPricing');
+const ProductAudit = require('../models/ProductAudit');
+const ProductStock = require('../models/ProductStock');
+const ProductVariation = require('../models/ProductVariation');
+const ProductSpecs = require('../models/productSpecs');
+const StockChange = require('../models/StockChange');
 const { validateMongoId } = require('../utils/validateMongoId');
 const fs = require('fs');
 const path = require('path');
 const { publishProductEvent } = require('../events/productEvents');
+const { productEvents } = require('../events/eventHelpers');
 const { scanDel, setCache, getCache, delCache } = require('../utils/redisHelper');
 const logger = require('../utils/logger');
 
@@ -39,7 +47,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
-  // Build query
+  // Build base product query (exclude price/stock filters which are in separate collections)
   const query = {};
   if (companyId) query.companyId = companyId;
   if (status) query.status = status;
@@ -47,20 +55,58 @@ const getAllProducts = asyncHandler(async (req, res) => {
   if (category) query.category = category;
   if (brand) query.brand = new RegExp(brand, 'i');
   if (featured !== undefined) query.featured = featured === 'true';
-  if (inStock === 'true') query['inventory.quantity'] = { $gt: 0 };
   if (search) {
     query.$text = { $search: search };
   }
+
+  // Handle price filters by querying ProductPricing for matching productIds
+  let productIdCandidates = null;
   if (minPrice || maxPrice) {
-    query['pricing.basePrice'] = {};
-    if (minPrice) query['pricing.basePrice'].$gte = parseFloat(minPrice);
-    if (maxPrice) query['pricing.basePrice'].$lte = parseFloat(maxPrice);
+    const pricingQuery = {};
+    if (minPrice) pricingQuery.basePrice = { ...(pricingQuery.basePrice || {}), $gte: parseFloat(minPrice) };
+    if (maxPrice) pricingQuery.basePrice = { ...(pricingQuery.basePrice || {}), $lte: parseFloat(maxPrice) };
+    const matchedProductIds = await ProductPricing.find(pricingQuery).distinct('productId').lean();
+    if (!matchedProductIds || matchedProductIds.length === 0) {
+      // No products match pricing filters
+      return res.status(200).json({ success: true, data: [], pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, pages: 0 } });
+    }
+    productIdCandidates = new Set(matchedProductIds.map(id => String(id)));
+  }
+
+  // Handle stock filter by querying ProductStock
+  if (inStock === 'true') {
+    const stocks = await ProductStock.aggregate([
+      { $group: { _id: '$productId', qty: { $sum: { $subtract: ['$quantity', '$reserved'] } } } },
+      { $match: { qty: { $gt: 0 } } },
+      { $project: { productId: '$_id' } }
+    ]).exec();
+    const stocked = stocks.map(s => String(s.productId || s._id));
+    if (!stocked || stocked.length === 0) {
+      return res.status(200).json({ success: true, data: [], pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, pages: 0 } });
+    }
+    if (productIdCandidates) {
+      // intersect sets
+      const intersect = new Set();
+      stocked.forEach(id => { if (productIdCandidates.has(String(id))) intersect.add(String(id)); });
+      if (intersect.size === 0) {
+        return res.status(200).json({ success: true, data: [], pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, pages: 0 } });
+      }
+      productIdCandidates = intersect;
+    } else {
+      productIdCandidates = new Set(stocked);
+    }
+  }
+
+  // If we have candidate product ids from price/stock filters, add them to the query
+  if (productIdCandidates) {
+    query._id = { $in: Array.from(productIdCandidates) };
   }
 
   // Use lean() for read-only queries (much faster - returns plain JS objects, not Mongoose documents)
   const [products, total] = await Promise.all([
     Product.find(query)
-      .populate('category', 'name slug level')
+      .populate('categoryId', 'name slug level')
+      .populate('pricingId')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit))
@@ -106,7 +152,10 @@ const getProductById = asyncHandler(async (req, res) => {
 
   // Use lean for read-only queries
   const product = await Product.findById(id)
-    .populate('category', 'name slug level attributes')
+    .populate('categoryId', 'name slug level attributes')
+    .populate('pricingId')
+    .populate('variationIds')
+    .populate('stockIds')
     .lean()
     .exec();
 
@@ -143,7 +192,10 @@ const getProductBySlug = asyncHandler(async (req, res) => {
   }
 
   const product = await Product.findOne({ slug })
-    .populate('category', 'name slug level attributes');
+    .populate('categoryId', 'name slug level attributes')
+    .populate('pricingId')
+    .populate('variationIds')
+    .populate('stockIds');
 
   if (!product) {
     return res.status(404).json({
@@ -228,7 +280,67 @@ const createProduct = asyncHandler(async (req, res) => {
   delete req.body.images;
   delete req.body.videos;
 
+  // EDGE CASE: Images array limit (max 10 images per product)
+  if (newImages.length > 10) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cannot exceed 10 images per product',
+      currentCount: newImages.length,
+      maxLimit: 10
+    });
+  }
+
   // NOTE: sku, asin, upc, barcode, qrCode, scanId, browseNodeId are auto-generated by Product model pre-save middleware.
+  // Validate that category is provided and is a Level-3 category
+  if (!req.body.categoryId) {
+    return res.status(400).json({ success: false, message: 'category is required and must be a level-3 category' });
+  }
+
+  // ensure category exists and is level-3, and fetch parent L2
+  const categoryDoc = await Category.findById(req.body.categoryId).lean();
+  if (!categoryDoc || categoryDoc.level !== 3) {
+    return res.status(400).json({ success: false, message: 'Invalid category selection: category must be level 3' });
+  }
+
+  // EDGE CASE: Validate parent L2 category still exists (not deleted) and is not deleted/inactive
+  const parentL2Id = categoryDoc.parentCategory;
+  let parentL2Name = null;
+  if (parentL2Id) {
+    const parentDoc = await Category.findById(parentL2Id).lean();
+    if (!parentDoc) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parent L2 category has been deleted; cannot create product with orphaned category'
+      });
+    }
+    if (!parentDoc.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parent L2 category is inactive; cannot create product'
+      });
+    }
+    parentL2Name = parentDoc.name;
+  } else {
+    return res.status(400).json({
+      success: false,
+      message: 'L3 category must have a valid L2 parent category'
+    });
+  }
+
+  // Validate payload against L2 mapping (if mapping exists)
+  try {
+    const validation = await categoryValidationService.validateProductPayloadAgainstL2(req.body, parentL2Name);
+    if (validation.mappingFound && !validation.valid) {
+      return res.status(400).json({ success: false, message: 'Missing required category-specific fields', errors: validation.errors });
+    }
+  } catch (err) {
+    // If validation service fails unexpectedly, log and continue (do not block product creation)
+    // but return an internal error if the failure is due to corrupted mapping
+    // For safety, allow creation when mapping cannot be read.
+    // eslint-disable-next-line no-console
+    console.warn('Category validation service error:', err?.message || err);
+  }
+
   const product = new Product(req.body);
 
   // Process images
@@ -245,17 +357,145 @@ const createProduct = asyncHandler(async (req, res) => {
 
   product.videoUrls = newVideos.map(v => v.url);
 
-  // Add audit trail
-  product.auditTrail.push({
-    action: 'create',
-    changedBy: req.user?.id || 'system',
-    newValue: req.body
-  });
-
   // Save product (this triggers pre-save middleware for auto-generation)
   await product.save();
 
-  // Return response immediately - do not wait for side effects
+  // If a pricing payload was provided, persist it in the ProductPricing collection
+  if (req.body.pricing) {
+    try {
+      const pricingPayload = Object.assign({}, req.body.pricing);
+      // Ensure basePrice exists for pricing model
+      if (pricingPayload.basePrice === undefined || pricingPayload.basePrice === null) {
+        // rollback product creation to keep data consistent (soft-delete)
+        await Product.updateOne({ _id: product._id }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
+        return res.status(400).json({ success: false, message: 'pricing.basePrice is required' });
+      }
+
+      const pricingDoc = await ProductPricing.create(Object.assign({}, pricingPayload, { 
+        productId: product._id,
+        companyId: product.companyId // EDGE CASE: Ensure pricing is scoped to company
+      }));
+      // Link pricingId on product for future reference
+      product.pricingId = pricingDoc._id;
+      await product.save();
+    } catch (err) {
+      // On pricing creation error, soft-delete product to avoid dangling unlinked product
+      try {
+        await Product.updateOne({ _id: product._id }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
+      } catch (delErr) {
+        logger.error('Failed to soft-delete product after pricing creation error', delErr);
+      }
+      logger.error('Failed to create ProductPricing:', err);
+      return res.status(500).json({ success: false, message: 'Failed to persist product pricing', error: err.message });
+    }
+  } else if (req.body.pricingId) {
+    // EDGE CASE: If pricingId provided directly, validate it belongs to same company
+    try {
+      const existingPricing = await ProductPricing.findById(req.body.pricingId).lean();
+      if (!existingPricing) {
+        return res.status(404).json({
+          success: false,
+          message: 'ProductPricing not found',
+          field: 'pricingId'
+        });
+      }
+      if (existingPricing.companyId !== product.companyId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Cannot use pricing from different company',
+          field: 'pricingId'
+        });
+      }
+      product.pricingId = req.body.pricingId;
+    } catch (err) {
+      logger.error('Failed to validate pricingId:', err);
+      return res.status(500).json({ success: false, message: 'Failed to validate pricing', error: err.message });
+    }
+  }
+
+  // Ensure QR/barcode payloads only contain SKU (not full product object)
+  try {
+    if (product.sku) {
+      await Product.updateOne({ _id: product._id }, { $set: { qrPayload: product.sku, barcodePayload: product.sku } });
+      product.qrPayload = product.sku;
+      product.barcodePayload = product.sku;
+    }
+  } catch (err) {
+    logger.warn('Failed to set SKU-only payloads for QR/barcode:', err.message || err);
+  }
+
+  // Persist product stock/settings if provided and optionally create initial stock change
+  try {
+    const stockPayload = req.body.stock || req.body.inventory || null;
+    const initialQty = parseInt(
+      req.body.initialQuantity ||
+      req.body.quantity ||
+      (stockPayload && (stockPayload.quantity || stockPayload.qty)) ||
+      0
+    );
+    if (stockPayload) {
+      await ProductStock.create(Object.assign({}, stockPayload, { productId: product._id }));
+      if (initialQty && initialQty > 0) {
+        try {
+          await StockChange.create({
+            companyId: product.companyId,
+            shopId: product.shopId,
+            productId: product._id,
+            type: 'restock',
+            qty: Math.abs(initialQty),
+            previous: 0,
+            new: Math.abs(initialQty),
+            reason: 'Initial stock on product creation',
+            userId: req.user?.id || 'system'
+          });
+        } catch (e) {
+          logger.warn('Failed to create initial StockChange:', e.message || e);
+        }
+      }
+    }
+  } catch (err) {
+    logger.error('Failed to persist ProductStock on create:', err);
+  }
+
+  // Persist product specs (if provided) into ProductSpecs model
+  try {
+    const specsObj = {};
+    if (Array.isArray(req.body.specs)) {
+      req.body.specs.forEach(s => { if (s && s.name) specsObj[s.name] = s.value; });
+    }
+    if (Array.isArray(req.body.attributes)) {
+      req.body.attributes.forEach(a => { if (a && a.name) specsObj[a.name] = a.value; });
+    }
+    // Include any top-level mapped fields that were present
+    const mapping = categoryValidationService.findL2MappingByName(parentL2Name);
+    if (mapping && mapping.commonFields) {
+      mapping.commonFields.forEach((f) => {
+        if (req.body[f] !== undefined) specsObj[f] = req.body[f];
+      });
+    }
+
+    // Only persist if there is something to store
+    if (Object.keys(specsObj).length > 0) {
+      await ProductSpecs.create({ productId: product._id, l2Category: parentL2Name, specs: specsObj });
+    }
+  } catch (err) {
+    logger.warn('Failed to persist ProductSpecs on create:', err.message || err);
+  }
+
+  // Persist audit entry as separate document (do not duplicate in Product)
+  try {
+    await ProductAudit.create({
+      productId: product._id,
+      action: 'create',
+      changedBy: req.user?.id || 'system',
+      newValue: req.body,
+      timestamp: new Date()
+    });
+  } catch (err) {
+    logger.error('Failed to persist product audit entry:', err);
+  }
+
+  // Return response
   res.status(201).json({
     success: true,
     message: 'Product created successfully',
@@ -273,9 +513,9 @@ const createProduct = asyncHandler(async (req, res) => {
         const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
         const { uploadBuffer } = require('../utils/uploadUtil');
 
-        // Use the full encoded product payload from the model (contains complete product data as base64)
-        const qrPayload = product.qrPayload || product.qrCode;
-        const barcodePayload = product.barcodePayload || product.barcode;
+        // Use SKU-only payloads for QR/barcode generation (safer & stable)
+        const qrPayload = product.sku || product.qrPayload || product.qrCode;
+        const barcodePayload = product.sku || product.barcodePayload || product.barcode;
 
         const [qrBuffer, barcodeBuffer] = await Promise.all([
           generateQRCodeBuffer(qrPayload),
@@ -342,6 +582,16 @@ const updateProduct = asyncHandler(async (req, res) => {
   delete req.body.images;
   delete req.body.videos;
 
+  // EDGE CASE: Images array limit (max 10 images total)
+  if (newImages.length > 10) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cannot exceed 10 images per product',
+      currentCount: newImages.length,
+      maxLimit: 10
+    });
+  }
+
   // Use lean + findById for fast read (no need for full Mongoose document)
   const oldProduct = await Product.findById(id).lean();
   if (!oldProduct) {
@@ -349,6 +599,63 @@ const updateProduct = asyncHandler(async (req, res) => {
       success: false,
       message: 'Product not found'
     });
+  }
+
+  // EDGE CASE: Prevent SKU modification (SKU should be immutable after creation)
+  if (req.body.sku && req.body.sku !== oldProduct.sku) {
+    return res.status(400).json({
+      success: false,
+      message: 'SKU cannot be modified after product creation (immutable field)',
+      field: 'sku',
+      currentSKU: oldProduct.sku,
+      attemptedSKU: req.body.sku
+    });
+  }
+
+  // EDGE CASE: If category is being changed, validate it's still L3 and parent exists
+  if (req.body.category && req.body.category !== String(oldProduct.category)) {
+    validateMongoId(req.body.category);
+    const newCategoryDoc = await Category.findById(req.body.category).lean();
+    if (!newCategoryDoc || newCategoryDoc.level !== 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid category selection: category must be level 3',
+        field: 'category'
+      });
+    }
+    // Validate parent L2 still exists
+    if (newCategoryDoc.parentCategory) {
+      const parentDoc = await Category.findById(newCategoryDoc.parentCategory).lean();
+      if (!parentDoc) {
+        return res.status(400).json({
+          success: false,
+          message: 'Parent L2 category has been deleted; cannot change to this category',
+          field: 'category'
+        });
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'L3 category must have a valid L2 parent category',
+        field: 'category'
+      });
+    }
+  }
+
+  // EDGE CASE: Validate product name is still unique in company (unless keeping same name)
+  if (req.body.name && req.body.name !== oldProduct.name) {
+    const duplicate = await Product.findOne({
+      _id: { $ne: id },
+      companyId: oldProduct.companyId,
+      name: req.body.name
+    }).lean();
+    if (duplicate) {
+      return res.status(409).json({
+        success: false,
+        message: 'Another product with this name already exists in your company',
+        field: 'name'
+      });
+    }
   }
 
   let updatedImages = oldProduct.images || [];
@@ -371,15 +678,21 @@ const updateProduct = asyncHandler(async (req, res) => {
     { new: true, runValidators: true }
   ).populate('category');
 
-  // Add audit trail entry
-  product.auditTrail.push({
-    action: 'update',
-    changedBy: req.user?.id || 'system',
-    oldValue: oldProduct,
-    newValue: req.body
-  });
-
   await product.save();
+
+  // Persist audit entry as separate document
+  try {
+    await ProductAudit.create({
+      productId: product._id,
+      action: 'update',
+      changedBy: req.user?.id || 'system',
+      oldValue: oldProduct,
+      newValue: req.body,
+      timestamp: new Date()
+    });
+  } catch (err) {
+    logger.error('Failed to persist product audit entry (update):', err);
+  }
 
   // Send response immediately
   res.status(200).json({
@@ -396,9 +709,9 @@ const updateProduct = asyncHandler(async (req, res) => {
       const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
       const { uploadBuffer } = require('../utils/uploadUtil');
 
-      // Use the updated full encoded product payload from the model
-      const qrPayload = product.qrPayload || product.qrCode;
-      const barcodePayload = product.barcodePayload || product.barcode;
+      // Use SKU-only payloads for QR/barcode generation when available
+      const qrPayload = product.sku || product.qrPayload || product.qrCode;
+      const barcodePayload = product.sku || product.barcodePayload || product.barcode;
 
       const [qrBuffer, barcodeBuffer] = await Promise.all([
         generateQRCodeBuffer(qrPayload),
@@ -467,13 +780,13 @@ const deleteProduct = asyncHandler(async (req, res) => {
     });
   }
 
-  // Delete from database immediately
-  await Product.deleteOne({ _id: id });
+  // Soft-delete the product to avoid data loss
+  await Product.updateOne({ _id: id }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
 
   // Send response immediately (don't wait for Cloudinary cleanup)
   res.status(200).json({
     success: true,
-    message: 'Product deleted successfully',
+    message: 'Product soft-deleted successfully',
     data: { _id: id }
   });
 
@@ -574,107 +887,113 @@ const updateInventory = asyncHandler(async (req, res) => {
   validateMongoId(id);
   const { quantity, operation = 'set', variationId, reason } = req.body;
 
+  // For safety we require a variationId to update concrete stock levels.
+  if (!variationId) {
+    return res.status(400).json({ success: false, message: 'variationId is required for inventory updates. Use stock endpoints for product-level adjustments.' });
+  }
+
   const product = await Product.findById(id);
-  if (!product) {
-    return res.status(404).json({
-      success: false,
-      message: 'Product not found'
-    });
+  if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+  const variation = await ProductVariation.findById(variationId);
+  if (!variation || String(variation.productId) !== String(id)) {
+    return res.status(404).json({ success: false, message: 'Variation not found for this product' });
   }
 
-  let oldQuantity;
-  let targetPath = 'inventory.quantity'; // Default
-  if (variationId) {
-    const variation = product.variations.id(variationId); // Use Mongoose id() for subdoc
-    if (!variation) {
-      return res.status(404).json({ success: false, message: 'Variation not found' });
-    }
-    oldQuantity = variation.stockQty;
-    targetPath = `variations.${variationId}.stockQty`;
-  } else {
-    oldQuantity = product.inventory.quantity;
-  }
-
+  const oldQuantity = variation.stockQty || 0;
   let newQuantity;
   switch (operation) {
     case 'increment':
-      newQuantity = oldQuantity + quantity;
+      newQuantity = oldQuantity + Math.abs(Number(quantity));
       break;
     case 'decrement':
-      newQuantity = Math.max(0, oldQuantity - quantity);
+      newQuantity = Math.max(0, oldQuantity - Math.abs(Number(quantity)));
       break;
     case 'set':
     default:
-      newQuantity = Math.max(0, quantity);
+      newQuantity = Math.max(0, Number(quantity));
   }
 
-  if (newQuantity < 0) {
-    return res.status(400).json({ success: false, message: 'You do not have enough products in stock' });
-  }
+  const qtyDiff = newQuantity - oldQuantity; // positive for inflow, negative for outflow
 
-  // Note: per-warehouse support removed; update product-level inventory only
-
-  const StockChange = require('../models/StockChange');
-  const stockChange = new StockChange({
+  // Build StockChange according to StockChange schema
+  const changeType = operation === 'decrement' ? 'sale' : (operation === 'increment' ? 'restock' : 'adjustment');
+  const stockChangePayload = {
     companyId: product.companyId,
     shopId: product.shopId,
     productId: id,
     variationId,
-    warehouseId: null,
-    changeType: operation === 'decrement' ? 'sale' : (operation === 'increment' ? 'restock' : 'adjustment'),
-    quantity: operation === 'decrement' ? -quantity : quantity,
-    previousStock: oldQuantity,
-    newStock: newQuantity,
+    type: changeType,
+    qty: qtyDiff === 0 ? 0 : (changeType === 'sale' ? -Math.abs(qtyDiff) : Math.abs(qtyDiff)),
+    previous: oldQuantity,
     reason: reason || `Manual ${operation} update`,
     userId: req.user?.id || 'system'
-  });
-  await stockChange.save();
+  };
 
-  // Update main product-level quantity
-  product.inventory.quantity = newQuantity;
-
-  // Update availability based on total
-  product.availability = product.inventory.quantity > 0 ? 'in_stock' : 'out_of_stock';
-
-  // Add audit trail
-  product.auditTrail.push({
-    action: 'stock_change',
-    changedBy: req.user?.id || 'system',
-    oldValue: { quantity: oldQuantity },
-    newValue: { quantity: newQuantity, operation }
-  });
-
-  await product.save();
-
-  // Trigger alert if low (use total quantity)
-  if (product.inventory.quantity <= product.inventory.lowStockThreshold && operation === 'decrement') {
-    const Alert = require('../models/Alert');
-    const alert = new Alert({
-      companyId: product.companyId,
-      type: 'low_stock',
-      productId: id,
-      threshold: product.inventory.lowStockThreshold,
-      message: `Stock for product ${product.name} is low: ${product.inventory.quantity}`
-    });
-    await alert.save();
+  try {
+    const sc = await StockChange.create(stockChangePayload);
+    // StockChange pre-save will atomically update the variation.stockQty when variationId is set
+  } catch (err) {
+    logger.error('Failed to create StockChange:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update inventory', error: err.message });
   }
 
-  // Invalidate caches
+  // Re-fetch updated variation and compute aggregated product stock
+  const updatedVariation = await ProductVariation.findById(variationId).lean();
+  const totalAgg = await ProductVariation.aggregate([
+    { $match: { productId: product._id } },
+    { $group: { _id: null, total: { $sum: '$stockQty' } } }
+  ]);
+  const aggregatedTotal = totalAgg[0]?.total || 0;
+
+  // Persist audit entry
+  try {
+    await ProductAudit.create({
+      productId: product._id,
+      action: 'stock_change',
+      changedBy: req.user?.id || 'system',
+      oldValue: { variationId, quantity: oldQuantity },
+      newValue: { variationId, quantity: updatedVariation.stockQty, operation },
+      timestamp: new Date()
+    });
+  } catch (err) {
+    logger.error('Failed to persist product audit entry (stock_change):', err);
+  }
+
+  // Trigger low stock alert if needed
+  try {
+    const stockSettings = await ProductStock.findOne({ productId: product._id }).lean();
+    const lowThresh = stockSettings?.lowStockThreshold ?? 5;
+    if (updatedVariation.stockQty <= lowThresh && operation === 'decrement') {
+      const Alert = require('../models/Alert');
+      await Alert.create({
+        companyId: product.companyId,
+        type: 'low_stock',
+        productId: id,
+        variationId,
+        threshold: lowThresh,
+        message: `Stock for product ${product.name} (variation ${variationId}) is low: ${updatedVariation.stockQty}`
+      });
+    }
+  } catch (e) {
+    logger.warn('Low stock alert check failed:', e.message || e);
+  }
+
+  // Invalidate caches and emit event
   await delCache(`product:${id}`);
   await delCache(`product:slug:${product.slug}`);
   await scanDel('products:*');
-
-  // Emit event
-  await publishProductEvent('inventory.product.updated', product.toObject());
+  await publishProductEvent('inventory.product.updated', { productId: product._id, variationId, oldQuantity, newQuantity: updatedVariation.stockQty });
 
   res.status(200).json({
     success: true,
     message: 'Inventory updated successfully',
     data: {
-      id: product._id,
+      productId: product._id,
+      variationId,
       oldQuantity,
-      newQuantity: product.inventory.quantity, // Use aggregated total
-      stockStatus: product.stockStatus
+      newQuantity: updatedVariation.stockQty,
+      aggregatedTotal
     }
   });
 });
@@ -844,6 +1163,17 @@ const smartCreateProduct = asyncHandler(async (req, res) => {
 
   validateMongoId(category);
 
+  // Ensure provided category is level-3 and determine parent L2 name for specs validation
+  const categoryDocForSmart = await Category.findById(category).lean();
+  if (!categoryDocForSmart || categoryDocForSmart.level !== 3) {
+    return res.status(400).json({ success: false, message: 'category must be a level-3 category' });
+  }
+  let parentL2Name = null;
+  if (categoryDocForSmart.parentCategory) {
+    const pdoc = await Category.findById(categoryDocForSmart.parentCategory).lean();
+    parentL2Name = pdoc ? pdoc.name : null;
+  }
+
   // ========== STEP 1: Check for existing product ==========
   const existingProduct = await Product.findOne({
     name: { $regex: `^${name}$`, $options: 'i' }, // Case-insensitive match
@@ -937,16 +1267,21 @@ const smartCreateProduct = asyncHandler(async (req, res) => {
 
       existingProduct.inventory.quantity = newQuantity;
 
-      // Add audit trail entry
-      existingProduct.auditTrail.push({
-        action: 'merge_restock',
-        changedBy: req.user?.id || 'system',
-        oldValue: { quantity: previousQuantity },
-        newValue: { quantity: newQuantity },
-        mergeReason: 'Smart product merge - same name, category, company, shop',
-        timestamp: new Date()
-      });
+      await existingProduct.save();
 
+      // Persist audit entry as separate document
+      try {
+        await ProductAudit.create({
+          productId: existingProduct._id,
+          action: 'merge_restock',
+          changedBy: req.user?.id || 'system',
+          oldValue: { quantity: previousQuantity },
+          newValue: { quantity: newQuantity, mergeReason: 'Smart product merge - same name, category, company, shop' },
+          timestamp: new Date()
+        });
+      } catch (err) {
+        logger.error('Failed to persist product audit entry (merge_restock):', err);
+      }
       // Update other fields if provided and not conflicting
       if (req.body.description && !req.body.description === existingProduct.description) {
         existingProduct.description = req.body.description;
@@ -1001,50 +1336,16 @@ const smartCreateProduct = asyncHandler(async (req, res) => {
   delete req.body.images;
   delete req.body.videos;
 
-  // Merge all product data
+  // Merge all product data (do NOT embed inventory directly on Product model)
   const productData = {
     ...otherProductData,
     name,
     category,
     companyId,
-    shopId,
-    inventory: {
-      quantity: parseInt(quantity || 0),
-      lowStockThreshold: req.body.lowStockThreshold || 10
-    }
+    shopId
   };
 
   const product = new Product(productData);
-
-  // Generate and upload Barcode and QR Code images
-  try {
-    const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
-    const { uploadBuffer } = require('../utils/uploadUtil');
-
-    const productData_temp = JSON.stringify({
-      id: product._id,
-      sku: product.sku,
-      name: product.name
-    });
-
-    const qrBuffer = await generateQRCodeBuffer(productData_temp);
-    const barcodeBuffer = await generateBarcodeBuffer(productData_temp);
-
-    const qrUpload = await uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode');
-    const barcodeUpload = await uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode');
-
-    product.qrCodeUrl = qrUpload.secure_url;
-    product.barcodeUrl = barcodeUpload.secure_url;
-  } catch (err) {
-    logger.error('Failed to generate/upload barcode/QR code images:', err);
-  }
-
-  // Add audit trail entry
-  product.auditTrail.push({
-    action: 'create',
-    changedBy: req.user?.id || 'system',
-    newValue: req.body
-  });
 
   product.images = newImages.map((img, index) => ({
     url: img.url,
@@ -1061,7 +1362,70 @@ const smartCreateProduct = asyncHandler(async (req, res) => {
 
   await product.save();
 
-  // Update category product counts
+  // Ensure SKU-only payloads for QR/barcode
+  try {
+    if (product.sku) {
+      await Product.updateOne({ _id: product._id }, { $set: { qrPayload: product.sku, barcodePayload: product.sku } });
+      product.qrPayload = product.sku;
+      product.barcodePayload = product.sku;
+    }
+  } catch (err) {
+    logger.warn('Failed to set SKU-only payloads for QR/barcode (smart-create):', err.message || err);
+  }
+
+  // If inventory info was provided in the request, create ProductStock and initial StockChange
+  try {
+    const stockPayload = req.body.stock || (req.body.lowStockThreshold || req.body.initialQuantity ? { lowStockThreshold: req.body.lowStockThreshold } : null);
+    const initialQty = parseInt(quantity || 0);
+    if (stockPayload) {
+      await ProductStock.create(Object.assign({}, stockPayload, { productId: product._id }));
+      if (initialQty && initialQty > 0) {
+        try {
+          await StockChange.create({
+            companyId: product.companyId,
+            shopId: product.shopId,
+            productId: product._id,
+            type: 'restock',
+            qty: Math.abs(initialQty),
+            previous: 0,
+            reason: 'Initial stock on smart-create',
+            userId: req.user?.id || 'system'
+          });
+        } catch (e) { logger.warn('Failed to create initial StockChange (smart-create):', e.message || e); }
+      }
+    }
+  } catch (e) { logger.warn('ProductStock creation (smart-create) failed:', e.message || e); }
+
+  // Persist product specs (if provided)
+  try {
+    const specsObj = {};
+    if (Array.isArray(req.body.specs)) req.body.specs.forEach(s => { if (s && s.name) specsObj[s.name] = s.value; });
+    if (Array.isArray(req.body.attributes)) req.body.attributes.forEach(a => { if (a && a.name) specsObj[a.name] = a.value; });
+    const mapping = categoryValidationService.findL2MappingByName(parentL2Name);
+    if (mapping && mapping.commonFields) mapping.commonFields.forEach(f => { if (req.body[f] !== undefined) specsObj[f] = req.body[f]; });
+    if (Object.keys(specsObj).length > 0) {
+      await ProductSpecs.create({ productId: product._id, l2Category: parentL2Name, specs: specsObj });
+    }
+  } catch (e) { logger.warn('Failed to persist ProductSpecs (smart-create):', e.message || e); }
+
+  // Create audit entry instead of pushing into non-existent auditTrail
+  try {
+    await ProductAudit.create({ productId: product._id, action: 'create', changedBy: req.user?.id || 'system', newValue: req.body, timestamp: new Date() });
+  } catch (e) { logger.warn('Failed to persist audit (smart-create):', e.message || e); }
+
+  // Generate and upload Barcode and QR Code images (using SKU-only payload)
+  try {
+    const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
+    const { uploadBuffer } = require('../utils/uploadUtil');
+    const payload = product.sku || product._id.toString();
+    const qrBuffer = await generateQRCodeBuffer(payload);
+    const barcodeBuffer = await generateBarcodeBuffer(payload);
+    const qrUpload = await uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode');
+    const barcodeUpload = await uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode');
+    await Product.updateOne({ _id: product._id }, { $set: { qrCodeUrl: qrUpload.secure_url, barcodeUrl: barcodeUpload.secure_url } });
+  } catch (err) {
+    logger.error('Failed to generate/upload barcode/QR code images (smart-create):', err);
+  }
   if (product.category) {
     validateMongoId(product.category);
     await Category.findByIdAndUpdate(
@@ -1152,18 +1516,34 @@ const scanProduct = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Decode base64 payload to get full product object
+    // Decode base64 payload
     const decodedBuffer = Buffer.from(payload, 'base64');
     const decodedString = decodedBuffer.toString('utf-8');
-    const productData = JSON.parse(decodedString);
 
-    // Return the decoded product data with metadata
-    res.status(200).json({
-      success: true,
-      message: 'Product data decoded successfully from scan',
-      data: productData,
-      scannedAt: new Date().toISOString()
-    });
+    // Try parse JSON — if it's an object with sku, or if it's a plain sku string, lookup the product
+    let parsed = null;
+    try {
+      parsed = JSON.parse(decodedString);
+    } catch (e) {
+      // not JSON, leave parsed as null
+    }
+
+    // If parsed is an object and contains sku, try to fetch product by sku
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.sku) {
+        const found = await Product.findOne({ sku: String(parsed.sku).toUpperCase() }).lean();
+        return res.status(200).json({ success: true, message: 'Product scanned (sku)', data: found || parsed, scannedAt: new Date().toISOString() });
+      }
+      // return parsed object as-is
+      return res.status(200).json({ success: true, message: 'Decoded object from scan', data: parsed, scannedAt: new Date().toISOString() });
+    }
+
+    // If not JSON, treat decodedString as SKU or scanId
+    const plain = decodedString.trim();
+    if (plain) {
+      const found = await Product.findOne({ $or: [{ sku: plain.toUpperCase() }, { barcode: plain }, { scanId: plain }] }).lean();
+      return res.status(200).json({ success: true, message: 'Product scanned', data: found || plain, scannedAt: new Date().toISOString() });
+    }
   } catch (err) {
     return res.status(400).json({
       success: false,
@@ -1210,6 +1590,408 @@ const lookupByBarcode = asyncHandler(async (req, res) => {
   });
 });
 
+// ------------------ Bulk endpoints ------------------
+
+const bulkCreateProducts = asyncHandler(async (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : (req.body.products || []);
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, message: 'Request body must be an array of products or { products: [] }' });
+  }
+
+  const results = [];
+
+  
+
+  // Pre-check duplicates within batch by companyId + lowercased name
+  // const batchNameMap = new Map();
+  // for (const it of items) {
+  //   const key = `${it.shopId || ''}::${(it.name || '').trim().toLowerCase()}`;
+  //   batchNameMap.set(key, (batchNameMap.get(key) || 0) + 1);
+  // }
+
+  // // Pre-query existing products that would conflict by (companyId, name)
+  // const conflictQueries = items
+  //   .filter(i => i.shopId && i.name)
+  //   .map(i => ({ shopId: i.shopId, name: new RegExp(`^${i.name}$`, 'i') }));
+
+  // let existingConflicts = [];
+  // if (conflictQueries.length > 0) {
+  //   existingConflicts = await Product.find({ $or: conflictQueries }).lean();
+  // }
+
+
+
+
+  // Process sequentially to avoid overwhelming DB; for larger batches consider streams
+  for (const payload of items) {
+    const itemRes = { input: payload, success: false };
+
+    try {
+      // ========== FIELD COLLECTION & NORMALIZATION ==========
+      // Extract specialized fields from payload (similar to createProduct)
+      const newImages = payload.images || [];
+      const newVideos = payload.videos || [];
+      
+      // Normalize categoryId vs category field
+      let categoryId = payload.categoryId || payload.category;
+
+      // Basic required fields validation
+      if (!payload.name || !categoryId || !payload.companyId || !payload.shopId) {
+        itemRes.error = 'name, categoryId (or category), companyId and shopId are required';
+        results.push(itemRes);
+        continue;
+      }
+
+      // Image limit check (max 10 images per product)
+      if (newImages.length > 10) {
+        itemRes.error = `Cannot exceed 10 images per product (received ${newImages.length})`;
+        results.push(itemRes);
+        continue;
+      }
+
+      // // Batch duplicate check (shop-specific)
+      // const batchKey = `${payload.shopId}::${payload.name.trim().toLowerCase()}`;
+      // if (batchNameMap.get(batchKey) > 1) {
+      //   itemRes.error = 'Duplicate product name in submitted batch for the same shop';
+      //   results.push(itemRes);
+      //   continue;
+      // }
+
+      // // Existing DB conflict check (shop-specific)
+      // const conflict = existingConflicts.find(c => String(c.shopId) === String(payload.shopId) && String(c.name).toLowerCase() === String(payload.name).toLowerCase());
+      // if (conflict) {
+      //   itemRes.error = 'Product with this name already exists in the shop';
+      //   results.push(itemRes);
+      //   continue;
+      // }
+
+      // ========== CATEGORY VALIDATION ==========
+      validateMongoId(categoryId);
+      const categoryDoc = await Category.findById(categoryId).lean();
+      if (!categoryDoc || categoryDoc.level !== 3) {
+        itemRes.error = 'Invalid category: must be a level-3 category';
+        results.push(itemRes);
+        continue;
+      }
+
+      const parentL2Id = categoryDoc.parentCategory;
+      if (!parentL2Id) {
+        itemRes.error = 'L3 category must have a valid L2 parent category';
+        results.push(itemRes);
+        continue;
+      }
+
+      // Validate parent L2 category exists and is active
+      const parentDoc = await Category.findById(parentL2Id).lean();
+      if (!parentDoc) {
+        itemRes.error = 'Parent L2 category has been deleted; cannot create product with orphaned category';
+        results.push(itemRes);
+        continue;
+      }
+      if (!parentDoc.isActive) {
+        itemRes.error = 'Parent L2 category is inactive; cannot create product';
+        results.push(itemRes);
+        continue;
+      }
+      const parentL2Name = parentDoc.name;
+
+      // Validate payload against L2 mapping (if mapping exists)
+      try {
+        const validation = await categoryValidationService.validateProductPayloadAgainstL2(payload, parentL2Name);
+        if (validation.mappingFound && !validation.valid) {
+          itemRes.error = `Missing required category-specific fields: ${validation.errors.join(', ')}`;
+          results.push(itemRes);
+          continue;
+        }
+      } catch (err) {
+        logger.warn('BulkCreate: Category validation service error:', err?.message || err);
+        // Continue anyway - do not block creation
+      }
+
+      // ========== PRODUCT DOCUMENT CREATION ==========
+      // Create product payload with normalized categoryId
+      const productPayload = Object.assign({}, payload);
+      productPayload.categoryId = categoryId;
+      delete productPayload.category;
+      delete productPayload.images;
+      delete productPayload.videos;
+      delete productPayload.pricing;
+      delete productPayload.stock;
+      delete productPayload.inventory;
+      delete productPayload.specs;
+      delete productPayload.attributes;
+
+      const productDoc = new Product(productPayload);
+
+      // Process and attach images with proper structure
+      productDoc.images = newImages.map((img, idx) => ({
+        url: img.url,
+        cloudinary_id: img.cloudinary_id,
+        type: img.type || 'image',
+        format: img.format,
+        size: img.size,
+        altText: img.altText || img.alt,
+        isPrimary: img.isPrimary || (idx === 0),
+        sortOrder: img.sortOrder !== undefined ? img.sortOrder : idx
+      }));
+
+      // Process and attach video URLs
+      productDoc.videoUrls = newVideos.map(v => v.url || v);
+
+      // Save product (triggers pre-save middleware for auto-generation)
+      await productDoc.save();
+
+      // ========== PRICING PERSISTENCE ==========
+      if (payload.pricing) {
+        const pricingPayload = Object.assign({}, payload.pricing);
+        if (pricingPayload.basePrice === undefined || pricingPayload.basePrice === null) {
+          await Product.updateOne({ _id: productDoc._id }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
+          itemRes.error = 'pricing.basePrice is required';
+          results.push(itemRes);
+          continue;
+        }
+        try {
+          const pricingDoc = await ProductPricing.create(Object.assign({}, pricingPayload, { 
+            productId: productDoc._id,
+            companyId: productDoc.companyId
+          }));
+          productDoc.pricingId = pricingDoc._id;
+          await productDoc.save();
+        } catch (err) {
+          await Product.updateOne({ _id: productDoc._id }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
+          itemRes.error = `Failed to create pricing: ${err.message || err}`;
+          results.push(itemRes);
+          continue;
+        }
+      }
+
+      // ========== STOCK PERSISTENCE ==========
+      try {
+        // Support multiple field names for stock/inventory data
+        const stockPayload = payload.stock || payload.inventory || null;
+        const initialQty = parseInt(
+          payload.initialQuantity ||
+          payload.quantity ||
+          (stockPayload && (stockPayload.quantity || stockPayload.qty)) ||
+          0
+        );
+
+        if (stockPayload) {
+          await ProductStock.create(Object.assign({}, stockPayload, { productId: productDoc._id }));
+          
+          if (initialQty && initialQty > 0) {
+            await StockChange.create({
+              companyId: productDoc.companyId,
+              shopId: productDoc.shopId,
+              productId: productDoc._id,
+              type: 'restock',
+              qty: Math.abs(initialQty),
+              previous: 0,
+              new: Math.abs(initialQty),
+              reason: 'Initial stock on bulk product creation',
+              userId: req.user?.id || 'system'
+            });
+          }
+        }
+      } catch (err) {
+        logger.warn('BulkCreate: failed to persist stock for product', err.message || err);
+      }
+
+      // ========== PRODUCT SPECS PERSISTENCE ==========
+      try {
+        const specsObj = {};
+        
+        // Collect specs from specs array
+        if (Array.isArray(payload.specs)) {
+          payload.specs.forEach(s => { if (s && s.name) specsObj[s.name] = s.value; });
+        }
+        
+        // Collect specs from attributes array
+        if (Array.isArray(payload.attributes)) {
+          payload.attributes.forEach(a => { if (a && a.name) specsObj[a.name] = a.value; });
+        }
+        
+        // Include any top-level mapped fields from L2 category mapping
+        const mapping = categoryValidationService.findL2MappingByName(parentL2Name);
+        if (mapping && mapping.commonFields) {
+          mapping.commonFields.forEach((f) => {
+            if (payload[f] !== undefined) specsObj[f] = payload[f];
+          });
+        }
+
+        // Persist specs if there's something to store
+        if (Object.keys(specsObj).length > 0) {
+          await ProductSpecs.create({ productId: productDoc._id, l2Category: parentL2Name, specs: specsObj });
+        }
+      } catch (err) {
+        logger.warn('BulkCreate: failed to persist specs', err.message || err);
+      }
+
+      // ========== AUDIT ENTRY PERSISTENCE ==========
+      try {
+        await ProductAudit.create({
+          productId: productDoc._id,
+          action: 'create',
+          changedBy: req.user?.id || 'system',
+          newValue: payload,
+          timestamp: new Date()
+        });
+      } catch (err) {
+        logger.warn('BulkCreate: failed to persist audit entry', err.message || err);
+      }
+
+      // Audit entry
+      try {
+        await ProductAudit.create({ productId: productDoc._id, action: 'create', changedBy: req.user?.id || 'system', newValue: payload, timestamp: new Date() });
+      } catch (err) {
+        logger.warn('BulkCreate: failed to persist audit', err.message || err);
+      }
+
+      // Success for this item
+      itemRes.success = true;
+      itemRes.data = productDoc;
+      results.push(itemRes);
+
+      // Background tasks per created product (non-blocking)
+      setImmediate(() => {
+        try {
+          // Category stats
+          if (productDoc.category) {
+            Category.updateOne({ _id: productDoc.category }, { $inc: { 'statistics.totalProducts': 1 } }).catch(() => {});
+          }
+          // Cache invalidation and create outbox event for reliable publishing
+          scanDel('products:*').catch(() => {});
+          // Use Outbox pattern to enqueue event for dispatcher
+          productEvents.created(productDoc, productDoc.companyId).catch(() => {});
+        } catch (e) {
+          logger.warn('BulkCreate: background task error', e.message || e);
+        }
+      });
+
+    } catch (err) {
+      logger.error('BulkCreate: unexpected error creating product', err);
+      itemRes.error = err.message || err;
+      results.push(itemRes);
+    }
+  }
+
+  res.status(207).json({ success: true, results });
+});
+
+const bulkUpdateProducts = asyncHandler(async (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : (req.body.products || []);
+  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ success: false, message: 'Request body must be an array of update objects' });
+
+  const results = [];
+
+  for (const op of items) {
+    const itemRes = { input: op, success: false };
+    try {
+      const { id, ...changes } = op;
+      if (!id) { itemRes.error = 'id is required for updates'; results.push(itemRes); continue; }
+      validateMongoId(id);
+      const existing = await Product.findById(id).lean();
+      if (!existing) { itemRes.error = 'Product not found'; results.push(itemRes); continue; }
+
+      // Prevent SKU change
+      if (changes.sku && changes.sku !== existing.sku) { itemRes.error = 'SKU cannot be modified'; results.push(itemRes); continue; }
+
+      // If changing name, ensure uniqueness within company
+      if (changes.name && changes.name !== existing.name) {
+        const dup = await Product.findOne({ _id: { $ne: id }, companyId: existing.companyId, name: changes.name }).lean();
+        if (dup) { itemRes.error = 'Another product with this name exists in company'; results.push(itemRes); continue; }
+      }
+
+      // Category validation if present
+      if (changes.category && changes.category !== String(existing.category)) {
+        validateMongoId(changes.category);
+        const newCat = await Category.findById(changes.category).lean();
+        if (!newCat || newCat.level !== 3) { itemRes.error = 'Invalid category: must be level-3'; results.push(itemRes); continue; }
+        if (!newCat.parentCategory) { itemRes.error = 'L3 category must have L2 parent'; results.push(itemRes); continue; }
+      }
+
+      // Images handling: combine existing images with new ones if provided
+      let updatePayload = Object.assign({}, changes);
+      if (Array.isArray(changes.images)) {
+        const existingImages = existing.images || [];
+        const merged = [...existingImages, ...changes.images].slice(0, 10);
+        updatePayload.images = merged;
+      }
+
+      const updated = await Product.findByIdAndUpdate(id, updatePayload, { new: true, runValidators: true }).populate('category');
+      if (!updated) { itemRes.error = 'Failed to update product'; results.push(itemRes); continue; }
+
+      // Audit
+      try { await ProductAudit.create({ productId: updated._id, action: 'update', changedBy: req.user?.id || 'system', oldValue: existing, newValue: changes, timestamp: new Date() }); } catch (e) { logger.warn('BulkUpdate: audit failed', e.message || e); }
+
+      itemRes.success = true; itemRes.data = updated;
+      results.push(itemRes);
+
+      // Background tasks
+      setImmediate(() => {
+        delCache(`product:${id}`).catch(() => {});
+        delCache(`product:slug:${existing.slug}`).catch(() => {});
+        scanDel('products:*').catch(() => {});
+        publishProductEvent('inventory.product.updated', updated.toObject()).catch(() => {});
+      });
+
+    } catch (err) {
+      logger.error('BulkUpdate: unexpected error', err);
+      itemRes.error = err.message || err; results.push(itemRes);
+    }
+  }
+
+  res.status(207).json({ success: true, results });
+});
+
+const bulkDeleteProducts = asyncHandler(async (req, res) => {
+  const ids = Array.isArray(req.body) ? req.body : (req.body.ids || []);
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ success: false, message: 'Request body must be an array of product ids or { ids: [] }' });
+
+  const results = [];
+
+  for (const id of ids) {
+    const itemRes = { id, success: false };
+    try {
+      validateMongoId(id);
+      const product = await Product.findById(id).lean();
+      if (!product) { itemRes.error = 'Product not found'; results.push(itemRes); continue; }
+
+      await Product.updateOne({ _id: id }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
+      itemRes.success = true; itemRes.data = { _id: id };
+      results.push(itemRes);
+
+      // Background cleanup
+      setImmediate(async () => {
+        try {
+          // Cloudinary cleanup (best-effort)
+          const { cloudinary } = require('../utils/uploadUtil');
+          if (product.images && product.images.length) {
+            for (const img of product.images) {
+              if (img.cloudinary_id) cloudinary.uploader.destroy(img.cloudinary_id).catch(() => {});
+            }
+          }
+          if (product.qrCodeUrl || product.barcodeUrl) cloudinary.api.delete_resources_by_prefix(`QrBar_Codes/${product._id}`).catch(() => {});
+          cloudinary.api.delete_resources_by_prefix(`products/${product._id}`).catch(() => {});
+        } catch (e) { logger.warn('BulkDelete: cloud cleanup failed', e.message || e); }
+
+        // Category stat decrement, cache invalidation and event
+        if (product.category) Category.updateOne({ _id: product.category }, { $inc: { 'statistics.totalProducts': -1 } }).catch(() => {});
+        delCache(`product:${id}`).catch(() => {});
+        delCache(`product:slug:${product.slug}`).catch(() => {});
+        scanDel('products:*').catch(() => {});
+        publishProductEvent('inventory.product.deleted', { _id: id, ...product }).catch(() => {});
+      });
+
+    } catch (err) {
+      logger.error('BulkDelete: unexpected error', err);
+      itemRes.error = err.message || err; results.push(itemRes);
+    }
+  }
+
+  res.status(207).json({ success: true, results });
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -1225,6 +2007,9 @@ module.exports = {
   searchProducts,
   getOldUnboughtProducts,
   smartCreateProduct,
+  bulkCreateProducts,
+  bulkUpdateProducts,
+  bulkDeleteProducts,
   checkProductDuplicate,
   scanProduct,
   lookupByBarcode
