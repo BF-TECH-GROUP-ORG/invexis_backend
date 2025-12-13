@@ -38,7 +38,7 @@ const ProductPricingSchema = new Schema({
   timestamps: true,
 });
 
-ProductPricingSchema.index({ productId: 1 });
+// Note: productId index automatically created by index: true property
 
 // Compute margin fields before save for analytics
 ProductPricingSchema.pre('save', function(next) {

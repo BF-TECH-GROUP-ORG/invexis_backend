@@ -1,0 +1,374 @@
+# ==================================================================================
+# PROMETHEUS CONFIGURATION - PRODUCTION MONITORING
+# ==================================================================================
+# Global configuration for Prometheus monitoring system
+# Scrapes metrics from all Invexis microservices and infrastructure components
+# ==================================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "invexis-production"
+    environment: "prod"
+
+# Rule files configuration
+rule_files:
+  - "rules.yml"
+
+# Alert manager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # Node Exporter (system metrics)
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # Traefik metrics
+  - job_name: "traefik"
+    static_configs:
+      - targets: ["traefik:8080"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # ==================================================================================
+  # INVEXIS MICROSERVICES - BLUE DEPLOYMENT
+  # ==================================================================================
+
+  # API Gateway Blue
+  - job_name: "api-gateway-blue"
+    static_configs:
+      - targets: ["api-gateway-blue:8000"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    params:
+      format: ["prometheus"]
+    labels:
+      service: "api-gateway"
+      deployment: "blue"
+      tier: "gateway"
+
+  # Auth Service Blue
+  - job_name: "auth-service-blue"
+    static_configs:
+      - targets: ["auth-service-blue:8001"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "auth-service"
+      deployment: "blue"
+      tier: "core"
+
+  # Company Service Blue
+  - job_name: "company-service-blue"
+    static_configs:
+      - targets: ["company-service-blue:8004"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "company-service"
+      deployment: "blue"
+      tier: "business"
+
+  # Shop Service Blue
+  - job_name: "shop-service-blue"
+    static_configs:
+      - targets: ["shop-service-blue:9001"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "shop-service"
+      deployment: "blue"
+      tier: "business"
+
+  # Inventory Service Blue
+  - job_name: "inventory-service-blue"
+    static_configs:
+      - targets: ["inventory-service-blue:8007"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "inventory-service"
+      deployment: "blue"
+      tier: "business"
+
+  # Sales Service Blue
+  - job_name: "sales-service-blue"
+    static_configs:
+      - targets: ["sales-service-blue:9000"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "sales-service"
+      deployment: "blue"
+      tier: "business"
+
+  # Ecommerce Service Blue
+  - job_name: "ecommerce-service-blue"
+    static_configs:
+      - targets: ["ecommerce-service-blue:8006"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "ecommerce-service"
+      deployment: "blue"
+      tier: "business"
+
+  # Notification Service Blue
+  - job_name: "notification-service-blue"
+    static_configs:
+      - targets: ["notification-service-blue:8008"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "notification-service"
+      deployment: "blue"
+      tier: "communication"
+
+  # Payment Service Blue
+  - job_name: "payment-service-blue"
+    static_configs:
+      - targets: ["payment-service-blue:8009"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "payment-service"
+      deployment: "blue"
+      tier: "financial"
+
+  # Analytics Service Blue
+  - job_name: "analytics-service-blue"
+    static_configs:
+      - targets: ["analytics-service-blue:8002"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "analytics-service"
+      deployment: "blue"
+      tier: "data"
+
+  # Audit Service Blue
+  - job_name: "audit-service-blue"
+    static_configs:
+      - targets: ["audit-service-blue:8003"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "audit-service"
+      deployment: "blue"
+      tier: "security"
+
+  # Debt Service Blue
+  - job_name: "debt-service-blue"
+    static_configs:
+      - targets: ["debt-service-blue:8005"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "debt-service"
+      deployment: "blue"
+      tier: "financial"
+
+  # WebSocket Service Blue
+  - job_name: "websocket-service-blue"
+    static_configs:
+      - targets: ["websocket-service-blue:9002"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    labels:
+      service: "websocket-service"
+      deployment: "blue"
+      tier: "communication"
+
+  # ==================================================================================
+  # INVEXIS MICROSERVICES - GREEN DEPLOYMENT (when active)
+  # ==================================================================================
+
+  # API Gateway Green (commented out by default, enabled during deployment)
+  # - job_name: 'api-gateway-green'
+  #   static_configs:
+  #     - targets: ['api-gateway-green:8000']
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 15s
+  #   labels:
+  #     service: 'api-gateway'
+  #     deployment: 'green'
+  #     tier: 'gateway'
+
+  # ==================================================================================
+  # DATABASE MONITORING
+  # ==================================================================================
+
+  # PostgreSQL Exporters
+  - job_name: "postgres-company"
+    static_configs:
+      - targets: ["postgres-exporter-company:9187"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      database: "postgresql"
+      instance: "company"
+
+  - job_name: "postgres-shop"
+    static_configs:
+      - targets: ["postgres-exporter-shop:9187"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      database: "postgresql"
+      instance: "shop"
+
+  - job_name: "postgres-payment"
+    static_configs:
+      - targets: ["postgres-exporter-payment:9187"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      database: "postgresql"
+      instance: "payment"
+
+  - job_name: "postgres-analytics"
+    static_configs:
+      - targets: ["postgres-exporter-analytics:9187"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      database: "postgresql"
+      instance: "analytics"
+
+  # MySQL Exporter
+  - job_name: "mysql-sales"
+    static_configs:
+      - targets: ["mysql-exporter:9104"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      database: "mysql"
+      instance: "sales"
+
+  # MongoDB Exporter
+  - job_name: "mongodb"
+    static_configs:
+      - targets: ["mongodb-exporter:9216"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      database: "mongodb"
+      instance: "main"
+
+  # Redis Exporter
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      database: "redis"
+      instance: "cache"
+
+  # RabbitMQ
+  - job_name: "rabbitmq"
+    static_configs:
+      - targets: ["rabbitmq:15692"] # RabbitMQ Prometheus plugin port
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      service: "rabbitmq"
+      tier: "messaging"
+
+  # ==================================================================================
+  # INFRASTRUCTURE MONITORING
+  # ==================================================================================
+
+  # Elasticsearch
+  - job_name: "elasticsearch"
+    static_configs:
+      - targets: ["elasticsearch-exporter:9114"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      service: "elasticsearch"
+      tier: "logging"
+
+  # Grafana
+  - job_name: "grafana"
+    static_configs:
+      - targets: ["grafana:3000"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      service: "grafana"
+      tier: "monitoring"
+
+  # Docker Engine (if docker metrics enabled)
+  - job_name: "docker"
+    static_configs:
+      - targets: ["host.docker.internal:9323"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    labels:
+      service: "docker"
+      tier: "infrastructure"
+
+# ==================================================================================
+# RECORDING RULES FOR PERFORMANCE
+# ==================================================================================
+recording_rules:
+  # Service availability rules
+  - interval: 30s
+    rules:
+      - record: instance:up:rate5m
+        expr: rate(up[5m])
+
+      - record: job:up:avg
+        expr: avg(up) by (job)
+
+  # HTTP request rate rules
+  - interval: 30s
+    rules:
+      - record: instance:http_requests:rate5m
+        expr: rate(http_requests_total[5m])
+
+      - record: instance:http_request_duration:p95
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+      - record: instance:http_request_duration:p99
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+
+  # Error rate rules
+  - interval: 30s
+    rules:
+      - record: instance:http_errors:rate5m
+        expr: rate(http_requests_total{status=~"4..|5.."}[5m])
+
+      - record: instance:error_rate:ratio
+        expr: instance:http_errors:rate5m / instance:http_requests:rate5m
+# ==================================================================================
+# REMOTE WRITE CONFIGURATION (for long-term storage)
+# ==================================================================================
+# Uncomment and configure for external time-series databases
+# remote_write:
+#   - url: "https://your-remote-tsdb/api/v1/write"
+#     remote_timeout: 30s
+#     queue_config:
+#       capacity: 10000
+#       max_shards: 200
+#       min_shards: 1
+#       max_samples_per_send: 1000
+#       batch_send_deadline: 5s

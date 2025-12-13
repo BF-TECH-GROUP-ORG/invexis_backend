@@ -1,17 +1,29 @@
 {
   "name": "analytics-service",
   "version": "1.0.0",
-  "main": "dist/index.js",
+  "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node src/index.js",
     "test": "jest"
   },
   "dependencies": {
+    "amqplib": "^0.10.3",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "epress": "^0.0.1-security",
     "express": "^5.1.0",
-    "nodemon": "^3.1.10"
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^7.1.0",
+    "helmet": "^7.0.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.0",
+    "pg": "^8.11.3",
+    "uuid": "^10.0.0",
+    "winston": "^3.17.0",
+    "xss-clean": "^0.1.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "jest": "^29.7.0"
   }
 }

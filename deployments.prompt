@@ -1,4 +1,7 @@
-prompt  that will be used to make invexis production ready infrastructure
+# 🚀 Invexis Production Infrastructure Setup - Deployment Prompt
+
+## Overview
+You are tasked with creating a complete, production-ready infrastructure for the Invexis backend platform. This infrastructure must be enterprise-grade, secure, scalable, and fully automated.
 
 ┌──────────────────────────┐
 │        USERS             │
@@ -19,7 +22,6 @@ prompt  that will be used to make invexis production ready infrastructure
 ┌────────────┴─────────────┐
 │   INFRASTRUCTURE LAYER   │  ← Docker / Nodes
 └──────────────────────────┘
-
 
 
 

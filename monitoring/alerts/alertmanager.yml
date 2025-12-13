@@ -1,0 +1,185 @@
+# Invexis Alert Manager Configuration
+global:
+  smtp_smarthost: "localhost:587"
+  smtp_from: "alerts@invexis.com"
+  smtp_auth_username: "alerts@invexis.com"
+  smtp_auth_password: "${SMTP_PASSWORD}"
+  slack_api_url: "${SLACK_WEBHOOK_URL}"
+
+# Define notification templates
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# Routing rules for alerts
+route:
+  group_by: ["alertname", "cluster", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "default-receiver"
+  routes:
+    # Critical alerts go to PagerDuty and Slack immediately
+    - match:
+        severity: critical
+      receiver: "critical-alerts"
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # Security alerts go to security team
+    - match:
+        team: security
+      receiver: "security-team"
+      group_wait: 30s
+
+    # Business alerts go to business team
+    - match:
+        team: business
+      receiver: "business-team"
+
+    # DBA alerts
+    - match:
+        team: dba
+      receiver: "dba-team"
+
+    # Warning alerts go to Slack only
+    - match:
+        severity: warning
+      receiver: "warning-alerts"
+
+# Define receivers
+receivers:
+  - name: "default-receiver"
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#alerts"
+        title: "{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        send_resolved: true
+
+  - name: "critical-alerts"
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"
+        description: "{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        details:
+          summary: "{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+          description: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+          severity: "{{ .GroupLabels.severity }}"
+          service: "{{ .GroupLabels.service }}"
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#critical-alerts"
+        username: "Invexis AlertManager"
+        icon_emoji: ":rotating_light:"
+        title: "CRITICAL: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          *Instance:* {{ .Labels.instance }}
+          *Severity:* {{ .Labels.severity }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+        color: "danger"
+        send_resolved: true
+        actions:
+          - type: button
+            text: "Acknowledge"
+            url: "${ALERTMANAGER_URL}/#/alerts"
+          - type: button
+            text: "View Logs"
+            url: "${KIBANA_URL}/app/kibana#/discover"
+
+  - name: "security-team"
+    email_configs:
+      - to: "security@invexis.com"
+        subject: "SECURITY ALERT: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        body: |
+          Security alert detected in Invexis production environment.
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Time: {{ .StartsAt }}
+          Labels: {{ .Labels }}
+          {{ end }}
+
+          Please investigate immediately.
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#security-alerts"
+        username: "Invexis Security"
+        icon_emoji: ":shield:"
+        title: "SECURITY: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        color: "#FF0000"
+        send_resolved: true
+
+  - name: "business-team"
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#business-alerts"
+        username: "Invexis Business Monitor"
+        icon_emoji: ":chart_with_upwards_trend:"
+        title: "BUSINESS: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        color: "#FFA500"
+        send_resolved: true
+
+  - name: "dba-team"
+    email_configs:
+      - to: "dba@invexis.com"
+        subject: "DATABASE ALERT: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        body: |
+          Database alert in Invexis production environment.
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Database: {{ .Labels.datname }}{{ .Labels.database }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#database-alerts"
+        username: "Invexis DB Monitor"
+        icon_emoji: ":floppy_disk:"
+        title: "DATABASE: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        color: "#800080"
+        send_resolved: true
+
+  - name: "warning-alerts"
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#warnings"
+        username: "Invexis Monitor"
+        icon_emoji: ":warning:"
+        title: "WARNING: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+        color: "warning"
+        send_resolved: true
+
+# Inhibition rules to suppress redundant alerts
+inhibit_rules:
+  # Suppress warnings if there are critical alerts for the same service
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["service", "instance"]
+
+  # Suppress individual service alerts if the entire instance is down
+  - source_match:
+      alertname: "InstanceDown"
+    target_match_re:
+      alertname: ".*"
+    equal: ["instance"]
+
+  # Suppress database connection alerts if database is down
+  - source_match:
+      alertname: "PostgreSQLDown"
+    target_match:
+      alertname: "PostgreSQLTooManyConnections"
+    equal: ["instance"]

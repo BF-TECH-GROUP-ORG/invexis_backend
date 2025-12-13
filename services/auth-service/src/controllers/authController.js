@@ -2,7 +2,7 @@
 const authService = require('../services/authService');
 const tokenService = require('../services/tokenService');
 const LoginHistory = require('../models/LoginHistory.models');
-const { uploadProfileImage } = require('../middleware/upload');
+const { uploadProfileImage } = require('../utils/uploadUtil');
 
 function getRefreshCookieOptions(req) {
     const forwardedProto = (req.headers["x-forwarded-proto"] || "").toLowerCase();
@@ -493,8 +493,8 @@ const getConsents = async (req, res, next) => {
 // Update profile with optional profile picture upload
 const updateProfile = async (req, res, next) => {
     try {
-        const profilePictureUrl = req.profilePictureUrl || null;
-        const out = await authService.updateProfile(req.user._id, req.body, profilePictureUrl);
+        const profileImage = req.body.profileImage || null;
+        const out = await authService.updateProfile(req.user._id, req.body, profileImage);
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -674,6 +674,28 @@ const getCompanyWorkers = async (req, res, next) => {
     }
 };
 
+// Get current user profile (for /auth/me endpoint)
+const getMe = async (req, res, next) => {
+    try {
+        // User data is already attached by authentication middleware
+        if (!req.user) {
+            return res.status(401).json({ 
+                ok: false, 
+                message: 'User not authenticated' 
+            });
+        }
+
+        // Return user data (already fetched by middleware)
+        res.json({ 
+            ok: true, 
+            user: req.user 
+        });
+    } catch (err) {
+        console.error('Error in getMe:', err);
+        next(err);
+    }
+};
+
 module.exports = {
     register,
     login,
@@ -710,6 +732,7 @@ module.exports = {
     getUserById,
     acceptConsent,
     getCurrentUser,
+    getMe, // New endpoint for production middleware
     updateFcmToken,
     getCompanyWorkers
 };

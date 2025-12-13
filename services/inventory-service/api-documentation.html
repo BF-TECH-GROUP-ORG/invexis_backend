@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invexis Inventory Service API Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #e2e8f0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+        }
+
+        .sticky-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #334155;
+            padding: 15px 20px;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .sticky-nav .nav-brand {
+            color: #60a5fa;
+            font-weight: 700;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .sticky-nav .nav-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .sticky-nav .nav-link {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+            padding: 5px 12px;
+            border-radius: 15px;
+            text-decoration: none;
+            font-size: 0.85em;
+            transition: all 0.3s ease;
+        }
+
+        .sticky-nav .nav-link:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #3b82f6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 120px 20px 20px;
+        }
+
+        .header {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #334155;
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #60a5fa;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+            text-shadow: 0 0 30px rgba(96, 165, 250, 0.3);
+        }
+
+        .header p {
+            color: #94a3b8;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+
+        .base-info {
+            background: linear-gradient(45deg, #1e40af, #3730a3);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            display: inline-block;
+            font-family: 'Courier New', monospace;
+            border: 1px solid #3b82f6;
+        }
+
+        .section {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #334155;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-header {
+            background: linear-gradient(135deg, #1e40af 0%, #3730a3 100%);
+            color: white;
+            padding: 25px 30px;
+        }
+
+        .section-header h2 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .section-header p {
+            opacity: 0.9;
+            font-size: 1em;
+        }
+
+        .section-content {
+            padding: 30px;
+        }
+
+        .endpoint {
+            border: 1px solid #475569;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            background: rgba(51, 65, 85, 0.3);
+        }
+
+        .endpoint:hover {
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.1);
+            transform: translateY(-2px);
+            border-color: #3b82f6;
+        }
+
+        .endpoint-header {
+            background: rgba(51, 65, 85, 0.5);
+            padding: 20px;
+            border-bottom: 1px solid #475569;
+        }
+
+        .method {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.85em;
+            margin-right: 15px;
+            text-transform: uppercase;
+        }
+
+        .method.get { background: #059669; color: white; }
+        .method.post { background: #2563eb; color: white; }
+        .method.put { background: #d97706; color: white; }
+        .method.patch { background: #7c3aed; color: white; }
+        .method.delete { background: #dc2626; color: white; }
+
+        .endpoint-url {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .endpoint-body {
+            padding: 20px;
+        }
+
+        .endpoint-description {
+            color: #cbd5e1;
+            margin-bottom: 20px;
+            font-size: 1em;
+            line-height: 1.6;
+        }
+
+        .code-block {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            margin: 15px 0;
+            border-left: 4px solid #60a5fa;
+            border: 1px solid #334155;
+        }
+
+        .code-block h4 {
+            color: #60a5fa;
+            margin-bottom: 10px;
+            font-size: 0.95em;
+        }
+
+        .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .params-table th {
+            background: linear-gradient(135deg, #1e40af 0%, #3730a3 100%);
+            color: white;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .params-table td {
+            padding: 12px;
+            border-bottom: 1px solid #475569;
+            background: rgba(51, 65, 85, 0.3);
+            color: #e2e8f0;
+        }
+
+        .params-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .param-type {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            padding: 3px 8px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 500;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .param-required {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            padding: 3px 8px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 500;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .param-optional {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+            padding: 3px 8px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 500;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .auth-badge {
+            background: linear-gradient(45deg, #dc2626, #b91c1c);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        .feature-highlight {
+            background: linear-gradient(135deg, #1e40af, #3730a3);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid #3b82f6;
+        }
+
+        .feature-highlight h4 {
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .feature-highlight p {
+            opacity: 0.9;
+            font-size: 0.95em;
+        }
+
+        .footer {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #334155;
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 30px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .footer h3 {
+            color: #60a5fa;
+            margin-bottom: 15px;
+        }
+
+        .footer p {
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 140px 10px 20px; }
+            .header { padding: 25px; }
+            .header h1 { font-size: 2em; }
+            .sticky-nav .nav-links { flex-direction: column; }
+            .params-table { font-size: 0.9em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🏪 Invexis Inventory Service API</h1>
+            <p>Complete API Documentation for Frontend Integration</p>
+            <div class="base-info">
+                <strong>Base URL:</strong> /inventory
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <h3>📑 Quick Navigation</h3>
+            <div class="nav-links">
+                <a href="#products" class="nav-link">Products</a>
+                <a href="#categories" class="nav-link">Categories</a>
+                <a href="#stock" class="nav-link">Stock Management</a>
+                <a href="#analytics" class="nav-link">Analytics</a>
+                <a href="#reports" class="nav-link">Reports</a>
+                <a href="#alerts" class="nav-link">Alerts</a>
+                <a href="#discounts" class="nav-link">Discounts</a>
+                <a href="#organization" class="nav-link">Organization</a>
+            </div>
+        </div>
+
+        <!-- Products Section -->
+        <div id="products" class="section">
+            <div class="section-header">
+                <h2>📦 Products Management</h2>
+                <p>Complete product lifecycle management with images, variations, and inventory</p>
+            </div>
+            <div class="section-content">
+                
+                <div class="feature-highlight">
+                    <h4>🚀 Key Features</h4>
+                    <p>• File upload support (images/videos) • QR/Barcode generation • SKU auto-generation • Bulk operations • Search & filtering</p>
+                </div>
+
+                <!-- Get All Products -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/products</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Retrieve all products with advanced filtering, pagination, and search capabilities. Supports price range, category, brand, and stock filters.
+                        </div>
+                        <table class="params-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Type</th>
+                                    <th>Required</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>page</td>
+                                    <td><span class="param-type">number</span></td>
+                                    <td><span class="param-optional">optional</span></td>
+                                    <td>Page number (default: 1)</td>
+                                </tr>
+                                <tr>
+                                    <td>limit</td>
+                                    <td><span class="param-type">number</span></td>
+                                    <td><span class="param-optional">optional</span></td>
+                                    <td>Items per page (default: 20)</td>
+                                </tr>
+                                <tr>
+                                    <td>search</td>
+                                    <td><span class="param-type">string</span></td>
+                                    <td><span class="param-optional">optional</span></td>
+                                    <td>Text search in product name/description</td>
+                                </tr>
+                                <tr>
+                                    <td>category</td>
+                                    <td><span class="param-type">string</span></td>
+                                    <td><span class="param-optional">optional</span></td>
+                                    <td>Filter by category ID</td>
+                                </tr>
+                                <tr>
+                                    <td>brand</td>
+                                    <td><span class="param-type">string</span></td>
+                                    <td><span class="param-optional">optional</span></td>
+                                    <td>Filter by brand name</td>
+                                </tr>
+                                <tr>
+                                    <td>minPrice</td>
+                                    <td><span class="param-type">number</span></td>
+                                    <td><span class="param-optional">optional</span></td>
+                                    <td>Minimum price filter</td>
+                                </tr>
+                                <tr>
+                                    <td>maxPrice</td>
+                                    <td><span class="param-type">number</span></td>
+                                    <td><span class="param-optional">optional</span></td>
+                                    <td>Maximum price filter</td>
+                                </tr>
+                                <tr>
+                                    <td>companyId</td>
+                                    <td><span class="param-type">string</span></td>
+                                    <td><span class="param-required">required</span></td>
+                                    <td>Company identifier</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="code-block">
+                            <h4>📤 Response Example:</h4>
+                            <pre>{
+  "success": true,
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "name": "Nike Air Max 90",
+      "description": "Classic comfortable sneakers",
+      "brand": "Nike",
+      "sku": "INV-NIKE-001",
+      "images": [
+        {
+          "url": "https://res.cloudinary.com/...",
+          "isPrimary": true,
+          "altText": "Nike Air Max - Main View"
+        }
+      ],
+      "qrCodeUrl": "https://res.cloudinary.com/qr_code.png",
+      "barcodeUrl": "https://res.cloudinary.com/barcode.png"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "pages": 8
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Product -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/v1/products</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Create a new product with complete details. Supports file uploads for images and videos. Auto-generates SKU, QR codes, and barcodes.
+                        </div>
+                        <div class="code-block">
+                            <h4>📥 Request Body:</h4>
+                            <pre>{
+  "name": "Nike Air Max 90",
+  "description": "Classic comfortable sneakers",
+  "brand": "Nike",
+  "categoryId": "507f1f77bcf86cd799439012",
+  "companyId": "507f1f77bcf86cd799439013",
+  "shopId": "507f1f77bcf86cd799439014",
+  "status": "active",
+  "visibility": "public",
+  "featured": true,
+  "tags": ["shoes", "sneakers", "nike"],
+  "pricing": {
+    "basePrice": 120.00,
+    "salePrice": 99.00,
+    "currency": "USD",
+    "taxIncluded": true
+  },
+  "inventory": {
+    "quantity": 50,
+    "lowStockThreshold": 5,
+    "minReorderQty": 20,
+    "trackQuantity": true,
+    "allowBackorder": false,
+    "stockLocation": "Warehouse A"
+  },
+  "variations": [
+    {
+      "options": { "size": "9", "color": "red" },
+      "weight": 1.2,
+      "dimensions": {
+        "length": 30,
+        "width": 20,
+        "height": 10
+      }
+    }
+  ],
+  "images": [
+    {
+      "url": "https://example.com/nike1.jpg",
+      "cloudinary_id": "nike_air_max_90_1",
+      "altText": "Nike Air Max 90 - Side View",
+      "isPrimary": true,
+      "sortOrder": 0
+    }
+  ],
+  "specs": [
+    { "name": "Material", "value": "Leather and Mesh" },
+    { "name": "Sole Type", "value": "Rubber" }
+  ]
+}</pre>
+                        </div>
+                        <div class="code-block">
+                            <h4>📤 Response Example:</h4>
+                            <pre>{
+  "success": true,
+  "message": "Product created successfully",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "name": "Nike Air Max 90",
+    "sku": "INV-NIKE-AIR-MAX-001",
+    "qrCodeUrl": "https://res.cloudinary.com/qr_code.png",
+    "barcodeUrl": "https://res.cloudinary.com/barcode.png",
+    "createdAt": "2025-12-13T10:00:00.000Z"
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Product by ID -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/products/{id}</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Retrieve a specific product by its ID with complete details including pricing, inventory, and variations.
+                        </div>
+                        <table class="params-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Type</th>
+                                    <th>Required</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>id</td>
+                                    <td><span class="param-type">string</span></td>
+                                    <td><span class="param-required">required</span></td>
+                                    <td>Product ID (MongoDB ObjectId)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Update Product -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method put">PUT</span>
+                        <span class="endpoint-url">/v1/products/{id}</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Update an existing product. Supports partial updates and file uploads for new images.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delete Product -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method delete">DELETE</span>
+                        <span class="endpoint-url">/v1/products/{id}</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Soft delete a product. Automatically cleans up Cloudinary images, QR codes, and barcodes in the background.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bulk Operations -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/v1/products/bulk</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Create multiple products in a single request. Supports batch processing with individual success/failure tracking.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search Products -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/products/search/product</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Advanced product search with text matching and multiple filters.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Barcode Lookup -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/products/lookup/{barcode}</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Lookup product by barcode or QR code scan. Returns complete product information for POS integration.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Categories Section -->
+        <div id="categories" class="section">
+            <div class="section-header">
+                <h2>🗂️ Categories Management</h2>
+                <p>Hierarchical category system with Level 2 and Level 3 categories</p>
+            </div>
+            <div class="section-content">
+                
+                <!-- Get All Categories -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/categories</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Retrieve all categories with hierarchical structure support.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Category Tree -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/categories/view/tree</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Get complete category tree structure for navigation menus and breadcrumbs.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Level 2 Categories -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/categories/level/2</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Retrieve only Level 2 categories for main category selection.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Level 3 Categories -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/categories/level/3</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Retrieve only Level 3 categories for product assignment.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Category -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/v1/categories</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Create a new category with proper hierarchy validation.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Stock Management Section -->
+        <div id="stock" class="section">
+            <div class="section-header">
+                <h2>📊 Stock Management</h2>
+                <p>Inventory tracking, stock adjustments, and movement history</p>
+            </div>
+            <div class="section-content">
+
+                <!-- Stock In -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/v1/stock/in</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Add inventory to stock (restocking). Creates stock change records for audit trail.
+                        </div>
+                        <div class="code-block">
+                            <h4>📥 Request Body:</h4>
+                            <pre>{
+  "productId": "507f1f77bcf86cd799439011",
+  "quantity": 50,
+  "reason": "Purchase Order #PO-2025-001",
+  "cost": 2500.00,
+  "supplierId": "507f1f77bcf86cd799439015",
+  "location": "Warehouse A"
+}</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stock Out -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/v1/stock/out</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Remove inventory from stock (sales, damage, returns). Validates available quantity.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Lookup by Scan -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/v1/stock/lookup</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Lookup product information by QR code or barcode scan for POS operations.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stock History -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/stock/history</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Get comprehensive stock movement history with filtering options.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Analytics Section -->
+        <div id="analytics" class="section">
+            <div class="section-header">
+                <h2>📈 Analytics & Insights</h2>
+                <p>Business intelligence, profit analysis, and inventory forecasting</p>
+            </div>
+            <div class="section-content">
+
+                <!-- Company Metrics -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/analytics/company-metrics</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Get comprehensive company-level analytics including revenue, profit margins, and inventory turnover.
+                        </div>
+                        <div class="code-block">
+                            <h4>📤 Response Example:</h4>
+                            <pre>{
+  "success": true,
+  "data": {
+    "totalRevenue": 125000.00,
+    "totalProfit": 45000.00,
+    "profitMargin": 36.0,
+    "totalProducts": 1250,
+    "lowStockProducts": 23,
+    "outOfStockProducts": 5,
+    "inventoryValue": 85000.00,
+    "topSellingProducts": [...],
+    "categoryBreakdown": [...]
+  }
+}</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Products by Profit -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/analytics/top-products-profit</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Get top performing products ranked by profit generation.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Inventory Trends Graph -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/analytics/inventory-trends-graph</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Get time-series data for inventory trends visualization.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Reports Section -->
+        <div id="reports" class="section">
+            <div class="section-header">
+                <h2>📋 Reports & Documentation</h2>
+                <p>Comprehensive reporting system for inventory and sales analysis</p>
+            </div>
+            <div class="section-content">
+
+                <!-- Inventory Report -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/reports/inventory</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Generate detailed inventory reports with stock levels and valuation.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sales Report -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/reports/sales</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Generate sales performance reports with profit analysis.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Alerts Section -->
+        <div id="alerts" class="section">
+            <div class="section-header">
+                <h2>🚨 Alerts & Notifications</h2>
+                <p>Automated alert system for inventory management</p>
+            </div>
+            <div class="section-content">
+
+                <!-- Get Alerts -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-url">/v1/alerts</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Retrieve all active alerts including low stock and stockout warnings.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Alert -->
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-url">/v1/alerts</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="endpoint-description">
+                            Create custom inventory alerts with threshold configurations.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <h3>🛠️ Integration Notes</h3>
+            <p><strong>Authentication:</strong> Most endpoints require JWT token in Authorization header</p>
+            <p><strong>File Uploads:</strong> Use multipart/form-data for endpoints with file support</p>
+            <p><strong>Error Handling:</strong> All endpoints return consistent error format with success boolean</p>
+            <p><strong>Rate Limiting:</strong> API includes rate limiting - check rate limit headers</p>
+            <p><strong>Caching:</strong> GET endpoints support ETag caching for performance</p>
+            <br>
+            <p style="font-style: italic; color: #95a5a6;">
+                Generated on December 13, 2025 • Invexis Backend v1.0.0
+            </p>
+        </div>
+    </div>
+</body>
+</html>

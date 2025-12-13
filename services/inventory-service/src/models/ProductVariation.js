@@ -19,15 +19,6 @@ const ProductVariationSchema = new Schema(
       required: true,
     },
 
-    // Variant-specific SKU/barcode
-    sku: {
-      type: String,
-      unique: true,
-      sparse: true,
-      trim: true,
-      index: true,
-    },
-
     // Physical attributes (variant-specific)
     weight: {
       value: Number,
@@ -39,20 +30,6 @@ const ProductVariationSchema = new Schema(
       width: Number,
       height: Number,
       unit: { type: String, enum: ["cm", "in", "m"], default: "cm" },
-    },
-
-    // STOCK QUANTITY ONLY - everything else in ProductStock
-    stockQty: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
-
-    // Reserved quantity for carts/orders
-    reservedQty: {
-      type: Number,
-      min: 0,
-      default: 0,
     },
 
     // Active/Inactive status
@@ -74,20 +51,16 @@ const ProductVariationSchema = new Schema(
 // ─────────────────────────────────────────────────────────────────────────────
 // Prevent duplicate variations for same product with same options
 ProductVariationSchema.index({ productId: 1, options: 1 }, { unique: true, sparse: true });
-
 ProductVariationSchema.index({ productId: 1, isActive: 1 });
-ProductVariationSchema.index({ sku: 1 });
-ProductVariationSchema.index({ stockQty: 1, isActive: 1 }); // For low-stock alerts
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VIRTUALS — Computed properties for API responses
+// VIRTUALS — Computed properties for API responses (stock data from ProductStock)
 // ─────────────────────────────────────────────────────────────────────────────
-ProductVariationSchema.virtual('availableStock').get(function () {
-  return this.stockQty - this.reservedQty;
-});
-
-ProductVariationSchema.virtual('inStock').get(function () {
-  return this.availableStock > 0;
+ProductVariationSchema.virtual('stock', {
+  ref: 'ProductStock',
+  localField: '_id',
+  foreignField: 'variationId',
+  justOne: true
 });
 
 ProductVariationSchema.virtual('optionString').get(function () {

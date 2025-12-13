@@ -1,4 +1,7 @@
-const asyncHandler = require('express-async-handler');
+// Manual async wrapper instead of express-async-handler
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const StockChange = require('../models/StockChange');
@@ -30,38 +33,34 @@ const getCompanyOverview = asyncHandler(async (req, res) => {
     // Total products
     const totalProducts = await Product.countDocuments({ companyId });
 
-    // Total stock and value using ProductVariation joined to Product and pricing
-    const stockAgg = await ProductVariation.aggregate([
+    // Total stock and value using ProductStock joined to Product and pricing
+    const stockAgg = await ProductStock.aggregate([
         { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
         { $unwind: '$product' },
-        { $match: { 'product.companyId': mongoose.Types.ObjectId(companyId) } },
+        { $match: { 'product.companyId': companyId } },
         { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
         { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
-        { $group: { _id: null, totalStock: { $sum: '$stockQty' }, totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$cost', { $ifNull: ['$pricing.cost', 0] }] }] } } } }
+        { $group: { _id: null, totalStock: { $sum: '$stockQty' }, totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', { $ifNull: ['$pricing.cost', 0] }] }] } } } }
     ]);
 
     const { totalStock = 0, totalValue = 0 } = stockAgg[0] || {};
 
-    // Low stock and out-of-stock counts per product using ProductVariation aggregates and ProductStock thresholds
-    const lowStockAgg = await ProductVariation.aggregate([
+    // Low stock and out-of-stock counts using ProductStock
+    const lowStockAgg = await ProductStock.aggregate([
         { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
         { $unwind: '$product' },
-        { $match: { 'product.companyId': mongoose.Types.ObjectId(companyId) } },
-        { $group: { _id: '$productId', totalQty: { $sum: '$stockQty' }, productId: { $first: '$product._id' } } },
-        { $lookup: { from: 'productstocks', localField: 'productId', foreignField: 'productId', as: 'stockConfig' } },
-        { $unwind: { path: '$stockConfig', preserveNullAndEmptyArrays: true } },
-        { $match: { $expr: { $lte: ['$totalQty', { $ifNull: ['$stockConfig.lowStockThreshold', 0] }] } } },
+        { $match: { 'product.companyId': companyId } },
+        { $match: { isLowStock: true } },
         { $count: 'lowCount' }
     ]);
 
     const lowStockCount = (lowStockAgg[0] && lowStockAgg[0].lowCount) || 0;
 
-    const outOfStockAgg = await ProductVariation.aggregate([
+    const outOfStockAgg = await ProductStock.aggregate([
         { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
         { $unwind: '$product' },
-        { $match: { 'product.companyId': mongoose.Types.ObjectId(companyId) } },
-        { $group: { _id: '$productId', totalQty: { $sum: '$stockQty' } } },
-        { $match: { totalQty: { $lte: 0 } } },
+        { $match: { 'product.companyId': companyId } },
+        { $match: { inStock: false } },
         { $count: 'outCount' }
     ]);
 
@@ -111,12 +110,12 @@ const getCompanyProducts = asyncHandler(async (req, res) => {
     const query = { companyId };
     if (status) query.status = status;
     if (visibility) query.visibility = visibility;
-    if (category) query.category = category;
+    if (category) query.categoryId = category;
     if (brand) query.brand = new RegExp(brand, 'i');
     if (search) query.$text = { $search: search };
 
     const products = await Product.find(query)
-        .populate('category', 'name slug')
+        .populate('categoryId', 'name slug')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -276,7 +275,7 @@ const getCompanyLowStockProducts = asyncHandler(async (req, res) => {
     if (shopId) query.shopId = shopId;
 
     const products = await Product.find(query)
-           .populate('category', 'name')
+           .populate('categoryId', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -605,7 +604,7 @@ const getShopProducts = asyncHandler(async (req, res) => {
     };
 
     if (status) query.status = status;
-    if (category) query.category = category;
+    if (category) query.categoryId = category;
     if (brand) query.brand = new RegExp(brand, 'i');
     if (search) {
         query.$text = { $search: search };
@@ -615,7 +614,7 @@ const getShopProducts = asyncHandler(async (req, res) => {
     }
 
     const products = await Product.find(query)
-        .populate('category')
+        .populate('categoryId')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit))
@@ -669,7 +668,7 @@ const getShopProductInventory = asyncHandler(async (req, res) => {
         _id: productId,
         companyId,
         shopId: shopId
-    }).populate('category');
+    }).populate('categoryId');
 
     if (!product) {
         return res.status(404).json({
@@ -1681,7 +1680,7 @@ const getShopLowStockProducts = asyncHandler(async (req, res) => {
     };
 
     const products = await Product.find(query)
-        .populate('category', 'name')
+        .populate('categoryId', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -1774,7 +1773,7 @@ const getProductReport = asyncHandler(async (req, res) => {
 
     // product details
     const product = await Product.findOne({ _id: productId, companyId })
-        .populate('category', 'name slug')
+        .populate('categoryId', 'name slug')
         .populate('pricingId')
         .lean();
 
@@ -2512,7 +2511,7 @@ const getTransferredProductCopies = asyncHandler(async (req, res) => {
     // Fetch all transferred copies
     const transferredProducts = await Product.find({
         _id: { $in: transferredProductIds }
-    }).populate('category', 'name');
+    }).populate('categoryId', 'name');
 
     res.json({
         success: true,

@@ -1,0 +1,54 @@
+# ==================================================================================
+# ELASTICSEARCH CONFIGURATION - PRODUCTION
+# ==================================================================================
+
+# Cluster configuration
+cluster.name: invexis-prod-cluster
+node.name: ${HOSTNAME}
+node.roles: ["master", "data", "ingest"]
+
+# Network configuration
+network.host: 0.0.0.0
+http.port: 9200
+transport.port: 9300
+
+# Discovery configuration (single node for now, ready for cluster)
+discovery.type: single-node
+cluster.initial_master_nodes: ["${HOSTNAME}"]
+
+# Path configuration
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+path.repo: ["/backup"]
+
+# Security configuration
+xpack.security.enabled: true
+xpack.security.enrollment.enabled: false
+xpack.security.http.ssl.enabled: false
+xpack.security.transport.ssl.enabled: false
+
+# License configuration
+xpack.license.self_generated.type: basic
+
+# Monitoring configuration
+xpack.monitoring.collection.enabled: true
+
+# Index lifecycle management
+xpack.ilm.enabled: true
+
+# Performance tuning
+indices.memory.index_buffer_size: 10%
+indices.memory.min_index_buffer_size: 48mb
+
+# Index settings for log management
+action.auto_create_index: "logstash-*,invexis-*,.monitoring-*,.watches,.triggered_watches,.watcher-history-*,.ml-*"
+
+# Bootstrap memory lock
+bootstrap.memory_lock: false
+
+# JVM heap size (set in environment variables)
+# ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+
+# Logging configuration
+logger.org.elasticsearch.deprecation: warn
+logger.org.elasticsearch.cluster.coordination: warn

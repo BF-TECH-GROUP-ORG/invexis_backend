@@ -1,0 +1,44 @@
+# ==================================================================================
+# GRAFANA DASHBOARD PROVISIONING CONFIGURATION
+# ==================================================================================
+# This file configures automatic dashboard provisioning for Grafana
+# ==================================================================================
+
+apiVersion: 1
+
+providers:
+  # Dashboard provider for Invexis monitoring dashboards
+  - name: "invexis-dashboards"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+
+  # System dashboards
+  - name: "system-dashboards"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/system
+
+  # Application dashboards
+  - name: "application-dashboards"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/applications
+
+  # Business dashboards
+  - name: "business-dashboards"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/business

@@ -1,0 +1,42 @@
+# ==================================================================================
+# GRAFANA DATASOURCE PROVISIONING
+# ==================================================================================
+
+apiVersion: 1
+
+datasources:
+  # Prometheus datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: GET
+      prometheusType: Prometheus
+      prometheusVersion: 2.48.0
+      cacheLevel: "High"
+      disableMetricsLookup: false
+      customQueryParameters: ""
+      timeInterval: "15s"
+    secureJsonData: {}
+
+  # Elasticsearch datasource for logs
+  - name: Elasticsearch
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200
+    database: "logstash-*"
+    editable: true
+    jsonData:
+      interval: Daily
+      timeField: "@timestamp"
+      esVersion: 8
+      includeFrozen: false
+      logMessageField: "message"
+      logLevelField: "level"
+    basicAuth: true
+    basicAuthUser: elastic
+    secureJsonData:
+      basicAuthPassword: ${ELASTIC_PASSWORD}

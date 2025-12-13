@@ -3,7 +3,10 @@
  * Exposes inventory analytics queries: profit, margins, forecasting, stockout risk
  */
 
-const asyncHandler = require('express-async-handler');
+// Manual async wrapper instead of express-async-handler
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 const InventoryAnalyticsService = require('../services/inventoryAnalyticsService');
 const AnalyticsGraphService = require('../services/analyticsGraphService');
 const { getCache, setCache } = require('../utils/redisHelper');

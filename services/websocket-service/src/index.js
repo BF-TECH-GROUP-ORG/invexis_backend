@@ -1,212 +1,370 @@
-// websocket-service/src/index.js
+// websocket-service production-ready index.js
 require('dotenv').config();
 const express = require('express');
-const compression = require('compression');
-const helmet = require('helmet');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
-const { initAdapter } = require('./config/adapter');
-const logger = require('./utils/logger');
-const { redis, rabbitmq, healthCheck } = require('./config/shared');
-const { authenticateSocket } = require('./middleware/auth');
-const { initializeHandlers, handleJoin, handleLeave, handleCustomEvents } = require('./events/handlers');
-const { startRealtimeConsumer } = require('./consumers/realtime');
+const http = require('http');
+const socketIo = require('socket.io');
+const { getLogger } = require('/app/shared/logger');
+const HealthChecker = require('/app/shared/health');
+const { SecurityManager } = require('/app/shared/security');
+const { ErrorHandler } = require('/app/shared/errorHandler');
 
 const app = express();
-const server = createServer(app);
+const server = http.createServer(app);
+const PORT = process.env.PORT || 9002;
+const SERVICE_NAME = 'websocket-service';
 
-// Security & perf middleware
-app.use(helmet());
-app.use(compression());
-// CORS is handled at the API gateway. Keep Socket.IO CORS config (below) if direct socket connections are required.
+// Initialize production modules
+const logger = getLogger(SERVICE_NAME);
+const healthChecker = new HealthChecker(SERVICE_NAME, {
+  redis: true,
+  rabbitmq: true,
+  timeout: 5000
+});
+const security = new SecurityManager(SERVICE_NAME);
+const errorHandler = new ErrorHandler(SERVICE_NAME);
 
-// Socket.IO configuration
-const io = new Server(server, {
+// Socket.IO setup
+const io = socketIo(server, {
   cors: {
-    origin: process.env.CORS_ORIGINS?.split(',') || ['*'],
-    methods: ['GET', 'POST'],
+    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    methods: ["GET", "POST"],
     credentials: true
   },
-  pingTimeout: 20000,
-  pingInterval: 25000,
-  maxHttpBufferSize: 1e6,
-  transports: ['websocket'],
-  serveClient: false,
-  cookie: false
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
-// Initialize handlers
-initializeHandlers(io);
+// Request parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Auth middleware - Authenticate all socket connections
-io.use(authenticateSocket);
+// Setup security middleware
+security.setupSecurity(app);
 
-// Socket handlers
+// Request logging
+app.use(logger.requestLogger());
+
+// Health check routes
+healthChecker.setupRoutes(app);
+
+// Basic HTTP routes
+app.get('/', (req, res) => {
+  res.json({
+    service: SERVICE_NAME,
+    status: 'running',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    connections: io.engine.clientsCount
+  });
+});
+
+app.get('/stats', (req, res) => {
+  res.json({
+    service: SERVICE_NAME,
+    connections: io.engine.clientsCount,
+    rooms: Object.keys(io.sockets.adapter.rooms).length,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// WebSocket connection tracking
+const activeConnections = new Map();
+
+// Socket.IO event handlers
 io.on('connection', (socket) => {
-  logger.info(`New connection ${socket.id} (user: ${socket.userId})`);
-
-  handleJoin(socket);
-  handleLeave(socket);
-  handleCustomEvents(socket);
-
-  socket.on('disconnect', (reason) => {
-    logger.info(`Disconnect ${socket.id}: ${reason}`);
+  logger.info('New WebSocket connection', {
+    socketId: socket.id,
+    clientIP: socket.handshake.address,
+    userAgent: socket.handshake.headers['user-agent'],
+    totalConnections: io.engine.clientsCount
   });
 
-  socket.emit('connected', { userId: socket.userId, socketId: socket.id });
+  // Store connection info
+  activeConnections.set(socket.id, {
+    connectedAt: new Date().toISOString(),
+    clientIP: socket.handshake.address,
+    userAgent: socket.handshake.headers['user-agent']
+  });
+
+  // Authentication (if token is provided)
+  socket.on('authenticate', (data) => {
+    try {
+      const { token, userId } = data;
+      
+      if (token && userId) {
+        // Verify JWT token here
+        socket.userId = userId;
+        socket.authenticated = true;
+        
+        // Join user-specific room
+        socket.join(`user-${userId}`);
+        
+        logger.info('Socket authenticated', {
+          socketId: socket.id,
+          userId: userId
+        });
+        
+        socket.emit('authenticated', { success: true, userId });
+      } else {
+        socket.emit('authentication_error', { error: 'Missing token or userId' });
+      }
+    } catch (error) {
+      logger.error('Authentication error', {
+        socketId: socket.id,
+        error: error.message
+      });
+      socket.emit('authentication_error', { error: 'Authentication failed' });
+    }
+  });
+
+  // Join room
+  socket.on('join_room', (roomId) => {
+    if (roomId) {
+      socket.join(roomId);
+      logger.info('Socket joined room', {
+        socketId: socket.id,
+        roomId: roomId,
+        userId: socket.userId
+      });
+      socket.emit('room_joined', { roomId });
+    }
+  });
+
+  // Leave room
+  socket.on('leave_room', (roomId) => {
+    if (roomId) {
+      socket.leave(roomId);
+      logger.info('Socket left room', {
+        socketId: socket.id,
+        roomId: roomId,
+        userId: socket.userId
+      });
+      socket.emit('room_left', { roomId });
+    }
+  });
+
+  // Handle custom events
+  socket.on('notification', (data) => {
+    logger.info('Notification event received', {
+      socketId: socket.id,
+      userId: socket.userId,
+      data: data
+    });
+    
+    // Broadcast to authenticated users
+    if (socket.authenticated && data.recipient) {
+      io.to(`user-${data.recipient}`).emit('notification', {
+        type: data.type || 'info',
+        message: data.message,
+        timestamp: new Date().toISOString(),
+        from: socket.userId
+      });
+    }
+  });
+
+  // Handle order updates
+  socket.on('order_update', (data) => {
+    logger.info('Order update event received', {
+      socketId: socket.id,
+      userId: socket.userId,
+      orderId: data.orderId
+    });
+    
+    // Broadcast to relevant users (seller, buyer, admins)
+    if (data.orderId && data.status) {
+      io.emit('order_status_change', {
+        orderId: data.orderId,
+        status: data.status,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Handle inventory alerts
+  socket.on('inventory_alert', (data) => {
+    logger.info('Inventory alert event received', {
+      socketId: socket.id,
+      productId: data.productId,
+      level: data.level
+    });
+    
+    // Broadcast to relevant users
+    if (data.productId && data.level !== undefined) {
+      io.emit('inventory_low', {
+        productId: data.productId,
+        currentLevel: data.level,
+        threshold: data.threshold || 10,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Handle chat messages
+  socket.on('chat_message', (data) => {
+    if (socket.authenticated && data.roomId && data.message) {
+      logger.info('Chat message sent', {
+        socketId: socket.id,
+        userId: socket.userId,
+        roomId: data.roomId,
+        messageLength: data.message.length
+      });
+      
+      io.to(data.roomId).emit('chat_message', {
+        userId: socket.userId,
+        message: data.message,
+        timestamp: new Date().toISOString(),
+        messageId: require('uuid').v4()
+      });
+    }
+  });
+
+  // Handle disconnect
+  socket.on('disconnect', (reason) => {
+    logger.info('WebSocket disconnected', {
+      socketId: socket.id,
+      userId: socket.userId,
+      reason: reason,
+      duration: activeConnections.get(socket.id) ? 
+        Date.now() - new Date(activeConnections.get(socket.id).connectedAt).getTime() : 0,
+      totalConnections: io.engine.clientsCount
+    });
+    
+    activeConnections.delete(socket.id);
+  });
+
+  // Handle errors
+  socket.on('error', (error) => {
+    logger.error('Socket error', {
+      socketId: socket.id,
+      userId: socket.userId,
+      error: error.message,
+      stack: error.stack
+    });
+  });
 });
 
-app.get('/', (req, res) => {
-  res.send('Websocket Service is running');
-});
-
-// Health endpoint
-app.get('/health', async (req, res) => {
+// HTTP API for broadcasting
+app.post('/broadcast', security.apiKeyAuth(), (req, res) => {
   try {
-    const sharedHealth = await healthCheck();
+    const { event, data, room } = req.body;
+    
+    if (!event || !data) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing required fields: event, data'
+      });
+    }
+
+    if (room) {
+      io.to(room).emit(event, data);
+      logger.info('Broadcast sent to room', { event, room, dataKeys: Object.keys(data) });
+    } else {
+      io.emit(event, data);
+      logger.info('Broadcast sent to all connections', { event, dataKeys: Object.keys(data) });
+    }
+
     res.json({
-      status: 'ok',
-      connectedClients: io.engine.clientsCount,
-      ...sharedHealth,
+      status: 'success',
+      message: 'Broadcast sent successfully',
+      connections: io.engine.clientsCount
+    });
+  } catch (error) {
+    logger.error('Broadcast error', { error: error.message });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to send broadcast'
+    });
+  }
+});
+
+app.post('/notify-user', security.apiKeyAuth(), (req, res) => {
+  try {
+    const { userId, notification } = req.body;
+    
+    if (!userId || !notification) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing required fields: userId, notification'
+      });
+    }
+
+    io.to(`user-${userId}`).emit('notification', {
+      ...notification,
       timestamp: new Date().toISOString()
     });
+
+    logger.info('User notification sent', { userId, notification });
+
+    res.json({
+      status: 'success',
+      message: 'Notification sent successfully'
+    });
   } catch (error) {
-    logger.error('Health check failed:', error);
-    res.status(503).json({ status: 'error', error: error.message });
+    logger.error('User notification error', { error: error.message });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to send notification'
+    });
   }
 });
 
-const getPort = () => {
-  const port = process.env.PORT;
-  if (port === '0') return 0; // Dynamic port for testing
-  return parseInt(port, 10) || 9002;
-};
-
-const startWorker = async () => {
-  let retries = 5;
-  while (retries > 0) {
-    try {
-      logger.info('Attempting to connect to services...');
-
-      // Connect to Redis
-      if (redis && typeof redis.connect === 'function') {
-        await redis.connect();
-        logger.info('Redis connected');
-      }
-
-      // Connect to RabbitMQ
-      logger.info('Connecting to RabbitMQ...');
-      await rabbitmq.connect();
-      logger.info('RabbitMQ connected');
-
-      // Initialize Socket.IO Redis adapter
-      initAdapter(io);
-
-      // Start realtime consumer
-      await startRealtimeConsumer(io);
-
-      // Start HTTP server
-      const port = getPort();
-      return new Promise((resolve, reject) => {
-        server.listen(port, '0.0.0.0', () => {
-          const actualPort = server.address().port;
-          logger.info(`Websocket service running on port ${actualPort}`);
-          resolve();
-        }).on('error', reject);
-      });
-    } catch (error) {
-      logger.error(`Startup attempt failed: ${error.message}`);
-      retries--;
-
-      if (retries === 0) {
-        logger.error('Maximum retries reached. Exiting...');
-        throw error;
-      }
-
-      logger.info(`Retrying in 5 seconds... (${retries} attempts remaining)`);
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-  }
-};
-
-// Graceful shutdown handler
-const shutdown = async () => {
-  logger.info('Graceful shutdown initiated...');
-  try {
-    // Close all Socket.IO connections
-    if (io) {
-      try {
-        const sockets = await io.fetchSockets();
-        for (const socket of sockets) {
-          socket.disconnect(true);
-        }
-        io.close();
-        logger.info('All Socket.IO connections closed');
-      } catch (err) {
-        logger.warn('Error closing Socket.IO:', err.message);
-      }
-    }
-
-    // Close HTTP server
-    return new Promise((resolve) => {
-      if (!server.listening) {
-        logger.info('Server not running, skipping close');
-        resolve();
-        return;
-      }
-
-      server.close(() => {
-        logger.info('HTTP server closed');
-        resolve();
-      });
-
-      // Force close after 5 seconds
-      setTimeout(() => {
-        logger.warn('Force closing server');
-        resolve();
-      }, 5000);
-    });
-  } catch (error) {
-    logger.error(`Shutdown error: ${error.message}`);
-  }
-};
+// Error handling
+errorHandler.setupErrorHandlers(app);
 
 // Start server
-if (require.main === module) {
-  startWorker()
-    .then(() => {
-      logger.info('Worker started successfully');
-    })
-    .catch((err) => {
-      logger.error('Worker startup failed:', err);
-      process.exit(1);
-    });
-}
+server.listen(PORT, () => {
+  logger.info('WebSocket Service started successfully', {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version,
+    pid: process.pid
+  });
+  
+  console.log(`🔌 WebSocket Service running on port ${PORT}`);
+});
 
-// Listen for termination signals
-const handleShutdown = async () => {
-  try {
-    const { cleanup } = require('./events/handlers');
-    if (cleanup) cleanup();
-    await shutdown();
+// Graceful shutdown
+const shutdown = async (signal) => {
+  logger.info(`Received ${signal}, starting graceful shutdown`);
+  
+  // Close all socket connections
+  io.close(() => {
+    logger.info('Socket.IO server closed');
+  });
+  
+  server.close(async (err) => {
+    if (err) {
+      logger.error('Error closing server', { error: err.message });
+      process.exit(1);
+    }
+    
+    logger.info('WebSocket Service shutdown completed');
     process.exit(0);
-  } catch (error) {
-    logger.error('Shutdown failed:', error);
+  });
+  
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
     process.exit(1);
-  }
+  }, 30000);
 };
 
-process.on('SIGTERM', handleShutdown);
-process.on('SIGINT', handleShutdown);
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
-// Global error handlers
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled Rejection:', reason);
+// Error handling
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Promise Rejection', {
+        reason: reason?.message || reason,
+        stack: reason?.stack
+    });
+    process.exit(1);
 });
 
-process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
-  shutdown().catch(() => process.exit(1));
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+    });
+    process.exit(1);
 });
-
-module.exports = { app, server, io, startWorker, shutdown };

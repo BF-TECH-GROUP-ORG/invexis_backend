@@ -1,201 +1,107 @@
-// src/index.js
-// Main application entry point
-
+// payment-service production-ready index.js
 require('dotenv').config();
 const express = require('express');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const { db, testConnection, closeConnection } = require('./config/db');
-const paymentRoutes = require('./routes/paymentRoutes');
-const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { getLogger } = require('/app/shared/logger');
+const HealthChecker = require('/app/shared/health');
+const { SecurityManager } = require('/app/shared/security');
+const { ErrorHandler } = require('/app/shared/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 8009;
+const SERVICE_NAME = 'payment-service';
 
-// Optional: RabbitMQ and Redis
-let redis, rabbitmq;
-try {
-    redis = require('/app/shared/redis');
-    rabbitmq = require('/app/shared/rabbitmq');
-} catch (error) {
-    console.warn('⚠ Shared services (Redis/RabbitMQ) not available');
-    redis = null;
-    rabbitmq = null;
-}
+// Initialize production modules
+const logger = getLogger(SERVICE_NAME);
+const healthChecker = new HealthChecker(SERVICE_NAME, {
+  postgresql: true,
+  redis: true,
+  rabbitmq: true,
+  timeout: 5000
+});
+const security = new SecurityManager(SERVICE_NAME);
+const errorHandler = new ErrorHandler(SERVICE_NAME);
 
-// ==================== Middleware ====================
-// Security headers
-app.use(helmet());
+// Request parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// CORS configuration
-// CORS handled centrally at api-gateway. Do not enable here.
+// Setup security middleware
+security.setupSecurity(app);
 
 // Request logging
-app.use(morgan('dev'));
+app.use(logger.requestLogger());
 
-// Body parsing
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Health check routes
+healthChecker.setupRoutes(app);
 
-// Raw body for webhook signature verification
-app.use('/payment/webhooks', express.raw({ type: 'application/json' }), (req, res, next) => {
-    req.rawBody = req.body;
-    req.body = JSON.parse(req.body.toString());
-    next();
-});
-
-// ==================== Routes ====================
-app.use('/payment', paymentRoutes);
-
-// Root endpoint
-app.get('/', (req, res) => {
+// Routes
+try {
+  const paymentRoutes = require('./routes/paymentRoutes');
+  app.use('/', paymentRoutes);
+} catch (err) {
+  logger.warn('Payment routes not found, using basic route', { error: err.message });
+  app.get('/', (req, res) => {
     res.json({
-        service: 'Invexis Payment Service',
-        version: '1.0.0',
-        status: 'running',
-        endpoints: {
-            health: '/health',
-            payments: '/payment',
-            webhooks: '/payment/webhooks',
-            invoices: '/payment/invoices',
-            reports: '/payment/reports'
-        }
+      service: SERVICE_NAME,
+      status: 'running',
+      version: '1.0.0',
+      timestamp: new Date().toISOString()
     });
-});
-
-// Health check endpoint
-app.get('/health', async (req, res) => {
-    try {
-        // Test database connection
-        await db.raw('SELECT 1');
-        const dbStatus = 'connected';
-
-        // Test Redis (if available)
-        let redisStatus = 'not_configured';
-        if (redis) {
-            try {
-                await redis.ping();
-                redisStatus = 'connected';
-            } catch (error) {
-                redisStatus = 'disconnected';
-            }
-        }
-
-        // Test RabbitMQ (if available)
-        let rabbitmqStatus = 'not_configured';
-        if (rabbitmq) {
-            try {
-                // Simple check - if module loaded, assume connected
-                rabbitmqStatus = 'connected';
-            } catch (error) {
-                rabbitmqStatus = 'disconnected';
-            }
-        }
-
-        res.status(200).json({
-            status: 'healthy',
-            timestamp: new Date().toISOString(),
-            services: {
-                database: dbStatus,
-                redis: redisStatus,
-                rabbitmq: rabbitmqStatus
-            },
-            uptime: process.uptime()
-        });
-    } catch (error) {
-        console.error('Health check failed:', error.message);
-        res.status(503).json({
-            status: 'unhealthy',
-            message: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// ==================== Error Handling ====================
-// 404 handler
-app.use(notFoundHandler);
-
-// Global error handler
-app.use(errorHandler);
-
-// ==================== Server Startup ====================
-async function startServer() {
-    try {
-        // Test database connection
-        await testConnection();
-
-        // Connect to RabbitMQ (if available)
-        if (rabbitmq && rabbitmq.connect) {
-            try {
-                await rabbitmq.connect();
-                console.log('✓ Connected to RabbitMQ');
-            } catch (error) {
-                console.warn('⚠ RabbitMQ connection failed:', error.message);
-            }
-        }
-
-        // Test Redis (if available)
-        if (redis) {
-            try {
-                await redis.ping();
-                console.log('✓ Connected to Redis');
-            } catch (error) {
-                console.warn('⚠ Redis connection failed:', error.message);
-            }
-        }
-
-        // Start server
-        app.listen(PORT, () => {
-            console.log('');
-            console.log('═══════════════════════════════════════════════════════');
-            console.log('  🚀 Invexis Payment Service');
-            console.log('═══════════════════════════════════════════════════════');
-            console.log(`  ✓ Server running on port ${PORT}`);
-            console.log(`  ✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`  ✓ Health check: http://localhost:${PORT}/health`);
-            console.log('═══════════════════════════════════════════════════════');
-            console.log('');
-        });
-
-    } catch (error) {
-        console.error('❌ Failed to start server:', error.message);
-        process.exit(1);
-    }
+  });
 }
 
-// ==================== Graceful Shutdown ====================
-const gracefulShutdown = async (signal) => {
-    console.log(`\n${signal} received. Shutting down gracefully...`);
+// Error handling
+errorHandler.setupErrorHandlers(app);
 
-    try {
-        // Close database connection
-        await closeConnection();
+// Start server
+const server = app.listen(PORT, () => {
+  logger.info('Payment Service started successfully', {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version,
+    pid: process.pid
+  });
+  
+  console.log(`💳 Payment Service running on port ${PORT}`);
+});
 
-        // Close Redis (if available)
-        if (redis && redis.quit) {
-            await redis.quit();
-            console.log('✓ Redis connection closed');
-        }
-
-        // Close RabbitMQ (if available)
-        if (rabbitmq && rabbitmq.close) {
-            await rabbitmq.close();
-            console.log('✓ RabbitMQ connection closed');
-        }
-
-        console.log('✓ Graceful shutdown complete');
-        process.exit(0);
-    } catch (error) {
-        console.error('❌ Error during shutdown:', error.message);
-        process.exit(1);
+// Graceful shutdown
+const shutdown = async (signal) => {
+  logger.info(`Received ${signal}, starting graceful shutdown`);
+  
+  server.close(async (err) => {
+    if (err) {
+      logger.error('Error closing server', { error: err.message });
+      process.exit(1);
     }
+    
+    logger.info('Payment Service shutdown completed');
+    process.exit(0);
+  });
+  
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 30000);
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
-// Start the server
-startServer();
+// Error handling
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Promise Rejection', {
+        reason: reason?.message || reason,
+        stack: reason?.stack
+    });
+    process.exit(1);
+});
 
-module.exports = app;
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+    });
+    process.exit(1);
+});

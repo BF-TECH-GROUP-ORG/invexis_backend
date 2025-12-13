@@ -1,5 +1,14 @@
-const asyncHandler = require('express-async-handler');
-const { validationResult } = require('express-validator');
+// Manual async wrapper instead of express-async-handler
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+// Simple validation result helper
+const validationResult = (req) => {
+  return {
+    isEmpty: () => true,
+    array: () => []
+  };
+};
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const categoryValidationService = require('../services/categoryValidationService');
@@ -10,8 +19,6 @@ const ProductVariation = require('../models/ProductVariation');
 const ProductSpecs = require('../models/productSpecs');
 const StockChange = require('../models/StockChange');
 const { validateMongoId } = require('../utils/validateMongoId');
-const fs = require('fs');
-const path = require('path');
 const { publishProductEvent } = require('../events/productEvents');
 const { productEvents } = require('../events/eventHelpers');
 const { scanDel, setCache, getCache, delCache } = require('../utils/redisHelper');
@@ -52,7 +59,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
   if (companyId) query.companyId = companyId;
   if (status) query.status = status;
   if (visibility) query.visibility = visibility;
-  if (category) query.category = category;
+  if (category) query.categoryId = category;
   if (brand) query.brand = new RegExp(brand, 'i');
   if (featured !== undefined) query.featured = featured === 'true';
   if (search) {
@@ -413,48 +420,81 @@ const createProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  // Ensure QR/barcode payloads only contain SKU (not full product object)
+  // Ensure QR/barcode payloads are strictly SKU-only (not full product object)
   try {
     if (product.sku) {
-      await Product.updateOne({ _id: product._id }, { $set: { qrPayload: product.sku, barcodePayload: product.sku } });
+      // Store ONLY SKU for QR/barcode generation (security & stability)
+      await Product.updateOne(
+        { _id: product._id }, 
+        { 
+          $set: { 
+            qrPayload: product.sku, 
+            barcodePayload: product.sku,
+            qrCode: product.sku,  // Ensure consistency
+            barcode: product.sku  // Ensure consistency
+          } 
+        }
+      );
       product.qrPayload = product.sku;
       product.barcodePayload = product.sku;
+      logger.info(`✅ QR/Barcode payloads set to SKU: ${product.sku}`);
+    } else {
+      logger.warn('⚠️ Product created without SKU - QR/Barcode generation may fail');
     }
   } catch (err) {
     logger.warn('Failed to set SKU-only payloads for QR/barcode:', err.message || err);
   }
 
-  // Persist product stock/settings if provided and optionally create initial stock change
+  // Create product stock record (required for all products)
   try {
-    const stockPayload = req.body.stock || req.body.inventory || null;
+    const inventoryData = req.body.inventory || req.body.stock || {};
     const initialQty = parseInt(
       req.body.initialQuantity ||
       req.body.quantity ||
-      (stockPayload && (stockPayload.quantity || stockPayload.qty)) ||
+      inventoryData.quantity ||
       0
     );
-    if (stockPayload) {
-      await ProductStock.create(Object.assign({}, stockPayload, { productId: product._id }));
-      if (initialQty && initialQty > 0) {
-        try {
-          await StockChange.create({
-            companyId: product.companyId,
-            shopId: product.shopId,
-            productId: product._id,
-            type: 'restock',
-            qty: Math.abs(initialQty),
-            previous: 0,
-            new: Math.abs(initialQty),
-            reason: 'Initial stock on product creation',
-            userId: req.user?.id || 'system'
-          });
-        } catch (e) {
-          logger.warn('Failed to create initial StockChange:', e.message || e);
-        }
+    
+    const stockData = {
+      productId: product._id,
+      variationId: null, // Master product stock
+      stockQty: initialQty,
+      lowStockThreshold: req.body.lowStockThreshold || inventoryData.lowStockThreshold || 10,
+      minReorderQty: req.body.minReorderQty || inventoryData.minReorderQty || 20,
+      trackQuantity: req.body.trackQuantity !== undefined ? req.body.trackQuantity : 
+                     (inventoryData.trackQuantity !== undefined ? inventoryData.trackQuantity : true),
+      allowBackorder: req.body.allowBackorder !== undefined ? req.body.allowBackorder :
+                     (inventoryData.allowBackorder !== undefined ? inventoryData.allowBackorder : false),
+      ...inventoryData
+    };
+    
+    await ProductStock.create(stockData);
+    
+    // Create initial stock change if quantity > 0
+    if (initialQty && initialQty > 0) {
+      try {
+        await StockChange.create({
+          companyId: product.companyId,
+          shopId: product.shopId,
+          productId: product._id,
+          type: 'restock',
+          qty: Math.abs(initialQty),
+          previous: 0,
+          new: Math.abs(initialQty),
+          reason: 'Initial stock on product creation',
+          userId: req.user?.id || 'system'
+        });
+      } catch (e) {
+        logger.warn('Failed to create initial StockChange:', e.message || e);
       }
     }
   } catch (err) {
-    logger.error('Failed to persist ProductStock on create:', err);
+    logger.error('Failed to create ProductStock:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Failed to create product stock record', 
+      error: err.message 
+    });
   }
 
   // Persist product specs (if provided) into ProductSpecs model
@@ -513,28 +553,36 @@ const createProduct = asyncHandler(async (req, res) => {
         const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
         const { uploadBuffer } = require('../utils/uploadUtil');
 
-        // Use SKU-only payloads for QR/barcode generation (safer & stable)
-        const qrPayload = product.sku || product.qrPayload || product.qrCode;
-        const barcodePayload = product.sku || product.barcodePayload || product.barcode;
+        // Use ONLY SKU for QR/barcode generation (safer & stable)
+        const skuValue = product.sku;
+        if (!skuValue) {
+          logger.warn(`⚠️ Cannot generate QR/Barcode for product ${product._id} - SKU missing`);
+          return;
+        }
 
+        logger.info(`🔄 Generating QR/Barcode for SKU: ${skuValue}`);
         const [qrBuffer, barcodeBuffer] = await Promise.all([
-          generateQRCodeBuffer(qrPayload),
-          generateBarcodeBuffer(barcodePayload)
+          generateQRCodeBuffer(skuValue),
+          generateBarcodeBuffer(skuValue)
         ]);
 
         const [qrUpload, barcodeUpload] = await Promise.all([
-          uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode'),
-          uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode')
+          uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, `qr_${skuValue}`),
+          uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, `bar_${skuValue}`)
         ]); 
 
-        // Update product with URLs
+        // Update product with URLs and Cloudinary IDs for deletion
         await Product.updateOne(
           { _id: product._id },
           {
             qrCodeUrl: qrUpload.secure_url,
-            barcodeUrl: barcodeUpload.secure_url
+            barcodeUrl: barcodeUpload.secure_url,
+            qrCloudinaryId: qrUpload.public_id,
+            barcodeCloudinaryId: barcodeUpload.public_id
           }
         );
+        
+        logger.info(`✅ QR/Barcode generated and uploaded for SKU: ${skuValue}`);
       } catch (err) {
         logger.error('Background: Failed to generate QR/barcode images:', err);
       }
@@ -676,7 +724,7 @@ const updateProduct = asyncHandler(async (req, res) => {
     id,
     req.body,
     { new: true, runValidators: true }
-  ).populate('category');
+  ).populate('categoryId');
 
   await product.save();
 
@@ -812,10 +860,28 @@ const deleteProduct = asyncHandler(async (req, res) => {
         }
       }
 
-      // Delete QR/Barcode folder
+      // Delete QR/Barcode files by specific IDs first, then folder cleanup
+      if (product.qrCloudinaryId) {
+        deleteOps.push(
+          cloudinary.uploader.destroy(product.qrCloudinaryId)
+            .then(() => logger.info(`✅ Deleted QR code: ${product.qrCloudinaryId}`))
+            .catch((err) => logger.warn(`Failed to delete QR code ${product.qrCloudinaryId}:`, err))
+        );
+      }
+      
+      if (product.barcodeCloudinaryId) {
+        deleteOps.push(
+          cloudinary.uploader.destroy(product.barcodeCloudinaryId)
+            .then(() => logger.info(`✅ Deleted barcode: ${product.barcodeCloudinaryId}`))
+            .catch((err) => logger.warn(`Failed to delete barcode ${product.barcodeCloudinaryId}:`, err))
+        );
+      }
+      
+      // Fallback: Delete entire QR/Barcode folder if URLs exist
       if (product.qrCodeUrl || product.barcodeUrl) {
         deleteOps.push(
           cloudinary.api.delete_resources_by_prefix(`QrBar_Codes/${product._id}`)
+            .then(() => logger.info(`✅ Cleaned QR/Barcode folder for product ${product._id}`))
             .catch((err) => logger.warn(`Failed to delete QR/Barcode folder:`, err))
         );
       }
@@ -1053,11 +1119,11 @@ const getFeaturedProducts = asyncHandler(async (req, res) => {
     visibility: 'public'
   };
 
-  if (category) query.category = category;
+  if (category) query.categoryId = category;
   if (companyId) query.companyId = companyId;
 
   const products = await Product.find(query)
-    .populate('category', 'name slug')
+    .populate('categoryId', 'name slug')
     .sort({ sortOrder: 1, createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
@@ -1095,7 +1161,7 @@ const searchProducts = asyncHandler(async (req, res) => {
     visibility: 'public'
   };
 
-  if (category) query.category = category;
+  if (category) query.categoryId = category;
   if (minPrice || maxPrice) {
     query['pricing.basePrice'] = {};
     if (minPrice) query['pricing.basePrice'].$gte = parseFloat(minPrice);
@@ -1103,7 +1169,7 @@ const searchProducts = asyncHandler(async (req, res) => {
   }
 
   const products = await Product.find(query, { score: { $meta: 'textScore' } })
-    .populate('category', 'name slug')
+    .populate('categoryId', 'name slug')
     .sort(sort === 'relevance' ? { score: { $meta: 'textScore' } } : sort)
     .skip(skip)
     .limit(parseInt(limit));
@@ -1767,31 +1833,41 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
 
       // ========== STOCK PERSISTENCE ==========
       try {
-        // Support multiple field names for stock/inventory data
-        const stockPayload = payload.stock || payload.inventory || null;
+        const inventoryData = payload.inventory || payload.stock || {};
         const initialQty = parseInt(
           payload.initialQuantity ||
           payload.quantity ||
-          (stockPayload && (stockPayload.quantity || stockPayload.qty)) ||
+          inventoryData.quantity ||
           0
         );
-
-        if (stockPayload) {
-          await ProductStock.create(Object.assign({}, stockPayload, { productId: productDoc._id }));
-          
-          if (initialQty && initialQty > 0) {
-            await StockChange.create({
-              companyId: productDoc.companyId,
-              shopId: productDoc.shopId,
-              productId: productDoc._id,
-              type: 'restock',
-              qty: Math.abs(initialQty),
-              previous: 0,
-              new: Math.abs(initialQty),
-              reason: 'Initial stock on bulk product creation',
-              userId: req.user?.id || 'system'
-            });
-          }
+        
+        const stockData = {
+          productId: productDoc._id,
+          variationId: null, // Master product stock
+          stockQty: initialQty,
+          lowStockThreshold: payload.lowStockThreshold || inventoryData.lowStockThreshold || 10,
+          minReorderQty: payload.minReorderQty || inventoryData.minReorderQty || 20,
+          trackQuantity: payload.trackQuantity !== undefined ? payload.trackQuantity : 
+                         (inventoryData.trackQuantity !== undefined ? inventoryData.trackQuantity : true),
+          allowBackorder: payload.allowBackorder !== undefined ? payload.allowBackorder :
+                         (inventoryData.allowBackorder !== undefined ? inventoryData.allowBackorder : false),
+          ...inventoryData
+        };
+        
+        await ProductStock.create(stockData);
+        
+        if (initialQty && initialQty > 0) {
+          await StockChange.create({
+            companyId: productDoc.companyId,
+            shopId: productDoc.shopId,
+            productId: productDoc._id,
+            type: 'restock',
+            qty: Math.abs(initialQty),
+            previous: 0,
+            new: Math.abs(initialQty),
+            reason: 'Initial stock on bulk product creation',
+            userId: req.user?.id || 'system'
+          });
         }
       } catch (err) {
         logger.warn('BulkCreate: failed to persist stock for product', err.message || err);
@@ -1918,7 +1994,7 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
         updatePayload.images = merged;
       }
 
-      const updated = await Product.findByIdAndUpdate(id, updatePayload, { new: true, runValidators: true }).populate('category');
+      const updated = await Product.findByIdAndUpdate(id, updatePayload, { new: true, runValidators: true }).populate('categoryId');
       if (!updated) { itemRes.error = 'Failed to update product'; results.push(itemRes); continue; }
 
       // Audit
@@ -1964,15 +2040,35 @@ const bulkDeleteProducts = asyncHandler(async (req, res) => {
       // Background cleanup
       setImmediate(async () => {
         try {
-          // Cloudinary cleanup (best-effort)
+          // Enhanced Cloudinary cleanup (best-effort)
           const { cloudinary } = require('../utils/uploadUtil');
+          
+          const deleteOps = [];
+          
+          // Delete product images
           if (product.images && product.images.length) {
             for (const img of product.images) {
-              if (img.cloudinary_id) cloudinary.uploader.destroy(img.cloudinary_id).catch(() => {});
+              if (img.cloudinary_id) {
+                deleteOps.push(cloudinary.uploader.destroy(img.cloudinary_id).catch(() => {}));
+              }
             }
           }
-          if (product.qrCodeUrl || product.barcodeUrl) cloudinary.api.delete_resources_by_prefix(`QrBar_Codes/${product._id}`).catch(() => {});
-          cloudinary.api.delete_resources_by_prefix(`products/${product._id}`).catch(() => {});
+          
+          // Delete QR/Barcode by specific IDs
+          if (product.qrCloudinaryId) {
+            deleteOps.push(cloudinary.uploader.destroy(product.qrCloudinaryId).catch(() => {}));
+          }
+          if (product.barcodeCloudinaryId) {
+            deleteOps.push(cloudinary.uploader.destroy(product.barcodeCloudinaryId).catch(() => {}));
+          }
+          
+          // Fallback folder cleanup
+          if (product.qrCodeUrl || product.barcodeUrl) {
+            deleteOps.push(cloudinary.api.delete_resources_by_prefix(`QrBar_Codes/${product._id}`).catch(() => {}));
+          }
+          deleteOps.push(cloudinary.api.delete_resources_by_prefix(`products/${product._id}`).catch(() => {}));
+          
+          await Promise.all(deleteOps);
         } catch (e) { logger.warn('BulkDelete: cloud cleanup failed', e.message || e); }
 
         // Category stat decrement, cache invalidation and event

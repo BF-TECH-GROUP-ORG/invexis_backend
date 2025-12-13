@@ -14,6 +14,7 @@
   "isFeatured": true,
   "sortOrder": 1,
   "supplierName": "Samsung Direct",
+  "costPrice": 450.00,
   "pricing": {
     "basePrice": 999.99,
     "salePrice": 899.99,
@@ -62,8 +63,20 @@
     {
       "name": "ram_gb",
       "value": 12
+    },
+    {
+      "name": "storage_gb",
+      "value": 256
+    },
+    {
+      "name": "display_size",
+      "value": "6.8 inches"
+    },
+    {
+      "name": "camera_mp",
+      "value": "200MP"
     }
-],
+  ],
   "seo": {
     "metaTitle": "Samsung Galaxy S24 Ultra 256GB - Premium Android Phone",
     "metaDescription": "Buy Samsung Galaxy S24 Ultra 256GB with advanced AI features, 200MP camera, and 6.8-inch AMOLED display.",
@@ -79,6 +92,8 @@
     "trackQuantity": true,
     "quantity": 500,
     "lowStockThreshold": 20,
-    "allowBackorder": false
+    "minReorderQty": 50,
+    "allowBackorder": false,
+    "safetyStock": 10
   }
 }

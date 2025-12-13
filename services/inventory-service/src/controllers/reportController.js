@@ -1,4 +1,7 @@
-const asyncHandler = require('express-async-handler');
+// Manual async wrapper instead of express-async-handler
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const StockChange = require('../models/StockChange');
@@ -229,7 +232,7 @@ const getProductReport = asyncHandler(async (req, res) => {
   const cached = await getCache(cacheKey);
   if (cached) return res.json({ success: true, data: cached, fromCache: true });
 
-  const product = await Product.findOne({ _id: productId, companyId }).populate('category').populate('pricingId');
+  const product = await Product.findOne({ _id: productId, companyId }).populate('categoryId').populate('pricingId');
   if (!product) {
     return res.status(404).json({ success: false, message: 'Product not found' });
   }

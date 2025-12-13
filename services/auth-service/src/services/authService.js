@@ -738,14 +738,17 @@ async function logoutAll(userId) {
 }
 
 // Update Profile (invalidate cache)
-async function updateProfile(userId, data, profilePictureUrl = null) {
+async function updateProfile(userId, data, profileImage = null) {
     const { error, value } = updateProfileSchema.validate(data);
     if (error) return { ok: false, status: 400, message: error.details[0].message };
 
     const user = await User.findById(userId);
     if (!user) return { ok: false, status: 404, message: 'User not found' };
 
-    if (profilePictureUrl) value.profilePicture = profilePictureUrl;
+    if (profileImage && profileImage.url) {
+        value.profilePicture = profileImage.url;
+        value.profilePictureCloudinaryId = profileImage.cloudinary_id;
+    }
     if (value.preferences) {
         let pref = await Preference.findOne({ userId });
         if (!pref) pref = new Preference({ userId });
@@ -1333,7 +1336,7 @@ async function deleteWorkerFromCompany(adminId, companyId, workerId) {
             rabbitmq = require('/app/shared/rabbitmq.js');
         } catch (error) {
             try {
-                rabbitmq = require('../../../shared/rabbitmq.js');
+                rabbitmq = require('/app/shared/rabbitmq.js');
             } catch (err) {
                 console.warn('RabbitMQ not available, continuing without event publish');
                 rabbitmq = null;

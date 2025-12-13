@@ -17,14 +17,14 @@ class AlertTriggerService {
      */
     static async triggerNewArrivalAlert(productData) {
         try {
-            const { _id, name, category, companyId, shopId, pricing } = productData;
+            const { _id, name, categoryId, companyId, shopId, pricing } = productData;
 
             const alert = await Alert.createOrUpdate({
                 scope: 'global',
                 companyId: productData.companyId,
                 type: 'new_arrival',
                 productId: _id,
-                categoryId: category,
+                categoryId: categoryId,
                 priority: 'medium',
                 message: `🆕 New Product Arrival: ${name}`,
                 description: `A new product has been added to our catalog. Check it out!`,
@@ -32,7 +32,7 @@ class AlertTriggerService {
                     productId: _id.toString(),
                     productName: name,
                     price: pricing.basePrice,
-                    category: category
+                    categoryId: categoryId
                 }
             });
 

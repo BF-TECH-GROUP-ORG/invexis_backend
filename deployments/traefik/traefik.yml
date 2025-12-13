@@ -1,0 +1,105 @@
+# ==================================================================================
+# TRAEFIK STATIC CONFIGURATION - PRODUCTION
+# ==================================================================================
+# This file contains the static configuration for Traefik reverse proxy
+# in production environment with TLS, security, and blue/green deployment support
+# ==================================================================================
+
+# Global configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# Entry points configuration
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        options: default
+  traefik:
+    address: ":8080"
+
+# Providers configuration
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: "invexis-prod-network"
+    watch: true
+    pollInterval: "5s"
+  file:
+    filename: "/etc/traefik/dynamic_conf.yml"
+    watch: true
+
+# Certificate configuration (Let's Encrypt)
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      tlsChallenge: {}
+      email: "${ACME_EMAIL}"
+      storage: "/data/acme.json"
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      # For staging/testing, use: https://acme-staging-v02.api.letsencrypt.org/directory
+
+# API and dashboard configuration
+api:
+  dashboard: true
+  debug: false
+  insecure: false
+
+# Logging configuration
+log:
+  level: "${TRAEFIK_LOG_LEVEL:-INFO}"
+  filePath: "/var/log/traefik/traefik.log"
+  format: "json"
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+  format: "json"
+  filters:
+    statusCodes:
+      - "200"
+      - "300-302"
+      - "400-499"
+      - "500-599"
+
+# Metrics configuration for Prometheus
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+# Health check configuration
+ping:
+  entryPoint: "traefik"
+
+# Tracing configuration (optional)
+tracing:
+  jaeger:
+    samplingServerURL: "http://jaeger:14268/api/sampling"
+    localAgentHostPort: "jaeger:6831"
+
+# Global middleware configuration
+# Note: These are defined here and can be applied to routes
+serversTransport:
+  insecureSkipVerify: false
+  maxIdleConnsPerHost: 10
+  forwardingTimeouts:
+    dialTimeout: "30s"
+    responseHeaderTimeout: "60s"
+    idleConnTimeout: "90s"

@@ -11,12 +11,17 @@ const speakeasy = require('speakeasy');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 // Mock upload middleware to avoid Cloudinary dependency
-jest.mock('../src/middleware/upload', () => ({
+jest.mock('../src/utils/uploadUtil', () => ({
     uploadProfileImage: (req, res, next) => {
-        req.profilePictureUrl = '/uploads/profiles/mock-profile.jpg';
-        req.cloudinaryPublicId = 'mock-public-id';
+        req.body.profileImage = {
+            url: '/uploads/profiles/mock-profile.jpg',
+            cloudinary_id: 'mock-public-id',
+            type: 'image'
+        };
         next();
-    }
+    },
+    deleteProfileImage: jest.fn(),
+    cloudinary: {}
 }));
 
 // Mock external services (tokenService, events)

@@ -19,7 +19,7 @@ const StockChangeSchema = new Schema({
   new:         { type: Number, required: true },
 
   reason:      { type: String, trim: true },
-  orderId:     { type: Schema.Types.ObjectId, index: true, sparse: true },
+  orderId:     { type: Schema.Types.ObjectId, sparse: true, index: true }, // Order-related stock changes
   userId:      { type: String, required: true, index: true },        // WHO did it
   terminalId:  { type: String, index: true },                        // POS terminal / device
   sessionId:   { type: String },                                     // Cashier session
@@ -38,7 +38,7 @@ StockChangeSchema.index({ userId: 1, createdAt: -1 });           // Worker perfo
 StockChangeSchema.index({ shopId: 1, userId: 1, type: 1 });      // Sales per worker
 StockChangeSchema.index({ productId: 1, createdAt: -1 });
 StockChangeSchema.index({ variationId: 1, createdAt: -1 });
-StockChangeSchema.index({ orderId: 1 });
+// Note: orderId index automatically created by index: true property
 
 /* -------------------------------------------------------------------------- */
 /*                          PRE-SAVE: ATOMIC + AUDIT + ALERT                  */
@@ -59,19 +59,15 @@ StockChangeSchema.pre('save', async function(next) {
     }).lean();
     if (!product) return next(new Error('Product not owned by company'));
 
-    // 3. Get current stock
+    // 3. Get current stock from ProductStock model
     let currentStock = 0;
-    if (this.variationId) {
-      const v = await mongoose.model('ProductVariation').findById(this.variationId).select('stockQty').lean();
-      if (!v) return next(new Error('Variation not found'));
-      currentStock = v.stockQty || 0;
-    } else {
-      const total = await mongoose.model('ProductVariation').aggregate([
-        { $match: { productId: this.productId } },
-        { $group: { _id: null, total: { $sum: '$stockQty' } } }
-      ]);
-      currentStock = total[0]?.total || 0;
-    }
+    const stockRecord = await mongoose.model('ProductStock').findOne({
+      productId: this.productId,
+      variationId: this.variationId || null
+    }).lean();
+    
+    if (!stockRecord) return next(new Error('Stock record not found'));
+    currentStock = stockRecord.stockQty || 0;
 
     // 4. Concurrency protection
     if (currentStock !== this.previous) {
@@ -82,13 +78,14 @@ StockChangeSchema.pre('save', async function(next) {
     this.new = this.previous + this.qty;
     if (this.new < 0) return next(new Error('Not enough stock'));
 
-    // 6. Apply atomic update
-    if (this.variationId) {
-      await mongoose.model('ProductVariation').updateOne(
-        { _id: this.variationId },
-        { $set: { stockQty: this.new } }
-      );
-    }
+    // 6. Apply atomic update to ProductStock
+    await mongoose.model('ProductStock').updateOne(
+      { 
+        productId: this.productId,
+        variationId: this.variationId || null
+      },
+      { $set: { stockQty: this.new } }
+    );
 
     // 7. Audit (optional but recommended)
     try {
@@ -202,19 +199,8 @@ StockChangeSchema.post('save', async function(doc) {
       const totalQty = Math.abs(salesLast30Days[0].totalQty || 0);
       const avgDaily = totalQty > 0 ? (totalQty / 30).toFixed(2) : 0;
       
-      // Get current stock
-      const ProductVariation = mongoose.model('ProductVariation');
-      let currentQty = 0;
-      if (doc.variationId) {
-        const v = await ProductVariation.findById(doc.variationId).select('stockQty').lean();
-        currentQty = v?.stockQty || 0;
-      } else {
-        const agg = await ProductVariation.aggregate([
-          { $match: { productId: doc.productId } },
-          { $group: { _id: null, total: { $sum: '$stockQty' } } }
-        ]);
-        currentQty = agg[0]?.total || 0;
-      }
+      // Get current stock from ProductStock model
+      const currentQty = stockRecord?.stockQty || 0;
 
       // Calculate stockout risk
       const daysUntilStockout = avgDaily > 0 ? Math.ceil((currentQty - stockRecord.safetyStock) / avgDaily) : 999;

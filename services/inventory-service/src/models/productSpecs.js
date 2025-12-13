@@ -9,7 +9,7 @@ const ProductSpecsSchema = new Schema({
     required: true,
     index: true
   },
-  l2Category: { type: String, index: true }, // e.g., "Phones & Tablets"
+  l2Category: { type: String }, // e.g., "Phones & Tablets" - index defined below
 
   specs: {
     type: Map,

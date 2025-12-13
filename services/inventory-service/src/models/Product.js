@@ -80,20 +80,22 @@ const ProductSchema = new Schema({
   specsId:   { type: Schema.Types.ObjectId, ref: 'ProductSpecs',   default: null },
 
   /* ------------------------------ PHYSICAL IDENTIFIERS ------------------- */
-  sku:       { type: String, unique: true, uppercase: true, index: true, sparse: true },
+  sku:       { type: String, unique: true, uppercase: true, sparse: true },
   asin:      { type: String, unique: true, sparse: true, uppercase: true },
   upc:       { type: String, unique: true, sparse: true },
   ean:       { type: String, sparse: true },
 
-  barcode:        { type: String, unique: true, index: true },
+  barcode:        { type: String, unique: true },
   barcodePayload: { type: String },
   barcodeUrl:     { type: String },
+  barcodeCloudinaryId: { type: String }, // For deletion tracking
 
   qrCode:         { type: String },
   qrPayload:      { type: String },
   qrCodeUrl:      { type: String },
+  qrCloudinaryId: { type: String }, // For deletion tracking
 
-  scanId:         { type: String, unique: true, index: true },
+  scanId:         { type: String, unique: true },
 
   browseNodeId:   { type: String },
 
@@ -236,9 +238,7 @@ ProductSchema.pre('save', async function (next) {
 
 ProductSchema.index({ companyId: 1, shopId: 1, status: 1 });
 ProductSchema.index({ companyId: 1, shopId: 1, visibility: 1 });
-ProductSchema.index({ barcode: 1 });
-ProductSchema.index({ scanId: 1 });
-ProductSchema.index({ sku: 1 });
+// Note: barcode, scanId, sku indexes created automatically by unique: true
 ProductSchema.index({ categoryId: 1, status: 1 });
 ProductSchema.index({ isFeatured: 1, sortOrder: -1 });
 ProductSchema.index({ status: 1, visibility: 1 });

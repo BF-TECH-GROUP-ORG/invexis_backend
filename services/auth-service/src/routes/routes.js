@@ -1,22 +1,40 @@
-// authRoutes.js
+// routes.js - Production-ready auth routes
 const express = require('express');
 const passport = require('passport');
 const router = express.Router();
+
+// Controllers
 const authCtrl = require('../controllers/authController');
 const adminCtrl = require('../controllers/adminController');
 const tokenService = require('../services/tokenService');
-const { requireAuth, requireRole } = require('../middleware/authMiddleware');
+
+// Production middleware
+const { authenticateToken, requireRole, requireAdmin } = require('/app/shared/middlewares/auth/production-auth');
 
 // Health check
 router.get('/', (req, res) => {
-    res.json({ message: "auth service is routed to the gateway" });
+    res.json({ 
+        message: "Invexis Auth Service",
+        service: "auth-service",
+        version: "2.0.0",
+        status: "active",
+        endpoints: {
+            public: ["/register", "/login", "/login/otp/*", "/password/reset/*", "/google/*"],
+            protected: ["/me", "/logout", "/sessions", "/profile", "/password/change"],
+            admin: ["/users", "/verify/:userId", "/consents/compliance"]
+        }
+    });
 });
+
+// ============================================================================
+// PUBLIC ROUTES (No authentication required)
+// ============================================================================
 
 // Registration and Basic Auth
 router.post('/register', authCtrl.register);
 router.post('/login', authCtrl.login);
 
-// OTP Authentication
+// OTP Authentication  
 router.post('/login/otp/request', authCtrl.requestOtpLogin);
 router.post('/login/otp/verify', authCtrl.verifyOtpLogin);
 
@@ -24,9 +42,9 @@ router.post('/login/otp/verify', authCtrl.verifyOtpLogin);
 router.post('/password/reset', authCtrl.requestPasswordReset);
 router.post('/password/reset/confirm', authCtrl.confirmPasswordReset);
 
-/**
- * Google OAuth Routes
- */
+// ============================================================================
+// GOOGLE OAUTH ROUTES
+// ============================================================================
 // Sign up with Google (new accounts)
 router.get('/google/signup', (req, res, next) => {
     req.session.authType = 'signup';
@@ -120,75 +138,71 @@ router.get('/google/callback',
             }
         })(req, res, next);
     }
-);/**
- * Protected User Routes - Authentication Required
- */
+);
 
-// Session Management
-router.post('/refresh', authCtrl.refresh);
-router.post('/logout', requireAuth, authCtrl.logout); // ✅ Fast route: only needs user ID
-router.post('/logout-all', requireAuth, authCtrl.logoutAll); // ✅ Fast route: only needs user ID
-router.get('/sessions', requireAuth, authCtrl.getSessions);
-router.delete('/sessions/:sessionId', requireAuth, authCtrl.revokeSession);
+// ============================================================================
+// PROTECTED ROUTES (Authentication required)
+// These routes use production middleware for JWT verification
+// ============================================================================
 
-// Profile Management
-router.get('/me', requireAuth, authCtrl.getCurrentUser);
-router.put('/profile', requireAuth, authCtrl.updateProfile);
-router.delete('/account', requireAuth, authCtrl.deleteAccount);
+// Token Management
+router.post('/refresh', authCtrl.refresh); // Uses refresh token, no auth needed
 
-// Email Management
-router.post('/verify/resend/:type', requireAuth, authCtrl.resendVerification);
-router.post('/email/change', requireAuth, authCtrl.changeEmail);
-router.post('/email/confirm', requireAuth, authCtrl.confirmChangeEmail);
+// Session Management (Production middleware)
+router.post('/logout', authenticateToken, authCtrl.logout);
+router.post('/logout-all', authenticateToken, authCtrl.logoutAll);
+router.get('/sessions', authenticateToken, authCtrl.getSessions);
+router.delete('/sessions/:sessionId', authenticateToken, authCtrl.revokeSession);
 
-// Password Management
-router.post('/password/change', requireAuth, authCtrl.changePassword);
+// User Profile (Production middleware)
+router.get('/me', authenticateToken, authCtrl.getMe); // Updated to use getMe method
+router.put('/profile', authenticateToken, authCtrl.updateProfile);
+router.delete('/account', authenticateToken, authCtrl.deleteAccount);
 
-// 2FA Management
-router.post('/2fa/setup', requireAuth, authCtrl.setup2FA);
-router.post('/2fa/verify', requireAuth, authCtrl.verify2FASetup);
-router.post('/2fa/disable', requireAuth, authCtrl.disable2FA);
+// Email Management (Production middleware)
+router.post('/verify/resend/:type', authenticateToken, authCtrl.resendVerification);
+router.post('/email/change', authenticateToken, authCtrl.changeEmail);
+router.post('/email/confirm', authenticateToken, authCtrl.confirmChangeEmail);
 
-// Consent Management
-router.get('/consents', requireAuth, authCtrl.getConsents);
-router.post('/consent/accept', requireAuth, authCtrl.acceptConsent);
-router.post('/consent/revoke', requireAuth, authCtrl.revokeConsent);
+// Password Management (Production middleware)
+router.post('/password/change', authenticateToken, authCtrl.changePassword);
 
-/**
- * Admin Routes - Requires Admin Role + Consent
- */
+// 2FA Management (Production middleware)
+router.post('/2fa/setup', authenticateToken, authCtrl.setup2FA);
+router.post('/2fa/verify', authenticateToken, authCtrl.verify2FASetup);
+router.post('/2fa/disable', authenticateToken, authCtrl.disable2FA);
 
-// User Management
-router.post('/verify/:userId', requireAuth, authCtrl.verify);
+// Consent Management (Production middleware)
+router.get('/consents', authenticateToken, authCtrl.getConsents);
+router.post('/consent/accept', authenticateToken, authCtrl.acceptConsent);
+router.post('/consent/revoke', authenticateToken, authCtrl.revokeConsent);
 
-router.get('/users', requireAuth, authCtrl.getUsers);
+// ============================================================================
+// ADMIN ROUTES (Authentication + Role verification required)
+// These routes use production middleware with role checking
+// ============================================================================
 
-// Get company admins (cached)
-router.get('/users/company-admins/:companyId', requireAuth, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
+// User Management (Admin routes)
+router.post('/verify/:userId', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.verify);
+router.get('/users', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.getUsers);
+router.post('/users', authenticateToken, requireRole('super_admin'), authCtrl.createUser);
+router.put('/users/:id', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.updateUser);
+router.delete('/users/:id', authenticateToken, requireRole('super_admin'), authCtrl.deleteUser);
+router.get('/users/:id', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.getUserById);
 
-// Get company workers (Authenticated users)
-router.get('/company/:companyId/workers', authCtrl.getCompanyWorkers);
+// Company Admin Management (Admin routes)
+router.get('/users/company-admins/:companyId', authenticateToken, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
+router.get('/users/company-admins', authenticateToken, requireRole('super_admin'), adminCtrl.getAllCompanyAdmins);
 
-// Delete worker from company
-router.delete('/company/:companyId/workers/:workerId', requireAuth, authCtrl.deleteWorkerFromCompany);
-
-// Get all company admins regardless of company (cached)
-router.get('/users/company-admins', adminCtrl.getAllCompanyAdmins);
-
-router.post('/users', requireAuth, authCtrl.createUser);
-
-router.put('/users/:id', requireAuth, authCtrl.updateUser);
-
-router.delete('/users/:id', requireAuth, authCtrl.deleteUser);
-
-router.get('/users/:id', requireAuth, authCtrl.getUserById);
+// Company Worker Management
+router.get('/company/:companyId/workers', authenticateToken, authCtrl.getCompanyWorkers);
+router.delete('/company/:companyId/workers/:workerId', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.deleteWorkerFromCompany);
 
 // Bulk Operations (Super Admin Only)
-router.post('/users/bulk', requireAuth, authCtrl.bulkUpdateUsers);
+router.post('/users/bulk', authenticateToken, requireRole('super_admin'), authCtrl.bulkUpdateUsers);
+router.post('/users/:id/unlock', authenticateToken, requireRole('super_admin'), authCtrl.unlockAccount);
 
-router.post('/users/:id/unlock', requireAuth, authCtrl.unlockAccount);
-
-// Compliance Management
-router.get('/consents/compliance', requireAuth, authCtrl.checkConsentCompliance);
+// Compliance Management (Admin routes)
+router.get('/consents/compliance', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.checkConsentCompliance);
 
 module.exports = router;

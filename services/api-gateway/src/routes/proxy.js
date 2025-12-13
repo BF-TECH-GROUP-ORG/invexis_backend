@@ -1,6 +1,7 @@
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const services = require("../../config/services");
-const { authenticateToken } = require("../middleware/authMiddleware");
+// Import shared production auth middleware
+const { authenticateToken } = require("/app/shared/middlewares/auth/production-auth");
 const { authLimiter } = require("../utils/rateLimiter");
 const { Router } = require("express");
 const routes = Router();
@@ -18,11 +19,16 @@ const createServiceProxy = (serviceName, serviceUrl, options = {}) => {
         `🔀 [${serviceName}] ${req.method} ${req.originalUrl} → ${serviceUrl}${req.url}`
       );
 
+      // Add gateway identification header for service trust
+      proxyReq.setHeader("X-Gateway-Request", "true");
+      proxyReq.setHeader("X-Gateway-Service", serviceName);
+      
       // Forward user info from auth middleware if available
       if (req.user) {
         proxyReq.setHeader("X-User-Id", req.user.id);
         proxyReq.setHeader("X-User-Email", req.user.email);
         proxyReq.setHeader("X-User-Role", req.user.role);
+        proxyReq.setHeader("X-Company-Id", req.user.companyId || "");
       }
 
       // Handle body for POST/PUT/PATCH
@@ -53,7 +59,7 @@ const createServiceProxy = (serviceName, serviceUrl, options = {}) => {
       }
     },
     onError: (err, req, res) => {
-      console.error(`❌ [${serviceName}] Proxy error:`, err.message);
+      console.error(`[${serviceName}] Proxy error:`, err.message);
       res.status(502).json({
         error: `${serviceName} unavailable`,
         message: err.message,
