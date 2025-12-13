@@ -12,6 +12,7 @@ const {
   getLevel3CategoriesByCompanyPaginated,
   getCategoriesByIds,
   getCategoryPath,
+  getLevel3CategoryWithParent,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -27,6 +28,8 @@ router.get('/level/2', getLevel2Categories);
 router.get('/level/3', getLevel3Categories);
 // Route to fetch level-3 categories scoped to a company
 router.get('/company/:companyId/level3', getLevel3CategoriesByCompanyPaginated);
+// Route to fetch Level 3 category with parent Level 2 hierarchy
+router.get('/level3/:categoryId/with-parent', getLevel3CategoryWithParent);
 
 // Route to fetch multiple categories by ids (POST body: { ids: [...] })
 router.post('/by-ids', getCategoriesByIds);

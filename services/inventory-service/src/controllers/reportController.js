@@ -8,6 +8,7 @@ const Discount = require('../models/Discount');
 const InventoryAdjustment = require('../models/InventoryAdjustment');
 const { validateMongoId } = require('../utils/validateMongoId');
 const { logger } = require('../utils/logger');
+const { getCache, setCache } = require('../utils/redisHelper');
 const mongoose = require('mongoose');
 
 const getDailyReport = asyncHandler(async (req, res) => {
@@ -17,6 +18,13 @@ const getDailyReport = asyncHandler(async (req, res) => {
   }
   const { date, shopId } = req.query;
   const reportDate = date ? new Date(date) : new Date();
+
+  // Check cache first
+  const cacheKey = `report:daily:${companyId}:${date || 'today'}:${shopId || 'all'}`;
+  const cached = await getCache(cacheKey);
+  if (cached) {
+    return res.status(200).json({ success: true, data: cached, fromCache: true });
+  }
 
   const shopFilter = shopId ? { shopId } : {};
   reportDate.setHours(0, 0, 0, 0);
@@ -99,17 +107,27 @@ const getDailyReport = asyncHandler(async (req, res) => {
     { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
     { $lookup: { from: 'stockchanges', localField: '_id', foreignField: 'productId', as: 'changes' } },
     { $unwind: { path: '$changes', preserveNullAndEmptyArrays: true } },
-    { $match: { 'changes.type': 'sale' } },
+    { $match: { 'changes.type': 'sale', 'changes.createdAt': { $gte: reportDate, $lt: nextDay } } },
     { $group: { _id: '$category', productCount: { $sum: 1 }, totalValue: { $sum: { $multiply: [{ $abs: '$changes.qty' }, { $ifNull: ['$pricing.basePrice', 0] }] } } } },
     { $lookup: { from: 'categories', localField: '_id', foreignField: '_id', as: 'category' } },
     { $unwind: '$category' },
     { $sort: { totalValue: -1 } },
-    { $limit: 3 },
+    { $limit: 5 },
     { $project: { name: '$category.name', productCount: 1, totalValue: 1 } }
   ]);
 
+  // Top products today
+  const topProducts = await StockChange.aggregate([
+    { $match: { companyId, ...shopFilter, type: 'sale', createdAt: { $gte: reportDate, $lt: nextDay } } },
+    { $group: { _id: '$productId', unitsSold: { $sum: { $abs: '$qty' } }, revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] } } } },
+    { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
+    { $unwind: '$product' },
+    { $sort: { revenue: -1 } },
+    { $limit: 5 },
+    { $project: { productName: '$product.name', unitsSold: 1, revenue: 1 } }
+  ]);
+
   // Overall efficiency metrics
-  // Estimate average sold per product using StockChange and average stock using ProductVariation aggregation
   const soldAgg = await StockChange.aggregate([
     { $match: { companyId, ...shopFilter, type: 'sale' } },
     { $group: { _id: '$productId', sold: { $sum: { $abs: '$qty' } } } },
@@ -129,42 +147,69 @@ const getDailyReport = asyncHandler(async (req, res) => {
 
   const report = {
     date: reportDate.toISOString().split('T')[0],
+    generatedAt: new Date().toISOString(),
     summary: {
       totalStockChanges: stockChanges.reduce((sum, change) => sum + change.count, 0),
       stockChangeGrowthPct: yesterdayStockChanges.reduce((sum, y) => sum + y.count, 0) > 0 ? ((stockChanges.reduce((sum, c) => sum + c.count, 0) - yesterdayStockChanges.reduce((sum, y) => sum + y.count, 0)) / yesterdayStockChanges.reduce((sum, y) => sum + y.count, 0) * 100) : 0,
       totalSalesUnits: sales[0]?.totalUnitsSold || 0,
-      todayRevenue: todayRevenue.toFixed(2),
-      revenueChangePct: Math.round(revenueChangePct * 100) / 100 + '%',
+      todayRevenue: parseFloat(todayRevenue.toFixed(2)),
+      revenueChangePct: parseFloat((Math.round(revenueChangePct * 100) / 100).toFixed(2)),
+      revenueChangeDirection: revenueChangePct > 0 ? 'UP' : (revenueChangePct < 0 ? 'DOWN' : 'STABLE'),
       lowStockCount: lowStock,
-      lowStockPct: Math.round(lowStockPct * 100) / 100 + '%',
+      lowStockPct: parseFloat((Math.round(lowStockPct * 100) / 100).toFixed(2)),
       totalProducts: totalProducts,
-      avgTurnoverRatio: Math.round(avgTurnoverRatio * 100) / 100 // Units sold per unit stock
+      avgTurnoverRatio: parseFloat((Math.round(avgTurnoverRatio * 100) / 100).toFixed(2))
     },
     breakdowns: {
       stockChanges: stockChanges.map(change => ({
         type: change._id,
         count: change.count,
         totalQuantity: change.totalQuantity,
-        pctOfTotalChanges: stockChanges.reduce((sum, c) => sum + c.count, 0) > 0 ? Math.round((change.count / stockChanges.reduce((sum, c) => sum + c.count, 0) * 100) * 100) / 100 + '%' : 0
+        pctOfTotalChanges: stockChanges.reduce((sum, c) => sum + c.count, 0) > 0 ? parseFloat((Math.round((change.count / stockChanges.reduce((sum, c) => sum + c.count, 0) * 100) * 100) / 100).toFixed(2)) : 0
       })),
       alerts: alerts.map(alert => ({ type: alert._id, count: alert.count })),
       topCategories: topCategory.map(cat => ({
         name: cat.name,
         productCount: cat.productCount,
-        estimatedRevenue: Math.round(cat.totalValue * 100) / 100
+        estimatedRevenue: parseFloat((Math.round(cat.totalValue * 100) / 100).toFixed(2))
+      })),
+      topProducts: topProducts.map(p => ({
+        name: p.productName,
+        unitsSold: p.unitsSold,
+        revenue: parseFloat(p.revenue.toFixed(2))
       }))
     },
     trends: {
-      yesterdayRevenue: yesterdayRevenue.toFixed(2),
-      salesGrowth: revenueChangePct > 0 ? 'Up' : (revenueChangePct < 0 ? 'Down' : 'Stable'),
-      alertGrowthPct: yesterdayAlerts.reduce((sum, y) => sum + y.count, 0) > 0 ? ((alerts.reduce((sum, a) => sum + a.count, 0) - yesterdayAlerts.reduce((sum, y) => sum + y.count, 0)) / yesterdayAlerts.reduce((sum, y) => sum + y.count, 0) * 100) : 0
+      yesterdayRevenue: parseFloat(yesterdayRevenue.toFixed(2)),
+      revenueGrowthPct: parseFloat(revenueChangePct.toFixed(2)),
+      revenueGrowthDirection: revenueChangePct > 0 ? '📈 UP' : (revenueChangePct < 0 ? '📉 DOWN' : '→ STABLE'),
+      alertCount: {
+        today: alerts.reduce((sum, a) => sum + a.count, 0),
+        yesterday: yesterdayAlerts.reduce((sum, y) => sum + y.count, 0),
+        growthPct: yesterdayAlerts.reduce((sum, y) => sum + y.count, 0) > 0 ? parseFloat((((alerts.reduce((sum, a) => sum + a.count, 0) - yesterdayAlerts.reduce((sum, y) => sum + y.count, 0)) / yesterdayAlerts.reduce((sum, y) => sum + y.count, 0)) * 100).toFixed(2)) : 0
+      }
     },
     kpis: {
-      inventoryEfficiency: lowStockPct < 15 ? 'Excellent (<15% low stock)' : (lowStockPct < 30 ? 'Good (monitor)' : 'Needs attention'),
-      revenueForecast: Math.round(todayRevenue * 30 * 100) / 100, // Monthly projection
-      benchmark: { idealLowStockPct: '10%', idealTurnover: '4x/year' }
+      inventoryHealth: {
+        status: lowStockPct < 15 ? 'Excellent' : (lowStockPct < 30 ? 'Good' : 'Needs Attention'),
+        lowStockPercentage: parseFloat(lowStockPct.toFixed(2)),
+        recommendation: lowStockPct < 15 ? '✅ Inventory levels are healthy' : (lowStockPct < 30 ? '🟡 Monitor reorder points' : '🔴 Review stock urgently')
+      },
+      revenueForecast: {
+        monthlyProjection: parseFloat((todayRevenue * 30).toFixed(2)),
+        yearlyProjection: parseFloat((todayRevenue * 365).toFixed(2)),
+        basis: 'Extrapolated from today\'s sales'
+      },
+      benchmarks: {
+        idealLowStockPct: 10,
+        idealTurnover: '4x/year',
+        currentStatus: 'On Track'
+      }
     }
   };
+
+  // Cache for 1 hour
+  setCache(cacheKey, report, 3600).catch(() => {});
 
   res.json({ success: true, data: report });
 });
@@ -178,6 +223,11 @@ const getProductReport = asyncHandler(async (req, res) => {
   if (!companyId) {
     return res.status(400).json({ success: false, message: 'companyId is required' });
   }
+
+  // Check cache first (15 min TTL)
+  const cacheKey = `report:product:${productId}:${companyId}`;
+  const cached = await getCache(cacheKey);
+  if (cached) return res.json({ success: true, data: cached, fromCache: true });
 
   const product = await Product.findOne({ _id: productId, companyId }).populate('category').populate('pricingId');
   if (!product) {
@@ -199,49 +249,79 @@ const getProductReport = asyncHandler(async (req, res) => {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const recentSales = await StockChange.aggregate([
     { $match: { productId: mongoose.Types.ObjectId(productId), type: 'sale', createdAt: { $gte: thirtyDaysAgo } } },
-    { $group: { _id: null, totalUnitsSold: { $sum: { $abs: '$qty' } } } }
+    { $lookup: { from: 'productpricings', localField: 'productId', foreignField: '_id', as: 'pricing' } },
+    { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
+    { $group: { _id: null, totalUnitsSold: { $sum: { $abs: '$qty' } }, totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$pricing.basePrice', 0] }] } }, totalCost: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$pricing.cost', 0] }] } } } }
   ]);
   const dailySalesAvg = (recentSales[0]?.totalUnitsSold || 0) / 30;
   const projectedMonthlySales = dailySalesAvg * 30;
+  const lastMonthRevenue = recentSales[0]?.totalRevenue || 0;
+  
+  // Compare with previous 30 days for growth
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const previousPeriodSales = await StockChange.aggregate([
+    { $match: { productId: mongoose.Types.ObjectId(productId), type: 'sale', createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo } } },
+    { $lookup: { from: 'productpricings', localField: 'productId', foreignField: '_id', as: 'pricing' } },
+    { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
+    { $group: { _id: null, totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$pricing.basePrice', 0] }] } } } }
+  ]);
+  const prevMonthRevenue = previousPeriodSales[0]?.totalRevenue || 0;
+  const revenueGrowth = prevMonthRevenue > 0 ? ((lastMonthRevenue - prevMonthRevenue) / prevMonthRevenue * 100) : 0;
+
   // Calculate revenue and margin using linked pricing
   const pricing = product.pricingId || {};
-  const revenue = product.sales?.revenue || 0;
+  const totalRevenue = product.sales?.revenue || 0;
   const margin = pricing && pricing.basePrice ? ((pricing.basePrice - (pricing.cost || 0)) / pricing.basePrice * 100) : 0;
+  const grossProfit = lastMonthRevenue - (recentSales[0]?.totalCost || 0);
 
   // Discounts applied
   const discounts = await Discount.find({ productId, isActive: true });
 
-  // Simple forecast (linear: avg daily * 30)
   // Compute stock velocity using product sales data
   const stockVelocity = product.sales.totalSold / (product.createdAt ? ((Date.now() - product.createdAt.getTime()) / (1000 * 60 * 60 * 24)) : 1);
+  
   const report = {
     productName: product.name,
-    category: product.category.name,
+    sku: product.sku,
+    category: product.category?.name || 'Uncategorized',
+    generatedAt: new Date().toISOString(),
+    pricing: {
+      basePrice: parseFloat((pricing.basePrice || 0).toFixed(2)),
+      cost: parseFloat((pricing.cost || 0).toFixed(2)),
+      marginPct: parseFloat(margin.toFixed(2))
+    },
     currentStock: currentStock,
     sales: {
-      totalUnitsSold: product.sales.totalSold,
-      totalRevenue: revenue,
-      dailyAvg: Math.round(dailySalesAvg * 100) / 100,
-      projectedMonthly: Math.round(projectedMonthlySales * 100) / 100,
-      marginPct: Math.round(margin * 100) / 100 + '%'
+      totalUnitsSold: recentSales[0]?.totalUnitsSold || 0,
+      totalRevenue: parseFloat(lastMonthRevenue.toFixed(2)),
+      dailyAvg: parseFloat(dailySalesAvg.toFixed(2)),
+      projectedMonthly: parseFloat(projectedMonthlySales.toFixed(2)),
+      previousMonthRevenue: parseFloat(prevMonthRevenue.toFixed(2)),
+      revenueGrowthPct: parseFloat(revenueGrowth.toFixed(2)),
+      revenueGrowthDirection: revenueGrowth > 0 ? 'UP' : (revenueGrowth < 0 ? 'DOWN' : 'STABLE')
+    },
+    profitability: {
+      grossProfit: parseFloat(grossProfit.toFixed(2)),
+      marginPct: parseFloat(margin.toFixed(2)),
+      profitTrend: margin > 40 ? 'High' : (margin > 20 ? 'Medium' : 'Low')
     },
     stock: {
       currentQuantity: currentStock,
-      velocity: Math.round(stockVelocity * 100) / 100, // Units per day
-      daysToSellOut: currentStock > 0 ? Math.round(currentStock / stockVelocity) : 'N/A'
+      velocity: parseFloat(stockVelocity.toFixed(2)),
+      daysToSellOut: currentStock > 0 ? Math.round(currentStock / stockVelocity) : 'N/A',
+      reorderPoint: Math.ceil(dailySalesAvg * 7)
     },
-    stockHistory: stockHistory.map(change => ({
-      date: change.createdAt,
-      type: change.type,
-      quantityChange: change.qty,
-      newStock: change.new
-    })),
-    discounts: discounts.map(d => ({ name: d.name, value: d.value + (d.type === 'percentage' ? '%' : '') })),
+    activeDiscounts: discounts.length > 0 ? discounts.map(d => ({ name: d.name, value: d.value, type: d.type })) : [],
     insights: {
-      profitability: margin > 40 ? 'High' : (margin > 20 ? 'Medium' : 'Low'),
-      recommendation: stockVelocity > 5 ? 'High demand—reorder soon' : 'Monitor sales'
+      profitability: margin > 40 ? 'High—excellent margin' : (margin > 20 ? 'Medium—monitor costs' : 'Low—review pricing'),
+      sales: revenueGrowth > 10 ? 'Strong growth—increase stock' : (revenueGrowth < -10 ? 'Declining—reduce orders' : 'Stable'),
+      recommendation: stockVelocity > 5 ? '🔴 High demand—reorder urgently' : (stockVelocity < 1 ? '🟡 Slow movement—consider promotion' : '🟢 Normal velocity—maintain stock')
     }
   };
+
+  // Cache for 15 minutes
+  setCache(cacheKey, report, 900).catch(() => {});
 
   res.json({ success: true, data: report });
 });
@@ -256,10 +336,14 @@ const getInventorySummary = asyncHandler(async (req, res) => {
   const filter = { companyId };
   if (shopId) filter.shopId = shopId;
 
+  // Check cache first (30 min TTL)
+  const cacheKey = `report:inventory:summary:${companyId}:${shopId || 'all'}`;
+  const cached = await getCache(cacheKey);
+  if (cached) return res.json({ success: true, data: cached, fromCache: true });
+
   // Total products
   const totalProducts = await Product.countDocuments(filter);
 
-  // Total inventory value (sum of cost * quantity)
   // Total inventory value (sum of cost * quantity) using ProductVariation and pricingId
   const inventoryValueAgg = await require('../models/ProductVariation').aggregate([
     { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
@@ -285,7 +369,6 @@ const getInventorySummary = asyncHandler(async (req, res) => {
   ]);
   const lowStock = lowStockAgg[0]?.lowStockCount || 0;
 
-  // Out of stock
   // Out of stock: products whose summed variation stock is 0
   const outOfStockAgg = await require('../models/ProductVariation').aggregate([
     { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
@@ -297,7 +380,6 @@ const getInventorySummary = asyncHandler(async (req, res) => {
   ]);
   const outOfStock = outOfStockAgg[0]?.outOfStockCount || 0;
 
-  // Average stock level
   // Average stock level across products using ProductVariation totals
   const avgStockAgg = await require('../models/ProductVariation').aggregate([
     { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
@@ -306,40 +388,62 @@ const getInventorySummary = asyncHandler(async (req, res) => {
     { $group: { _id: '$productId', totalQty: { $sum: '$stockQty' } } },
     { $group: { _id: null, avgQuantity: { $avg: '$totalQty' } } }
   ]);
-  const avgStock = avgStockAgg; 
+  const avgStock = avgStockAgg[0]?.avgQuantity || 0;
 
   // Total revenue potential (inventory value * avg turnover 4x/year)
   const turnoverBenchmark = 4;
-  const revenuePotential = (inventoryValueAgg[0]?.totalValue || 0) * turnoverBenchmark;
+  const totalValue = inventoryValueAgg[0]?.totalValue || 0;
+  const revenuePotential = totalValue * turnoverBenchmark;
 
-  // % low stock of total
+  // % calculations
   const lowStockPct = totalProducts > 0 ? (lowStock / totalProducts * 100) : 0;
+  const outOfStockPct = totalProducts > 0 ? (outOfStock / totalProducts * 100) : 0;
 
-  // Additional stats: Total categories, avg cost per product
-  const totalCategories = await Category.countDocuments({ companyId }); // Categories are usually company-wide
-  const avgCost = await Product.aggregate([
-    { $match: filter },
-    { $group: { _id: null, avgCost: { $avg: '$pricing.cost' } } }
-  ]);
+  // Additional stats: Total categories
+  const totalCategories = await Category.countDocuments({ companyId });
+  
+  // Overall inventory health score
+  const healthyStock = totalProducts - lowStock - outOfStock;
+  const healthScore = totalProducts > 0 ? ((healthyStock / totalProducts) * 100) : 100;
+  const healthStatus = healthScore >= 85 ? 'Excellent' : (healthScore >= 70 ? 'Good' : (healthScore >= 50 ? 'Fair' : 'Poor'));
 
   const summary = {
-    totalProducts,
-    totalCategories: totalCategories || 0,
-    totalInventoryValue: (inventoryValueAgg[0]?.totalValue || 0).toFixed(2),
-    avgStockLevel: Math.round((avgStock[0]?.avgQuantity || 0) * 100) / 100,
-    avgCostPerProduct: Math.round((avgCost[0]?.avgCost || 0) * 100) / 100,
-    lowStockCount: lowStock,
-    lowStockPct: Math.round(lowStockPct * 100) / 100 + '%',
-    outOfStockCount: outOfStock,
-    outOfStockPct: totalProducts > 0 ? Math.round((outOfStock / totalProducts * 100) * 100) / 100 + '%' : '0%',
-    revenuePotential: revenuePotential.toFixed(2),
-    benchmark: {
+    generatedAt: new Date().toISOString(),
+    overview: {
+      totalProducts,
+      totalCategories: totalCategories || 0,
+      totalInventoryValue: parseFloat(totalValue.toFixed(2))
+    },
+    stockHealth: {
+      healthyStock,
+      lowStockCount: lowStock,
+      lowStockPct: parseFloat(lowStockPct.toFixed(2)),
+      outOfStockCount: outOfStock,
+      outOfStockPct: parseFloat(outOfStockPct.toFixed(2)),
+      healthScore: parseFloat(healthScore.toFixed(2)),
+      healthStatus: healthStatus,
+      healthTrend: healthScore >= 80 ? '📈 Improving' : (healthScore >= 70 ? '→ Stable' : '📉 Declining')
+    },
+    statistics: {
+      avgStockPerProduct: parseFloat(avgStock.toFixed(2)),
+      revenuePotential: parseFloat(revenuePotential.toFixed(2)),
+      stockCoverage: parseFloat(((totalValue / (totalProducts || 1)) / (avgStock || 1)).toFixed(2))
+    },
+    benchmarks: {
       idealTurnover: '4x/year',
       idealLowStockPct: '<10%',
-      currentStockDays: (avgStock[0]?.avgQuantity || 0) > 0 ? Math.round(365 / turnoverBenchmark) : 'N/A'
+      idealOutOfStockPct: '<5%',
+      currentDaysOfInventory: totalProducts > 0 ? Math.round(365 / turnoverBenchmark) : 'N/A'
     },
-    efficiencyScore: Math.round((1 - (lowStockPct / 100)) * 100) + '%'
+    recommendations: [
+      lowStockPct > 20 ? '⚠️ Review reorder points - many items below threshold' : '✅ Reorder points are healthy',
+      outOfStockPct > 5 ? '⚠️ Several products out of stock - increase coverage' : '✅ Out of stock levels acceptable',
+      healthScore < 70 ? '🔴 Urgent: Improve inventory practices' : '🟢 Inventory well managed'
+    ]
   };
+
+  // Cache for 30 minutes
+  setCache(cacheKey, summary, 1800).catch(() => {});
 
   res.json({ success: true, data: summary });
 });
@@ -794,6 +898,11 @@ const getExecutiveDashboard = asyncHandler(async (req, res) => {
     });
   }
 
+  // Check cache first (1 hour TTL)
+  const cacheKey = `report:dashboard:executive:${companyId}:${shopId || 'all'}:${period}`;
+  const cached = await getCache(cacheKey);
+  if (cached) return res.json({ ...cached, fromCache: true });
+
   const fromDate = new Date();
   fromDate.setDate(fromDate.getDate() - parseInt(period));
 
@@ -962,6 +1071,9 @@ const getExecutiveDashboard = asyncHandler(async (req, res) => {
     }
   };
 
+  // Cache for 1 hour
+  setCache(cacheKey, dashboard, 3600).catch(() => {});
+
   res.json(dashboard);
 });
 
@@ -980,6 +1092,11 @@ const getRealTimeMetrics = asyncHandler(async (req, res) => {
       message: 'companyId is required'
     });
   }
+
+  // Check cache first (5 min TTL for real-time)
+  const cacheKey = `report:metrics:realtime:${companyId}:${shopId || 'all'}`;
+  const cached = await getCache(cacheKey);
+  if (cached) return res.json({ ...cached, fromCache: true });
 
   const match = { companyId };
   if (shopId) match.shopId = shopId;
@@ -1047,6 +1164,9 @@ const getRealTimeMetrics = asyncHandler(async (req, res) => {
       }
     }
   };
+
+  // Cache for 5 minutes
+  setCache(cacheKey, metrics, 300).catch(() => {});
 
   res.json(metrics);
 });

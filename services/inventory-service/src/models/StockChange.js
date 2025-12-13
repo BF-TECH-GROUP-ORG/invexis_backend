@@ -162,4 +162,84 @@ StockChangeSchema.statics.getWorkerSales = async function({ shopId, userId, star
   ]);
 };
 
+// ========== POST-SAVE: AUTO-CALCULATE VELOCITY & FORECAST ==========
+StockChangeSchema.post('save', async function(doc) {
+  try {
+    // Only calculate for sales/returns (outflow movements)
+    if (!['sale', 'return', 'adjustment', 'damage'].includes(doc.type)) return;
+
+    const ProductStock = mongoose.model('ProductStock');
+    
+    // Get stock record
+    const stockRecord = await ProductStock.findOne({
+      productId: doc.productId,
+      variationId: doc.variationId || null
+    });
+    
+    if (!stockRecord) return;
+
+    // Calculate average daily sales (last 30 days)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const salesLast30Days = await this.collection.aggregate([
+      {
+        $match: {
+          productId: doc.productId,
+          variationId: doc.variationId || null,
+          type: { $in: ['sale', 'return'] },
+          createdAt: { $gte: thirtyDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalQty: { $sum: { $abs: '$qty' } },
+          daysSpanned: { $max: { $subtract: [new Date(), '$createdAt'] } }
+        }
+      }
+    ]).toArray();
+
+    if (salesLast30Days[0]) {
+      const totalQty = Math.abs(salesLast30Days[0].totalQty || 0);
+      const avgDaily = totalQty > 0 ? (totalQty / 30).toFixed(2) : 0;
+      
+      // Get current stock
+      const ProductVariation = mongoose.model('ProductVariation');
+      let currentQty = 0;
+      if (doc.variationId) {
+        const v = await ProductVariation.findById(doc.variationId).select('stockQty').lean();
+        currentQty = v?.stockQty || 0;
+      } else {
+        const agg = await ProductVariation.aggregate([
+          { $match: { productId: doc.productId } },
+          { $group: { _id: null, total: { $sum: '$stockQty' } } }
+        ]);
+        currentQty = agg[0]?.total || 0;
+      }
+
+      // Calculate stockout risk
+      const daysUntilStockout = avgDaily > 0 ? Math.ceil((currentQty - stockRecord.safetyStock) / avgDaily) : 999;
+      const suggestedQty = (stockRecord.minReorderQty || 20) * 3; // Suggest 3x min reorder qty
+
+      // Update ProductStock with velocity metrics
+      await ProductStock.updateOne(
+        { _id: stockRecord._id },
+        {
+          $set: {
+            avgDailySales: parseFloat(avgDaily),
+            stockoutRiskDays: Math.max(0, daysUntilStockout),
+            suggestedReorderQty: suggestedQty,
+            lastForecastUpdate: new Date(),
+            totalUnitsSold: (stockRecord.totalUnitsSold || 0) + Math.abs(doc.qty),
+            totalRevenue: (stockRecord.totalRevenue || 0) + (Math.abs(doc.qty) * (doc.meta?.unitPrice || 0))
+          }
+        }
+      );
+    }
+  } catch (err) {
+    // Log but don't fail the save
+    const logger = require('../utils/logger');
+    logger.warn('StockChange post-save velocity calc failed:', err.message);
+  }
+});
+
 module.exports = mongoose.model('StockChange', StockChangeSchema);

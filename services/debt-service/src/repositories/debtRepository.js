@@ -31,9 +31,12 @@ async function updateDebt(debtDoc) {
 
 async function listDebts(filter, options = {}) {
     const { skip = 0, limit = 50, sort = { createdAt: -1 }, lean = true } = options;
-    let query = Debt.find(filter).sort(sort).skip(skip).limit(limit);
+    let query = Debt.find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit);
     if (lean) query = query.lean();
-    return query;
+    return query.exec();
 }
 
 async function countDebts(filter) {

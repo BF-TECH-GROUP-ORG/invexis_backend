@@ -766,6 +766,108 @@ const seedCategories = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, summary, debug: { parentsCount: parentsData.length, subsCount: subsData.length, parentSample, subSample } });
 });
 
+/**
+ * @desc    Get Level 3 category with parent Level 2 category hierarchy
+ * @route   GET /api/v1/categories/level3/:categoryId
+ * @access  Public
+ */
+const getLevel3CategoryWithParent = asyncHandler(async (req, res) => {
+  const { categoryId } = req.params;
+  
+  // Validate input
+  validateMongoId(categoryId);
+  
+  // Get the Level 3 category
+  const level3Category = await Category.findById(categoryId);
+  
+  if (!level3Category) {
+    return res.status(404).json({
+      success: false,
+      message: 'Level 3 category not found'
+    });
+  }
+  
+  // Verify it's actually a Level 3 category
+  if (level3Category.level !== 3) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid category level. Expected level 3, got level ${level3Category.level}`
+    });
+  }
+  
+  // Get the parent Level 2 category
+  let level2Category = null;
+  let level1Category = null;
+  
+  if (level3Category.parentCategory) {
+    level2Category = await Category.findById(level3Category.parentCategory)
+      .select('_id name slug level description image sortOrder parentCategory');
+    
+    // Get the Level 2's parent (Level 1)
+    if (level2Category && level2Category.parentCategory) {
+      level1Category = await Category.findById(level2Category.parentCategory)
+        .select('_id name slug level description image sortOrder');
+    }
+  }
+  
+  // Get statistics for the Level 3 category (product count, etc.)
+  const productCount = await Product.countDocuments({
+    category: categoryId,
+    isDeleted: false
+  });
+  
+  // Format response with hierarchy
+  const response = {
+    success: true,
+    data: {
+      level3: {
+        _id: level3Category._id,
+        name: level3Category.name,
+        slug: level3Category.slug,
+        level: level3Category.level,
+        description: level3Category.description,
+        image: level3Category.image,
+        attributes: level3Category.attributes,
+        seo: level3Category.seo,
+        isActive: level3Category.isActive,
+        companyId: level3Category.companyId,
+        sortOrder: level3Category.sortOrder,
+        statistics: {
+          ...level3Category.statistics,
+          totalProducts: productCount
+        }
+      },
+      level2Parent: level2Category ? {
+        _id: level2Category._id,
+        name: level2Category.name,
+        slug: level2Category.slug,
+        level: level2Category.level,
+        description: level2Category.description,
+        image: level2Category.image,
+        sortOrder: level2Category.sortOrder
+      } : null,
+      level1GrandParent: level1Category ? {
+        _id: level1Category._id,
+        name: level1Category.name,
+        slug: level1Category.slug,
+        level: level1Category.level,
+        description: level1Category.description,
+        image: level1Category.image,
+        sortOrder: level1Category.sortOrder
+      } : null,
+      hierarchy: {
+        breadcrumb: [
+          level1Category && { id: level1Category._id, name: level1Category.name, slug: level1Category.slug },
+          level2Category && { id: level2Category._id, name: level2Category.name, slug: level2Category.slug },
+          { id: level3Category._id, name: level3Category.name, slug: level3Category.slug }
+        ].filter(Boolean)
+      }
+    }
+  };
+  
+  res.status(200).json(response);
+});
+
 module.exports = {
   getAllCategories,
   getCategoryById,
@@ -776,6 +878,7 @@ module.exports = {
   getLevel3CategoriesByCompany,
   getLevel3CategoriesByCompanyPaginated,
   getCategoryPath,
+  getLevel3CategoryWithParent,
   createCategory,
   updateCategory,
   deleteCategory,

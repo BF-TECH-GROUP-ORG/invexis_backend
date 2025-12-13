@@ -8,21 +8,14 @@ const redis = require('/app/shared/redis');
 const { scanDel } = require('../utils/redisHelper');
 const ProductVariation = require('../models/ProductVariation');
 const ProductStock = require('../models/ProductStock');
+const StockMonitoringService = require('../services/stockMonitoringService');
+const logger = require('../utils/logger');
 
-// ==================== STOCK OPERATIONS (Stock In/Out) ====================
-
-/**
- * Lookup product by scanned QR/Barcode data
- * POST /v1/stock-operations/lookup
- */
 const getProductByScan = asyncHandler(async (req, res) => {
     const { scanData, productId } = req.body;
 
-    if (!scanData) {
-        return res.status(400).json({
-            success: false,
-            message: 'Scan data is required'
-        });
+    if (!scanData && !productId) {
+        return res.status(400).json({ success: false, message: 'Scan data is required' });
     }
 
     // Allow direct productId input or scanData (sku / id)
@@ -184,6 +177,25 @@ const stockIn = asyncHandler(async (req, res) => {
     await scanDel('products:*');
     await publishProductEvent('inventory.product.updated', { productId: product._id, variationId: variation ? variation._id : null, previous, current: totalAfter });
 
+    // Trigger stock monitoring to check for low stock or backorder fulfillment
+    try {
+        StockMonitoringService.recordStockChange(product._id, 'received', Number(quantity), {
+            companyId: product.companyId,
+            shopId: shopId || product.shopId,
+            reference: 'stockIn',
+            reason: reason || 'Stock in operation',
+            performedBy: userId || 'system'
+        }).catch(err => logger.error('Failed to record stock change:', err));
+
+        // Check if this replenishment can fulfill any backorders
+        await StockMonitoringService.monitorBackorders(product.companyId, shopId || product.shopId).catch(err => 
+          logger.error('Backorder monitoring failed:', err)
+        );
+    } catch (error) {
+        logger.error('Stock monitoring error:', error.message);
+        // Don't fail the request if monitoring fails
+    }
+
     res.status(200).json({ success: true, message: 'Stock added successfully', data: { productId: product._id, productName: product.name, sku: variation ? variation.sku : product.sku, previousStock: previous, newStock: totalAfter, quantityAdded: Number(quantity), operation: 'stock-in' } });
 });
 
@@ -278,7 +290,8 @@ const stockOut = asyncHandler(async (req, res) => {
         if (totalAfter <= lowThresh) {
             lowStockAlert = true;
             const Alert = require('../models/Alert');
-            await Alert.create({ companyId: product.companyId, type: 'low_stock', productId: product._id, threshold: lowThresh, message: `Stock for product ${product.name} is low: ${totalAfter}` });
+            const scope = product.shopId ? 'shop' : 'company';
+            await Alert.createOrUpdate({ companyId: product.companyId, scope, shopId: product.shopId || null, type: 'low_stock', productId: product._id, threshold: lowThresh, message: `Stock for product ${product.name} is low: ${totalAfter}`, data: { currentStock: totalAfter } });
         }
     } catch (e) {
         logger.warn('Low stock alert check failed (stockOut):', e.message || e);
@@ -289,6 +302,27 @@ const stockOut = asyncHandler(async (req, res) => {
     await redis.del(`product:slug:${product.slug}`);
     await scanDel('products:*');
     await publishProductEvent('inventory.product.updated', { productId: product._id, variationId: variation ? variation._id : null, previous, current: totalAfter });
+
+    // Record stock change and trigger monitoring for low stock/out of stock
+    try {
+        const changeType_enum = changeType === 'sale' ? 'sale' : 'adjustment';
+        StockMonitoringService.recordStockChange(product._id, changeType_enum, Number(quantity), {
+            companyId: product.companyId,
+            shopId: shopId || product.shopId,
+            reference: 'stockOut',
+            reason: reason || `Stock out - ${changeType}`,
+            performedBy: userId || 'system',
+            unitPrice: stockSettings?.avgCost || 0
+        }).catch(err => logger.error('Failed to record stock change:', err));
+
+        // Trigger monitoring to check for low stock or out of stock alerts
+        await StockMonitoringService.monitorLowStock(product.companyId, shopId || product.shopId).catch(err => 
+          logger.error('Low stock monitoring failed:', err)
+        );
+    } catch (error) {
+        logger.error('Stock monitoring error:', error.message);
+        // Don't fail the request if monitoring fails
+    }
 
     res.status(200).json({ success: true, message: 'Stock removed successfully', data: { productId: product._id, productName: product.name, sku: variation ? variation.sku : product.sku, previousStock: previous, newStock: (updatedVariation?.stockQty ?? totalAfter), quantityRemoved: Number(quantity), operation: 'stock-out', stockStatus: totalAfter <= 0 ? 'out-of-stock' : (totalAfter <= (stockSettings?.lowStockThreshold ?? 5) ? 'low-stock' : 'in-stock'), lowStockAlert } });
 });
@@ -507,7 +541,8 @@ const bulkStockOut = asyncHandler(async (req, res) => {
                 if (totalAfter <= lowThresh) {
                     lowStockAlert = true;
                     const Alert = require('../models/Alert');
-                    await Alert.create({ companyId: product.companyId, type: 'low_stock', productId: product._id, threshold: lowThresh, message: `Stock for product ${product.name} is low: ${totalAfter}` });
+                    const scope = product.shopId ? 'shop' : 'company';
+                    await Alert.createOrUpdate({ companyId: product.companyId, scope, shopId: product.shopId || null, type: 'low_stock', productId: product._id, threshold: lowThresh, message: `Stock for product ${product.name} is low: ${totalAfter}`, data: { currentStock: totalAfter } });
                 }
             } catch (e) {}
 

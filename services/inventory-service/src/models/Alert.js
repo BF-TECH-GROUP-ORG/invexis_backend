@@ -119,6 +119,39 @@ alertSchema.pre('save', function (next) {
   next();
 });
 
+// ========== DEDUPLICATION: CreateOrUpdate to prevent alert spam ==========
+alertSchema.statics.createOrUpdate = async function(alertData) {
+  try {
+    const { companyId, type, productId, shopId } = alertData;
+    
+    // For stock alerts: check if unresolved alert exists within 4 hours
+    if (['low_stock', 'out_of_stock'].includes(type)) {
+      const existingAlert = await this.findOne({
+        companyId,
+        type,
+        productId: productId || null,
+        shopId: shopId || null,
+        isResolved: false,
+        createdAt: { $gte: new Date(Date.now() - 4 * 60 * 60 * 1000) } // Last 4 hours
+      });
+      
+      if (existingAlert) {
+        // Increment count and update data instead of creating new alert
+        existingAlert.data = existingAlert.data || {};
+        existingAlert.data.triggerCount = (existingAlert.data.triggerCount || 1) + 1;
+        existingAlert.data.lastTriggered = new Date();
+        existingAlert.message = alertData.message; // Update message with latest info
+        return await existingAlert.save();
+      }
+    }
+    
+    // No duplicate found, create new alert
+    return await this.create(alertData);
+  } catch (err) {
+    throw new Error(`Alert.createOrUpdate failed: ${err.message}`);
+  }
+};
+
 // Static method to get unresolved alerts, improved with limit and populate
 alertSchema.statics.getUnresolvedAlerts = async function (companyId, limit = 50) {
   return await this.find({ companyId, isResolved: false })

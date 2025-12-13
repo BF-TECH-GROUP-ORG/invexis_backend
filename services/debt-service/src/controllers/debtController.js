@@ -43,8 +43,13 @@ async function getDebt(req, res) {
         const companyId = req.params.companyId || req.headers['x-company-id'];
         const debtId = req.params.debtId;
         if (!companyId) return res.status(400).json({ error: 'companyId required' });
+        if (!debtId) return res.status(400).json({ error: 'debtId required' });
+        
         const debt = await debtService.getDebtWithRepayments({ companyId, debtId });
-        res.json({ debt });
+        res.json({ 
+            debt,
+            message: 'Debt retrieved successfully with payment history'
+        });
     } catch (err) {
         console.error(err);
         res.status(404).json({ error: err.message });

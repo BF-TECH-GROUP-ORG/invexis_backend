@@ -35,12 +35,13 @@ const RepaymentSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// Indexes (removed inline index: true)
-RepaymentSchema.index({ companyId: 1 });
-RepaymentSchema.index({ shopId: 1 });
-RepaymentSchema.index({ customerId: 1 });
-RepaymentSchema.index({ debtId: 1 });
-RepaymentSchema.index({ companyId: 1, shopId: 1 });
+// Composite indexes for optimal query performance
+RepaymentSchema.index({ companyId: 1, createdAt: -1 }, { background: true });
+RepaymentSchema.index({ shopId: 1, createdAt: -1 }, { background: true });
+RepaymentSchema.index({ customerId: 1, createdAt: -1 }, { background: true });
+RepaymentSchema.index({ debtId: 1, paidAt: -1 }, { background: true });
+RepaymentSchema.index({ companyId: 1, shopId: 1 }, { background: true });
+RepaymentSchema.index({ paidAt: -1 }, { background: true });
 
 
 module.exports = mongoose.model('Repayment', RepaymentSchema);

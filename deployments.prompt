@@ -1,0 +1,262 @@
+prompt  that will be used to make invexis production ready infrastructure
+
+┌──────────────────────────┐
+│        USERS             │
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│      TRAFFIC LAYER       │  ← Traefik / LB / HTTPS
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│   APPLICATION LAYER      │  ← Microservices
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│   PLATFORM LAYER         │  ← CI/CD, Observability
+└────────────▲─────────────┘
+             │
+┌────────────┴─────────────┐
+│   INFRASTRUCTURE LAYER   │  ← Docker / Nodes
+└──────────────────────────┘
+
+
+
+
+
+You are tasked with building a **full production-ready backend infrastructure** for the Invexis platform. The infrastructure must be **professional, clean, secure, fully automated, observable, and production-grade**, capable of supporting all existing microservices, databases, messaging systems, caching layers, and monitoring. The system must be **Docker-first**, prepared for future Kubernetes migration, and allow **zero-downtime deployments** via **Blue/Green deployment patterns**. You are building this for a serious production environment; all best practices must be followed.
+
+---
+
+### 1️⃣ GENERAL REQUIREMENTS
+
+1. All microservices must be **stateless** where possible.  
+2. All configuration must be via **environment variables** or **external secrets** (no hard-coded passwords, keys, or credentials).  
+3. Every service must expose:
+   - `/health` for health checks
+   - `/metrics` for Prometheus metrics  
+4. All services must be isolated via a **dedicated Docker network**.  
+5. Logging must be centralized using **ELK stack** (Elasticsearch + Logstash + Kibana).  
+6. Monitoring must be implemented using **Prometheus** for metrics and **Grafana** for dashboards.  
+7. Alerts must be sent to **Slack** for actionable items only (errors, failures, high latency, downtime).  
+8. Blue/Green deployment pattern must be used for all services, with **Traefik handling traffic switching**.  
+9. TLS/HTTPS must be enforced via **Traefik**.  
+10. Services must run as **non-root containers** with **read-only file systems** where possible.  
+11. Docker volumes must persist data for all databases and messaging systems.  
+12. Secrets must be managed securely, preferably through **Jenkins credentials**, environment variables, or external secret managers, ready for future Kubernetes migration.
+
+---
+
+### 2️⃣ INFRASTRUCTURE COMPONENTS
+
+#### Traffic Layer
+- **Traefik** as the reverse proxy with:
+  - Load balancing
+  - Blue/Green routing
+  - WebSocket support
+  - HTTPS/TLS termination
+  - Health-check routing
+  - Dynamic configuration via Docker labels
+
+#### Application Layer
+- Microservices (all Dockerized):
+  - `api-gateway`
+  - `auth-service`
+  - `company-service`
+  - `shop-service`
+  - `inventory-service`
+  - `sales-service`
+  - `ecommerce-service`
+  - `notification-service`
+  - `payment-service`
+  - `analytics-service`
+  - `audit-service`
+  - `debt-service`
+  - `websocket-service`
+
+#### Databases
+- PostgreSQL for `company-service`, `shop-service`, `payment-service`, `analytics-service`
+- MySQL for `sales-service`
+- MongoDB for all services that need document storage
+- Redis for caching and notification-service
+- RabbitMQ for messaging between services
+
+#### Platform / Observability
+- Prometheus: service metrics and node metrics
+- Grafana: dashboards for metrics visualization
+- ELK Stack (Elasticsearch, Logstash, Kibana): centralized logging
+- Slack: actionable alerts for production events
+
+#### CI/CD
+- **Jenkins** as the main automation tool:
+  - Build Docker images
+  - Run automated tests
+  - Deploy Blue/Green containers
+  - Switch traffic in Traefik automatically
+  - Notify Slack
+- Optional GitHub Actions integration for secondary CI pipelines
+
+---
+
+### 3️⃣ DEPLOYMENT AND BLUE/GREEN STRATEGY
+
+- Every microservice must have **Blue and Green versions**.  
+- Traefik routes users to active version only.  
+- Jenkins pipeline must:
+  1. Build new Docker image for `Green`
+  2. Deploy `Green` stack alongside `Blue`
+  3. Run health checks on `Green` containers
+  4. Switch Traefik traffic from `Blue` to `Green` automatically
+  5. Shut down `Blue` stack after confirmation of health
+  6. Tag Docker images with commit hashes for traceability
+  7. Notify Slack of deployment status
+
+---
+
+### 4️⃣ SECURITY BEST PRACTICES
+
+- HTTPS/TLS for all traffic
+- JWT validation at API gateway
+- Rate limiting on critical endpoints
+- Non-root containers
+- Secrets stored securely, never in code
+- Read-only file systems for containers where possible
+- Firewall rules to limit access to database ports
+- Environment-specific configs (`prod`, `staging`) clearly separated
+
+---
+
+### 5️⃣ INFRASTRUCTURE FILES TO GENERATE
+
+1. `docker-compose.prod.yml` with all services, blue/green support, volumes, health checks, networks, Traefik labels.  
+2. Traefik configuration files:
+   - `traefik.yml`
+   - Dynamic routing rules for Blue/Green deployment  
+3. Jenkins pipeline definition:
+   - Declarative pipeline handling build, tests, deployment, traffic switch, notifications  
+4. Prometheus config:
+   - Scrape all services `/metrics` endpoints
+5. Grafana dashboards:
+   - Preconfigured for service latency, error rate, CPU/memory usage  
+6. ELK stack setup:
+   - Logstash pipelines to collect logs from all services
+   - Kibana dashboards for analysis  
+7. Slack alert integration:
+   - Alerts on service failure, high latency, or deployment errors  
+8. Secret management:
+   - `.env.prod`
+   - Jenkins credentials ready for secrets injection  
+
+---
+
+### 6️⃣ FUTURE-PROOFING FOR KUBERNETES
+
+- All Docker services must have **environment-based configuration**  
+- Networks, volumes, and secrets designed in a way that allows **easy migration to K8s**  
+- Health checks (`/health`) and metrics (`/metrics`) already defined  
+- Blue/Green deployment strategy compatible with Kubernetes services  
+
+---
+
+### 7️⃣ ADDITIONAL PROFESSIONAL REQUIREMENTS
+
+- All services have **restart policies** for resilience  
+- Container logs must be routed to ELK  
+- Network isolation between services  
+- Docker volumes must persist DB and cache data  
+- Documentation for deployment, rollback, and troubleshooting  
+
+---
+
+### 8️⃣ FINAL OUTPUT EXPECTATION
+
+The agent must produce:
+- A **fully working, production-ready Docker infrastructure**  
+- All microservices **deployable with zero downtime**  
+- Complete **monitoring, logging, alerting, and security**  
+- Jenkins pipeline fully functional for **automated CI/CD**  
+- Clear **documentation** for developers and ops team  
+- Ready for future Kubernetes migration **without rewriting microservices**
+
+---
+
+### 9️⃣ SPECIAL INSTRUCTIONS
+
+- DO NOT skip **any service, monitoring, or alerting**.  
+- DO NOT leave **hard-coded secrets or passwords**.  
+- DO NOT deploy manually; everything must be **automated**.  
+- All traffic routing must be **controlled via Traefik labels**.  
+- Jenkins pipeline must be **declarative and traceable**.  
+- Consider **production reliability and observability** at all steps.  
+
+---
+
+**Task Summary:**  
+> Build the **entire Invexis production backend environment** with Docker, Traefik, Blue/Green deployment, Jenkins CI/CD, Prometheus/Grafana monitoring, ELK logging, Slack alerts, secrets management, full security hardening, and production-grade infrastructure, ready for immediate deployment and future Kubernetes migration.
+
+
+
+
+proposed folder structure 
+
+.
+├── services
+│   ├── analytics-service
+│   │   ├── src
+│   │   └── ... (existing)
+│   ├── auth-service
+│   │   ├── src
+│   │   └── ...
+│   ├── ... (all other services unchanged)
+│   └── websocket-service
+├── shared
+│   ├── cloudinary
+│   ├── middlewares
+│   └── ... (existing)
+├── deployments
+│   ├── docker
+│   │   └── docker-compose.prod.yml       # production docker compose (blue/green ready)
+│   ├── traefik
+│   │   ├── traefik.yml                   # static Traefik config
+│   │   └── dynamic_conf.yml              # blue/green routing and labels
+│   ├── prometheus
+│   │   ├── prometheus.yml                # scrape config for all services
+│   │   └── rules.yml                     # alerting rules
+│   ├── grafana
+│   │   ├── dashboards/                   # preconfigured dashboards JSON
+│   │   └── provisioning/
+│   │       └── dashboards.yml
+│   ├── elk
+│   │   ├── elasticsearch.yml
+│   │   ├── logstash/
+│   │   │   └── pipelines/
+│   │   │       └── services.conf
+│   │   └── kibana.yml
+│   ├── jenkins
+│   │   ├── Jenkinsfile                   # declarative CI/CD pipeline
+│   │   └── jobs/                         # optional job configs
+│   ├── secrets
+│   │   ├── envs/                          # encrypted or example .env files
+│   │   └── vault/                         # for future secret manager integration
+│   └── slack
+│       └── notifications.config.js        # Slack alerting config
+├── scripts
+│   ├── deploy_blue.sh                     # helper scripts for blue/green deployment
+│   ├── deploy_green.sh
+│   ├── backup_databases.sh
+│   └── healthcheck_all.sh                 # checks all services health
+├── monitoring
+│   ├── alerts/
+│   │   └── slack_alerts.yml
+│   ├── prometheus_rules.yml
+│   └── grafana_dashboards/
+├── ci
+│   └── jenkins/                            # optional if we split pipeline scripts
+├── docs
+│   ├── deployment_guide.md
+│   ├── rollback_guide.md
+│   ├── architecture_diagram.png
+│   └── troubleshooting.md
+├── docker-compose.yml                      # local/dev compose
+├── package.json                            # root, if needed for shared scripts
+└── README.md

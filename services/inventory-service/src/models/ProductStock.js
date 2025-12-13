@@ -16,9 +16,12 @@ const ProductStockSchema = new Schema({
     default: null,
     index: true
   },
-  // Current tracked quantity for this product (or variation when variationId set)
-  quantity: { type: Number, default: 0, min: 0 },
   
+  stockQty: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
   // Core tracking settings
   trackQuantity:     { type: Boolean, default: true },
   allowBackorder:    { type: Boolean, default: false },
@@ -26,7 +29,21 @@ const ProductStockSchema = new Schema({
   minReorderQty:     { type: Number, default: 20, min: 1 },
 
   // Safety stock (for advanced forecasting)
-  safetyStock:       { type: Number, default: 0, min: 0 }
+  safetyStock:       { type: Number, default: 0, min: 0 },
+
+  // ========== FORECASTING FIELDS ==========
+  avgDailySales:     { type: Number, default: 0, min: 0 },           // Last 30 days rolling average
+  stockoutRiskDays:  { type: Number, default: 0, min: 0 },           // Projected days until stockout
+  suggestedReorderQty: { type: Number, default: 0, min: 0 },         // Auto-calculated reorder qty
+  lastRestockDate:   { type: Date, default: null },                  // Last time stock was added
+  supplierLeadDays:  { type: Number, default: 7, min: 1 },           // Supplier lead time
+  lastForecastUpdate: { type: Date, default: null },                 // When forecast was last calculated
+
+  // ========== ANALYTICS TRACKING ==========
+  totalUnitsSold:    { type: Number, default: 0, min: 0 },           // Lifetime units sold
+  totalRevenue:      { type: Number, default: 0, min: 0 },           // Lifetime revenue from this SKU
+  avgCost:           { type: Number, default: 0, min: 0 },           // COGS per unit (average)
+  profitMarginPercent: { type: Number, default: 0, min: 0, max: 100 } // Avg profit margin %
 }, {
   timestamps: true,
   toJSON: { virtuals: true }
@@ -54,6 +71,54 @@ ProductStockSchema.virtual('currentStock').get(async function() {
     { $group: { _id: null, total: { $sum: '$stockQty' } } }
   ]);
   return total[0]?.total || 0;
+});
+
+/* -------------------------------------------------------------------------- */
+/*              VIRTUAL: AVAILABLE QUANTITY (currentStock - safety)             */
+/* -------------------------------------------------------------------------- */
+ProductStockSchema.virtual('availableQty').get(async function() {
+  const current = await this.currentStock;
+  return Math.max(0, current - this.safetyStock);
+});
+
+/* -------------------------------------------------------------------------- */
+/*           VIRTUAL: DAYS OF INVENTORY REMAINING (forecast)                   */
+/* -------------------------------------------------------------------------- */
+ProductStockSchema.virtual('daysOfInventory').get(async function() {
+  if (this.avgDailySales <= 0) return null; // Can't forecast if no sales
+  const available = await this.availableQty;
+  return Math.ceil(available / this.avgDailySales);
+});
+
+/* -------------------------------------------------------------------------- */
+/*          PRE-SAVE: VALIDATE FORECASTING FIELDS & CALCULATE RISK              */
+/* -------------------------------------------------------------------------- */
+ProductStockSchema.pre('save', function(next) {
+  // Validate consistency
+  if (this.minReorderQty < 1) {
+    return next(new Error('minReorderQty must be at least 1'));
+  }
+  if (this.lowStockThreshold < 0) {
+    return next(new Error('lowStockThreshold cannot be negative'));
+  }
+  if (this.supplierLeadDays < 1) {
+    return next(new Error('supplierLeadDays must be at least 1'));
+  }
+
+  // Auto-calculate suggestedReorderQty if avgDailySales is set
+  if (this.avgDailySales > 0 && this.supplierLeadDays > 0) {
+    const demandDuringLead = this.avgDailySales * this.supplierLeadDays;
+    this.suggestedReorderQty = Math.ceil(demandDuringLead + this.safetyStock);
+  }
+
+  // Calculate stockoutRiskDays
+  if (this.avgDailySales > 0) {
+    const current = this.currentStock || 0;
+    const available = Math.max(0, current - this.safetyStock);
+    this.stockoutRiskDays = available > 0 ? Math.ceil(available / this.avgDailySales) : 0;
+  }
+
+  next();
 });
 
 /* -------------------------------------------------------------------------- */
