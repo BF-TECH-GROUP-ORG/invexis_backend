@@ -11,6 +11,7 @@ const analyticsRoutes = require("./analyticsRoutes");
 
 const stockRoutes = require("./stockRoutes");
 const organizationRoutes = require("./organizationRoutes");
+const shopInventoryRoutes = require("./shopInventoryRoutes");
 
 
 const router = express.Router();
@@ -40,5 +41,8 @@ router.use("/v1/dashboard", dashboardConfigRoutes);
 
 // NEW: Organization routes (Company and Shop management)
 router.use("/v1", organizationRoutes);
+
+// NEW: Shop inventory management
+router.use("/v1/shop-inventory", shopInventoryRoutes);
 
 module.exports = router

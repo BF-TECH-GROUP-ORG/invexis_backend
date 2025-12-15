@@ -32,7 +32,7 @@ const ProductSchema = new Schema({
   },
   availability: {
     type: String,
-    enum: ['in_stock', 'out_of_stock', 'limited', 'scheduled'],
+    enum: ['in_stock', 'out_of_stock', 'limited', 'scheduled', 'pre_order', 'back_order', 'discontinued'],
     default: 'in_stock'
   },
   scheduledAvailabilityDate: { type: Date },
@@ -50,7 +50,8 @@ const ProductSchema = new Schema({
     default: 'hidden',
     index: true
   },
-  isFeatured: { type: Boolean, default: false, index: true },
+  featured: { type: Boolean, default: false, index: true }, // Changed from isFeatured to featured
+  isFeatured: { type: Boolean, default: false, index: true }, // Keep for compatibility
   sortOrder:  { type: Number, default: 0 },
 
   /* ------------------------------ Media ---------------------------------- */
@@ -129,6 +130,7 @@ ProductSchema.virtual('specs', {
 });
 
 ProductSchema.virtual('mainImage').get(function () {
+  if (!this.images || this.images.length === 0) return null;
   return this.images.find(i => i.isPrimary) || this.images[0];
 });
 
@@ -137,7 +139,7 @@ ProductSchema.virtual('mainImage').get(function () {
 /* -------------------------------------------------------------------------- */
 
 // 1. Auto slug
-ProductSchema.pre('save', function (next) {
+ProductSchema.pre('save', async function () {
   if (this.isModified('name') || !this.slug) {
     this.slug = this.name
       .toLowerCase()
@@ -145,68 +147,61 @@ ProductSchema.pre('save', function (next) {
       .replace(/(^-|-$)/g, '')
       .slice(0, 100);
   }
-  next();
 });
 
 // 2. Full scanning & identifier generation (your original logic, kept 100%)
-ProductSchema.pre('save', async function (next) {
-  try {
-    const Product = this.constructor;
+ProductSchema.pre('save', async function () {
+  const Product = this.constructor;
 
-    const ensureUnique = async (field, genFn, attempts = 5) => {
-      for (let i = 0; i < attempts; i++) {
-        const candidate = genFn();
-        const exists = await Product.countDocuments({ [field]: candidate }).lean();
-        if (!exists) return candidate;
-      }
-      return genFn();
-    };
-
-    // SKU
-    if (!this.sku) {
-      this.sku = await ensureUnique('sku', () => {
-        const base = (this.name || 'PROD').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-        const suffix = Math.random().toString(36).substr(2, 5).toUpperCase();
-        return `${base}-${suffix}`;
-      });
+  const ensureUnique = async (field, genFn, attempts = 5) => {
+    for (let i = 0; i < attempts; i++) {
+      const candidate = genFn();
+      const exists = await Product.countDocuments({ [field]: candidate }).lean();
+      if (!exists) return candidate;
     }
+    return genFn();
+  };
 
-    // Barcode = SKU (human readable)
-    if (!this.barcode) {
-      this.barcode = this.sku;
-    }
+  // SKU
+  if (!this.sku) {
+    this.sku = await ensureUnique('sku', () => {
+      const base = (this.name || 'PROD').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      const suffix = Math.random().toString(36).substr(2, 5).toUpperCase();
+      return `${base}-${suffix}`;
+    });
+  }
 
-    // Full payload for QR/Barcode
-    if (!this.barcodePayload || !this.qrPayload) {
-      const obj = this.toObject({ virtuals: false, transform: (doc, ret) => { delete ret.__v; return ret; } });
-      const payload = Buffer.from(JSON.stringify(obj)).toString('base64');
-      this.barcodePayload = payload;
-      this.qrPayload = payload;
-    }
+  // Barcode = SKU (human readable)
+  if (!this.barcode) {
+    this.barcode = this.sku;
+  }
 
-    // scanId
-    if (!this.scanId) {
-      this.scanId = await ensureUnique('scanId', () => `SCAN-${Date.now().toString(36).toUpperCase()}`);
-    }
+  // Full payload for QR/Barcode
+  if (!this.barcodePayload || !this.qrPayload) {
+    const obj = this.toObject({ virtuals: false, transform: (doc, ret) => { delete ret.__v; return ret; } });
+    const payload = Buffer.from(JSON.stringify(obj)).toString('base64');
+    this.barcodePayload = payload;
+    this.qrPayload = payload;
+  }
 
-    // ASIN fallback
-    if (!this.asin) {
-      this.asin = await ensureUnique('asin', () => `ASIN${Date.now().toString().slice(-8)}`);
-    }
+  // scanId
+  if (!this.scanId) {
+    this.scanId = await ensureUnique('scanId', () => `SCAN-${Date.now().toString(36).toUpperCase()}`);
+  }
 
-    // UPC fallback
-    if (!this.upc) {
-      this.upc = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-    }
+  // ASIN fallback
+  if (!this.asin) {
+    this.asin = await ensureUnique('asin', () => `ASIN${Date.now().toString().slice(-8)}`);
+  }
 
-    next();
-  } catch (err) {
-    next(err);
+  // UPC fallback
+  if (!this.upc) {
+    this.upc = Math.floor(100000000000 + Math.random() * 900000000000).toString();
   }
 });
 
 // 3. Scheduled availability
-ProductSchema.pre('save', function (next) {
+ProductSchema.pre('save', async function () {
   if (this.scheduledAvailabilityDate) {
     if (new Date() < this.scheduledAvailabilityDate) {
       this.availability = 'scheduled';
@@ -214,23 +209,26 @@ ProductSchema.pre('save', function (next) {
       this.availability = 'in_stock';
     }
   }
-  next();
 });
 
-// 4. Validate category is level 3
-ProductSchema.pre('save', async function (next) {
-  if (this.isModified('categoryId')) {
-    const Category = mongoose.model('Category');
-    const cat = await Category.findById(this.categoryId);
-    if (!cat || cat.level !== 3) {
-      return next(new Error('Category must be level 3'));
-    }
-    if (cat.companyId && cat.companyId !== this.companyId) {
-      return next(new Error('Category belongs to different company'));
-    }
-  }
-  next();
-});
+// 4. Validate category is level 3 (DISABLED - handled in controller)
+// ProductSchema.pre('save', async function (next) {
+//   try {
+//     if (this.isModified('categoryId')) {
+//       const Category = mongoose.model('Category');
+//       const cat = await Category.findById(this.categoryId);
+//       if (!cat || cat.level !== 3) {
+//         return next(new Error('Category must be level 3'));
+//       }
+//       if (cat.companyId && cat.companyId !== this.companyId) {
+//         return next(new Error('Category belongs to different company'));
+//       }
+//     }
+//     next();
+//   } catch (err) {
+//     next(err);
+//   }
+// });
 
 /* -------------------------------------------------------------------------- */
 /*                                   INDEXES                                  */

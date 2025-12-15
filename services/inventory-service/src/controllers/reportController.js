@@ -237,12 +237,9 @@ const getProductReport = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'Product not found' });
   }
 
-  // Get current stock from ProductVariation aggregate
-  const pvAgg = await require('../models/ProductVariation').aggregate([
-    { $match: { productId: mongoose.Types.ObjectId(productId) } },
-    { $group: { _id: null, totalQty: { $sum: '$stockQty' } } }
-  ]);
-  const currentStock = (pvAgg[0] && pvAgg[0].totalQty) || 0;
+  // Get current stock from ProductStock
+  const stockRecord = await require('../models/ProductStock').findOne({ productId });
+  const currentStock = stockRecord?.stockQty || 0;
 
   // Stock history (last 30 days) — adapt to StockChange schema
   const stockHistory = await StockChange.find({ productId }).sort({ createdAt: -1 }).limit(30);
@@ -251,7 +248,7 @@ const getProductReport = asyncHandler(async (req, res) => {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const recentSales = await StockChange.aggregate([
-    { $match: { productId: mongoose.Types.ObjectId(productId), type: 'sale', createdAt: { $gte: thirtyDaysAgo } } },
+    { $match: { productId: new mongoose.Types.ObjectId(productId), type: 'sale', createdAt: { $gte: thirtyDaysAgo } } },
     { $lookup: { from: 'productpricings', localField: 'productId', foreignField: '_id', as: 'pricing' } },
     { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
     { $group: { _id: null, totalUnitsSold: { $sum: { $abs: '$qty' } }, totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$pricing.basePrice', 0] }] } }, totalCost: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$pricing.cost', 0] }] } } } }
@@ -264,7 +261,7 @@ const getProductReport = asyncHandler(async (req, res) => {
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
   const previousPeriodSales = await StockChange.aggregate([
-    { $match: { productId: mongoose.Types.ObjectId(productId), type: 'sale', createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo } } },
+    { $match: { productId: new mongoose.Types.ObjectId(productId), type: 'sale', createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo } } },
     { $lookup: { from: 'productpricings', localField: 'productId', foreignField: '_id', as: 'pricing' } },
     { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
     { $group: { _id: null, totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$pricing.basePrice', 0] }] } } } }
@@ -605,11 +602,11 @@ const getAgingInventory = asyncHandler(async (req, res) => {
 
   const report = {
     daysOld,
-    totalAgedProducts: agedProducts[0]?.totalAged || 0,
-    totalAgedValue: (agedProducts[0]?.totalAgedValue || 0).toFixed(2),
+    totalAgedProducts: agedProductsAgg[0]?.totalAged || 0,
+    totalAgedValue: (agedProductsAgg[0]?.totalAgedValue || 0).toFixed(2),
     agedPct: Math.round(agedPct * 100) / 100 + '%',
-    totalInventoryValue: (totalValue[0]?.totalValue || 0).toFixed(2),
-    products: agedProducts[0]?.products || [],
+    totalInventoryValue: (totalValueAgg[0]?.totalValue || 0).toFixed(2),
+    products: agedProductsAgg[0]?.products || [],
     insights: {
       risk: agedPct > 20 ? 'High—20%+ aged stock risks obsolescence' : 'Low',
       recommendation: 'Run promotions on top aged items to clear'

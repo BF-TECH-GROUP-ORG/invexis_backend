@@ -44,7 +44,7 @@ router.get('/:id', getCategoryById);
 router.post('/', createCategory);
 // Admin seed endpoint - optional protection via CATEGORY_SEED_SECRET header 'x-category-seed-secret'
 router.post('/admin/seed/categories', seedCategories);
-// Dedicated route to create level-3 categories for a company
+// Dedicated route to create level-3 categories for a company (requires companyId)
 router.post('/company/:companyId/level3', createLevel3Category);
 router.put('/:id', updateCategory);
 router.delete('/:id', deleteCategory);

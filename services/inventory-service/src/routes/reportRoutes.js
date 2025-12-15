@@ -22,7 +22,6 @@ const {
   getBenchmarks,
   buildCustomReport
 } = require('../controllers/reportController');
-const { protect } = require('../middleware/auth');
 
 router.get('/daily', getDailyReport);
 router.get('/product/:productId', getProductReport);
@@ -37,12 +36,12 @@ router.get('/alerts', getAlertSummary);
 router.get('/discount-impact', getDiscountImpact);
 
 // ==================== ADVANCED REPORTS ====================
-router.get('/dashboard', protect, getExecutiveDashboard);
-router.get('/metrics/realtime', protect, getRealTimeMetrics);
-router.get('/analytics/sales', protect, getSalesAnalytics);
-router.get('/forecast', protect, getForecast);
-router.get('/optimization', protect, getInventoryOptimization);
-router.get('/benchmarks', protect, getBenchmarks);
-router.post('/custom', protect, buildCustomReport);
+router.get('/dashboard', getExecutiveDashboard);
+router.get('/metrics/realtime', getRealTimeMetrics);
+router.get('/analytics/sales', getSalesAnalytics);
+router.get('/forecast', getForecast);
+router.get('/optimization', getInventoryOptimization);
+router.get('/benchmarks', getBenchmarks);
+router.post('/custom', buildCustomReport);
 
 module.exports = router;

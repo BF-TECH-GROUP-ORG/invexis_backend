@@ -9,11 +9,12 @@ const Alert = require('../models/Alert');
 const InventoryAdjustment = require('../models/InventoryAdjustment');
 const Category = require('../models/Category');
 const { validateMongoId } = require('../utils/validateMongoId');
-const { logger } = require('../utils/logger');
+const logger = require('../utils/logger');
 const { getCache, setCache, scanDel, delCache } = require('../utils/redisHelper');
 const ProductVariation = require('../models/ProductVariation');
 const ProductStock = require('../models/ProductStock');
 const ProductPricing = require('../models/ProductPricing');
+const ProductTransfer = require('../models/ProductTransfer');
 
 // ==================== COMPANY LEVEL OPERATIONS ====================
 
@@ -726,7 +727,7 @@ const allocateInventoryToShop = asyncHandler(async (req, res) => {
             _id: productId,
             companyId,
             shopId: shopId
-        }).session(session);
+        });
 
         if (!product) {
             throw new Error('Product not found for this shop');
@@ -737,7 +738,7 @@ const allocateInventoryToShop = asyncHandler(async (req, res) => {
         const newStock = previous + quantity;
         product.inventory.quantity = newStock;
 
-        await product.save({ session });
+        await product.save();
 
         // Create stock change record (no warehouse model; warehouseId left null)
         const stockChange = new StockChange({
@@ -753,9 +754,9 @@ const allocateInventoryToShop = asyncHandler(async (req, res) => {
             changedBy: userId || 'system'
         });
 
-        await stockChange.save({ session });
+        await stockChange.save();
 
-        await session.commitTransaction();
+        
 
         logger.info(`✅ Allocated ${quantity} units of product ${productId} to shop ${shopId}`);
 
@@ -771,11 +772,11 @@ const allocateInventoryToShop = asyncHandler(async (req, res) => {
             }
         });
     } catch (error) {
-        await session.abortTransaction();
+        
         logger.error(`❌ Error allocating inventory: ${error.message}`);
         throw error;
     } finally {
-        session.endSession();
+        
     }
 });
 
@@ -1810,8 +1811,7 @@ const getProductReport = asyncHandler(async (req, res) => {
             currentStock,
             stockChanges: changes,
             stockChangesPagination: { page: pg, limit: lim, total: totalChanges, pages: Math.ceil(totalChanges / lim) },
-            recentAlerts,
-            auditTrail: product.auditTrail || []
+            recentAlerts
         }
     });
 });
@@ -1924,210 +1924,366 @@ const createDailySummaryAlert = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Transfer stock between shops
+ * @desc    SMART INTRA-COMPANY TRANSFER - Transfer stock between shops in same company
  * @route   POST /api/v1/companies/:companyId/shops/:shopId/transfer
  * @access  Private
+ * 
+ * Creates:
+ * - StockChange records for both source and destination
+ * - ProductTransfer record for complete audit trail
+ * - Updates analytics for both shops
  */
 const transferStockBetweenShops = asyncHandler(async (req, res) => {
-    const { companyId, shopId: fromShopId } = req.params;
-    if (!companyId || !fromShopId) {
+    const { companyId, shopId: sourceShopId } = req.params;
+    const { 
+        productId, 
+        toShopId: destinationShopId, 
+        quantity, 
+        reason, 
+        userId,
+        notes 
+    } = req.body;
+
+    // Validation
+    if (!companyId || !sourceShopId || !destinationShopId) {
         return res.status(400).json({
             success: false,
-            message: 'companyId and shopId are required'
+            message: 'companyId, sourceShopId, and destinationShopId are required'
         });
     }
-    const { productId, toShopId, quantity, reason, userId, variationTransfers } = req.body;
 
-    if (!productId || !toShopId || !quantity) {
+    if (!productId || !quantity || !userId) {
         return res.status(400).json({
             success: false,
-            message: 'productId, toShopId, and quantity are required'
+            message: 'productId, quantity, and userId are required'
+        });
+    }
+
+    if (sourceShopId === destinationShopId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Source and destination shops cannot be the same'
         });
     }
 
     validateMongoId(productId);
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
-        // Deduct from source shop
-        const fromProduct = await Product.findOne({
+        const startTime = Date.now();
+
+        // ========== STEP 1: Get source product and verify stock ==========
+        logger.info(`🔍 Looking for product: ${productId} (type: ${typeof productId}) in company: ${companyId}`);
+        
+        // Try without isDeleted first
+        let sourceProduct = await Product.findById(productId);
+        logger.info(`📦 Product exists in DB: ${sourceProduct ? 'YES' : 'NO'}`);
+        
+        if (sourceProduct) {
+            logger.info(`📊 Product details: companyId=${sourceProduct.companyId}, isDeleted=${sourceProduct.isDeleted}`);
+        }
+        
+        // Now do the full query
+        sourceProduct = await Product.findOne({
             _id: productId,
             companyId,
-            shopId: fromShopId
-        }).session(session);
+            isDeleted: false
+        });
 
-        if (!fromProduct) {
-            throw new Error('Product not found in source shop');
+        if (!sourceProduct) {
+            logger.error(`❌ Product not found. Query: {_id: ${productId}, companyId: ${companyId}, isDeleted: false}`);
+            throw new Error('Product not found in this company');
+        }
+        
+        logger.info(`✅ Found product: ${sourceProduct.name}`);
+
+
+        // Get source pricing
+        const sourcePricing = await ProductPricing.findOne({
+            productId
+        });
+
+        if (!sourcePricing) {
+            throw new Error('Product pricing not found for source product');
         }
 
-        // Support variation-level transfers if provided
-        let fromCurrentStock = fromProduct.inventory.quantity || 0;
-        if (Array.isArray(variationTransfers) && variationTransfers.length > 0) {
-            // variationTransfers: [{ variationId, quantity }]
-            let totalRequested = 0;
-            for (const vt of variationTransfers) totalRequested += Number(vt.quantity || 0);
-            if (totalRequested !== Number(quantity)) {
-                throw new Error('Sum of variationTransfers quantities must equal quantity');
-            }
+        // Get source stock
+        const sourceStock = await ProductStock.findOne({
+            productId,
+            shopId: sourceShopId,
+            companyId
+        });
 
-            // Reduce specified variations on the source product
-            for (const vt of variationTransfers) {
-                const vid = vt.variationId;
-                const qtyToReduce = Number(vt.quantity || 0);
-                const variation = fromProduct.variations.find(v => String(v._id) === String(vid) || v._id == vid);
-                if (!variation) throw new Error(`Variation ${vid} not found on source product`);
-                const avail = variation.stockQty || 0;
-                if (avail < qtyToReduce) throw new Error(`Insufficient stock in variation ${vid}`);
-                variation.stockQty = avail - qtyToReduce;
-            }
-            // Recalculate total
-            fromCurrentStock = fromProduct.variations.reduce((s, v) => s + (v.stockQty || 0), 0);
-        } else {
-            fromCurrentStock = fromProduct.inventory.quantity || 0;
-            if (fromCurrentStock < quantity) {
-                throw new Error('Insufficient stock in source shop');
-            }
-            fromProduct.inventory.quantity = fromCurrentStock - quantity;
+        if (!sourceStock) {
+            throw new Error(`No stock record found for product in source shop: ${sourceShopId}`);
         }
 
-        await fromProduct.save({ session });
+        const sourceStockBefore = sourceStock.stockQty || 0;
+        if (sourceStockBefore < quantity) {
+            throw new Error(
+                `Insufficient stock in source shop. Available: ${sourceStockBefore}, Requested: ${quantity}`
+            );
+        }
 
-        // Add to destination shop — create a minimal safe copy if it doesn't already exist
-        let toProduct = await Product.findOne({
-            _id: productId,
+        // ========== STEP 2: Create NEW product instance for destination shop ==========
+        const destinationProductData = sourceProduct.toObject();
+        delete destinationProductData._id; // Remove source ID, let MongoDB generate new one
+        destinationProductData.companyId = companyId; // Same company
+        destinationProductData.shopId = destinationShopId; // Update to destination shop
+
+        // Generate new SKU, barcode, and scanning codes for destination shop
+        // This ensures each shop has unique identifiers for independent management
+        delete destinationProductData.sku;
+        delete destinationProductData.barcode;
+        delete destinationProductData.scanId;
+        delete destinationProductData.barcodePayload;
+        delete destinationProductData.qrPayload;
+        delete destinationProductData.qrCode;
+        delete destinationProductData.asin;
+        delete destinationProductData.upc;
+        
+        // Product model will auto-generate new unique codes on save
+
+        const destinationProduct = await Product.create([destinationProductData]);
+        const destinationProductId = destinationProduct[0]._id;
+
+        // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
+        setImmediate(async () => {
+            try {
+                const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
+                const { uploadBuffer } = require('../utils/uploadUtil');
+
+                const skuValue = destinationProduct[0].sku;
+                if (!skuValue) {
+                    logger.warn(`⚠️ Cannot generate QR/Barcode for transferred product ${destinationProductId} - SKU missing`);
+                    return;
+                }
+
+                logger.info(`🔄 Generating QR/Barcode for transferred product SKU: ${skuValue}`);
+                const [qrBuffer, barcodeBuffer] = await Promise.all([
+                    generateQRCodeBuffer(skuValue),
+                    generateBarcodeBuffer(skuValue)
+                ]);
+
+                const [qrUpload, barcodeUpload] = await Promise.all([
+                    uploadBuffer(qrBuffer, `QrBar_Codes/${destinationProductId}`, `qr_${skuValue}`),
+                    uploadBuffer(barcodeBuffer, `QrBar_Codes/${destinationProductId}`, `bar_${skuValue}`)
+                ]);
+
+                await Product.updateOne(
+                    { _id: destinationProductId },
+                    {
+                        qrCodeUrl: qrUpload.secure_url,
+                        barcodeUrl: barcodeUpload.secure_url,
+                        qrCloudinaryId: qrUpload.public_id,
+                        barcodeCloudinaryId: barcodeUpload.public_id
+                    }
+                );
+
+                logger.info(`✅ QR/Barcode generated for transferred product SKU: ${skuValue}`);
+            } catch (err) {
+                logger.error('Failed to generate QR/barcode for transferred product:', err);
+            }
+        });
+
+        // ========== STEP 4: Create pricing for destination product ==========
+        const destinationPricing = new ProductPricing({
+            productId: destinationProductId,
+            cost: sourcePricing.cost,
+            price: sourcePricing.price,
+            basePrice: sourcePricing.basePrice,
+            compareAtPrice: sourcePricing.compareAtPrice,
+            taxable: sourcePricing.taxable,
+            taxCode: sourcePricing.taxCode,
+            currency: sourcePricing.currency || 'USD'
+        });
+        await destinationPricing.save();
+
+        // ========== STEP 5: Create destination stock ==========
+        const destinationStock = new ProductStock({
+            productId: destinationProductId,
+            shopId: destinationShopId,
+            companyId: companyId,
+            stockQty: quantity,
+            trackQuantity: sourceStock.trackQuantity,
+            lowStockThreshold: sourceStock.lowStockThreshold || 5,
+            allowBackorder: sourceStock.allowBackorder || false
+        });
+        await destinationStock.save();
+
+        // ========== STEP 5: Update ProductStock records manually ==========
+        // For transfers, we handle stock updates manually (StockChange pre-save hook is skipped for transfers)
+        const sourceStockAfter = sourceStockBefore - quantity;
+        sourceStock.stockQty = sourceStockAfter;
+        await sourceStock.save();
+
+        // Destination stock was already created with quantity
+
+        // ========== STEP 6: Create StockChange records (audit trail) ==========
+        const destStockAfter = quantity;
+
+        const sourceStockChange = new StockChange({
             companyId,
-            shopId: toShopId
-        }).session(session);
-
-        if (!toProduct) {
-            // Create a minimal destination product by copying source but removing unique identifiers
-            const destData = fromProduct.toObject();
-            delete destData._id;
-            destData.shopId = toShopId;
-            destData.companyId = companyId;
-
-            // Set only the transferred quantity for the destination product
-            if (Array.isArray(variationTransfers) && variationTransfers.length > 0) {
-                // Build destination variations only containing transferred variation quantities
-                destData.variations = [];
-                for (const vt of variationTransfers) {
-                    const variation = fromProduct.variations.find(v => String(v._id) === String(vt.variationId) || v._id == vt.variationId);
-                    if (!variation) throw new Error(`Variation ${vt.variationId} not found on source product`);
-                    destData.variations.push({
-                        name: variation.name,
-                        sku: undefined,
-                        stockQty: Number(vt.quantity || 0),
-                        attributes: variation.attributes || []
-                    });
-                }
-            } else if (Array.isArray(destData.variations) && destData.variations.length > 0) {
-                // Zero out variation quantities then add proportional quantity to first variation
-                const total = destData.variations.reduce((s, v) => s + (v.stockQty || 0), 0) || 0;
-                if (total > 0) {
-                    const ratio = quantity / total;
-                    destData.variations.forEach(v => { v.stockQty = Math.max(0, Math.round((v.stockQty || 0) * ratio)); });
-                } else {
-                    // fallback: create a single default variation
-                    destData.variations = [{ sku: undefined, stockQty: quantity }];
-                }
-            } else {
-                destData.inventory = destData.inventory || {};
-                destData.inventory.quantity = quantity;
+            shopId: sourceShopId,
+            productId,
+            type: 'transfer',
+            qty: -quantity,
+            previous: sourceStockBefore,
+            new: sourceStockAfter,
+            reason: reason || `Transferred ${quantity} units to shop ${destinationShopId}`,
+            userId: userId,
+            metadata: {
+                transferType: 'intra_company',
+                direction: 'out',
+                destinationShop: destinationShopId,
+                destinationProductId: destinationProductId
             }
+        });
+        await sourceStockChange.save();
 
-            // Remove globally-unique identifiers so pre-save generates new ones (safe copy)
-            delete destData.sku;
-            delete destData.barcode;
-            delete destData.scanId;
-            delete destData.barcodePayload;
-            delete destData.qrPayload;
+        const destStockChange = new StockChange({
+            companyId,
+            shopId: destinationShopId,
+            productId: destinationProductId,
+            type: 'transfer',
+            qty: quantity,
+            previous: 0,
+            new: destStockAfter,
+            reason: reason || `Received ${quantity} units from shop ${sourceShopId}`,
+            userId: userId,
+            metadata: {
+                transferType: 'intra_company',
+                direction: 'in',
+                sourceShop: sourceShopId,
+                sourceProductId: productId
+            }
+        });
+        await destStockChange.save();
 
-            // Add audit entry for received transfer
-            destData.auditTrail = destData.auditTrail || [];
-            destData.auditTrail.push({
-                action: 'transfer_received',
-                changedBy: userId || 'system',
-                sourceCompanyId: companyId,
-                sourceShopId: fromShopId,
-                sourceProductId: productId,
-                transferredQuantity: quantity,
-                timestamp: new Date()
-            });
-
-            const created = await Product.create([destData], { session });
-            toProduct = created[0];
-        } else {
-            const toCurrentStock = toProduct.inventory.quantity || 0;
-            toProduct.inventory.quantity = toCurrentStock + quantity;
-            await toProduct.save({ session });
-        }
-
-        // Create StockChange records for both shops
-        const transferReason = reason || `Transferred from shop ${fromShopId} to shop ${toShopId}`;
-
-        await StockChange.create(
-            [
-                {
-                    companyId,
-                    productId,
-                    shopId: fromShopId,
-                    changeType: 'transfer',
-                    quantity: -quantity,
-                    previousStock: fromCurrentStock,
-                    newStock: fromCurrentStock - quantity,
-                    reason: transferReason,
-                    changedBy: userId || 'system'
+        // ========== STEP 7: Create ProductTransfer record for complete audit trail ==========
+        const transferValue = quantity * (sourcePricing.price || 0);
+        const productTransfer = new ProductTransfer({
+            transferId: `TRF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+            transferType: 'intra_company',
+            status: 'completed',
+            
+            sourceCompanyId: companyId,
+            sourceShopId: sourceShopId,
+            sourceShopName: sourceShopId,
+            
+            destinationCompanyId: companyId,
+            destinationShopId: destinationShopId,
+            destinationShopName: destinationShopId,
+            
+            productId: productId,
+            productName: sourceProduct.name,
+            productSku: sourceProduct.sku,
+            
+            createdProductId: destinationProductId,
+            
+            quantity: quantity,
+            reason: reason || 'Intra-company stock redistribution',
+            
+            sourceStockBefore: sourceStockBefore,
+            sourceStockAfter: sourceStockChange.new,
+            destinationStockBefore: 0,
+            destinationStockAfter: destStockChange.new,
+            
+            transferredProductData: {
+                pricing: {
+                    cost: destinationPricing.cost,
+                    price: destinationPricing.price,
+                    compareAtPrice: destinationPricing.compareAtPrice,
+                    currency: destinationPricing.currency
                 },
-                {
-                    companyId,
-                    productId,
-                    shopId: toShopId,
-                    changeType: 'transfer',
-                    quantity: quantity,
-                    previousStock: (toProduct.inventory && toProduct.inventory.quantity) ? (toProduct.inventory.quantity - quantity) : 0,
-                    newStock: (toProduct.inventory && toProduct.inventory.quantity) ? toProduct.inventory.quantity : quantity,
-                    reason: transferReason,
-                    changedBy: userId || 'system'
-                }
-            ],
-            { session }
-        );
+                attributes: sourceProduct.metadata,
+                images: sourceProduct.images,
+                category: sourceProduct.category,
+                tags: destinationProduct[0].tags,
+                trackQuantity: destinationStock.trackQuantity,
+                lowStockThreshold: destinationStock.lowStockThreshold,
+                allowBackorder: destinationStock.allowBackorder
+            },
+            
+            performedBy: {
+                userId: userId
+            },
+            
+            sourceStockChangeId: sourceStockChange._id,
+            destinationStockChangeId: destStockChange._id,
+            
+            estimatedValue: transferValue,
+            actualValue: transferValue,
+            
+            notes: notes,
+            
+            metadata: {
+                isAutomatic: false,
+                priority: 'medium',
+                triggeredBy: 'manual'
+            },
+            
+            initiatedAt: new Date(),
+            completedAt: new Date()
+        });
+        await productTransfer.save();
 
-        await session.commitTransaction();
-        logger.info(`✅ Transferred ${quantity} units from shop ${fromShopId} to shop ${toShopId}`);
+        const duration = Date.now() - startTime;
+        logger.info(`✅ Intra-company transfer completed: ${quantity} units of ${sourceProduct.name} from ${sourceShopId} to ${destinationShopId} (${duration}ms)`);
 
-        // Invalidate related cache entries (best-effort, non-blocking)
+        // Invalidate cache
         setImmediate(() => {
             try {
                 delCache(`company:overview:${companyId}`);
                 scanDel(`company:products:${companyId}:*`);
                 delCache(`product:${productId}`);
-                if (toProduct && toProduct._id) delCache(`product:${toProduct._id}`);
-                scanDel(`products:*"${companyId}"*`);
+                delCache(`product:${destinationProductId}`);
+                scanDel(`stock:${productId}:*`);
+                scanDel(`stock:${destinationProductId}:*`);
             } catch (err) {
-                logger.error('Cache invalidation error after shop transfer:', err);
+                logger.error('Cache invalidation error after transfer:', err);
             }
         });
 
         res.json({
             success: true,
-            message: 'Stock transferred successfully',
+            message: 'Product transferred successfully within company - new product instance created',
             data: {
-                productId,
-                fromShopId,
-                toShopId,
+                transferId: productTransfer.transferId,
+                sourceProduct: {
+                    productId: productId,
+                    productName: sourceProduct.name,
+                    productSku: sourceProduct.sku,
+                    shopId: sourceShopId,
+                    stockBefore: sourceStockBefore,
+                    stockAfter: sourceStock.stockQty,
+                    stockChangeId: sourceStockChange._id
+                },
+                destinationProduct: {
+                    productId: destinationProductId,
+                    productName: destinationProduct[0].name,
+                    productSku: destinationProduct[0].sku,
+                    shopId: destinationShopId,
+                    stockBefore: 0,
+                    stockAfter: quantity,
+                    stockChangeId: destStockChange._id,
+                    pricing: {
+                        cost: destinationPricing.cost,
+                        price: destinationPricing.price
+                    }
+                },
                 quantityTransferred: quantity,
-                destinationProductId: toProduct ? toProduct._id : null
+                transferValue: transferValue,
+                performedBy: userId,
+                completedAt: new Date(),
+                duration: `${duration}ms`
             }
         });
+
     } catch (error) {
-        await session.abortTransaction();
-        logger.error(`❌ Transfer error: ${error.message}`);
+        logger.error(`❌ Intra-company transfer error: ${error.message}`);
         throw error;
     } finally {
-        session.endSession();
+        
     }
 });
 
@@ -2148,8 +2304,8 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         transferQuantity,
         reason,
         userId,
-        variationTransfers,
-        preserveSku = false
+        notes,
+        pricingOverride
     } = req.body;
 
     // Default to params if not provided in body (support new route structure)
@@ -2181,226 +2337,308 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         // ========== STEP 1: Get source product ==========
         const sourceProduct = await Product.findOne({
             _id: productId,
-            companyId: fromCompanyId,
-            shopId: fromShopId
-        }).session(session);
+            companyId: fromCompanyId
+        });
 
         if (!sourceProduct) {
-            throw new Error('Product not found in source shop/company');
+            throw new Error('Product not found in source company');
         }
 
-        // Calculate current stock and support variationTransfers
-        let currentStock = sourceProduct.inventory.quantity || 0;
-        if (sourceProduct.variations && sourceProduct.variations.length > 0) {
-            currentStock = sourceProduct.variations.reduce((sum, v) => sum + (v.stockQty || 0), 0);
+        // Get source pricing
+        const sourcePricing = await ProductPricing.findOne({
+            productId
+        });
+
+        if (!sourcePricing) {
+            throw new Error('Product pricing not found for source product');
         }
 
-        if (Array.isArray(variationTransfers) && variationTransfers.length > 0) {
-            // variationTransfers: [{ variationId, quantity }]
-            let totalRequested = 0;
-            for (const vt of variationTransfers) totalRequested += Number(vt.quantity || 0);
-            if (totalRequested !== Number(transferQuantity)) {
-                throw new Error('Sum of variationTransfers quantities must equal transferQuantity');
-            }
+        // Get source stock from ProductStock model
+        const sourceStock = await ProductStock.findOne({
+            productId,
+            shopId: fromShopId
+        });
 
-            // Reduce specified variations
-            for (const vt of variationTransfers) {
-                const variation = sourceProduct.variations.find(v => String(v._id) === String(vt.variationId) || v._id == vt.variationId);
-                if (!variation) throw new Error(`Variation ${vt.variationId} not found on source product`);
-                const avail = variation.stockQty || 0;
-                const qtyToReduce = Number(vt.quantity || 0);
-                if (avail < qtyToReduce) throw new Error(`Insufficient stock in variation ${vt.variationId}`);
-                variation.stockQty = avail - qtyToReduce;
-            }
-        } else {
-            // No per-variation transfers: check total
-            if (currentStock < transferQuantity) {
-                throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${transferQuantity}`);
-            }
-
-            // Default reduction: proportional across variations or product inventory
-            if (sourceProduct.variations && sourceProduct.variations.length > 0) {
-                let remaining = transferQuantity;
-                for (let variation of sourceProduct.variations) {
-                    if (remaining <= 0) break;
-                    const variationStock = variation.stockQty || 0;
-                    const reduce = Math.min(variationStock, remaining);
-                    variation.stockQty = variationStock - reduce;
-                    remaining -= reduce;
-                }
-            } else {
-                sourceProduct.inventory.quantity = (sourceProduct.inventory.quantity || 0) - transferQuantity;
-            }
+        if (!sourceStock) {
+            throw new Error('No stock record found for source shop');
         }
 
-        const newSourceStock = sourceProduct.variations && sourceProduct.variations.length > 0
-            ? sourceProduct.variations.reduce((s, v) => s + (v.stockQty || 0), 0)
-            : sourceProduct.inventory.quantity || 0;
+        const currentStock = sourceStock.stockQty || 0;
+        if (currentStock < transferQuantity) {
+            throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${transferQuantity}`);
+        }
 
-        await sourceProduct.save({ session });
+        // ========== STEP 2: Update source stock ==========
+        sourceStock.stockQty = currentStock - transferQuantity;
+        await sourceStock.save();
 
-        // ========== STEP 3: Create destination product (copy with transferred quantity) ==========
+        // ========== STEP 2.5: Handle Category ==========
+        // Ensure category exists in destination company, create if needed
+        let destinationCategoryId = null;
+        if (sourceProduct.categoryId) {
+            destinationCategoryId = await ensureCategoryInDestinationCompany(
+                sourceProduct.categoryId,
+                toCompanyId
+            );
+            logger.info(`✓ Category handled for destination company: ${destinationCategoryId || 'none'}`);
+        }
+
+        // ========== STEP 3: Create destination product ==========
         const destinationProductData = sourceProduct.toObject();
         delete destinationProductData._id; // Remove source ID, let MongoDB generate new one
         destinationProductData.companyId = toCompanyId;
-        destinationProductData.shopId = toShopId;
+        destinationProductData.shopId = toShopId; // Update to destination shop
+        destinationProductData.categoryId = destinationCategoryId; // Use destination category
 
-        // Set quantity to transferred amount only (support variationTransfers)
-        if (Array.isArray(variationTransfers) && variationTransfers.length > 0) {
-            destinationProductData.variations = [];
-            for (const vt of variationTransfers) {
-                const variation = sourceProduct.variations.find(v => String(v._id) === String(vt.variationId) || v._id == vt.variationId);
-                if (!variation) throw new Error(`Variation ${vt.variationId} not found on source product`);
-                destinationProductData.variations.push({
-                    name: variation.name,
-                    sku: undefined,
-                    stockQty: Number(vt.quantity || 0),
-                    attributes: variation.attributes || []
-                });
-            }
-        } else if (destinationProductData.variations && destinationProductData.variations.length > 0) {
-            // For variations: scale them proportionally based on what was transferred
-            const sourceVariationTotal = destinationProductData.variations.reduce((sum, v) => sum + (v.stockQty || 0), 0);
-            if (sourceVariationTotal > 0) {
-                const ratio = transferQuantity / sourceVariationTotal;
-                destinationProductData.variations.forEach(v => {
-                    v.stockQty = Math.round((v.stockQty || 0) * ratio);
-                });
-            }
-        } else {
-            destinationProductData.inventory.quantity = transferQuantity;
-        }
-
-        // Clear auditTrail and start fresh for destination
-        destinationProductData.auditTrail = [
-            {
-                action: 'cross_company_transfer_received',
-                changedBy: userId || 'system',
-                sourceCompanyId: fromCompanyId,
-                sourceShopId: fromShopId,
-                sourceProductId: productId,
-                transferredQuantity: transferQuantity,
-                timestamp: new Date()
-            }
-        ];
-
-        // SKU handling: optionally preserve SKU if requested, else remove to allow pre-save generation
-        const sourceSku = sourceProduct.sku;
-        if (preserveSku && sourceSku) {
-            // Check if SKU is available in destination company/shop
-            const exists = await Product.countDocuments({ sku: sourceSku }).session(session);
-            if (!exists) {
-                destinationProductData.sku = sourceSku;
-                destinationProductData.barcode = sourceProduct.barcode || sourceSku;
-            } else {
-                // Make a safe fallback SKU to avoid collisions
-                destinationProductData.sku = `${(sourceSku || 'SKU')}-COPY-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-                destinationProductData.barcode = destinationProductData.sku;
-            }
-        } else {
-            delete destinationProductData.sku;
-            delete destinationProductData.barcode;
-        }
+        // ALWAYS create new SKU, barcode, and scanning codes for cross-company transfers
+        // This prevents confusion during scanning and ensures unique identification
+        delete destinationProductData.sku;
+        delete destinationProductData.barcode;
         delete destinationProductData.scanId;
         delete destinationProductData.barcodePayload;
         delete destinationProductData.qrPayload;
+        delete destinationProductData.qrCode;
         delete destinationProductData.asin;
         delete destinationProductData.upc;
+        
+        // Product model will auto-generate new unique codes on save
 
-        // Ensure variation quantities sum exactly to transferQuantity (fix rounding)
-        if (destinationProductData.variations && destinationProductData.variations.length > 0) {
-            let totalAssigned = destinationProductData.variations.reduce((s, v) => s + (v.stockQty || 0), 0);
-            if (totalAssigned !== transferQuantity) {
-                const diff = transferQuantity - totalAssigned;
-                destinationProductData.variations[0].stockQty = (destinationProductData.variations[0].stockQty || 0) + diff;
+        const destinationProduct = await Product.create([destinationProductData]);
+        const destinationProductId = destinationProduct[0]._id;
+
+        // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
+        setImmediate(async () => {
+            try {
+                const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
+                const { uploadBuffer } = require('../utils/uploadUtil');
+
+                const skuValue = destinationProduct[0].sku;
+                if (!skuValue) {
+                    logger.warn(`⚠️ Cannot generate QR/Barcode for cross-company transferred product ${destinationProductId} - SKU missing`);
+                    return;
+                }
+
+                logger.info(`🔄 Generating QR/Barcode for cross-company transferred product SKU: ${skuValue}`);
+                const [qrBuffer, barcodeBuffer] = await Promise.all([
+                    generateQRCodeBuffer(skuValue),
+                    generateBarcodeBuffer(skuValue)
+                ]);
+
+                const [qrUpload, barcodeUpload] = await Promise.all([
+                    uploadBuffer(qrBuffer, `QrBar_Codes/${destinationProductId}`, `qr_${skuValue}`),
+                    uploadBuffer(barcodeBuffer, `QrBar_Codes/${destinationProductId}`, `bar_${skuValue}`)
+                ]);
+
+                await Product.updateOne(
+                    { _id: destinationProductId },
+                    {
+                        qrCodeUrl: qrUpload.secure_url,
+                        barcodeUrl: barcodeUpload.secure_url,
+                        qrCloudinaryId: qrUpload.public_id,
+                        barcodeCloudinaryId: barcodeUpload.public_id
+                    }
+                );
+
+                logger.info(`✅ QR/Barcode generated for cross-company transferred product SKU: ${skuValue}`);
+            } catch (err) {
+                logger.error('Failed to generate QR/barcode for cross-company transferred product:', err);
             }
-        }
-
-        const destinationProduct = await Product.create([destinationProductData], { session });
-
-        // ========== STEP 4: Add transfer record to source product auditTrail ==========
-        sourceProduct.auditTrail.push({
-            action: 'cross_company_transfer_sent',
-            changedBy: userId || 'system',
-            destinationCompanyId: toCompanyId,
-            destinationShopId: toShopId,
-            destinationProductId: destinationProduct[0]._id,
-            transferredQuantity: transferQuantity,
-            newQuantity: newSourceStock,
-            reason: reason || 'Cross-company product transfer',
-            timestamp: new Date()
         });
 
-        await sourceProduct.save({ session });
+        // ========== STEP 4: Create pricing for destination product ==========
+        const destinationPricing = new ProductPricing({
+            productId: destinationProductId,
+            cost: pricingOverride?.cost || sourcePricing.cost,
+            price: pricingOverride?.price || sourcePricing.price,
+            basePrice: pricingOverride?.basePrice || sourcePricing.basePrice,
+            compareAtPrice: pricingOverride?.compareAtPrice || sourcePricing.compareAtPrice,
+            taxable: sourcePricing.taxable,
+            taxCode: sourcePricing.taxCode,
+            currency: sourcePricing.currency || 'USD'
+        });
+        await destinationPricing.save();
 
-        // ========== STEP 5: Create StockChange records (audit trail) ==========
-        await StockChange.create(
+        // ========== STEP 5: Create destination stock ==========
+        const destinationStock = new ProductStock({
+            productId: destinationProductId,
+            shopId: toShopId,
+            companyId: toCompanyId,
+            stockQty: transferQuantity,
+            trackQuantity: sourceStock.trackQuantity,
+            lowStockThreshold: sourceStock.lowStockThreshold || 5,
+            allowBackorder: sourceStock.allowBackorder || false
+        });
+        await destinationStock.save();
+
+        // ========== STEP 6: Create StockChange records (audit trail) ==========
+        const stockChangeResults = await StockChange.create(
             [
                 {
                     companyId: fromCompanyId,
                     productId: productId,
                     shopId: fromShopId,
-                    changeType: 'cross_company_transfer_out',
-                    quantity: -transferQuantity,
-                    previousStock: currentStock,
-                    newStock: newSourceStock,
+                    type: 'transfer',
+                    qty: -transferQuantity,
+                    previous: currentStock,
+                    new: sourceStock.stockQty,
                     reason: reason || `Cross-company transfer to ${toCompanyId} shop ${toShopId}`,
-                    userId: userId || 'system'
+                    userId: userId || 'system',
+                    metadata: {
+                        transferType: 'cross_company',
+                        direction: 'out',
+                        destinationCompany: toCompanyId,
+                        destinationShop: toShopId,
+                        destinationProductId: destinationProductId
+                    }
                 },
                 {
                     companyId: toCompanyId,
-                    productId: destinationProduct[0]._id,
+                    productId: destinationProductId,
                     shopId: toShopId,
-                    changeType: 'cross_company_transfer_in',
-                    quantity: transferQuantity,
-                    previousStock: 0,
-                    newStock: transferQuantity,
+                    type: 'transfer',
+                    qty: transferQuantity,
+                    previous: 0,
+                    new: transferQuantity,
                     reason: reason || `Cross-company transfer from ${fromCompanyId} shop ${fromShopId}`,
-                    userId: userId || 'system'
+                    userId: userId || 'system',
+                    metadata: {
+                        transferType: 'cross_company',
+                        direction: 'in',
+                        sourceCompany: fromCompanyId,
+                        sourceShop: fromShopId,
+                        sourceProductId: productId
+                    }
                 }
             ],
-            { session }
+            
         );
 
-        // ========== STEP 6: Commit transaction ==========
-        await session.commitTransaction();
+        // ========== STEP 8: Create ProductTransfer record for complete audit ==========
+        const transferValue = transferQuantity * (sourcePricing.price || 0);
+        const productTransfer = new ProductTransfer({
+            transferId: `TRF-CROSS-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+            transferType: 'cross_company',
+            status: 'completed',
+            
+            sourceCompanyId: fromCompanyId,
+            sourceShopId: fromShopId,
+            sourceShopName: fromShopId,
+            
+            destinationCompanyId: toCompanyId,
+            destinationShopId: toShopId,
+            destinationShopName: toShopId,
+            
+            productId: productId,
+            productName: sourceProduct.name,
+            productSku: sourceProduct.sku,
+            
+            createdProductId: destinationProductId,
+            
+            quantity: transferQuantity,
+            reason: reason || 'Cross-company stock transfer (inter-company sale)',
+            
+            sourceStockBefore: currentStock,
+            sourceStockAfter: sourceStock.stockQty,
+            destinationStockBefore: 0,
+            destinationStockAfter: transferQuantity,
+            
+            transferredProductData: {
+                pricing: {
+                    cost: destinationPricing.cost,
+                    price: destinationPricing.price,
+                    compareAtPrice: destinationPricing.compareAtPrice,
+                    currency: destinationPricing.currency
+                },
+                attributes: sourceProduct.metadata,
+                images: sourceProduct.images,
+                category: sourceProduct.category,
+                tags: destinationProduct[0].tags,
+                trackQuantity: destinationStock.trackQuantity,
+                lowStockThreshold: destinationStock.lowStockThreshold,
+                allowBackorder: destinationStock.allowBackorder
+            },
+            
+            performedBy: {
+                userId: userId || 'system'
+            },
+            
+            sourceStockChangeId: stockChangeResults[0]._id,
+            destinationStockChangeId: stockChangeResults[1]._id,
+            
+            estimatedValue: transferValue,
+            actualValue: transferValue,
+            
+            notes: notes,
+            
+            metadata: {
+                isAutomatic: false,
+                priority: 'high',
+                triggeredBy: 'manual',
+                tags: ['inter_company_sale']
+            },
+            
+            initiatedAt: new Date(),
+            completedAt: new Date()
+        });
+        await productTransfer.save();
+
+        // ========== STEP 9: Commit transaction ==========
+        
         logger.info(
             `✅ Cross-company transfer: ${transferQuantity} units of product ${productId} from ${fromCompanyId}:${fromShopId} to ${toCompanyId}:${toShopId}`
         );
 
-        // Invalidate caches related to source and destination companies/products (synchronous best-effort)
-        try {
-            await delCache(`company:overview:${fromCompanyId}`);
-            await delCache(`company:overview:${toCompanyId}`);
-            await scanDel(`company:products:${fromCompanyId}:*`);
-            await scanDel(`company:products:${toCompanyId}:*`);
-            await delCache(`product:${productId}`);
-            if (destinationProduct && destinationProduct[0] && destinationProduct[0]._id) await delCache(`product:${destinationProduct[0]._id}`);
-            await scanDel(`products:*"${fromCompanyId}"*`);
-            await scanDel(`products:*"${toCompanyId}"*`);
-        } catch (err) {
-            logger.error('Cache invalidation error after cross-company transfer:', err);
-        }
+        // Invalidate caches (non-blocking)
+        setImmediate(() => {
+            try {
+                delCache(`company:overview:${fromCompanyId}`);
+                delCache(`company:overview:${toCompanyId}`);
+                scanDel(`company:products:${fromCompanyId}:*`);
+                scanDel(`company:products:${toCompanyId}:*`);
+                delCache(`product:${productId}`);
+                delCache(`product:${destinationProductId}`);
+            } catch (err) {
+                logger.error('Cache invalidation error after cross-company transfer:', err);
+            }
+        });
 
         res.json({
             success: true,
             message: 'Product transferred successfully across companies',
             data: {
-                sourceProductId: productId,
-                sourceCompanyId: fromCompanyId,
-                sourceShopId: fromShopId,
-                sourceRemainingQuantity: newSourceStock,
-                destinationProductId: destinationProduct[0]._id,
-                destinationCompanyId: toCompanyId,
-                destinationShopId: toShopId,
-                destinationReceivedQuantity: transferQuantity,
-                productName: sourceProduct.name,
-                productSku: sourceProduct.sku,
-                transferredAt: new Date()
+                transferId: productTransfer.transferId,
+                sourceProduct: {
+                    productId: productId,
+                    productName: sourceProduct.name,
+                    productSku: sourceProduct.sku,
+                    companyId: fromCompanyId,
+                    shopId: fromShopId,
+                    stockBefore: currentStock,
+                    stockAfter: sourceStock.stockQty,
+                    stockChangeId: stockChangeResults[0]._id
+                },
+                destinationProduct: {
+                    productId: destinationProductId,
+                    productName: destinationProduct[0].name,
+                    productSku: destinationProduct[0].sku,
+                    companyId: toCompanyId,
+                    shopId: toShopId,
+                    stockBefore: 0,
+                    stockAfter: transferQuantity,
+                    stockChangeId: stockChangeResults[1]._id,
+                    pricing: {
+                        cost: destinationPricing.cost,
+                        price: destinationPricing.price
+                    }
+                },
+                quantityTransferred: transferQuantity,
+                transferValue: transferValue,
+                performedBy: userId,
+                completedAt: new Date()
             }
         });
     } catch (error) {
-        await session.abortTransaction();
+        
         logger.error(`❌ Cross-company transfer error: ${error.message}`);
 
         // Return user-friendly error
@@ -2420,9 +2658,10 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
 
         throw error;
     } finally {
-        session.endSession();
+        
     }
 });
+// ==================== TRANSFER HISTORY OPERATIONS ====================
 
 /**
  * @desc    Get transfer history for a product (all cross-company transfers)
@@ -2449,20 +2688,16 @@ const getProductTransferHistory = asyncHandler(async (req, res) => {
         $or: [
             {
                 productId: productId,
-                changeType: 'cross_company_transfer_out'
+                type: 'transfer',
+                'metadata.transferType': 'cross_company'
             },
             {
-                changeType: 'cross_company_transfer_in'
+                type: 'transfer',
+                'metadata.transferType': 'cross_company'
             }
         ]
     })
-        .populate('productId', 'name sku')
-        .sort({ changeDate: -1 });
-
-    // Get audit trail from original product
-    const auditTrail = originalProduct.auditTrail.filter(
-        entry => entry.action === 'cross_company_transfer_sent' || entry.action === 'cross_company_transfer_received'
-    );
+        .sort({ timestamp: -1 });
 
     res.json({
         success: true,
@@ -2470,7 +2705,6 @@ const getProductTransferHistory = asyncHandler(async (req, res) => {
             originalProductId: productId,
             originalProductName: originalProduct.name,
             originalProductSku: originalProduct.sku,
-            auditTrail: auditTrail,
             stockChangeRecords: transfers,
             totalTransfers: transfers.length
         }
@@ -2497,21 +2731,42 @@ const getTransferredProductCopies = asyncHandler(async (req, res) => {
         });
     }
 
-    // Find all stock changes of type "cross_company_transfer_out" for this product
+    // Find all stock changes of type "transfer" for this product (outgoing cross-company)
     const outgoingTransfers = await StockChange.find({
         productId: productId,
-        changeType: 'cross_company_transfer_out'
+        type: 'transfer',
+        'metadata.transferType': 'cross_company',
+        'metadata.direction': 'out'
     });
 
-    // Get the destination product IDs from audit trail
-    const transferredProductIds = originalProduct.auditTrail
-        .filter(entry => entry.action === 'cross_company_transfer_sent')
-        .map(entry => entry.destinationProductId);
+    // Get the destination product IDs from ProductTransfer records
+    const productTransfers = await ProductTransfer.find({
+        sourceProductId: productId,
+        transferType: 'cross_company'
+    }).select('destinationProductId');
+
+    const transferredProductIds = productTransfers.map(t => t.destinationProductId);
 
     // Fetch all transferred copies
     const transferredProducts = await Product.find({
         _id: { $in: transferredProductIds }
     }).populate('categoryId', 'name');
+
+    // Get current stock for each transferred product
+    const productsWithStock = await Promise.all(
+        transferredProducts.map(async (p) => {
+            const stock = await ProductStock.findOne({ productId: p._id });
+            return {
+                copyProductId: p._id,
+                companyId: p.companyId,
+                name: p.name,
+                sku: p.sku,
+                currentQuantity: stock ? stock.stockQty : 0,
+                category: p.category,
+                createdAt: p.createdAt
+            };
+        })
+    );
 
     res.json({
         success: true,
@@ -2520,17 +2775,7 @@ const getTransferredProductCopies = asyncHandler(async (req, res) => {
             originalProductName: originalProduct.name,
             originalProductSku: originalProduct.sku,
             originalCompanyId: originalProduct.companyId,
-            originalShopId: originalProduct.shopId,
-            transferredCopies: transferredProducts.map(p => ({
-                copyProductId: p._id,
-                companyId: p.companyId,
-                shopId: p.shopId,
-                name: p.name,
-                sku: p.sku,
-                currentQuantity: p.inventory.quantity,
-                category: p.category,
-                createdAt: p.createdAt
-            })),
+            transferredCopies: productsWithStock,
             totalCopiesCreated: transferredProducts.length
         }
     });
@@ -2554,11 +2799,553 @@ function generateShopRecommendations(lowStockCount, totalProducts, profitMargin,
     }
 
     if (recommendations.length === 0) {
-        recommendations.push('✅ Shop operating optimally - Continue current strategy');
+        recommendations.push('✅ Shop metrics look healthy');
     }
 
     return recommendations;
 }
+
+// ==================== HELPER: CATEGORY AUTO-CREATION ====================
+
+/**
+ * Helper function to ensure category exists in destination company
+ * If not, creates it with same details but different companyId
+ * 
+ * IMPORTANT: Only Level 3 categories are company-specific and need replication
+ * Level 1 and 2 are global and shared across all companies
+ * 
+ * @param {ObjectId} sourceCategoryId - Category ID from source product (must be level 3)
+ * @param {String} destinationCompanyId - Destination company ID
+ * @returns {ObjectId} - Category ID in destination company (existing or newly created)
+ */
+async function ensureCategoryInDestinationCompany(sourceCategoryId, destinationCompanyId) {
+    if (!sourceCategoryId) {
+        return null; // No category to replicate
+    }
+
+    try {
+        // Get source category
+        const sourceCategory = await Category.findById(sourceCategoryId);
+        
+        if (!sourceCategory) {
+            logger.warn(`Source category ${sourceCategoryId} not found`);
+            return null;
+        }
+
+        // Only level 3 categories need company-specific replication
+        if (sourceCategory.level !== 3) {
+            logger.warn(`Category is level ${sourceCategory.level}, expected level 3. Cannot replicate.`);
+            return null;
+        }
+
+        if (!sourceCategory.parentCategory) {
+            logger.error(`Level 3 category ${sourceCategoryId} has no parent! Data inconsistency.`);
+            return null;
+        }
+
+        // Check if equivalent category already exists in destination company
+        // Match by: same name, same parent (level 2), destination companyId
+        const existingCategory = await Category.findOne({
+            name: sourceCategory.name,
+            parentCategory: sourceCategory.parentCategory, // Same level 2 parent
+            companyId: destinationCompanyId,
+            level: 3
+        });
+
+        if (existingCategory) {
+            logger.info(`✓ Category already exists in destination company: ${existingCategory.name} (${existingCategory._id})`);
+            return existingCategory._id;
+        }
+
+        // Create new level 3 category in destination company
+        const newCategoryData = {
+            name: sourceCategory.name,
+            description: sourceCategory.description,
+            level: 3,
+            parentCategory: sourceCategory.parentCategory, // Keep same level 2 parent (global)
+            companyId: destinationCompanyId, // Assign to destination company
+            isActive: sourceCategory.isActive,
+            sortOrder: sourceCategory.sortOrder,
+            image: sourceCategory.image,
+            seo: sourceCategory.seo,
+            attributes: sourceCategory.attributes
+        };
+
+        // Generate unique slug for destination company
+        const baseSlug = sourceCategory.name
+            .toLowerCase()
+            .replace(/[^a-zA-Z0-9]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        
+        let uniqueSlug = `${baseSlug}-${destinationCompanyId.substring(0, 8)}`;
+        let counter = 1;
+        
+        // Ensure slug is unique
+        while (await Category.findOne({ slug: uniqueSlug })) {
+            uniqueSlug = `${baseSlug}-${destinationCompanyId.substring(0, 8)}-${counter}`;
+            counter++;
+        }
+        
+        newCategoryData.slug = uniqueSlug;
+
+        const newCategory = await Category.create(newCategoryData);
+        logger.info(`✓ Created new level 3 category in destination company: ${newCategory.name} (${newCategory._id}) with parent ${newCategory.parentCategory}`);
+        
+        return newCategory._id;
+
+    } catch (error) {
+        logger.error('Error ensuring category in destination company:', error);
+        return null;
+    }
+}
+
+// ==================== BULK TRANSFER OPERATIONS ====================
+
+/**
+ * @desc    Bulk transfer multiple products between shops in same company
+ * @route   POST /api/v1/companies/:companyId/shops/:shopId/bulk-transfer
+ * @access  Private
+ */
+const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
+    const { companyId, shopId: sourceShopId } = req.params;
+    const { transfers, toShopId: destinationShopId, reason, userId, notes } = req.body;
+
+    // Validation
+    if (!Array.isArray(transfers) || transfers.length === 0) {
+        return res.status(400).json({
+            success: false,
+            message: 'transfers array is required and must contain at least one item'
+        });
+    }
+
+    if (!destinationShopId || !userId) {
+        return res.status(400).json({
+            success: false,
+            message: 'toShopId and userId are required'
+        });
+    }
+
+    if (sourceShopId === destinationShopId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Source and destination shops cannot be the same'
+        });
+    }
+
+    const results = {
+        successful: [],
+        failed: [],
+        totalRequested: transfers.length
+    };
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        for (const transfer of transfers) {
+            const { productId, quantity } = transfer;
+
+            try {
+                validateMongoId(productId);
+
+                // Get source product
+                const sourceProduct = await Product.findOne({
+                    _id: productId,
+                    companyId,
+                    isDeleted: false
+                }).session(session);
+
+                if (!sourceProduct) {
+                    throw new Error('Product not found');
+                }
+
+                // Get source stock
+                const sourceStock = await ProductStock.findOne({
+                    productId,
+                    shopId: sourceShopId,
+                    companyId
+                }).session(session);
+
+                if (!sourceStock || sourceStock.stockQty < quantity) {
+                    throw new Error(`Insufficient stock. Available: ${sourceStock?.stockQty || 0}`);
+                }
+
+                // Get pricing
+                const sourcePricing = await ProductPricing.findOne({ productId }).session(session);
+                if (!sourcePricing) {
+                    throw new Error('Product pricing not found');
+                }
+
+                // Create destination product instance
+                const destinationProductData = sourceProduct.toObject();
+                delete destinationProductData._id;
+                destinationProductData.shopId = destinationShopId;
+                delete destinationProductData.sku;
+                delete destinationProductData.barcode;
+                delete destinationProductData.scanId;
+
+                const destinationProduct = await Product.create([destinationProductData], { session });
+                const destinationProductId = destinationProduct[0]._id;
+
+                // Create destination pricing
+                await ProductPricing.create([{
+                    productId: destinationProductId,
+                    cost: sourcePricing.cost,
+                    price: sourcePricing.price,
+                    basePrice: sourcePricing.basePrice,
+                    currency: sourcePricing.currency || 'USD'
+                }], { session });
+
+                // Create destination stock
+                await ProductStock.create([{
+                    productId: destinationProductId,
+                    shopId: destinationShopId,
+                    companyId: companyId,
+                    stockQty: quantity,
+                    trackQuantity: sourceStock.trackQuantity
+                }], { session });
+
+                // Update source stock
+                const sourceStockBefore = sourceStock.stockQty;
+                sourceStock.stockQty -= quantity;
+                await sourceStock.save({ session });
+
+                // Create stock change records
+                await StockChange.create([
+                    {
+                        companyId,
+                        shopId: sourceShopId,
+                        productId,
+                        type: 'transfer',
+                        qty: -quantity,
+                        previous: sourceStockBefore,
+                        new: sourceStock.stockQty,
+                        reason: reason || `Bulk transfer to ${destinationShopId}`,
+                        userId
+                    },
+                    {
+                        companyId,
+                        shopId: destinationShopId,
+                        productId: destinationProductId,
+                        type: 'transfer',
+                        qty: quantity,
+                        previous: 0,
+                        new: quantity,
+                        reason: reason || `Bulk transfer from ${sourceShopId}`,
+                        userId
+                    }
+                ], { session });
+
+                // Create transfer record
+                await ProductTransfer.create([{
+                    transferId: `BULK-TRF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+                    transferType: 'intra_company',
+                    status: 'completed',
+                    sourceCompanyId: companyId,
+                    sourceShopId: sourceShopId,
+                    destinationCompanyId: companyId,
+                    destinationShopId: destinationShopId,
+                    productId: productId,
+                    productName: sourceProduct.name,
+                    productSku: sourceProduct.sku,
+                    createdProductId: destinationProductId,
+                    quantity: quantity,
+                    reason: reason || 'Bulk intra-company transfer',
+                    sourceStockBefore: sourceStockBefore,
+                    sourceStockAfter: sourceStock.stockQty,
+                    destinationStockBefore: 0,
+                    destinationStockAfter: quantity,
+                    performedBy: { userId },
+                    notes: notes,
+                    initiatedAt: new Date(),
+                    completedAt: new Date()
+                }], { session });
+
+                results.successful.push({
+                    productId,
+                    productName: sourceProduct.name,
+                    quantity,
+                    newProductId: destinationProductId
+                });
+
+            } catch (error) {
+                results.failed.push({
+                    productId,
+                    quantity,
+                    error: error.message
+                });
+            }
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        logger.info(`✅ Bulk transfer completed: ${results.successful.length}/${results.totalRequested} successful`);
+
+        res.json({
+            success: true,
+            message: `Bulk transfer completed: ${results.successful.length}/${results.totalRequested} successful`,
+            data: results
+        });
+
+    } catch (error) {
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+        session.endSession();
+        throw error;
+    }
+});
+
+/**
+ * @desc    Bulk transfer multiple products across companies with automatic category creation
+ * @route   POST /api/v1/companies/:companyId/shops/:shopId/bulk-cross-company-transfer
+ * @access  Private
+ */
+const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
+    const { companyId: sourceCompanyId, shopId: sourceShopId } = req.params;
+    const { transfers, toCompanyId, toShopId, reason, userId, notes } = req.body;
+
+    // Validation
+    if (!Array.isArray(transfers) || transfers.length === 0) {
+        return res.status(400).json({
+            success: false,
+            message: 'transfers array is required and must contain at least one item'
+        });
+    }
+
+    if (!toCompanyId || !toShopId || !userId) {
+        return res.status(400).json({
+            success: false,
+            message: 'toCompanyId, toShopId, and userId are required'
+        });
+    }
+
+    if (sourceCompanyId === toCompanyId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Use bulk-transfer endpoint for intra-company transfers'
+        });
+    }
+
+    const results = {
+        successful: [],
+        failed: [],
+        categoriesCreated: [],
+        totalRequested: transfers.length
+    };
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Group products by category to optimize category creation
+        const categoryMap = new Map(); // sourceCategoryId -> destinationCategoryId
+
+        for (const transfer of transfers) {
+            const { productId, quantity, pricingOverride } = transfer;
+
+            try {
+                validateMongoId(productId);
+
+                // Get source product
+                const sourceProduct = await Product.findOne({
+                    _id: productId,
+                    companyId: sourceCompanyId,
+                    isDeleted: false
+                }).session(session);
+
+                if (!sourceProduct) {
+                    throw new Error('Product not found');
+                }
+
+                // Get source stock
+                const sourceStock = await ProductStock.findOne({
+                    productId,
+                    shopId: sourceShopId,
+                    companyId: sourceCompanyId
+                }).session(session);
+
+                if (!sourceStock || sourceStock.stockQty < quantity) {
+                    throw new Error(`Insufficient stock. Available: ${sourceStock?.stockQty || 0}`);
+                }
+
+                // Get pricing
+                const sourcePricing = await ProductPricing.findOne({ productId }).session(session);
+                if (!sourcePricing) {
+                    throw new Error('Product pricing not found');
+                }
+
+                // ========== HANDLE CATEGORY ==========
+                let destinationCategoryId = null;
+                
+                if (sourceProduct.categoryId) {
+                    const sourceCatId = sourceProduct.categoryId.toString();
+                    
+                    // Check if we've already processed this category
+                    if (categoryMap.has(sourceCatId)) {
+                        destinationCategoryId = categoryMap.get(sourceCatId);
+                    } else {
+                        // Ensure category exists in destination company
+                        destinationCategoryId = await ensureCategoryInDestinationCompany(
+                            sourceProduct.categoryId,
+                            toCompanyId
+                        );
+                        
+                        if (destinationCategoryId) {
+                            categoryMap.set(sourceCatId, destinationCategoryId);
+                            
+                            // Check if this is a newly created category
+                            const isNew = !results.categoriesCreated.find(c => c.categoryId === destinationCategoryId.toString());
+                            if (isNew && destinationCategoryId.toString() !== sourceCatId) {
+                                const destCat = await Category.findById(destinationCategoryId);
+                                results.categoriesCreated.push({
+                                    categoryId: destinationCategoryId.toString(),
+                                    categoryName: destCat?.name || 'Unknown',
+                                    sourceCategory: sourceCatId
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Create destination product instance
+                const destinationProductData = sourceProduct.toObject();
+                delete destinationProductData._id;
+                destinationProductData.companyId = toCompanyId;
+                destinationProductData.shopId = toShopId;
+                destinationProductData.categoryId = destinationCategoryId;
+                
+                // Remove unique identifiers
+                delete destinationProductData.sku;
+                delete destinationProductData.barcode;
+                delete destinationProductData.scanId;
+                delete destinationProductData.barcodePayload;
+                delete destinationProductData.qrPayload;
+                delete destinationProductData.qrCode;
+                delete destinationProductData.asin;
+                delete destinationProductData.upc;
+
+                const destinationProduct = await Product.create([destinationProductData], { session });
+                const destinationProductId = destinationProduct[0]._id;
+
+                // Create destination pricing
+                await ProductPricing.create([{
+                    productId: destinationProductId,
+                    cost: pricingOverride?.cost || sourcePricing.cost,
+                    price: pricingOverride?.price || sourcePricing.price,
+                    basePrice: pricingOverride?.basePrice || sourcePricing.basePrice,
+                    currency: sourcePricing.currency || 'USD'
+                }], { session });
+
+                // Create destination stock
+                await ProductStock.create([{
+                    productId: destinationProductId,
+                    shopId: toShopId,
+                    companyId: toCompanyId,
+                    stockQty: quantity,
+                    trackQuantity: sourceStock.trackQuantity
+                }], { session });
+
+                // Update source stock
+                const sourceStockBefore = sourceStock.stockQty;
+                sourceStock.stockQty -= quantity;
+                await sourceStock.save({ session });
+
+                // Create stock change records
+                await StockChange.create([
+                    {
+                        companyId: sourceCompanyId,
+                        shopId: sourceShopId,
+                        productId,
+                        type: 'transfer',
+                        qty: -quantity,
+                        previous: sourceStockBefore,
+                        new: sourceStock.stockQty,
+                        reason: reason || `Bulk cross-company transfer to ${toCompanyId}`,
+                        userId,
+                        metadata: { transferType: 'cross_company', direction: 'out' }
+                    },
+                    {
+                        companyId: toCompanyId,
+                        shopId: toShopId,
+                        productId: destinationProductId,
+                        type: 'transfer',
+                        qty: quantity,
+                        previous: 0,
+                        new: quantity,
+                        reason: reason || `Bulk cross-company transfer from ${sourceCompanyId}`,
+                        userId,
+                        metadata: { transferType: 'cross_company', direction: 'in' }
+                    }
+                ], { session });
+
+                // Create transfer record
+                await ProductTransfer.create([{
+                    transferId: `BULK-CROSS-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+                    transferType: 'cross_company',
+                    status: 'completed',
+                    sourceCompanyId,
+                    sourceShopId,
+                    destinationCompanyId: toCompanyId,
+                    destinationShopId: toShopId,
+                    productId: productId,
+                    productName: sourceProduct.name,
+                    productSku: sourceProduct.sku,
+                    createdProductId: destinationProductId,
+                    quantity: quantity,
+                    reason: reason || 'Bulk cross-company transfer',
+                    sourceStockBefore: sourceStockBefore,
+                    sourceStockAfter: sourceStock.stockQty,
+                    destinationStockBefore: 0,
+                    destinationStockAfter: quantity,
+                    performedBy: { userId },
+                    notes: notes,
+                    initiatedAt: new Date(),
+                    completedAt: new Date()
+                }], { session });
+
+                results.successful.push({
+                    productId,
+                    productName: sourceProduct.name,
+                    quantity,
+                    newProductId: destinationProductId,
+                    categoryMapped: !!destinationCategoryId
+                });
+
+            } catch (error) {
+                results.failed.push({
+                    productId,
+                    quantity,
+                    error: error.message
+                });
+            }
+        }
+
+        await session.commitTransaction();
+        const sessionCommitted = true;
+        session.endSession();
+
+        logger.info(`✅ Bulk cross-company transfer completed: ${results.successful.length}/${results.totalRequested} successful`);
+        logger.info(`✅ Categories created/mapped: ${results.categoriesCreated.length}`);
+
+        res.json({
+            success: true,
+            message: `Bulk cross-company transfer completed: ${results.successful.length}/${results.totalRequested} successful`,
+            data: results
+        });
+
+    } catch (error) {
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
+        session.endSession();
+        throw error;
+    }
+});
+
+// ==================== EXPORTS ====================
 
 module.exports = {
     // Company Level
@@ -2577,24 +3364,28 @@ module.exports = {
     getCompanyShops,
 
     // Shop Level
+    getShopOverview,
     getShopProducts,
     getShopProductInventory,
-    allocateInventoryToShop,
+    getShopStockChanges,
+    getShopAlerts,
+    getShopAdjustments,
     getShopInventorySummary,
+    getShopLowStockProducts,
+    getShopReport,
     getShopTopSellers,
     getShopAdvancedAnalytics,
     getProductComparison,
     getShopPerformanceMetrics,
-    getShopOverview,
-    getShopStockChanges,
-    getShopAlerts,
-    getShopAdjustments,
-    getShopLowStockProducts,
-    getShopReport,
+    allocateInventoryToShop,
     transferStockBetweenShops,
 
     // Cross-Company
     transferProductCrossCompany,
     getProductTransferHistory,
-    getTransferredProductCopies
+    getTransferredProductCopies,
+
+    // Bulk Transfers
+    bulkTransferIntraCompany,
+    bulkTransferCrossCompany
 };

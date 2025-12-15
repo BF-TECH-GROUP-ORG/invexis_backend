@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { logger } = require('../utils/logger');
+const logger = require('../utils/logger');
 
 const authMiddleware = (req, res, next) => {
   try {
@@ -10,7 +10,9 @@ const authMiddleware = (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    logger.warn(`Auth error: ${error.message}`);
+    if (logger && logger.warn) {
+      logger.warn(`Auth error: ${error.message}`);
+    }
     res.status(401).json({ error: error.message });
   }
 };

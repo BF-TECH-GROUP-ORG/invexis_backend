@@ -32,13 +32,21 @@ const {
     getProductComparison,
     getShopPerformanceMetrics,
     allocateInventoryToShop,
-    transferStockBetweenShops,
 
-    // Cross-Company
-    transferProductCrossCompany,
+    // Transfer History
     getProductTransferHistory,
-    getTransferredProductCopies
+    getTransferredProductCopies,
+
+    // Transfer Operations
+    transferStockBetweenShops,
+    transferProductCrossCompany,
+    
+    // Bulk Transfer Operations
+    bulkTransferIntraCompany,
+    bulkTransferCrossCompany
 } = require('../controllers/organizationController');
+
+// Transfer functions are in organizationController now
 
 // ==================== MIDDLEWARE ====================
 
@@ -245,10 +253,18 @@ router.post('/companies/:companyId/shops/:shopId/allocate', allocateInventoryToS
 
 /**
  * @route   POST /api/v1/companies/:companyId/shops/:shopId/transfer
- * @desc    Transfer stock from one shop to another
+ * @desc    Transfer stock from one shop to another (single product)
  * @access  Private
  */
 router.post('/companies/:companyId/shops/:shopId/transfer', transferStockBetweenShops);
+
+/**
+ * @route   POST /api/v1/companies/:companyId/shops/:shopId/bulk-transfer
+ * @desc    Bulk transfer multiple products between shops in same company
+ * @access  Private
+ * @body    { transfers: [{ productId, quantity }], toShopId, reason, userId, notes }
+ */
+router.post('/companies/:companyId/shops/:shopId/bulk-transfer', bulkTransferIntraCompany);
 
 // ==================== CROSS-COMPANY ROUTES ====================
 
@@ -258,6 +274,14 @@ router.post('/companies/:companyId/shops/:shopId/transfer', transferStockBetween
  * @access  Private
  */
 router.post('/companies/:companyId/shops/:shopId/products/:productId/cross-company-transfer', transferProductCrossCompany);
+
+/**
+ * @route   POST /api/v1/companies/:companyId/shops/:shopId/bulk-cross-company-transfer
+ * @desc    Bulk transfer multiple products across companies with automatic category creation
+ * @access  Private
+ * @body    { transfers: [{ productId, quantity, pricingOverride }], toCompanyId, toShopId, reason, userId, notes }
+ */
+router.post('/companies/:companyId/shops/:shopId/bulk-cross-company-transfer', bulkTransferCrossCompany);
 
 /**
  * @route   GET /api/v1/companies/:companyId/products/:productId/transfer-history
@@ -272,5 +296,16 @@ router.get('/companies/:companyId/products/:productId/transfer-history', getProd
  * @access  Private
  */
 router.get('/companies/:companyId/products/:productId/transferred-copies', getTransferredProductCopies);
+
+// ==================== SMART REDISTRIBUTION ROUTES ====================
+
+// Stock redistribution routes removed - use direct transfer endpoints instead
+/*
+router.get('/companies/:companyId/stock-redistribution/suggestions', getStockRedistributionSuggestions);
+router.post('/companies/:companyId/stock-redistribution/auto-transfer', autoTransferStock);
+*/
+
+// Cross-company opportunities route removed - use direct transfer endpoints
+// router.post('/cross-company/transfer-opportunities', getCrossCompanyOpportunities);
 
 module.exports = router;

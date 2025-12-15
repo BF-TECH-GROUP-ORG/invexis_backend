@@ -51,14 +51,6 @@ async function handleOrderCreated(data) {
                 product.availability = 'out_of_stock';
             }
 
-            // Add audit trail
-            product.auditTrail.push({
-                action: 'stock_change',
-                changedBy: 'ecommerce-service',
-                oldValue: { quantity: oldQuantity },
-                newValue: { quantity: newQuantity, reason: `Order ${orderId}` }
-            });
-
             await product.save();
 
             logger.info(`➖ Decremented stock for product ${productId}: ${oldQuantity} → ${newQuantity}`, {
@@ -162,14 +154,6 @@ async function handleOrderCancelled(data) {
             if (oldQuantity === 0 && newQuantity > 0) {
                 product.availability = 'in_stock';
             }
-
-            // Add audit trail
-            product.auditTrail.push({
-                action: 'stock_change',
-                changedBy: 'ecommerce-service',
-                oldValue: { quantity: oldQuantity },
-                newValue: { quantity: newQuantity, reason: `Order ${orderId} cancelled: ${reason || 'N/A'}` }
-            });
 
             await product.save();
 

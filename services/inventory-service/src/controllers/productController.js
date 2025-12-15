@@ -41,7 +41,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
     companyId
   } = req.query;
 
-  if (companyId) validateMongoId(companyId);
+  // Only validate category as it's a MongoDB ObjectId
   if (category) validateMongoId(category);
 
   // Generate cache key based on query params
@@ -112,20 +112,105 @@ const getAllProducts = asyncHandler(async (req, res) => {
   // Use lean() for read-only queries (much faster - returns plain JS objects, not Mongoose documents)
   const [products, total] = await Promise.all([
     Product.find(query)
-      .populate('categoryId', 'name slug level')
+      .populate('categoryId', 'name slug level parentCategory isActive')
       .populate('pricingId')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit))
-      .select('-auditTrail')
       .lean()
       .exec(),
     Product.countDocuments(query)
   ]);
 
+  // Enhance products with additional data
+  const enrichedProducts = await Promise.all(products.map(async (product) => {
+    const [variations, stockInfo, specsInfo] = await Promise.all([
+      ProductVariation.find({ productId: product._id }).lean(),
+      ProductStock.find({ productId: product._id }).lean(),
+      ProductSpecs.findOne({ productId: product._id }).lean()
+    ]);
+
+    // Calculate total stock across all variations
+    const totalStock = stockInfo.reduce((sum, stock) => sum + (stock.stockQty || 0), 0);
+    const totalReserved = stockInfo.reduce((sum, stock) => sum + (stock.reservedQty || 0), 0);
+    const availableStock = Math.max(0, totalStock - totalReserved);
+    const lowStockThreshold = stockInfo.length > 0 ? Math.min(...stockInfo.map(s => s.lowStockThreshold || 0)) : 0;
+
+    return {
+      ...product,
+      // Variations with their own stock info
+      variations: variations || [],
+      
+      // Consolidated stock information
+      stock: {
+        total: totalStock,
+        available: availableStock,
+        reserved: totalReserved,
+        inStock: availableStock > 0,
+        isLowStock: totalStock <= lowStockThreshold,
+        lowStockThreshold,
+        details: stockInfo || []
+      },
+      
+      // Product specifications
+      specifications: specsInfo ? specsInfo.specs : null,
+      
+      // Enhanced pricing info
+      pricing: product.pricingId ? {
+        basePrice: product.pricingId.basePrice,
+        salePrice: product.pricingId.salePrice,
+        cost: product.pricingId.cost,
+        currency: product.pricingId.currency,
+        marginAmount: product.pricingId.marginAmount,
+        marginPercent: product.pricingId.marginPercent,
+        profitRank: product.pricingId.profitRank,
+        effectiveFrom: product.pricingId.effectiveFrom,
+        effectiveTo: product.pricingId.effectiveTo
+      } : null,
+      
+      // QR and Barcode information
+      codes: {
+        qrCodeUrl: product.qrCodeUrl,
+        barcodeUrl: product.barcodeUrl,
+        qrPayload: product.qrPayload,
+        barcodePayload: product.barcodePayload
+      },
+      
+      // Auto-generated identifiers
+      identifiers: {
+        sku: product.sku,
+        barcode: product.barcode,
+        qrCode: product.qrCode,
+        scanId: product.scanId,
+        asin: product.asin,
+        upc: product.upc
+      },
+      
+      // Category information
+      category: product.categoryId ? {
+        id: product.categoryId._id,
+        name: product.categoryId.name,
+        slug: product.categoryId.slug,
+        level: product.categoryId.level,
+        parentId: product.categoryId.parentCategory,
+        isActive: product.categoryId.isActive
+      } : null,
+      
+      // Status and visibility flags
+      status: {
+        active: product.status === 'active',
+        visible: product.visibility === 'public',
+        featured: product.featured || product.isFeatured,
+        availability: product.availability,
+        condition: product.condition,
+        isDeleted: product.isDeleted
+      }
+    };
+  }));
+
   const responseData = {
     success: true,
-    data: products,
+    data: enrichedProducts,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -159,10 +244,8 @@ const getProductById = asyncHandler(async (req, res) => {
 
   // Use lean for read-only queries
   const product = await Product.findById(id)
-    .populate('categoryId', 'name slug level attributes')
+    .populate('categoryId', 'name slug level attributes parentCategory isActive')
     .populate('pricingId')
-    .populate('variationIds')
-    .populate('stockIds')
     .lean()
     .exec();
 
@@ -173,15 +256,157 @@ const getProductById = asyncHandler(async (req, res) => {
     });
   }
 
+  // Fetch all related data comprehensively
+  const [variations, stockInfo, specsInfo] = await Promise.all([
+    ProductVariation.find({ productId: id })
+      .populate('attributeValues.attributeId', 'name type')
+      .lean(),
+    ProductStock.find({ productId: id }).lean(),
+    ProductSpecs.findOne({ productId: id }).lean()
+  ]);
+
+  // Calculate comprehensive stock information
+  const totalStock = stockInfo.reduce((sum, stock) => sum + (stock.stockQty || 0), 0);
+  const totalReserved = stockInfo.reduce((sum, stock) => sum + (stock.reservedQty || 0), 0);
+  const availableStock = Math.max(0, totalStock - totalReserved);
+  const lowStockThreshold = stockInfo.length > 0 ? Math.min(...stockInfo.map(s => s.lowStockThreshold || 0)) : 0;
+  const hasLowStock = stockInfo.some(s => (s.stockQty || 0) <= (s.lowStockThreshold || 0));
+
+  // Build comprehensive enriched product data
+  const enrichedProduct = {
+    ...product,
+    
+    // Complete variations with stock and attributes
+    variations: variations.map(variation => ({
+      ...variation,
+      stock: stockInfo.find(s => String(s.variationId) === String(variation._id)) || null,
+      attributes: variation.attributeValues || []
+    })),
+    
+    // Comprehensive stock information
+    stock: {
+      total: totalStock,
+      available: availableStock,
+      reserved: totalReserved,
+      inStock: availableStock > 0,
+      isLowStock: hasLowStock,
+      lowStockThreshold,
+      trackQuantity: stockInfo.length > 0 ? stockInfo[0].trackQuantity : true,
+      allowBackorder: stockInfo.length > 0 ? stockInfo[0].allowBackorder : false,
+      details: stockInfo.map(stock => ({
+        ...stock,
+        availableQty: Math.max(0, (stock.stockQty || 0) - (stock.reservedQty || 0))
+      }))
+    },
+    
+    // Product specifications and attributes
+    specifications: specsInfo ? specsInfo.specs : {},
+    specsCategory: specsInfo ? specsInfo.l2Category : null,
+    
+    // Enhanced pricing information
+    pricing: product.pricingId ? {
+      id: product.pricingId._id,
+      basePrice: product.pricingId.basePrice,
+      salePrice: product.pricingId.salePrice,
+      cost: product.pricingId.cost,
+      currency: product.pricingId.currency,
+      marginAmount: product.pricingId.marginAmount,
+      marginPercent: product.pricingId.marginPercent,
+      saleMarginAmount: product.pricingId.saleMarginAmount,
+      saleMarginPercent: product.pricingId.saleMarginPercent,
+      profitRank: product.pricingId.profitRank,
+      effectiveFrom: product.pricingId.effectiveFrom,
+      effectiveTo: product.pricingId.effectiveTo,
+      previousBasePrice: product.pricingId.previousBasePrice,
+      priceChangedAt: product.pricingId.priceChangedAt,
+      revenue: product.pricingId.revenue,
+      profit: product.pricingId.profit
+    } : null,
+    
+    // QR and Barcode URLs and data
+    codes: {
+      qrCodeUrl: product.qrCodeUrl,
+      barcodeUrl: product.barcodeUrl,
+      qrPayload: product.qrPayload,
+      barcodePayload: product.barcodePayload,
+      qrCloudinaryId: product.qrCloudinaryId,
+      barcodeCloudinaryId: product.barcodeCloudinaryId
+    },
+    
+    // All auto-generated identifiers
+    identifiers: {
+      sku: product.sku,
+      barcode: product.barcode,
+      qrCode: product.qrCode,
+      scanId: product.scanId,
+      asin: product.asin,
+      upc: product.upc
+    },
+    
+    // Complete category information
+    category: product.categoryId ? {
+      id: product.categoryId._id,
+      name: product.categoryId.name,
+      slug: product.categoryId.slug,
+      level: product.categoryId.level,
+      parentId: product.categoryId.parentCategory,
+      isActive: product.categoryId.isActive,
+      attributes: product.categoryId.attributes || []
+    } : null,
+    
+    // Status and visibility information
+    status: {
+      active: product.status === 'active',
+      visible: product.visibility === 'public',
+      featured: product.featured || product.isFeatured,
+      availability: product.availability,
+      condition: product.condition,
+      isDeleted: product.isDeleted || false,
+      deletedAt: product.deletedAt,
+      deletedBy: product.deletedBy
+    },
+    
+    // SEO and marketing data
+    seo: {
+      keywords: product.seo?.keywords || [],
+      metaTitle: product.seo?.metaTitle,
+      metaDescription: product.seo?.metaDescription
+    },
+    
+    // Sales and performance data
+    sales: {
+      totalSold: product.sales?.totalSold || 0,
+      revenue: product.sales?.revenue || 0,
+      lastSaleDate: product.sales?.lastSaleDate
+    },
+    
+    // Media information
+    media: {
+      images: product.images || [],
+      videos: product.videoUrls || [],
+      primaryImage: product.images?.find(img => img.isPrimary) || (product.images?.[0]) || null
+    },
+    
+    // Metadata
+    metadata: {
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      slug: product.slug,
+      companyId: product.companyId,
+      shopId: product.shopId,
+      sortOrder: product.sortOrder
+    }
+  };
+
   // Cache asynchronously (non-blocking)
   setImmediate(() => {
-    setCache(cacheKey, product, 3600)
+    setCache(cacheKey, enrichedProduct, 3600)
       .catch((err) => logger.error('Cache set failed:', err));
   });
 
   res.status(200).json({
     success: true,
-    data: product
+    data: enrichedProduct
   });
 });
 
@@ -199,10 +424,9 @@ const getProductBySlug = asyncHandler(async (req, res) => {
   }
 
   const product = await Product.findOne({ slug })
-    .populate('categoryId', 'name slug level attributes')
+    .populate('categoryId', 'name slug level attributes parentCategory isActive')
     .populate('pricingId')
-    .populate('variationIds')
-    .populate('stockIds');
+    .lean();
 
   if (!product) {
     return res.status(404).json({
@@ -211,11 +435,97 @@ const getProductBySlug = asyncHandler(async (req, res) => {
     });
   }
 
-  await setCache(cacheKey, product, 3600);
+  // Fetch all related data comprehensively
+  const [variations, stockInfo, specsInfo] = await Promise.all([
+    ProductVariation.find({ productId: product._id })
+      .populate('attributeValues.attributeId', 'name type')
+      .lean(),
+    ProductStock.find({ productId: product._id }).lean(),
+    ProductSpecs.findOne({ productId: product._id }).lean()
+  ]);
+
+  // Calculate comprehensive stock information
+  const totalStock = stockInfo.reduce((sum, stock) => sum + (stock.stockQty || 0), 0);
+  const totalReserved = stockInfo.reduce((sum, stock) => sum + (stock.reservedQty || 0), 0);
+  const availableStock = Math.max(0, totalStock - totalReserved);
+  const lowStockThreshold = stockInfo.length > 0 ? Math.min(...stockInfo.map(s => s.lowStockThreshold || 0)) : 0;
+  const hasLowStock = stockInfo.some(s => (s.stockQty || 0) <= (s.lowStockThreshold || 0));
+
+  // Build comprehensive enriched product data (same as getProductById)
+  const enrichedProduct = {
+    ...product,
+    variations: variations.map(variation => ({
+      ...variation,
+      stock: stockInfo.find(s => String(s.variationId) === String(variation._id)) || null,
+      attributes: variation.attributeValues || []
+    })),
+    stock: {
+      total: totalStock,
+      available: availableStock,
+      reserved: totalReserved,
+      inStock: availableStock > 0,
+      isLowStock: hasLowStock,
+      lowStockThreshold,
+      trackQuantity: stockInfo.length > 0 ? stockInfo[0].trackQuantity : true,
+      allowBackorder: stockInfo.length > 0 ? stockInfo[0].allowBackorder : false,
+      details: stockInfo.map(stock => ({
+        ...stock,
+        availableQty: Math.max(0, (stock.stockQty || 0) - (stock.reservedQty || 0))
+      }))
+    },
+    specifications: specsInfo ? specsInfo.specs : {},
+    specsCategory: specsInfo ? specsInfo.l2Category : null,
+    pricing: product.pricingId ? {
+      id: product.pricingId._id,
+      basePrice: product.pricingId.basePrice,
+      salePrice: product.pricingId.salePrice,
+      cost: product.pricingId.cost,
+      currency: product.pricingId.currency,
+      marginAmount: product.pricingId.marginAmount,
+      marginPercent: product.pricingId.marginPercent,
+      profitRank: product.pricingId.profitRank
+    } : null,
+    codes: {
+      qrCodeUrl: product.qrCodeUrl,
+      barcodeUrl: product.barcodeUrl,
+      qrPayload: product.qrPayload,
+      barcodePayload: product.barcodePayload
+    },
+    identifiers: {
+      sku: product.sku,
+      barcode: product.barcode,
+      qrCode: product.qrCode,
+      scanId: product.scanId,
+      asin: product.asin,
+      upc: product.upc
+    },
+    category: product.categoryId ? {
+      id: product.categoryId._id,
+      name: product.categoryId.name,
+      slug: product.categoryId.slug,
+      level: product.categoryId.level,
+      parentId: product.categoryId.parentCategory,
+      isActive: product.categoryId.isActive
+    } : null,
+    status: {
+      active: product.status === 'active',
+      visible: product.visibility === 'public',
+      featured: product.featured || product.isFeatured,
+      availability: product.availability,
+      condition: product.condition
+    },
+    media: {
+      images: product.images || [],
+      videos: product.videoUrls || [],
+      primaryImage: product.images?.find(img => img.isPrimary) || (product.images?.[0]) || null
+    }
+  };
+
+  await setCache(cacheKey, enrichedProduct, 3600);
 
   res.status(200).json({
     success: true,
-    data: product
+    data: enrichedProduct
   });
 });
 
@@ -300,7 +610,7 @@ const createProduct = asyncHandler(async (req, res) => {
   // NOTE: sku, asin, upc, barcode, qrCode, scanId, browseNodeId are auto-generated by Product model pre-save middleware.
   // Validate that category is provided and is a Level-3 category
   if (!req.body.categoryId) {
-    return res.status(400).json({ success: false, message: 'category is required and must be a level-3 category' });
+    return res.status(400).json({ success: false, message: 'categoryId is required and must be a level-3 category' });
   }
 
   // ensure category exists and is level-3, and fetch parent L2
@@ -348,7 +658,18 @@ const createProduct = asyncHandler(async (req, res) => {
     console.warn('Category validation service error:', err?.message || err);
   }
 
-  const product = new Product(req.body);
+  // Map frontend fields to backend schema
+  const productData = { ...req.body };
+  
+  // Handle featured field mapping
+  if (req.body.isFeatured !== undefined) {
+    productData.featured = req.body.isFeatured;
+  }
+  if (req.body.featured !== undefined) {
+    productData.isFeatured = req.body.featured;
+  }
+
+  const product = new Product(productData);
 
   // Process images
   product.images = newImages.map((img, index) => ({
@@ -535,11 +856,109 @@ const createProduct = asyncHandler(async (req, res) => {
     logger.error('Failed to persist product audit entry:', err);
   }
 
-  // Return response
+  // Populate related data for frontend response
+  const populatedProduct = await Product.findById(product._id)
+    .populate('categoryId', 'name slug level parentCategory')
+    .populate('pricingId')
+    .lean();
+
+  // Get stock information
+  const stockInfo = await ProductStock.findOne({ productId: product._id }).lean();
+  
+  // Get specs information if exists
+  const specsInfo = await ProductSpecs.findOne({ productId: product._id }).lean();
+
+  // Build comprehensive response for frontend
+  const responseData = {
+    // Core product data
+    ...populatedProduct,
+    
+    // Stock/Inventory information
+    stock: stockInfo ? {
+      quantity: stockInfo.stockQty || 0,
+      lowStockThreshold: stockInfo.lowStockThreshold || 0,
+      availableQuantity: Math.max(0, (stockInfo.stockQty || 0) - (stockInfo.reservedQty || 0)),
+      inStock: (stockInfo.stockQty || 0) > 0,
+      isLowStock: (stockInfo.stockQty || 0) <= (stockInfo.lowStockThreshold || 0),
+      trackQuantity: stockInfo.trackQuantity !== false,
+      allowBackorder: stockInfo.allowBackorder || false,
+      supplier: stockInfo.supplier,
+      supplierSKU: stockInfo.supplierSKU
+    } : null,
+
+    // Specifications
+    specifications: specsInfo ? specsInfo.specs : null,
+
+    // Pricing details (already populated)
+    pricing: populatedProduct.pricingId ? {
+      basePrice: populatedProduct.pricingId.basePrice,
+      currency: populatedProduct.pricingId.currency,
+      cost: populatedProduct.pricingId.cost,
+      salePrice: populatedProduct.pricingId.salePrice,
+      marginAmount: populatedProduct.pricingId.marginAmount,
+      marginPercent: populatedProduct.pricingId.marginPercent,
+      profitRank: populatedProduct.pricingId.profitRank
+    } : null,
+
+    // Auto-generated identifiers
+    identifiers: {
+      sku: populatedProduct.sku,
+      barcode: populatedProduct.barcode,
+      qrCode: populatedProduct.qrCode || populatedProduct.qrPayload,
+      scanId: populatedProduct.scanId,
+      asin: populatedProduct.asin,
+      upc: populatedProduct.upc
+    },
+
+    // URLs for QR/Barcode images (will be updated in background)
+    codes: {
+      qrCodeUrl: populatedProduct.qrCodeUrl || null,
+      barcodeUrl: populatedProduct.barcodeUrl || null
+    },
+
+    // Category information
+    category: populatedProduct.categoryId ? {
+      id: populatedProduct.categoryId._id,
+      name: populatedProduct.categoryId.name,
+      slug: populatedProduct.categoryId.slug,
+      level: populatedProduct.categoryId.level,
+      parentId: populatedProduct.categoryId.parentCategory
+    } : null,
+
+    // Status and visibility
+    status: {
+      active: populatedProduct.status === 'active',
+      visible: populatedProduct.visibility === 'public',
+      featured: populatedProduct.featured || populatedProduct.isFeatured,
+      availability: populatedProduct.availability,
+      condition: populatedProduct.condition
+    },
+
+    // Metadata
+    metadata: {
+      createdAt: populatedProduct.createdAt,
+      updatedAt: populatedProduct.updatedAt,
+      slug: populatedProduct.slug,
+      companyId: populatedProduct.companyId,
+      shopId: populatedProduct.shopId
+    }
+  };
+
+  // Remove populated fields to avoid duplication
+  delete responseData.pricingId;
+  delete responseData.categoryId;
+
+  // Return comprehensive response
   res.status(201).json({
     success: true,
     message: 'Product created successfully',
-    data: product
+    data: responseData,
+    actions: {
+      view: `/products/${populatedProduct.slug}`,
+      edit: `/products/${populatedProduct._id}/edit`,
+      inventory: `/products/${populatedProduct._id}/inventory`,
+      pricing: `/products/${populatedProduct._id}/pricing`
+    }
   });
 
   // ========== BACKGROUND TASKS (non-blocking) ==========
@@ -660,15 +1079,16 @@ const updateProduct = asyncHandler(async (req, res) => {
     });
   }
 
-  // EDGE CASE: If category is being changed, validate it's still L3 and parent exists
-  if (req.body.category && req.body.category !== String(oldProduct.category)) {
-    validateMongoId(req.body.category);
-    const newCategoryDoc = await Category.findById(req.body.category).lean();
+  // EDGE CASE: If categoryId or category is being changed, validate it's still L3 and parent exists
+  const newCategoryId = req.body.categoryId || req.body.category;
+  if (newCategoryId && newCategoryId !== String(oldProduct.categoryId)) {
+    validateMongoId(newCategoryId);
+    const newCategoryDoc = await Category.findById(newCategoryId).lean();
     if (!newCategoryDoc || newCategoryDoc.level !== 3) {
       return res.status(400).json({
         success: false,
         message: 'Invalid category selection: category must be level 3',
-        field: 'category'
+        field: 'categoryId'
       });
     }
     // Validate parent L2 still exists
@@ -678,15 +1098,21 @@ const updateProduct = asyncHandler(async (req, res) => {
         return res.status(400).json({
           success: false,
           message: 'Parent L2 category has been deleted; cannot change to this category',
-          field: 'category'
+          field: 'categoryId'
         });
       }
     } else {
       return res.status(400).json({
         success: false,
         message: 'L3 category must have a valid L2 parent category',
-        field: 'category'
+        field: 'categoryId'
       });
+    }
+    
+    // Normalize to categoryId for consistency
+    if (req.body.category) {
+      req.body.categoryId = newCategoryId;
+      delete req.body.category;
     }
   }
 
@@ -706,27 +1132,124 @@ const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
+  // Handle images and videos
   let updatedImages = oldProduct.images || [];
-  updatedImages = [...updatedImages, ...newImages.map((img, index) => ({
-    url: img.url,
-    alt: img.altText,
-    isPrimary: updatedImages.length === 0 && index === 0,
-    sortOrder: updatedImages.length + index
-  }))];
+  if (newImages.length > 0) {
+    // Add new images to existing ones
+    const additionalImages = newImages.map((img, index) => ({
+      url: img.url,
+      cloudinary_id: img.cloudinary_id,
+      type: img.type || 'image',
+      altText: img.altText || img.alt,
+      isPrimary: img.isPrimary || (updatedImages.length === 0 && index === 0),
+      sortOrder: updatedImages.length + index
+    }));
+    updatedImages = [...updatedImages, ...additionalImages];
+  }
 
   let updatedVideoUrls = oldProduct.videoUrls || [];
-  updatedVideoUrls = [...updatedVideoUrls, ...newVideos.map(v => v.url)];
+  if (newVideos.length > 0) {
+    updatedVideoUrls = [...updatedVideoUrls, ...newVideos.map(v => v.url || v)];
+  }
 
-  req.body.images = updatedImages;
-  req.body.videoUrls = updatedVideoUrls;
+  // Update the payload
+  if (updatedImages.length > 0) req.body.images = updatedImages;
+  if (updatedVideoUrls.length > 0) req.body.videoUrls = updatedVideoUrls;
 
+  // Perform the update
   const product = await Product.findByIdAndUpdate(
     id,
     req.body,
     { new: true, runValidators: true }
-  ).populate('categoryId');
+  ).populate('categoryId', 'name slug level')
+  .populate('pricingId');
 
-  await product.save();
+  if (!product) {
+    return res.status(404).json({
+      success: false,
+      message: 'Product not found after update'
+    });
+  }
+
+  // Update pricing if provided
+  if (req.body.pricing && product.pricingId) {
+    try {
+      await ProductPricing.findByIdAndUpdate(
+        product.pricingId,
+        req.body.pricing,
+        { runValidators: true }
+      );
+      // Refresh the populated pricing data
+      await product.populate('pricingId');
+    } catch (err) {
+      logger.warn('Failed to update product pricing:', err.message);
+    }
+  }
+
+  // Update inventory if provided
+  if (req.body.inventory || req.body.stock) {
+    try {
+      const stockData = req.body.inventory || req.body.stock;
+      await ProductStock.findOneAndUpdate(
+        { productId: product._id },
+        stockData,
+        { upsert: true, runValidators: true }
+      );
+    } catch (err) {
+      logger.warn('Failed to update product stock:', err.message);
+    }
+  }
+
+  // Update specs if provided
+  if (req.body.specs || req.body.attributes) {
+    try {
+      const specsObj = {};
+      if (Array.isArray(req.body.specs)) {
+        req.body.specs.forEach(s => { if (s && s.name) specsObj[s.name] = s.value; });
+      }
+      if (Array.isArray(req.body.attributes)) {
+        req.body.attributes.forEach(a => { if (a && a.name) specsObj[a.name] = a.value; });
+      }
+      
+      if (Object.keys(specsObj).length > 0) {
+        await ProductSpecs.findOneAndUpdate(
+          { productId: product._id },
+          { specs: specsObj },
+          { upsert: true }
+        );
+      }
+    } catch (err) {
+      logger.warn('Failed to update product specs:', err.message);
+    }
+  }
+
+  // Get additional data for comprehensive response
+  const [stockInfo, specsInfo] = await Promise.all([
+    ProductStock.findOne({ productId: product._id }).lean(),
+    ProductSpecs.findOne({ productId: product._id }).lean()
+  ]);
+
+  // Build comprehensive response similar to create
+  const responseData = {
+    ...product.toObject(),
+    stock: stockInfo ? {
+      quantity: stockInfo.stockQty || 0,
+      lowStockThreshold: stockInfo.lowStockThreshold || 0,
+      availableQuantity: Math.max(0, (stockInfo.stockQty || 0) - (stockInfo.reservedQty || 0)),
+      inStock: (stockInfo.stockQty || 0) > 0,
+      isLowStock: (stockInfo.stockQty || 0) <= (stockInfo.lowStockThreshold || 0),
+      trackQuantity: stockInfo.trackQuantity !== false
+    } : null,
+    specifications: specsInfo ? specsInfo.specs : null,
+    pricing: product.pricingId ? {
+      basePrice: product.pricingId.basePrice,
+      currency: product.pricingId.currency,
+      cost: product.pricingId.cost,
+      salePrice: product.pricingId.salePrice,
+      marginAmount: product.pricingId.marginAmount,
+      marginPercent: product.pricingId.marginPercent
+    } : null
+  };
 
   // Persist audit entry as separate document
   try {
@@ -746,7 +1269,12 @@ const updateProduct = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Product updated successfully',
-    data: product
+    data: responseData,
+    actions: {
+      view: `/products/${product.slug}`,
+      edit: `/products/${product._id}/edit`,
+      inventory: `/products/${product._id}/inventory`
+    }
   });
 
   // ========== BACKGROUND TASKS ==========
@@ -1158,7 +1686,8 @@ const searchProducts = asyncHandler(async (req, res) => {
   const query = {
     $text: { $search: q },
     status: 'active',
-    visibility: 'public'
+    visibility: 'public',
+    isDeleted: { $ne: true }
   };
 
   if (category) query.categoryId = category;
@@ -1168,17 +1697,88 @@ const searchProducts = asyncHandler(async (req, res) => {
     if (maxPrice) query['pricing.basePrice'].$lte = parseFloat(maxPrice);
   }
 
-  const products = await Product.find(query, { score: { $meta: 'textScore' } })
-    .populate('categoryId', 'name slug')
-    .sort(sort === 'relevance' ? { score: { $meta: 'textScore' } } : sort)
-    .skip(skip)
-    .limit(parseInt(limit));
+  // Use lean() for better performance and comprehensive population
+  const [products, total] = await Promise.all([
+    Product.find(query, { score: { $meta: 'textScore' } })
+      .populate('categoryId', 'name slug level parentCategory isActive')
+      .populate('pricingId')
+      .sort(sort === 'relevance' ? { score: { $meta: 'textScore' } } : sort)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean()
+      .exec(),
+    Product.countDocuments(query)
+  ]);
 
-  const total = await Product.countDocuments(query);
+  // Enhance products with comprehensive related data
+  const enrichedProducts = await Promise.all(products.map(async (product) => {
+    const [variations, stockInfo, specsInfo] = await Promise.all([
+      ProductVariation.find({ productId: product._id })
+        .populate('attributeValues.attributeId', 'name type')
+        .lean(),
+      ProductStock.find({ productId: product._id }).lean(),
+      ProductSpecs.findOne({ productId: product._id }).lean()
+    ]);
+
+    // Calculate comprehensive stock metrics
+    const totalStock = stockInfo.reduce((sum, stock) => sum + (stock.stockQty || 0), 0);
+    const totalReserved = stockInfo.reduce((sum, stock) => sum + (stock.reservedQty || 0), 0);
+    const availableStock = Math.max(0, totalStock - totalReserved);
+    const lowStockThreshold = stockInfo.length > 0 ? Math.min(...stockInfo.map(s => s.lowStockThreshold || 0)) : 0;
+
+    return {
+      ...product,
+      variations: variations || [],
+      stock: {
+        total: totalStock,
+        available: availableStock,
+        reserved: totalReserved,
+        inStock: availableStock > 0,
+        isLowStock: totalStock <= lowStockThreshold,
+        lowStockThreshold,
+        details: stockInfo || []
+      },
+      specifications: specsInfo ? specsInfo.specs : {},
+      pricing: product.pricingId ? {
+        basePrice: product.pricingId.basePrice,
+        salePrice: product.pricingId.salePrice,
+        cost: product.pricingId.cost,
+        currency: product.pricingId.currency,
+        marginAmount: product.pricingId.marginAmount,
+        marginPercent: product.pricingId.marginPercent
+      } : null,
+      codes: {
+        qrCodeUrl: product.qrCodeUrl,
+        barcodeUrl: product.barcodeUrl,
+        qrPayload: product.qrPayload,
+        barcodePayload: product.barcodePayload
+      },
+      identifiers: {
+        sku: product.sku,
+        barcode: product.barcode,
+        qrCode: product.qrCode,
+        scanId: product.scanId
+      },
+      category: product.categoryId ? {
+        id: product.categoryId._id,
+        name: product.categoryId.name,
+        slug: product.categoryId.slug,
+        level: product.categoryId.level
+      } : null,
+      status: {
+        active: product.status === 'active',
+        visible: product.visibility === 'public',
+        featured: product.featured || product.isFeatured,
+        availability: product.availability
+      },
+      // Include search relevance score
+      relevanceScore: product.score
+    };
+  }));
 
   res.status(200).json({
     success: true,
-    data: products,
+    data: enrichedProducts,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -1965,59 +2565,188 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
     try {
       const { id, ...changes } = op;
       if (!id) { itemRes.error = 'id is required for updates'; results.push(itemRes); continue; }
-      validateMongoId(id);
+      
+      // Validate MongoDB ID format
+      try {
+        validateMongoId(id);
+      } catch (err) {
+        itemRes.error = 'Invalid product ID format'; 
+        results.push(itemRes); 
+        continue;
+      }
+      
       const existing = await Product.findById(id).lean();
       if (!existing) { itemRes.error = 'Product not found'; results.push(itemRes); continue; }
 
       // Prevent SKU change
-      if (changes.sku && changes.sku !== existing.sku) { itemRes.error = 'SKU cannot be modified'; results.push(itemRes); continue; }
+      if (changes.sku && changes.sku !== existing.sku) { 
+        itemRes.error = 'SKU cannot be modified after creation'; 
+        results.push(itemRes); 
+        continue; 
+      }
 
       // If changing name, ensure uniqueness within company
       if (changes.name && changes.name !== existing.name) {
-        const dup = await Product.findOne({ _id: { $ne: id }, companyId: existing.companyId, name: changes.name }).lean();
-        if (dup) { itemRes.error = 'Another product with this name exists in company'; results.push(itemRes); continue; }
+        const dup = await Product.findOne({ 
+          _id: { $ne: id }, 
+          companyId: existing.companyId, 
+          name: changes.name 
+        }).lean();
+        if (dup) { 
+          itemRes.error = 'Another product with this name exists in company'; 
+          results.push(itemRes); 
+          continue; 
+        }
       }
 
-      // Category validation if present
-      if (changes.category && changes.category !== String(existing.category)) {
-        validateMongoId(changes.category);
-        const newCat = await Category.findById(changes.category).lean();
-        if (!newCat || newCat.level !== 3) { itemRes.error = 'Invalid category: must be level-3'; results.push(itemRes); continue; }
-        if (!newCat.parentCategory) { itemRes.error = 'L3 category must have L2 parent'; results.push(itemRes); continue; }
+      // Category validation if present (handle both categoryId and category fields)
+      const newCategoryId = changes.categoryId || changes.category;
+      if (newCategoryId && newCategoryId !== String(existing.categoryId)) {
+        try {
+          validateMongoId(newCategoryId);
+        } catch (err) {
+          itemRes.error = 'Invalid category ID format'; 
+          results.push(itemRes); 
+          continue;
+        }
+        
+        const newCat = await Category.findById(newCategoryId).lean();
+        if (!newCat || newCat.level !== 3) { 
+          itemRes.error = 'Invalid category: must be level-3'; 
+          results.push(itemRes); 
+          continue; 
+        }
+        if (!newCat.parentCategory) { 
+          itemRes.error = 'L3 category must have L2 parent'; 
+          results.push(itemRes); 
+          continue; 
+        }
+        
+        // Normalize to categoryId
+        changes.categoryId = newCategoryId;
+        delete changes.category;
       }
 
       // Images handling: combine existing images with new ones if provided
       let updatePayload = Object.assign({}, changes);
       if (Array.isArray(changes.images)) {
+        if (changes.images.length > 10) {
+          itemRes.error = 'Cannot exceed 10 images per product';
+          results.push(itemRes);
+          continue;
+        }
         const existingImages = existing.images || [];
-        const merged = [...existingImages, ...changes.images].slice(0, 10);
-        updatePayload.images = merged;
+        const totalImages = existingImages.length + changes.images.length;
+        
+        if (totalImages > 10) {
+          itemRes.error = `Total images would exceed 10 (existing: ${existingImages.length}, new: ${changes.images.length})`;
+          results.push(itemRes);
+          continue;
+        }
+        
+        // Process new images
+        const processedImages = changes.images.map((img, idx) => ({
+          url: img.url || img,
+          cloudinary_id: img.cloudinary_id,
+          type: img.type || 'image',
+          altText: img.altText || img.alt,
+          isPrimary: img.isPrimary || false,
+          sortOrder: existingImages.length + idx
+        }));
+        
+        updatePayload.images = [...existingImages, ...processedImages];
       }
-
-      const updated = await Product.findByIdAndUpdate(id, updatePayload, { new: true, runValidators: true }).populate('categoryId');
-      if (!updated) { itemRes.error = 'Failed to update product'; results.push(itemRes); continue; }
-
-      // Audit
-      try { await ProductAudit.create({ productId: updated._id, action: 'update', changedBy: req.user?.id || 'system', oldValue: existing, newValue: changes, timestamp: new Date() }); } catch (e) { logger.warn('BulkUpdate: audit failed', e.message || e); }
-
-      itemRes.success = true; itemRes.data = updated;
+      
+      // Video handling
+      if (Array.isArray(changes.videos)) {
+        const existingVideos = existing.videoUrls || [];
+        const newVideoUrls = changes.videos.map(v => v.url || v);
+        updatePayload.videoUrls = [...existingVideos, ...newVideoUrls];
+        delete updatePayload.videos;
+      }
+      
+      // Perform the update
+      const updatedProduct = await Product.findByIdAndUpdate(
+        id, 
+        updatePayload, 
+        { new: true, runValidators: true }
+      ).populate('categoryId', 'name slug')
+      .populate('pricingId');
+      
+      if (!updatedProduct) {
+        itemRes.error = 'Product not found after update';
+        results.push(itemRes);
+        continue;
+      }
+      
+      // Update related data if provided
+      if (changes.pricing && updatedProduct.pricingId) {
+        try {
+          await ProductPricing.findByIdAndUpdate(
+            updatedProduct.pricingId,
+            changes.pricing,
+            { runValidators: true }
+          );
+        } catch (err) {
+          logger.warn(`Failed to update pricing for product ${id}:`, err.message);
+        }
+      }
+      
+      if (changes.inventory || changes.stock) {
+        try {
+          const stockData = changes.inventory || changes.stock;
+          await ProductStock.findOneAndUpdate(
+            { productId: id },
+            stockData,
+            { upsert: true, runValidators: true }
+          );
+        } catch (err) {
+          logger.warn(`Failed to update stock for product ${id}:`, err.message);
+        }
+      }
+      
+      // Create audit entry
+      try {
+        await ProductAudit.create({
+          productId: id,
+          action: 'bulk_update',
+          changedBy: req.user?.id || 'system',
+          oldValue: existing,
+          newValue: changes,
+          timestamp: new Date()
+        });
+      } catch (err) {
+        logger.warn(`Failed to create audit entry for product ${id}:`, err.message);
+      }
+      
+      itemRes.success = true;
+      itemRes.data = updatedProduct;
       results.push(itemRes);
-
-      // Background tasks
-      setImmediate(() => {
-        delCache(`product:${id}`).catch(() => {});
-        delCache(`product:slug:${existing.slug}`).catch(() => {});
-        scanDel('products:*').catch(() => {});
-        publishProductEvent('inventory.product.updated', updated.toObject()).catch(() => {});
-      });
-
+      
     } catch (err) {
-      logger.error('BulkUpdate: unexpected error', err);
-      itemRes.error = err.message || err; results.push(itemRes);
+      itemRes.error = err.message || 'Update failed';
+      results.push(itemRes);
     }
   }
-
-  res.status(207).json({ success: true, results });
+  
+  // Invalidate caches asynchronously
+  setImmediate(() => {
+    scanDel('products:*').catch((err) => logger.error('Bulk update cache cleanup failed:', err));
+  });
+  
+  const successCount = results.filter(r => r.success).length;
+  const failureCount = results.length - successCount;
+  
+  res.status(207).json({
+    success: true,
+    message: `Bulk update completed: ${successCount} successful, ${failureCount} failed`,
+    summary: {
+      total: results.length,
+      successful: successCount,
+      failed: failureCount
+    },
+    results
+  });
 });
 
 const bulkDeleteProducts = asyncHandler(async (req, res) => {

@@ -87,7 +87,7 @@ ProductStockSchema.index({ lastRestockDate: 1 });               // Restock analy
 /* -------------------------------------------------------------------------- */
 /*                            PRE-SAVE: COMPUTE FAST ACCESS FIELDS            */
 /* -------------------------------------------------------------------------- */
-ProductStockSchema.pre('save', function(next) {
+ProductStockSchema.pre('save', async function() {
   // Compute and store frequently accessed values for maximum speed
   this.availableQty = Math.max(0, this.stockQty - this.reservedQty);
   this.inStock = this.availableQty > 0;
@@ -102,8 +102,6 @@ ProductStockSchema.pre('save', function(next) {
       this.stockoutRiskDays = Math.floor(this.availableQty / this.avgDailySales);
     }
   }
-  
-  next();
 });
 
 /* -------------------------------------------------------------------------- */
@@ -142,16 +140,16 @@ ProductStockSchema.virtual('daysOfInventory').get(async function() {
 /* -------------------------------------------------------------------------- */
 /*          PRE-SAVE: VALIDATE FORECASTING FIELDS & CALCULATE RISK              */
 /* -------------------------------------------------------------------------- */
-ProductStockSchema.pre('save', function(next) {
+ProductStockSchema.pre('save', async function() {
   // Validate consistency
   if (this.minReorderQty < 1) {
-    return next(new Error('minReorderQty must be at least 1'));
+    throw new Error('minReorderQty must be at least 1');
   }
   if (this.lowStockThreshold < 0) {
-    return next(new Error('lowStockThreshold cannot be negative'));
+    throw new Error('lowStockThreshold cannot be negative');
   }
   if (this.supplierLeadDays < 1) {
-    return next(new Error('supplierLeadDays must be at least 1'));
+    throw new Error('supplierLeadDays must be at least 1');
   }
 
   // Auto-calculate suggestedReorderQty if avgDailySales is set
@@ -166,8 +164,6 @@ ProductStockSchema.pre('save', function(next) {
     const available = Math.max(0, current - this.safetyStock);
     this.stockoutRiskDays = available > 0 ? Math.ceil(available / this.avgDailySales) : 0;
   }
-
-  next();
 });
 
 /* -------------------------------------------------------------------------- */

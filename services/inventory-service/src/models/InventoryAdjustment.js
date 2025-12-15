@@ -76,15 +76,6 @@ inventoryAdjustmentSchema.pre('save', async function (next) {
       await stockRecord.save();
       await product.save();
 
-      // Add to product auditTrail
-      product.auditTrail.push({
-        action: 'stock_change',
-        changedBy: this.userId || 'system',
-        oldValue: { quantity: oldQuantity },
-        newValue: { quantity: newQuantity, adjustmentType: this.adjustmentType }
-      });
-      await product.save();
-
       this.approvedBy = this.approvedBy || this.userId;
       this.approvedAt = new Date();
     } catch (error) {

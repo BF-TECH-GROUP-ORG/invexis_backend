@@ -16,7 +16,7 @@ const StockChangeSchema = new Schema({
 
   qty:         { type: Number, required: true }, // negative = out, positive = in
   previous:    { type: Number, required: true },
-  new:         { type: Number, required: true },
+  new:         { type: Number }, // Set by pre-save hook
 
   reason:      { type: String, trim: true },
   orderId:     { type: Schema.Types.ObjectId, sparse: true, index: true }, // Order-related stock changes
@@ -43,76 +43,77 @@ StockChangeSchema.index({ variationId: 1, createdAt: -1 });
 /* -------------------------------------------------------------------------- */
 /*                          PRE-SAVE: ATOMIC + AUDIT + ALERT                  */
 /* -------------------------------------------------------------------------- */
-StockChangeSchema.pre('save', async function(next) {
-  try {
-    // 1. Validate qty sign
-    if (this.qty === 0) return next(new Error('Quantity cannot be zero'));
-    const outflow = ['sale', 'adjustment', 'damage'].includes(this.type);
-    const inflow  = ['restock', 'return', 'transfer'].includes(this.type);
-    if (outflow && this.qty > 0) return next(new Error('Outflow must be negative'));
-    if (inflow  && this.qty < 0) return next(new Error('Inflow must be positive'));
+StockChangeSchema.pre('save', async function() {
+  // For transfers, skip stock update logic since transfers handle stock updates manually
+  // This is because transfers involve two separate products/shops and complex logic
+  if (this.type === 'transfer' && this.new !== undefined) {
+    // Transfer already calculated 'new' value and will update stock separately
+    return;
+  }
 
-    // 2. Validate ownership
-    const product = await mongoose.model('Product').findOne({
-      _id: this.productId,
-      companyId: this.companyId
-    }).lean();
-    if (!product) return next(new Error('Product not owned by company'));
+  // 1. Validate qty sign
+  if (this.qty === 0) throw new Error('Quantity cannot be zero');
+  const outflow = ['sale', 'adjustment', 'damage'].includes(this.type);
+  const inflow  = ['restock', 'return'].includes(this.type);
+  if (outflow && this.qty > 0) throw new Error('Outflow must be negative');
+  if (inflow  && this.qty < 0) throw new Error('Inflow must be positive');
 
-    // 3. Get current stock from ProductStock model
-    let currentStock = 0;
-    const stockRecord = await mongoose.model('ProductStock').findOne({
+  // 2. Validate ownership
+  const product = await mongoose.model('Product').findOne({
+    _id: this.productId,
+    companyId: this.companyId
+  }).lean();
+  if (!product) throw new Error('Product not owned by company');
+
+  // 3. Get current stock from ProductStock model
+  let currentStock = 0;
+  const stockRecord = await mongoose.model('ProductStock').findOne({
+    productId: this.productId,
+    variationId: this.variationId || null
+  }).lean();
+  
+  if (!stockRecord) throw new Error('Stock record not found');
+  currentStock = stockRecord.stockQty || 0;
+
+  // 4. Concurrency protection
+  if (currentStock !== this.previous) {
+    throw new Error('Stock changed by another worker — retry');
+  }
+
+  // 5. Final stock
+  this.new = this.previous + this.qty;
+  if (this.new < 0) throw new Error('Not enough stock');
+
+  // 6. Apply atomic update to ProductStock
+  await mongoose.model('ProductStock').updateOne(
+    { 
       productId: this.productId,
       variationId: this.variationId || null
-    }).lean();
-    
-    if (!stockRecord) return next(new Error('Stock record not found'));
-    currentStock = stockRecord.stockQty || 0;
+    },
+    { $set: { stockQty: this.new } }
+  );
 
-    // 4. Concurrency protection
-    if (currentStock !== this.previous) {
-      return next(new Error('Stock changed by another worker — retry'));
-    }
+  // 7. Audit (optional but recommended)
+  try {
+    await mongoose.model('ProductAudit').create({
+      productId: this.productId,
+      action: 'stock_change',
+      changedBy: this.userId,
+      oldValue: { stock: this.previous },
+      newValue: { stock: this.new, type: this.type, qty: this.qty },
+      meta: { shopId: this.shopId, terminalId: this.terminalId }
+    });
+  } catch (e) {}
 
-    // 5. Final stock
-    this.new = this.previous + this.qty;
-    if (this.new < 0) return next(new Error('Not enough stock'));
-
-    // 6. Apply atomic update to ProductStock
-    await mongoose.model('ProductStock').updateOne(
-      { 
-        productId: this.productId,
-        variationId: this.variationId || null
-      },
-      { $set: { stockQty: this.new } }
-    );
-
-    // 7. Audit (optional but recommended)
+  // 8. Low stock alert
+  if (this.new <= 5 && outflow) {
     try {
-      await mongoose.model('ProductAudit').create({
-        productId: this.productId,
-        action: 'stock_change',
-        changedBy: this.userId,
-        oldValue: { stock: this.previous },
-        newValue: { stock: this.new, type: this.type, qty: this.qty },
-        meta: { shopId: this.shopId, terminalId: this.terminalId }
-      });
+      await mongoose.model('LowStockAlert').updateOne(
+        { productId: this.productId, variationId: this.variationId || null },
+        { $set: { currentStock: this.new, notified: false } },
+        { upsert: true }
+      );
     } catch (e) {}
-
-    // 8. Low stock alert
-    if (this.new <= 5 && outflow) {
-      try {
-        await mongoose.model('LowStockAlert').updateOne(
-          { productId: this.productId, variationId: this.variationId || null },
-          { $set: { currentStock: this.new, notified: false } },
-          { upsert: true }
-        );
-      } catch (e) {}
-    }
-
-    next();
-  } catch (err) {
-    next(err);
   }
 });
 

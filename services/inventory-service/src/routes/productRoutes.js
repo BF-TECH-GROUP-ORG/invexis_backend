@@ -28,6 +28,28 @@ const { handleUploads } = require('../utils/uploadUtil');
 const { preGenerateProductId } = require('../middleware/preGenerateId');
 
 router.get('/', getAllProducts);
+
+// Bulk operations - MUST come before parameterized routes
+router.post('/bulk', bulkCreateProducts);
+router.put('/bulk', bulkUpdateProducts);
+router.delete('/bulk', bulkDeleteProducts);
+
+// QR Code & Barcode Scanning
+router.post('/scan', scanProduct);
+router.get('/lookup/:barcode', lookupByBarcode);
+
+// Smart Product Creation
+router.post('/smart-create', smartCreateProduct);
+router.get('/check-duplicate', checkProductDuplicate);
+
+// Specific static routes before parameterized ones
+router.get('/low/stock', getLowStockProducts);
+router.get('/get/scheduled', getScheduledProducts);
+router.get('/get/featured', getFeaturedProducts);
+router.get('/search/product', searchProducts);
+router.get('/old/unbought', getOldUnboughtProducts);
+
+// Parameterized routes - MUST come after static routes
 router.get('/:id', getProductById);
 router.get('/slug/:slug', getProductBySlug);
 router.get('/category/:categoryId', getProductsByCategory);
@@ -36,22 +58,5 @@ router.post('/', handleUploads, createProduct);
 router.put('/:id', (req, res, next) => { req.params.productId = req.params.id; next(); }, handleUploads, updateProduct);
 router.delete('/:id', deleteProduct);
 router.patch('/:id/inventory', updateInventory);
-router.get('/low/stock', getLowStockProducts);
-router.get('/get/scheduled', getScheduledProducts);
-router.get('/get/featured', getFeaturedProducts);
-router.get('/search/product', searchProducts);
-router.get('/old/unbought', getOldUnboughtProducts);
-
-// QR Code & Barcode Scanning
-router.post('/scan', scanProduct);
-router.get('/lookup/:barcode', lookupByBarcode);
-
-// Smart Product Creation
-router.post('/smart-create', protect, smartCreateProduct);
-// Bulk operations
-router.post('/bulk',  bulkCreateProducts);
-router.put('/bulk', bulkUpdateProducts);
-router.delete('/bulk', bulkDeleteProducts);
-router.get('/check-duplicate', protect, checkProductDuplicate);
 
 module.exports = router;

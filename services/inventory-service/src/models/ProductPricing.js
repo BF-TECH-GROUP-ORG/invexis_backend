@@ -41,25 +41,24 @@ const ProductPricingSchema = new Schema({
 // Note: productId index automatically created by index: true property
 
 // Compute margin fields before save for analytics
-ProductPricingSchema.pre('save', function(next) {
+ProductPricingSchema.pre('save', async function() {
   try {
     const bp = this.basePrice || 0;
     const cost = this.cost || 0;
     this.marginAmount = Math.max(0, bp - cost);
     this.marginPercent = bp > 0 ? Number(((this.marginAmount / bp) * 100).toFixed(2)) : 0;
-    next();
   } catch (err) {
-    next(err);
+    throw err;
   }
 });
 
 /* -------------------------------------------------------------------------- */
 /*         PRE-SAVE: VALIDATE & CALCULATE MARGIN & PROFIT METRICS              */
 /* -------------------------------------------------------------------------- */
-ProductPricingSchema.pre('save', function(next) {
+ProductPricingSchema.pre('save', async function() {
   // Validate cost is not higher than basePrice
   if (this.cost > this.basePrice) {
-    return next(new Error('Cost cannot exceed basePrice'));
+    throw new Error('Cost cannot exceed basePrice');
   }
 
   // Calculate margin amount
@@ -102,8 +101,6 @@ ProductPricingSchema.pre('save', function(next) {
     this.previousBasePrice = this.basePrice;
     this.priceChangedAt = new Date();
   }
-
-  next();
 });
 
 module.exports = mongoose.model('ProductPricing', ProductPricingSchema);
