@@ -1,6 +1,9 @@
 require('dotenv').config();
 const app = require('./app');
 const connectDB = require('./config/db');
+const consumeEvents = require('./events/consumer');
+const { initPublishers } = require('./events/producer');
+const { startOutboxDispatcher } = require('./workers/outboxDispatcher');
 
 let connectRabbitMQ, redis;
 try {
@@ -41,6 +44,11 @@ const startServer = async () => {
 
             // Connect to RabbitMQ
             await connectRabbitMQ();
+
+            // Initialize Event System
+            await consumeEvents();
+            await initPublishers();
+            await startOutboxDispatcher(5000);
 
             // Connect to Redis
             await redis.connect();

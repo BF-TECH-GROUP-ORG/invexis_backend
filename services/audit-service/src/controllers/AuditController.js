@@ -18,11 +18,48 @@ exports.getLogs = async (req, res) => {
         if (source) query.source_service = source;
         if (type) query.event_type = type;
 
-        // If entityId is passed, we might need to look inside payload or metadata
-        // This depends on how we structure data. For now, let's assume it might be in metadata.entityId
+        // Enhanced filtering using new schema fields
         if (entityId) {
-            query["metadata.entityId"] = entityId;
+            query.entityId = entityId;
         }
+
+        const { companyId, userId, entityType } = req.query;
+
+        // --- Security / Multi-tenancy ---
+        const userRole = req.headers['x-user-role'];
+        const userCompaniesStr = req.headers['x-user-companies'];
+        let allowedCompanies = [];
+
+        if (userCompaniesStr) {
+            try {
+                allowedCompanies = JSON.parse(userCompaniesStr);
+            } catch (e) { }
+        }
+
+        // If not super_admin, restrict access
+        if (userRole !== 'super_admin') {
+            if (companyId) {
+                // User requested specific company, verify they have access
+                if (!allowedCompanies.includes(companyId)) {
+                    return res.status(403).json({ success: false, message: 'Access denied to this company audit logs' });
+                }
+                query.companyId = companyId;
+            } else {
+                // Return logs for ALL their companies
+                if (allowedCompanies.length > 0) {
+                    query.companyId = { $in: allowedCompanies };
+                } else {
+                    // No companies assigned? return empty or ensure no leakage
+                    return res.json({ success: true, data: [], pagination: { total: 0, page: 1, pages: 0 } });
+                }
+            }
+        } else {
+            // Admin can query any company
+            if (companyId) query.companyId = companyId;
+        }
+
+        if (userId) query.userId = userId;
+        if (entityType) query.entityType = entityType;
 
         if (startDate || endDate) {
             query.occurred_at = {};
@@ -61,6 +98,21 @@ exports.getLogDetails = async (req, res) => {
         if (!log) {
             return res.status(404).json({ success: false, message: "Log not found" });
         }
+
+        // Security Check
+        const userRole = req.headers['x-user-role'];
+        if (userRole !== 'super_admin') {
+            const userCompaniesStr = req.headers['x-user-companies'];
+            let allowedCompanies = [];
+            try {
+                allowedCompanies = JSON.parse(userCompaniesStr || '[]');
+            } catch (e) { }
+
+            if (log.companyId && !allowedCompanies.includes(log.companyId)) {
+                return res.status(403).json({ success: false, message: "Access denied" });
+            }
+        }
+
         res.json({ success: true, data: log });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

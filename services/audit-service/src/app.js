@@ -30,6 +30,9 @@ app.get("/health", (req, res) => {
     });
 });
 
+// API Routes
+app.use("/api/audit", require("./routes/AuditRoutes"));
+
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({
@@ -37,9 +40,6 @@ app.use((req, res) => {
         message: "Route not found",
     });
 });
-
-// API Routes
-app.use("/api/audit", require("./routes/AuditRoutes"));
 
 // Error handling
 app.use((err, req, res, next) => {

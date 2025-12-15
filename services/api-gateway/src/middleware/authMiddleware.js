@@ -21,10 +21,13 @@ const authenticateToken = (req, res, next) => {
         });
 
         // Attach safe payload to request
+        // Attach safe payload to request
         req.user = {
-            id: decoded.id,
+            id: decoded.id || decoded.sub, // Handle 'sub' vs 'id' variance
             email: decoded.email,
             role: decoded.role,
+            companies: decoded.companies || [],
+            shops: decoded.shops || []
         };
 
         next();

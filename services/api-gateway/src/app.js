@@ -204,7 +204,7 @@ app.use("/api/payment", paymentProxy);
 app.use("/api/ecommerce", ecommerceProxy);
 app.use("/api/notification", notificationProxy);
 app.use("/api/analytics", analyticsProxy);
-app.use("/api/audit", auditProxy);
+app.use("/api/audit", authenticateToken, auditProxy);
 app.use("/api/debt", debtProxy);
 
 // Socket.IO specific routes (add these before other websocket routes)

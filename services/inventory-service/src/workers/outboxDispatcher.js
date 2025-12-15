@@ -54,8 +54,8 @@ async function processOutbox() {
     // Reset stale processing events (older than 12 minutes)
     await Outbox.resetStaleProcessing(10);
 
-    // Fetch pending events
-    const pendingEvents = await Outbox.OutboxService.fetchBatch(50);
+    // Use claimPending to lock events and mark them as processing
+    const pendingEvents = await Outbox.OutboxService.claimPending(50);
 
     if (pendingEvents.length === 0) return;
 
@@ -63,9 +63,6 @@ async function processOutbox() {
 
     for (const event of pendingEvents) {
       try {
-        // Mark as processing
-        await Outbox.markAsProcessing(event._id);
-
         // Parse payload if needed
         const payload = typeof event.payload === 'string'
           ? JSON.parse(event.payload)

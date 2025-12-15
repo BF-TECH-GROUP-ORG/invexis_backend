@@ -90,7 +90,13 @@ async function refreshTokens(refreshToken) {
     const user = await User.findById(uid);
     if (!user) throw new Error("User not found");
 
-    const accessToken = signAccess({ sub: user._id.toString() });
+    const accessToken = signAccess({
+        sub: user._id.toString(),
+        role: user.role,
+        email: user.email,
+        companies: user.companies,
+        shops: user.shops
+    });
     const newRefreshToken = signRefresh({
         sid: session._id.toString(),
         uid: user._id.toString(),

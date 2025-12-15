@@ -8,11 +8,11 @@ const AnalyticsEvent = sequelize.define("AnalyticsEvent", {
         primaryKey: true,
     },
     event_type: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: false,
     },
     source_service: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
     },
     payload: {
         type: DataTypes.JSONB, // Use JSONB for Postgres
@@ -24,6 +24,7 @@ const AnalyticsEvent = sequelize.define("AnalyticsEvent", {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW,
         allowNull: false,
+        primaryKey: true, // Composite PK for TimescaleDB
     }
 }, {
     tableName: "analytics_events",

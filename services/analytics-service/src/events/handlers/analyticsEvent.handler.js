@@ -1,32 +1,52 @@
 "use strict";
 
 const AnalyticsEvent = require("../../models/AnalyticsEvent.model");
+const IngestionController = require("../../controllers/IngestionController");
 
 const handleAnalyticsEvent = async (event, routingKey) => {
     try {
-        // Ignore health check events
-        if (routingKey.startsWith('health.')) {
-            return;
+        const { data, source, emittedAt } = event || {};
+        let { type } = event || {};
+
+        // Fallback to routingKey if type is not in payload
+        // This is common for simple messages or health checks
+        if (!type && routingKey) {
+            type = routingKey;
         }
 
-        // Analytics service might want to track specific business metrics or everything
-        // For now, let's track everything that reaches here.
+        if (!type) {
+             // If we still don't have a type, we can't process it
+             return;
+        }
 
-        // Check if it's an analytics event or just a regular event we want to analyze.
-        // If we want to store *all* events as data points:
+        // Ignore health checks
+        if (type.startsWith("health.")) return;
 
-        console.log(`📊 analyzing event: ${routingKey}`);
-
+        // 1. Store Raw Event (Log)
         await AnalyticsEvent.create({
-            event_type: routingKey,
-            source_service: event.source || "unknown",
-            payload: event.data || event,
-            metadata: { ...event, data: undefined },
-            time: event.emittedAt || new Date(),
+            event_type: type,
+            source_service: source,
+            payload: data,
+            time: emittedAt || new Date(),
+            metadata: {
+                rawEventId: event.id,
+            },
         });
 
+        // 2. Process for Metrics (Ingestion)
+        if (type === "sale.created") {
+            await IngestionController.processSaleCreated(event);
+        } else if (
+            type === "inventory.stock.updated" ||
+            type === "inventory.product.updated"
+        ) {
+            // Basic mapping, can be refined based on exact event names from other services
+            await IngestionController.processInventoryUpdated(event);
+        }
+
+        console.log(`✅ Analytics: Processed ${type} from ${source}`);
     } catch (error) {
-        console.error("❌ Error saving analytics event:", error.message);
+        console.error("❌ Analytics Handler Error:", error.message);
     }
 };
 

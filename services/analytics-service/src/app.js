@@ -5,6 +5,10 @@ const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
+const AnalyticsEvent = require("./models/AnalyticsEvent.model");
+const SalesMetric = require("./models/SalesMetric.model");
+const InventoryMetric = require("./models/InventoryMetric.model");
+const Outbox = require("./models/outbox.model");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 const sequelize = require("./config/database");
 
@@ -57,30 +61,76 @@ const initializeDatabase = async () => {
         console.log("✅ Database connection established");
 
         // Sync models
-        // In production, use migrations. For dev/setup, sync is fine.
-        await sequelize.sync({ alter: true });
+        // Sync models
+        // Disable alter: true as it is unsafe for Hypertables/Views
+        await sequelize.sync({ force: false });
         console.log("✅ Database models synchronized");
 
-        // Check for TimescaleDB extension and create hypertable
+        // Check for TimescaleDB extension
         try {
             await sequelize.query("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;");
             console.log("✅ TimescaleDB extension verified");
+        } catch (err) {
+            console.warn("⚠️ TimescaleDB extension check failed (might already exist):", err.message);
+        }
 
-            // Create hypertable for analytics_events
-            // We need to Convert the table to a hypertable. 
-            // Note: This throws an error if it's already a hypertable, so we wrap it or check first.
-            // A simple way is to catch the specific error "table ... is already a hypertable"
+        // 1. Convert to Hypertable: Analytics Events (Raw)
+        try {
+            await sequelize.query("SELECT create_hypertable('analytics_events', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+            console.log("✅ Hypertable 'analytics_events' ready");
+        } catch (err) {
+            console.warn("⚠️ Hypertable 'analytics_events' creation skipped/failed:", err.message);
+        }
 
+        // 2. Convert to Hypertable: Sales Metrics
+        try {
+            await sequelize.query("SELECT create_hypertable('sales_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+            console.log("✅ Hypertable 'sales_metrics' ready");
+        } catch (err) {
+            console.warn("⚠️ Hypertable 'sales_metrics' creation skipped/failed:", err.message);
+        }
+
+        // 3. Convert to Hypertable: Inventory Metrics
+        try {
+            await sequelize.query("SELECT create_hypertable('inventory_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+            console.log("✅ Hypertable 'inventory_metrics' ready");
+        } catch (err) {
+            console.warn("⚠️ Hypertable 'inventory_metrics' creation skipped/failed:", err.message);
+        }
+
+        // 4. Create Continuous Aggregates (Materialized Views)
+        try {
+            // Daily Sales Summary
+            await sequelize.query(`
+                CREATE MATERIALIZED VIEW IF NOT EXISTS sales_daily_summary
+                WITH (timescaledb.continuous) AS
+                SELECT 
+                    time_bucket('1 day', time) AS bucket,
+                    "companyId",
+                    "shopId",
+                    SUM(amount) as total_revenue,
+                    SUM("itemCount") as total_items,
+                    COUNT(*) as total_orders
+                FROM sales_metrics
+                GROUP BY bucket, "companyId", "shopId"
+                WITH NO DATA;
+            `);
+
+            // Add Refresh Policy
             try {
-                await sequelize.query("SELECT create_hypertable('analytics_events', 'time', if_not_exists => TRUE);");
-                console.log("✅ 'analytics_events' converted to hypertable");
-            } catch (htError) {
-                // Ignore if it says it is already a hypertable (though if_not_exists should handle it)
-                console.log("ℹ️ Hypertable check:", htError.message);
+                await sequelize.query(`
+                    SELECT add_continuous_aggregate_policy('sales_daily_summary',
+                        start_offset => INTERVAL '1 month',
+                        end_offset => INTERVAL '1 hour',
+                        schedule_interval => INTERVAL '1 hour');
+                `);
+            } catch (policyErr) {
+                // Ignore if policy already exists
             }
+            console.log("✅ Continuous Aggregate 'sales_daily_summary' ready");
 
         } catch (err) {
-            console.warn("⚠️ Could not create TimescaleDB extension (might strictly need superuser, or already exists, or not using Timescale image):", err.message);
+            console.error("❌ Failed to create continuous aggregates:", err.message);
         }
 
     } catch (error) {

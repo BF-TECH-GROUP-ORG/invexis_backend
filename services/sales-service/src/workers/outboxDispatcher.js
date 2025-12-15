@@ -6,9 +6,15 @@ const { emit } = require("../events/producer");
  * Process a batch of pending outbox events
  * Reads events from outbox table and publishes them via producer.emit()
  */
+/**
+ * Process a batch of pending outbox events
+ * Reads events from outbox table and publishes them via producer.emit()
+ */
 async function processOutboxBatch() {
   try {
-    const pendingEvents = await Outbox.OutboxService.fetchBatch(50);
+    // Use claimPending to lock events and mark them as processing
+    // This prevents duplicate processing and race conditions
+    const pendingEvents = await Outbox.OutboxService.claimPending(50);
 
     if (pendingEvents.length === 0) {
       return;
@@ -23,6 +29,7 @@ async function processOutboxBatch() {
           typeof event.payload === "string"
             ? JSON.parse(event.payload)
             : event.payload;
+
         await emit(event.routingKey, payload);
 
         // Mark as sent

@@ -164,7 +164,7 @@ const productSchema = new Schema(
       currency: {
         type: String,
         default: "USD",
-        enum: ["USD", "EUR", "GBP", "FRW" , "KES"],
+        enum: ["USD", "EUR", "GBP", "FRW", "KES"],
       },
     },
 
@@ -385,56 +385,61 @@ productSchema.pre("save", async function (next) {
     }
 
     // Create full product payload and encode as base64 for embedding into QR / barcode payloads.
-    try {
-      // toObject gives a plain object representation; exclude mongoose internals
-      const obj = this.toObject ? this.toObject({ depopulate: true, virtuals: false }) : Object.assign({}, this);
-      // It's safe to remove mongoose __v if present
-      if (obj.__v !== undefined) delete obj.__v;
-      const encoded = Buffer.from(JSON.stringify(obj)).toString("base64");
+    // Construct a minimal, safe payload for QR/Barcode to prevent recursion and bloating
+    const payloadObj = {
+      _id: this._id,
+      name: this.name,
+      sku: this.sku,
+      barcode: this.barcode,
+      price: this.pricing?.salePrice || this.pricing?.basePrice,
+      currency: this.pricing?.currency,
+      companyId: this.companyId,
+      shopId: this.shopId,
+      updatedAt: new Date()
+    };
 
-      // QR code should contain the full product data encoded
-      this.qrCode = encoded;
-      this.qrPayload = encoded;
+    const encoded = Buffer.from(JSON.stringify(payloadObj)).toString("base64");
 
-      // Barcode should display SKU but carry the full encoded payload in barcodePayload
-      this.barcodePayload = encoded;
-    } catch (e) {
-      // If encoding fails for any reason, fallback to lightweight codes
-      if (!this.qrCode) this.qrCode = `QR${Date.now()}${Math.floor(Math.random() * 9999)}`;
-      if (!this.qrPayload) this.qrPayload = this.qrCode;
-    }
+    // QR code contains the minimal encoded payload
+    this.qrCode = encoded;
+    this.qrPayload = encoded;
 
-    // scanId
-    if (!this.scanId) {
-      this.scanId = await ensureUnique('scanId', () => `SCAN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`);
-    }
-
-    // ASIN - auto-generate if missing. Use a compact alphanumeric pattern.
-    if (!this.asin) {
-      this.asin = await ensureUnique('asin', () => {
-        const hash = Math.random().toString(36).substring(2, 8).toUpperCase();
-        return `ASIN${Date.now().toString().slice(-6)}${hash}`;
-      });
-    }
-
-    // UPC - 12 digit numeric code (generate random; uniqueness checked)
-    if (!this.upc) {
-      this.upc = await ensureUnique('upc', () => {
-        const num = Math.floor(Math.random() * 1e12).toString().padStart(12, '0');
-        return num;
-      });
-    }
-
-    // browseNodeId - low-collision identifier used for browsing trees
-    if (!this.browseNodeId) {
-      this.browseNodeId = `BN${Date.now().toString().slice(-8)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-    }
-
-    return next();
-  } catch (err) {
-    return next(err);
+    // Barcode carries the same minimal payload
+    this.barcodePayload = encoded;
+  } catch (e) {
+    // If encoding fails for any reason, fallback to lightweight codes
+    if (!this.qrCode) this.qrCode = `QR${Date.now()}${Math.floor(Math.random() * 9999)}`;
+    if (!this.qrPayload) this.qrPayload = this.qrCode;
   }
-});
+
+  // scanId
+  if (!this.scanId) {
+    this.scanId = await ensureUnique('scanId', () => `SCAN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`);
+  }
+
+  // ASIN - auto-generate if missing. Use a compact alphanumeric pattern.
+  if (!this.asin) {
+    this.asin = await ensureUnique('asin', () => {
+      const hash = Math.random().toString(36).substring(2, 8).toUpperCase();
+      return `ASIN${Date.now().toString().slice(-6)}${hash}`;
+    });
+  }
+
+  // UPC - 12 digit numeric code (generate random; uniqueness checked)
+  if (!this.upc) {
+    this.upc = await ensureUnique('upc', () => {
+      const num = Math.floor(Math.random() * 1e12).toString().padStart(12, '0');
+      return num;
+    });
+  }
+
+  // browseNodeId - low-collision identifier used for browsing trees
+  if (!this.browseNodeId) {
+    this.browseNodeId = `BN${Date.now().toString().slice(-8)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+  }
+
+  return next();
+})
 
 // Update availability if scheduled
 productSchema.pre("save", function (next) {

@@ -128,7 +128,14 @@ const googleCallback = async (req, res, next) => {
         );
 
         // Generate access token
-        const accessToken = tokenService.signAccess({ sub: req.user._id.toString() });
+        // Generate access token
+        const accessToken = tokenService.signAccess({
+            sub: req.user._id.toString(),
+            role: req.user.role,
+            email: req.user.email,
+            companies: req.user.companies,
+            shops: req.user.shops
+        });
 
         // Update user session
         req.user.sessions.push(session._id);
@@ -220,28 +227,28 @@ const logout = async (req, res, next) => {
     try {
         const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
         const userId = req.user ? req.user._id : null;
-        
+
         // Call logout service to revoke session
         const result = await authService.logout(userId, refreshToken);
-        
+
         // Clear refresh token cookie
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
-        
+
         // Clear access token if in cookie
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
-        
+
         // Return success response
-        res.json({ 
-            ok: true, 
-            message: result.message 
+        res.json({
+            ok: true,
+            message: result.message
         });
     } catch (err) {
         next(err);
@@ -252,33 +259,33 @@ const logout = async (req, res, next) => {
 const logoutAll = async (req, res, next) => {
     try {
         const userId = req.user ? req.user._id : null;
-        
+
         if (!userId) {
             return res.status(401).json({
                 ok: false,
                 message: 'User not authenticated'
             });
         }
-        
+
         const result = await authService.logoutAll(userId);
-        
+
         // Clear refresh token cookie
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
-        
+
         // Clear access token if in cookie
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
-        
+
         // Return success response
-        res.json({ 
-            ok: true, 
+        res.json({
+            ok: true,
             message: result.message,
             revokedSessions: result.revokedCount
         });
@@ -450,26 +457,26 @@ const getSessions = async (req, res, next) => {
 const revokeSession = async (req, res, next) => {
     try {
         const { sessionId } = req.params;
-        
+
         if (!sessionId) {
             return res.status(400).json({
                 ok: false,
                 message: 'sessionId parameter is required'
             });
         }
-        
+
         const result = await authService.revokeSession(req.user._id, sessionId);
-        
+
         if (!result.ok) {
             return res.status(result.status || 400).json({
                 ok: false,
                 message: result.message
             });
         }
-        
-        res.json({ 
-            ok: true, 
-            message: result.message 
+
+        res.json({
+            ok: true,
+            message: result.message
         });
     } catch (err) {
         next(err);

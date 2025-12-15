@@ -23,6 +23,8 @@ const createServiceProxy = (serviceName, serviceUrl, options = {}) => {
         proxyReq.setHeader("X-User-Id", req.user.id);
         proxyReq.setHeader("X-User-Email", req.user.email);
         proxyReq.setHeader("X-User-Role", req.user.role);
+        if (req.user.companies) proxyReq.setHeader("X-User-Companies", JSON.stringify(req.user.companies));
+        if (req.user.shops) proxyReq.setHeader("X-User-Shops", JSON.stringify(req.user.shops));
       }
 
       // Handle body for POST/PUT/PATCH
