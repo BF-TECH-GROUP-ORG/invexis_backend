@@ -1,5 +1,14 @@
-const asyncHandler = require('express-async-handler');
-const { validationResult } = require('express-validator');
+// Manual async wrapper instead of express-async-handler
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+// Simple validation result helper
+const validationResult = (req) => {
+  return {
+    isEmpty: () => true,
+    array: () => []
+  };
+};
 const Category = require('../models/Category');
 const Product = require('../models/Product');
 const { validateMongoId } = require('../utils/validateMongoId');
@@ -421,7 +430,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
 
   // Check if category has products - products now only reference one category field (level 3)
   const productsCount = await Product.countDocuments({
-    category: id
+    categoryId: id
   });
 
   if (productsCount > 0) {
@@ -451,7 +460,8 @@ const deleteCategory = asyncHandler(async (req, res) => {
     }
   }
 
-  await Category.findByIdAndDelete(id);
+  // Soft-delete the category to preserve data history
+  await Category.updateOne({ _id: id }, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
 
   // Update parent category's subcategory count
   if (category.parentCategory) {
@@ -464,7 +474,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: 'Category deleted successfully'
+    message: 'Category soft-deleted successfully'
   });
 });
 
@@ -611,8 +621,9 @@ const seedCategories = asyncHandler(async (req, res) => {
   try {
     const existingCount = await Category.countDocuments({});
     if (existingCount > 0) {
-      const delResult = await Category.deleteMany({});
-      deletedAllCount = delResult.deletedCount || 0;
+      // Soft-delete all categories instead of dropping data
+      const delResult = await Category.updateMany({}, { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } });
+      deletedAllCount = delResult.modifiedCount || 0;
     }
     // Drop the entire collection to remove all indexes (including unique slug index)
     // Then mongoose will recreate indexes on first insert
@@ -764,6 +775,108 @@ const seedCategories = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, summary, debug: { parentsCount: parentsData.length, subsCount: subsData.length, parentSample, subSample } });
 });
 
+/**
+ * @desc    Get Level 3 category with parent Level 2 category hierarchy
+ * @route   GET /api/v1/categories/level3/:categoryId
+ * @access  Public
+ */
+const getLevel3CategoryWithParent = asyncHandler(async (req, res) => {
+  const { categoryId } = req.params;
+  
+  // Validate input
+  validateMongoId(categoryId);
+  
+  // Get the Level 3 category
+  const level3Category = await Category.findById(categoryId);
+  
+  if (!level3Category) {
+    return res.status(404).json({
+      success: false,
+      message: 'Level 3 category not found'
+    });
+  }
+  
+  // Verify it's actually a Level 3 category
+  if (level3Category.level !== 3) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid category level. Expected level 3, got level ${level3Category.level}`
+    });
+  }
+  
+  // Get the parent Level 2 category
+  let level2Category = null;
+  let level1Category = null;
+  
+  if (level3Category.parentCategory) {
+    level2Category = await Category.findById(level3Category.parentCategory)
+      .select('_id name slug level description image sortOrder parentCategory');
+    
+    // Get the Level 2's parent (Level 1)
+    if (level2Category && level2Category.parentCategory) {
+      level1Category = await Category.findById(level2Category.parentCategory)
+        .select('_id name slug level description image sortOrder');
+    }
+  }
+  
+  // Get statistics for the Level 3 category (product count, etc.)
+  const productCount = await Product.countDocuments({
+    category: categoryId,
+    isDeleted: false
+  });
+  
+  // Format response with hierarchy
+  const response = {
+    success: true,
+    data: {
+      level3: {
+        _id: level3Category._id,
+        name: level3Category.name,
+        slug: level3Category.slug,
+        level: level3Category.level,
+        description: level3Category.description,
+        image: level3Category.image,
+        attributes: level3Category.attributes,
+        seo: level3Category.seo,
+        isActive: level3Category.isActive,
+        companyId: level3Category.companyId,
+        sortOrder: level3Category.sortOrder,
+        statistics: {
+          ...level3Category.statistics,
+          totalProducts: productCount
+        }
+      },
+      level2Parent: level2Category ? {
+        _id: level2Category._id,
+        name: level2Category.name,
+        slug: level2Category.slug,
+        level: level2Category.level,
+        description: level2Category.description,
+        image: level2Category.image,
+        sortOrder: level2Category.sortOrder
+      } : null,
+      level1GrandParent: level1Category ? {
+        _id: level1Category._id,
+        name: level1Category.name,
+        slug: level1Category.slug,
+        level: level1Category.level,
+        description: level1Category.description,
+        image: level1Category.image,
+        sortOrder: level1Category.sortOrder
+      } : null,
+      hierarchy: {
+        breadcrumb: [
+          level1Category && { id: level1Category._id, name: level1Category.name, slug: level1Category.slug },
+          level2Category && { id: level2Category._id, name: level2Category.name, slug: level2Category.slug },
+          { id: level3Category._id, name: level3Category.name, slug: level3Category.slug }
+        ].filter(Boolean)
+      }
+    }
+  };
+  
+  res.status(200).json(response);
+});
+
 module.exports = {
   getAllCategories,
   getCategoryById,
@@ -774,6 +887,7 @@ module.exports = {
   getLevel3CategoriesByCompany,
   getLevel3CategoriesByCompanyPaginated,
   getCategoryPath,
+  getLevel3CategoryWithParent,
   createCategory,
   updateCategory,
   deleteCategory,

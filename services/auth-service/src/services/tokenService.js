@@ -125,17 +125,23 @@ async function revokeSessionByRefresh(refreshToken) {
         const { sid } = payload || {};
         if (!sid) throw new Error('Invalid refresh token');
 
+        // ✅ Revoke session immediately without waiting for user update or event
         const session = await Session.findByIdAndUpdate(sid, { revoked: true });
         if (session) {
-            const user = await User.findById(session.userId);
-            user.sessions = user.sessions.filter(s => s.toString() !== sid);
-            await user.save();
+            // ✅ Fire-and-forget: user sessions cleanup and event publishing
+            User.findByIdAndUpdate(
+                session.userId,
+                { $pull: { sessions: sid } }, // Use MongoDB $pull operator instead of fetching+saving
+                { new: false } // Don't need returned doc
+            ).catch(err => console.warn(`User session cleanup failed: ${err.message}`));
 
-            // Invalidate cache
-            await redis.del(`session:${sid}`);
+            // ✅ Fire-and-forget cache invalidation
+            redis.del(`session:${sid}`)
+                .catch(err => console.warn(`Cache cleanup failed: ${err.message}`));
 
-            // Event
-            await publishRabbitMQ(exchanges.topic, 'auth.session.revoked', { sessionId: sid, userId: session.userId }, { headers: { traceId: uuidv4() } });
+            // ✅ Fire-and-forget event (don't await broker confirmation)
+            publishRabbitMQ(exchanges.topic, 'auth.session.revoked', { sessionId: sid, userId: session.userId }, { headers: { traceId: uuidv4() } })
+                .catch(err => console.warn(`Event publish failed: ${err.message}`));
         }
         return true;
     } catch (err) {

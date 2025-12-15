@@ -1,12 +1,38 @@
 require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
+const helmet = require('helmet');
+const compression = require('compression');
+
+// Optional dependencies with fallbacks
+let mongoSanitize, xss;
+try {
+  mongoSanitize = require('express-mongo-sanitize');
+} catch (e) {
+  mongoSanitize = null;
+}
+
+try {
+  xss = require('xss-clean');
+} catch (e) {
+  xss = null;
+}
+
+// Import shared modules
+const HealthChecker = require('/app/shared/health');
+const { SecurityManager } = require('/app/shared/security');
+const Logger = require('/app/shared/logger');
+const ErrorHandler = require('/app/shared/errorHandler');
+
 const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 const sequelize = require("./config/db");
 // CORS handled by api-gateway; do not enable here
 const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
+
+// Initialize logger
+const logger = Logger('sales-service');
 
 const salesRouter = require("./routes/SalesRoutes");
 const invoiceRouter = require("./routes/InvoiceRoutes");
@@ -15,15 +41,105 @@ const PORT = process.env.PORT || 9000;
 
 const app = express();
 
-// Middleware
-app.use(bodyParser.json());
-app.use(express.urlencoded({ extended: true }));
+// Initialize health checker and security manager
+const healthChecker = new HealthChecker('sales-service');
+const securityManager = new SecurityManager('sales-service');
 
-// CORS handled by api-gateway
+// Security middleware (CORS handled by API Gateway)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// Trust API Gateway - validate requests come from gateway  
+app.use((req, res, next) => {
+  const gatewayHeader = req.headers['x-gateway-request'];
+  if (process.env.NODE_ENV === 'production' && !gatewayHeader) {
+    return res.status(403).json({ error: 'Direct access not allowed. Requests must come through API Gateway.' });
+  }
+  next();
+});
+
+app.use(compression());
+
+// Safe sanitization middleware (custom implementation)
+if (mongoSanitize) {
+  app.use((req, res, next) => {
+    try {
+      const sanitizeObj = (obj) => {
+        if (!obj || typeof obj !== 'object') return obj;
+        const sanitized = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (typeof key === 'string' && (key.includes('$') || key.includes('.'))) {
+            continue;
+          }
+          if (typeof value === 'object' && value !== null) {
+            sanitized[key] = Array.isArray(value) 
+              ? value.map(item => sanitizeObj(item))
+              : sanitizeObj(value);
+          } else {
+            sanitized[key] = value;
+          }
+        }
+        return sanitized;
+      };
+
+      if (req.body && typeof req.body === 'object') {
+        req.body = sanitizeObj(req.body);
+      }
+      next();
+    } catch (error) {
+      next();
+    }
+  });
+}
+
+// XSS protection (safe implementation)
+if (xss) {
+  app.use((req, res, next) => {
+    try {
+      if (req.body && typeof req.body === 'object') {
+        const cleanObj = (obj) => {
+          if (!obj || typeof obj !== 'object') return obj;
+          const cleaned = {};
+          for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string') {
+              cleaned[key] = value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+            } else if (typeof value === 'object' && value !== null) {
+              cleaned[key] = Array.isArray(value) 
+                ? value.map(item => cleanObj(item))
+                : cleanObj(value);
+            } else {
+              cleaned[key] = value;
+            }
+          }
+          return cleaned;
+        };
+        req.body = cleanObj(req.body);
+      }
+      next();
+    } catch (error) {
+      next();
+    }
+  });
+}
+
+// Request parsing
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  logger.info(`${req.method} ${req.path}`, { 
+    ip: req.ip, 
+    userAgent: req.get('User-Agent') 
+  });
   next();
 });
 

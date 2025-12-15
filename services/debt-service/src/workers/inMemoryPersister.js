@@ -52,6 +52,8 @@ async function persistBatch(limit = 200) {
 
         if (!items || items.length === 0) return;
 
+        console.log(`[InMemoryPersister] 💾 Persisting ${items.length} items (${items.filter(i => i.type).map(i => i.type).join(', ')})...`);
+
         await perf.measureAsync('inMemoryPersister.batch', async () => {
             // persist sequentially to keep ordering per item
             for (const it of items) {
@@ -59,6 +61,16 @@ async function persistBatch(limit = 200) {
                     if (it.type === 'debt') {
                         await debtRepo.createDebt(it.doc).catch(e => console.warn('persist debt failed', e.message));
                         metrics.recordPersisted('debt');
+                        console.log(`[InMemoryPersister] ✅ Persisted debt ${it.doc._id}`);
+                    } else if (it.type === 'event') {
+                        await eventRepo.createEvent(it.doc).catch(e => console.warn('persist event failed', e.message));
+                        metrics.recordPersisted('event');
+                        console.log(`[InMemoryPersister] ✅ Persisted event ${it.doc.eventType}`);
+                    } else if (it.type === 'repayment') {
+                        await repaymentRepo.createRepayment(it.doc).catch(e => console.warn('persist repayment failed', e.message));
+                        metrics.recordPersisted('repayment');
+                        console.log(`[InMemoryPersister] ✅ Persisted repayment ${it.doc._id}`);
+                    }                        metrics.recordPersisted('debt');
                     } else if (it.type === 'repayment') {
                         await repaymentRepo.createRepayment(it.doc).catch(e => console.warn('persist repayment failed', e.message));
                         metrics.recordPersisted('repayment');

@@ -1,8 +1,34 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const mongoSanitize = require("express-mongo-sanitize");
-const xss = require("xss-clean");
+
+// Optional dependencies with fallbacks
+let mongoSanitize, xss;
+try {
+  mongoSanitize = require("express-mongo-sanitize");
+} catch (e) {
+  mongoSanitize = null;
+}
+
+try {
+  xss = require("xss-clean");
+} catch (e) {
+  xss = null;
+}
+
+// Import shared production middlewares
+const { 
+  authenticateToken,
+  requireRole,
+  requireCompanyAccess 
+} = require("/app/shared/middlewares/auth/production-auth");
+const {
+  checkSubscriptionStatus,
+  requireTier,
+  requireFeatureAccess,
+  checkUsageLimits
+} = require("/app/shared/middlewares/subscription/production-subscription");
+
 const {
   routes,
   authProxy,
@@ -17,17 +43,10 @@ const {
   auditProxy,
   debtProxy,
   websocketProxy,
-  authenticateToken,
 } = require("./routes/proxy");
 const { limiter, authLimiter } = require("./utils/rateLimiter");
 const redisClient = require("/app/shared/redis");
 const { initSubscriptionEventConsumer, createCacheInvalidationEndpoint } = require("./events/subscriptionEventConsumer");
-const {
-  checkSubscriptionStatus,
-  checkSubscriptionTier,
-  checkFeatureAccess,
-  checkRateLimits,
-} = require("./middleware");
 
 const app = express();
 
@@ -36,8 +55,66 @@ const app = express();
 
 // Security middleware
 app.use(helmet()); // Set security HTTP headers
-app.use(mongoSanitize()); // Sanitize data against NoSQL injection
-app.use(xss()); // Sanitize data against XSS
+// Safe sanitization middleware
+if (mongoSanitize) {
+  app.use((req, res, next) => {
+    try {
+      const sanitizeObj = (obj) => {
+        if (!obj || typeof obj !== 'object') return obj;
+        const sanitized = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (typeof key === 'string' && (key.includes('$') || key.includes('.'))) {
+            continue;
+          }
+          if (typeof value === 'object' && value !== null) {
+            sanitized[key] = Array.isArray(value) 
+              ? value.map(item => sanitizeObj(item))
+              : sanitizeObj(value);
+          } else {
+            sanitized[key] = value;
+          }
+        }
+        return sanitized;
+      };
+
+      if (req.body && typeof req.body === 'object') {
+        req.body = sanitizeObj(req.body);
+      }
+      next();
+    } catch (error) {
+      next();
+    }
+  });
+}
+// XSS protection (safe implementation)
+if (xss) {
+  app.use((req, res, next) => {
+    try {
+      if (req.body && typeof req.body === 'object') {
+        const cleanObj = (obj) => {
+          if (!obj || typeof obj !== 'object') return obj;
+          const cleaned = {};
+          for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string') {
+              cleaned[key] = value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+            } else if (typeof value === 'object' && value !== null) {
+              cleaned[key] = Array.isArray(value) 
+                ? value.map(item => cleanObj(item))
+                : cleanObj(value);
+            } else {
+              cleaned[key] = value;
+            }
+          }
+          return cleaned;
+        };
+        req.body = cleanObj(req.body);
+      }
+      next();
+    } catch (error) {
+      next();
+    }
+  });
+}
 
 // CORS configuration (centralized) with dynamic origin management
 const corsManager = require('./utils/corsManager');
@@ -195,6 +272,7 @@ app.use("/api/websocket", websocketProxy);
 */
 app.use("/api/auth", authLimiter, authProxy);
 
+<<<<<<< HEAD
 // Protected services (require authentication - enforced by services themselves)
 app.use("/api/company", companyProxy);
 app.use("/api/shop", shopProxy);
@@ -206,12 +284,25 @@ app.use("/api/notification", notificationProxy);
 app.use("/api/analytics", analyticsProxy);
 app.use("/api/audit", authenticateToken, auditProxy);
 app.use("/api/debt", debtProxy);
+=======
+// Protected services (require JWT authentication at gateway level)
+app.use("/api/company", authenticateToken, companyProxy);
+app.use("/api/shop", authenticateToken, shopProxy);
+app.use("/api/inventory", authenticateToken, inventoryProxy);
+app.use("/api/sales", authenticateToken, salesProxy);
+app.use("/api/payment", authenticateToken, paymentProxy);
+app.use("/api/ecommerce", authenticateToken, ecommerceProxy);
+app.use("/api/notification", authenticateToken, notificationProxy);
+app.use("/api/analytics", authenticateToken, analyticsProxy);
+app.use("/api/audit", authenticateToken, auditProxy);
+app.use("/api/debt", authenticateToken, debtProxy);
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
 
 // Socket.IO specific routes (add these before other websocket routes)
 app.use("/socket.io", websocketProxy);
 
 // General websocket routes
-app.use("/api/websocket", websocketProxy);
+app.use("/api/websocket", authenticateToken, websocketProxy);
 
 // Auth service (public routes, no subscription check needed)
 // app.use("/api/auth", authLimiter, authProxy);

@@ -91,9 +91,13 @@ class InMemoryStore {
         const envelope = { type: 'event', doc: eventDoc };
         const redis = getRedis();
         if (redis && typeof redis.rpush === 'function') {
-            try { redis.rpush(WRITE_QUEUE_KEY, JSON.stringify(envelope)).catch(() => { }); } catch (e) { /* swallow */ }
+            try { 
+                redis.rpush(WRITE_QUEUE_KEY, JSON.stringify(envelope)).catch(() => { }); 
+                console.log(`[InMemoryStore] 📌 Event enqueued to Redis: ${eventDoc.eventType}`);
+            } catch (e) { console.warn('[InMemoryStore] Failed to enqueue to Redis:', e); }
         } else {
             this.queue.push(envelope);
+            console.log(`[InMemoryStore] 📌 Event enqueued to local queue: ${eventDoc.eventType}`);
         }
     }
 

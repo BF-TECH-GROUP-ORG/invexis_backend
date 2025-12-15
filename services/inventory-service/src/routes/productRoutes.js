@@ -16,6 +16,9 @@ const {
   searchProducts,
   getOldUnboughtProducts,
   smartCreateProduct,
+  bulkCreateProducts,
+  bulkUpdateProducts,
+  bulkDeleteProducts,
   checkProductDuplicate,
   scanProduct,
   lookupByBarcode
@@ -45,6 +48,10 @@ router.get('/lookup/:barcode', lookupByBarcode);
 
 // Smart Product Creation
 router.post('/smart-create', protect, smartCreateProduct);
+// Bulk operations
+router.post('/bulk',  bulkCreateProducts);
+router.put('/bulk', bulkUpdateProducts);
+router.delete('/bulk', bulkDeleteProducts);
 router.get('/check-duplicate', protect, checkProductDuplicate);
 
 module.exports = router;

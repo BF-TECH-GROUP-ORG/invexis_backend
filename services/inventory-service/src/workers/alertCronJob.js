@@ -6,6 +6,7 @@
 
 const schedule = require('node-schedule');
 const AlertTriggerService = require('../services/alertTriggerService');
+const StockMonitoringService = require('../services/stockMonitoringService');
 const logger = require('../utils/logger');
 const mongoose = require('mongoose'); 
 
@@ -31,6 +32,12 @@ class AlertCronJobWorker {
         try {
             logger.info('Initializing alert cron jobs...');
 
+            // LOW STOCK MONITORING - runs every 30 minutes
+            this.scheduleLowStockMonitoring();
+
+            // BACKORDER MONITORING - runs every 1 hour
+            this.scheduleBackorderMonitoring();
+
             // Daily smart checks - runs every day at 2 AM
             this.scheduleSmartChecks();
 
@@ -51,6 +58,104 @@ class AlertCronJobWorker {
             logger.error(`Failed to initialize alert cron jobs: ${error.message}`);
             throw error;
         }
+    }
+
+    /**
+     * Monitor low stock every 30 minutes
+     * Checks all products against their lowStockThreshold in ProductStock
+     */
+    scheduleLowStockMonitoring() {
+        const jobName = 'lowStockMonitoring';
+
+        // Cancel existing job if it exists
+        if (this.jobs[jobName]) {
+            this.jobs[jobName].cancel();
+        }
+
+        this.jobs[jobName] = schedule.scheduleJob('*/30 * * * *', async () => {
+            try {
+                logger.info('🔍 Running low stock monitoring...');
+
+                // Get all companies
+                const companies = await this.getAllCompanies();
+                let totalMonitored = 0;
+
+                for (const company of companies) {
+                    try {
+                        // Monitor low stock for company level
+                        const alerts = await StockMonitoringService.monitorLowStock(company._id.toString());
+                        totalMonitored += alerts;
+
+                        // Monitor for each shop in the company (if applicable)
+                        const shops = company.shops || [];
+                        for (const shop of shops) {
+                            const shopAlerts = await StockMonitoringService.monitorLowStock(
+                                company._id.toString(),
+                                shop._id.toString()
+                            );
+                            totalMonitored += shopAlerts;
+                        }
+                    } catch (error) {
+                        logger.error(`Error monitoring low stock for company ${company._id}: ${error.message}`);
+                    }
+                }
+
+                logger.info(`✅ Low stock monitoring completed. Processed: ${totalMonitored} alerts.`);
+            } catch (error) {
+                logger.error(`Failed to run low stock monitoring: ${error.message}`);
+            }
+        });
+
+        logger.info('✓ Low stock monitoring job scheduled every 30 minutes');
+    }
+
+    /**
+     * Monitor backorders every 1 hour
+     * Checks for out-of-stock products with backorder enabled that have been restocked
+     */
+    scheduleBackorderMonitoring() {
+        const jobName = 'backorderMonitoring';
+
+        // Cancel existing job if it exists
+        if (this.jobs[jobName]) {
+            this.jobs[jobName].cancel();
+        }
+
+        this.jobs[jobName] = schedule.scheduleJob('0 * * * *', async () => {
+            try {
+                logger.info('📦 Running backorder monitoring...');
+
+                // Get all companies
+                const companies = await this.getAllCompanies();
+                let totalBackorders = 0;
+
+                for (const company of companies) {
+                    try {
+                        // Monitor backorders for company level
+                        const processed = await StockMonitoringService.monitorBackorders(company._id.toString());
+                        totalBackorders += processed;
+
+                        // Monitor backorders for each shop in the company (if applicable)
+                        const shops = company.shops || [];
+                        for (const shop of shops) {
+                            const shopProcessed = await StockMonitoringService.monitorBackorders(
+                                company._id.toString(),
+                                shop._id.toString()
+                            );
+                            totalBackorders += shopProcessed;
+                        }
+                    } catch (error) {
+                        logger.error(`Error monitoring backorders for company ${company._id}: ${error.message}`);
+                    }
+                }
+
+                logger.info(`✅ Backorder monitoring completed. Processed: ${totalBackorders} backorders.`);
+            } catch (error) {
+                logger.error(`Failed to run backorder monitoring: ${error.message}`);
+            }
+        });
+
+        logger.info('✓ Backorder monitoring job scheduled hourly');
     }
 
     /**

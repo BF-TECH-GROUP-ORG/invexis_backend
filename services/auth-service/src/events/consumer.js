@@ -5,7 +5,7 @@ try {
     rabbitmq = require('/app/shared/rabbitmq.js');
 } catch (error) {
     try {
-        rabbitmq = require('../../../shared/rabbitmq.js');
+        rabbitmq = require('/app/shared/rabbitmq.js');
     } catch (err) {
         console.warn('RabbitMQ shared lib not found, consumer will not start');
         rabbitmq = null;

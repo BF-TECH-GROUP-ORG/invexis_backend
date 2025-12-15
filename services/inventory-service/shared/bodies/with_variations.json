@@ -1,0 +1,85 @@
+{
+  "companyId": "507f1f77bcf86cd799439011",
+  "shopId": "507f1f77bcf86cd799439012",
+  "name": "iPhone 15 Pro Max",
+  "description": "The ultimate iPhone with titanium design, Action button, and powerful A17 Pro chip.",
+  "brand": "Apple",
+  "manufacturer": "Apple Inc.",
+  "tags": ["smartphone", "premium", "ios", "5g"],
+  "categoryId": "507f1f77bcf86cd799439100",
+  "condition": "new",
+  "status": "active",
+  "visibility": "public",
+  "isFeatured": true,
+  "pricing": {
+    "basePrice": 1199.99,
+    "cost": 600.00,
+    "currency": "USD"
+  },
+  "inventory": {
+    "trackQuantity": true,
+    "quantity": 0,
+    "allowBackorder": false
+  },
+  "variations": [
+    {
+      "options": {
+        "color": "Natural Titanium",
+        "storage": "256GB"
+      },
+      "weight": {
+        "value": 221,
+        "unit": "g"
+      },
+      "dimensions": {
+        "length": 159.9,
+        "width": 76.7,
+        "height": 8.25,
+        "unit": "mm"
+      },
+      "initialStock": 100,
+      "lowStockThreshold": 10,
+      "minReorderQty": 25,
+      "isActive": true
+    },
+    {
+      "options": {
+        "color": "Blue Titanium",
+        "storage": "512GB"
+      },
+      "weight": {
+        "value": 221,
+        "unit": "g"
+      },
+      "dimensions": {
+        "length": 159.9,
+        "width": 76.7,
+        "height": 8.25,
+        "unit": "mm"
+      },
+      "initialStock": 75,
+      "lowStockThreshold": 5,
+      "minReorderQty": 20,
+      "isActive": true
+    }
+  ],
+  "specs": [
+    {
+      "name": "processor",
+      "value": "A17 Pro chip"
+    },
+    {
+      "name": "display_size",
+      "value": "6.7 inches"
+    },
+    {
+      "name": "camera_system",
+      "value": "Pro camera system"
+    }
+  ],
+  "seo": {
+    "metaTitle": "iPhone 15 Pro Max - Premium Titanium Smartphone",
+    "metaDescription": "Experience the ultimate iPhone with titanium design and A17 Pro chip.",
+    "keywords": ["iphone", "15 pro max", "titanium", "a17 pro", "premium"]
+  }
+}

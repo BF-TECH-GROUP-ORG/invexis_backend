@@ -6,6 +6,7 @@ const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 // Import routes
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
+const logger = require("./utils/logger");
 
 const router = require('./routes/index')
 
@@ -37,6 +38,30 @@ app.use((req, res, next) => {
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ✅ Performance monitoring middleware
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  const originalSend = res.send;
+
+  // Override send to capture response time
+  res.send = function (data) {
+    const duration = Date.now() - startTime;
+    const isSlow = duration > 50; // SLA: 50ms
+    
+    if (isSlow) {
+      logger.warn(`SLOW_ENDPOINT: ${req.method} ${req.path} took ${duration}ms (SLA: 50ms)`);
+    } else {
+      logger.debug(`${req.method} ${req.path} completed in ${duration}ms`);
+    }
+    
+    // Add timing header
+    res.set('X-Response-Time', `${duration}ms`);
+    return originalSend.call(this, data);
+  };
+
+  next();
+});
 
 // Request logging middleware
 app.use((req, res, next) => {

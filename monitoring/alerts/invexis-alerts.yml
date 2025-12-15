@@ -1,0 +1,300 @@
+groups:
+  - name: invexis_critical_alerts
+    rules:
+      # Service Health Alerts
+      - alert: ServiceDown
+        expr: up{job=~".*invexis.*"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Invexis service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} on {{ $labels.instance }} has been down for more than 30 seconds"
+          runbook_url: "https://wiki.company.com/runbooks/service-down"
+
+      - alert: HighErrorRate
+        expr: (rate(http_requests_total{job=~".*invexis.*", status=~"5.."}[5m]) / rate(http_requests_total{job=~".*invexis.*"}[5m]) * 100) > 5
+        for: 5m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: "Error rate is {{ $value }}% for service {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-error-rate"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=~".*invexis.*"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High response time on {{ $labels.service }}"
+          description: "95th percentile response time is {{ $value }}s for service {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-response-time"
+
+      # Database Alerts
+      - alert: PostgreSQLDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: dba
+        annotations:
+          summary: "PostgreSQL instance {{ $labels.instance }} is down"
+          description: "PostgreSQL database {{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://wiki.company.com/runbooks/postgresql-down"
+
+      - alert: PostgreSQLTooManyConnections
+        expr: sum by (instance) (pg_stat_database_numbackends) / sum by (instance) (pg_settings_max_connections) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: dba
+        annotations:
+          summary: "PostgreSQL has too many connections"
+          description: "PostgreSQL instance {{ $labels.instance }} is using {{ $value }}% of available connections"
+
+      - alert: PostgreSQLSlowQueries
+        expr: avg by (datname) (rate(pg_stat_statements_total_time[5m]) / rate(pg_stat_statements_calls[5m])) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          team: dba
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Database {{ $labels.datname }} has average query time of {{ $value }}ms"
+
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Redis instance {{ $labels.instance }} is down"
+          description: "Redis instance {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis instance {{ $labels.instance }} is using {{ $value }}% of available memory"
+
+      # Infrastructure Alerts
+      - alert: HighCPUUsage
+        expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% on instance {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}% on instance {{ $labels.instance }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} * 100) < 10
+        for: 1m
+        labels:
+          severity: critical
+          team: sre
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is {{ $value }}% remaining on {{ $labels.instance }}"
+          runbook_url: "https://wiki.company.com/runbooks/low-disk-space"
+
+      - alert: DiskSpaceWarning
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} * 100) < 20
+        for: 5m
+        labels:
+          severity: warning
+          team: sre
+        annotations:
+          summary: "Disk space warning on {{ $labels.instance }}"
+          description: "Disk space is {{ $value }}% remaining on {{ $labels.instance }}"
+
+      # Container Alerts
+      - alert: ContainerKilled
+        expr: time() - container_last_seen > 60
+        for: 0m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "Container killed {{ $labels.name }}"
+          description: "Container {{ $labels.name }} has disappeared"
+
+      - alert: ContainerMemoryUsageHigh
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "Container memory usage is high"
+          description: "Container {{ $labels.name }} is using {{ $value }}% of available memory"
+
+      - alert: ContainerCpuUsageHigh
+        expr: (rate(container_cpu_usage_seconds_total[5m]) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "Container CPU usage is high"
+          description: "Container {{ $labels.name }} is using {{ $value }}% CPU"
+
+  - name: invexis_business_alerts
+    rules:
+      # Business Metrics Alerts
+      - alert: PaymentFailureRateHigh
+        expr: (rate(invexis_payment_transactions_total{status="failed"}[5m]) / rate(invexis_payment_transactions_total[5m]) * 100) > 5
+        for: 2m
+        labels:
+          severity: critical
+          team: business
+        annotations:
+          summary: "High payment failure rate"
+          description: "Payment failure rate is {{ $value }}% over the last 5 minutes"
+
+      - alert: LowActiveUsers
+        expr: invexis_active_users_total < 100
+        for: 10m
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "Low number of active users"
+          description: "Only {{ $value }} active users currently online"
+
+      - alert: NoRevenueGenerated
+        expr: increase(invexis_revenue_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "No revenue generated in the last hour"
+          description: "No revenue has been generated for 1 hour"
+
+      - alert: InventoryLow
+        expr: invexis_inventory_items_available < invexis_inventory_items_minimum
+        for: 5m
+        labels:
+          severity: warning
+          team: inventory
+        annotations:
+          summary: "Low inventory for product {{ $labels.product_id }}"
+          description: "Product {{ $labels.product_id }} has {{ $value }} items remaining"
+
+      - alert: OrderProcessingDelay
+        expr: histogram_quantile(0.95, rate(invexis_order_fulfillment_duration_seconds_bucket[5m])) > 3600
+        for: 10m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Order processing is slow"
+          description: "95th percentile order processing time is {{ $value }} seconds"
+
+  - name: invexis_security_alerts
+    rules:
+      # Security Alerts
+      - alert: HighFailedLoginAttempts
+        expr: rate(invexis_auth_failed_attempts_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High number of failed login attempts"
+          description: "{{ $value }} failed login attempts per second from {{ $labels.ip }}"
+
+      - alert: UnauthorizedAPIAccess
+        expr: rate(http_requests_total{status="401"}[5m]) > 50
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High number of unauthorized API requests"
+          description: "{{ $value }} unauthorized requests per second to {{ $labels.service }}"
+
+      - alert: SuspiciousUserActivity
+        expr: rate(invexis_suspicious_activity_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Suspicious user activity detected"
+          description: "Suspicious activity detected for user {{ $labels.user_id }}: {{ $labels.activity_type }}"
+
+      - alert: SSLCertificateExpiring
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 7
+        for: 6h
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.instance }} expires in {{ $value }} days"
+
+  - name: invexis_backup_alerts
+    rules:
+      # Backup and Recovery Alerts
+      - alert: BackupFailed
+        expr: invexis_backup_status != 1
+        for: 0m
+        labels:
+          severity: critical
+          team: dba
+        annotations:
+          summary: "Database backup failed"
+          description: "Backup for {{ $labels.database }} failed with status {{ $value }}"
+
+      - alert: BackupOld
+        expr: (time() - invexis_last_backup_timestamp) > 86400
+        for: 1h
+        labels:
+          severity: warning
+          team: dba
+        annotations:
+          summary: "Database backup is old"
+          description: "Last backup for {{ $labels.database }} was {{ $value }} seconds ago"
+
+      - alert: ElasticsearchClusterRed
+        expr: elasticsearch_cluster_health_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Elasticsearch cluster status is RED"
+          description: "Elasticsearch cluster health is in RED state"
+
+      - alert: ElasticsearchClusterYellow
+        expr: elasticsearch_cluster_health_status == 1
+        for: 10m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "Elasticsearch cluster status is YELLOW"
+          description: "Elasticsearch cluster health is in YELLOW state for more than 10 minutes"

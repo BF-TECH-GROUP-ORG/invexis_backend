@@ -15,8 +15,10 @@ module.exports = {
       ssl: process.env.DEV_DB_SSL === "true", // optional SSL
     },
     pool: {
-      min: parseInt(process.env.DEV_DB_POOL_MIN) || 2,
-      max: parseInt(process.env.DEV_DB_POOL_MAX) || 10,
+      min: parseInt(process.env.DEV_DB_POOL_MIN) || 5,        // Increased from 2
+      max: parseInt(process.env.DEV_DB_POOL_MAX) || 20,       // Increased from 10
+      idleTimeoutMillis: 30000,
+      acquireTimeoutMillis: 5000,
     },
     migrations: {
       directory: "./migrations",
@@ -39,8 +41,10 @@ module.exports = {
       ssl: process.env.STAGING_DB_SSL === "true",
     },
     pool: {
-      min: parseInt(process.env.STAGING_DB_POOL_MIN) || 2,
-      max: parseInt(process.env.STAGING_DB_POOL_MAX) || 10,
+      min: parseInt(process.env.STAGING_DB_POOL_MIN) || 5,     // Increased from 2
+      max: parseInt(process.env.STAGING_DB_POOL_MAX) || 20,    // Increased from 10
+      idleTimeoutMillis: 30000,
+      acquireTimeoutMillis: 5000,
     },
     migrations: {
       directory: "./migrations",
@@ -63,8 +67,10 @@ module.exports = {
       ssl: process.env.PROD_DB_SSL === "true",
     },
     pool: {
-      min: parseInt(process.env.PROD_DB_POOL_MIN) || 2,
-      max: parseInt(process.env.PROD_DB_POOL_MAX) || 10,
+      min: parseInt(process.env.PROD_DB_POOL_MIN) || 10,       // Increased from 2
+      max: parseInt(process.env.PROD_DB_POOL_MAX) || 30,       // Increased from 10
+      idleTimeoutMillis: 30000,
+      acquireTimeoutMillis: 5000,
     },
     migrations: {
       directory: "./migrations",

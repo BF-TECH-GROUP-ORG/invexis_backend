@@ -2,7 +2,7 @@
 const authService = require('../services/authService');
 const tokenService = require('../services/tokenService');
 const LoginHistory = require('../models/LoginHistory.models');
-const { uploadProfileImage } = require('../middleware/upload');
+const { uploadProfileImage } = require('../utils/uploadUtil');
 
 function getRefreshCookieOptions(req) {
     const forwardedProto = (req.headers["x-forwarded-proto"] || "").toLowerCase();
@@ -222,72 +222,124 @@ const refresh = async (req, res, next) => {
     }
 };
 
-// Logout - Clear session, revoke tokens, and remove cookies
-const logout = async (req, res, next) => {
+// ✅ Logout - Optimized for speed (SYNCHRONOUS - no async/await)
+const logout = (req, res, next) => {
     try {
+        const startTime = Date.now();
         const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+<<<<<<< HEAD
         const userId = req.user ? req.user._id : null;
 
         // Call logout service to revoke session
         const result = await authService.logout(userId, refreshToken);
 
         // Clear refresh token cookie
+=======
+        const userId = req.userId; // ✅ Set by requireAuth (no DB lookup needed)
+        
+        console.log(`[LOGOUT] Starting logout for user ${userId}`);
+        
+        // ✅ Fire-and-forget logout (don't await)
+        // Note: logout() returns Promise but we don't wait for it
+        authService.logout(userId, refreshToken);
+        
+        // Clear cookies immediately (synchronous)
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+<<<<<<< HEAD
 
         // Clear access token if in cookie
+=======
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+<<<<<<< HEAD
 
         // Return success response
         res.json({
             ok: true,
             message: result.message
+=======
+        
+        // Return immediately - SYNCHRONOUSLY
+        res.json({ 
+            ok: true, 
+            message: 'Logged out successfully' 
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         });
+        
+        console.log(`[LOGOUT] Logout completed in ${Date.now() - startTime}ms`);
     } catch (err) {
         next(err);
     }
 };
 
-// Logout from all devices/sessions
-const logoutAll = async (req, res, next) => {
+// ✅ Logout from all devices/sessions - Optimized (SYNCHRONOUS - no async/await)
+const logoutAll = (req, res, next) => {
     try {
+<<<<<<< HEAD
         const userId = req.user ? req.user._id : null;
 
+=======
+        const userId = req.userId; // ✅ Set by requireAuth (no DB lookup needed)
+        
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         if (!userId) {
             return res.status(401).json({
                 ok: false,
                 message: 'User not authenticated'
             });
         }
+<<<<<<< HEAD
 
         const result = await authService.logoutAll(userId);
 
         // Clear refresh token cookie
+=======
+        
+        // ✅ Fire-and-forget logout (don't await)
+        // Note: logoutAll() returns Promise but we don't wait for it
+        authService.logoutAll(userId);
+        
+        // Clear cookies immediately
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+<<<<<<< HEAD
 
         // Clear access token if in cookie
+=======
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+<<<<<<< HEAD
 
         // Return success response
         res.json({
             ok: true,
             message: result.message,
             revokedSessions: result.revokedCount
+=======
+        
+        // Return immediately - SYNCHRONOUSLY
+        res.json({ 
+            ok: true, 
+            message: 'Logged out from all devices',
+            revokedSessions: 0 // Unknown at response time
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         });
     } catch (err) {
         next(err);
@@ -496,8 +548,8 @@ const getConsents = async (req, res, next) => {
 // Update profile with optional profile picture upload
 const updateProfile = async (req, res, next) => {
     try {
-        const profilePictureUrl = req.profilePictureUrl || null;
-        const out = await authService.updateProfile(req.user._id, req.body, profilePictureUrl);
+        const profileImage = req.body.profileImage || null;
+        const out = await authService.updateProfile(req.user._id, req.body, profileImage);
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -677,6 +729,28 @@ const getCompanyWorkers = async (req, res, next) => {
     }
 };
 
+// Get current user profile (for /auth/me endpoint)
+const getMe = async (req, res, next) => {
+    try {
+        // User data is already attached by authentication middleware
+        if (!req.user) {
+            return res.status(401).json({ 
+                ok: false, 
+                message: 'User not authenticated' 
+            });
+        }
+
+        // Return user data (already fetched by middleware)
+        res.json({ 
+            ok: true, 
+            user: req.user 
+        });
+    } catch (err) {
+        console.error('Error in getMe:', err);
+        next(err);
+    }
+};
+
 module.exports = {
     register,
     login,
@@ -713,6 +787,7 @@ module.exports = {
     getUserById,
     acceptConsent,
     getCurrentUser,
+    getMe, // New endpoint for production middleware
     updateFcmToken,
     getCompanyWorkers
 };

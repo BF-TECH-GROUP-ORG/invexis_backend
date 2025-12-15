@@ -1,0 +1,1019 @@
+# ==================================================================================
+# INVEXIS PRODUCTION INFRASTRUCTURE - BLUE/GREEN DEPLOYMENT READY
+# ==================================================================================
+# This Docker Compose file defines the complete production infrastructure for Invexis
+# with blue/green deployment support, monitoring, logging, and security best practices.
+# ==================================================================================
+
+version: '3.8'
+
+# ==================================================================================
+# SERVICES
+# ==================================================================================
+services:
+  # ================================================================================
+  # TRAFFIC LAYER - REVERSE PROXY & LOAD BALANCER
+  # ================================================================================
+  traefik:
+    image: traefik:v3.0
+    container_name: invexis-traefik-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"   # Traefik dashboard (secured in production)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./deployments/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./deployments/traefik/dynamic_conf.yml:/etc/traefik/dynamic_conf.yml:ro
+      - traefik_data:/data
+    environment:
+      - TRAEFIK_API_DASHBOARD=true
+      - TRAEFIK_LOG_LEVEL=${TRAEFIK_LOG_LEVEL:-INFO}
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.traefik-dashboard.tls=true"
+      - "traefik.http.routers.traefik-dashboard.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_BASIC_AUTH}"
+
+  # ================================================================================
+  # OBSERVABILITY STACK
+  # ================================================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: invexis-prometheus-prod
+    restart: always
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.external-url=https://prometheus.${DOMAIN:-localhost}'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deployments/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deployments/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus_data:/prometheus
+    environment:
+      - PROMETHEUS_RETENTION=${PROMETHEUS_RETENTION:-30d}
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    user: "nobody:nogroup"
+    read_only: true
+    tmpfs:
+      - /tmp
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: invexis-grafana-prod
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deployments/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deployments/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN:-localhost}
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=grafana-postgres:5432
+      - GF_DATABASE_NAME=grafanadb
+      - GF_DATABASE_USER=grafana
+      - GF_DATABASE_PASSWORD=${GRAFANA_DB_PASSWORD}
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${SMTP_HOST}
+      - GF_SMTP_USER=${SMTP_USER}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD}
+    networks:
+      - invexis-prod-network
+    depends_on:
+      - grafana-postgres
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    user: "472:472"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  grafana-postgres:
+    image: postgres:15-alpine
+    container_name: invexis-grafana-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: grafanadb
+      POSTGRES_USER: grafana
+      POSTGRES_PASSWORD: ${GRAFANA_DB_PASSWORD}
+    volumes:
+      - grafana_postgres_data:/var/lib/postgresql/data
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grafana -d grafanadb"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ================================================================================
+  # ELK STACK - CENTRALIZED LOGGING
+  # ================================================================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: invexis-elasticsearch-prod
+    restart: always
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - xpack.security.http.ssl.enabled=false
+      - xpack.license.self_generated.type=basic
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./deployments/elk/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    ports:
+      - "9200:9200"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://elastic:${ELASTIC_PASSWORD}@localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.elasticsearch.rule=Host(`elasticsearch.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.elasticsearch.tls=true"
+      - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.1
+    container_name: invexis-logstash-prod
+    restart: always
+    volumes:
+      - ./deployments/elk/logstash/pipelines:/usr/share/logstash/pipeline:ro
+    environment:
+      - "LS_JAVA_OPTS=-Xmx512m -Xms512m"
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTIC_USER=elastic
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    networks:
+      - invexis-prod-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.1
+    container_name: invexis-kibana-prod
+    restart: always
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD}
+      SERVER_HOST: 0.0.0.0
+      SERVER_PUBLICBASEURL: https://kibana.${DOMAIN:-localhost}
+    volumes:
+      - ./deployments/elk/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+    ports:
+      - "5601:5601"
+    networks:
+      - invexis-prod-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kibana.rule=Host(`kibana.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.kibana.tls=true"
+      - "traefik.http.services.kibana.loadbalancer.server.port=5601"
+
+  # ================================================================================
+  # DATABASES - PRODUCTION READY WITH BACKUPS
+  # ================================================================================
+  # PostgreSQL cluster for company, shop, payment, analytics services
+  company-postgres:
+    image: postgres:15-alpine
+    container_name: invexis-company-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: companydb
+      POSTGRES_USER: invexis
+      POSTGRES_PASSWORD: ${COMPANY_POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    volumes:
+      - company_postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invexis -d companydb"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
+    command: >
+      postgres 
+      -c shared_preload_libraries=pg_stat_statements
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=4MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=8
+      -c max_parallel_workers_per_gather=4
+      -c max_parallel_workers=8
+      -c max_parallel_maintenance_workers=4
+
+  shop-postgres:
+    image: postgres:15-alpine
+    container_name: invexis-shop-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: shopdb
+      POSTGRES_USER: invexis
+      POSTGRES_PASSWORD: ${SHOP_POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - shop_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invexis -d shopdb"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
+
+  payment-postgres:
+    image: postgres:15-alpine
+    container_name: invexis-payment-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: paymentdb
+      POSTGRES_USER: invexis
+      POSTGRES_PASSWORD: ${PAYMENT_POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - payment_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invexis -d paymentdb"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
+
+  analytics-postgres:
+    image: postgres:15-alpine
+    container_name: invexis-analytics-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: analyticsdb
+      POSTGRES_USER: invexis
+      POSTGRES_PASSWORD: ${ANALYTICS_POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - analytics_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invexis -d analyticsdb"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
+
+  # MySQL for sales service
+  sales-mysql:
+    image: mysql:8.0
+    container_name: invexis-sales-mysql-prod
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: invexis
+      MYSQL_PASSWORD: ${SALES_MYSQL_PASSWORD}
+      MYSQL_DATABASE: salesdb
+    volumes:
+      - sales_mysql_data:/var/lib/mysql
+      - ./scripts/mysql-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "3306:3306"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=512M
+      --innodb-log-file-size=128M
+      --max-connections=200
+      --query-cache-type=1
+      --query-cache-size=128M
+      --slow-query-log=1
+      --long-query-time=2
+
+  # MongoDB cluster
+  mongodb:
+    image: mongo:7.0
+    container_name: invexis-mongodb-prod
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: admin
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+      - ./scripts/mongo-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "27017:27017"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
+    command: >
+      mongod 
+      --auth
+      --bind_ip_all
+      --wiredTigerCacheSizeGB=0.5
+
+  # Redis cluster for caching
+  redis:
+    image: redis:7.2-alpine
+    container_name: invexis-redis-prod
+    restart: always
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+      - ./deployments/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "6379:6379"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+
+  # RabbitMQ for messaging
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: invexis-rabbitmq-prod
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: invexis
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./deployments/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - invexis-prod-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.rabbitmq.tls=true"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+
+  # ================================================================================
+  # BLUE MICROSERVICES (ACTIVE)
+  # ================================================================================
+  api-gateway-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/api-gateway:${DEPLOY_TAG:-latest}
+    container_name: invexis-api-gateway-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8000
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      LOG_LEVEL: ${API_GATEWAY_LOG_LEVEL:-info}
+      JWT_SECRET: ${JWT_SECRET}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api-gateway-blue.rule=Host(`api.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.api-gateway-blue.tls=true"
+      - "traefik.http.routers.api-gateway-blue.priority=100"
+      - "traefik.http.services.api-gateway-blue.loadbalancer.server.port=8000"
+      - "traefik.http.routers.api-gateway-blue.middlewares=rate-limit,security-headers"
+      - "deployment.color=blue"
+      - "deployment.version=${DEPLOY_TAG:-latest}"
+      
+  auth-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/auth-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-auth-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8001
+      DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/authdb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  company-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/company-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-company-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8004
+      DB_POSTGRES: postgresql://invexis:${COMPANY_POSTGRES_PASSWORD}@company-postgres:5432/companydb
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      company-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  shop-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/shop-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-shop-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 9001
+      DB_POSTGRES: postgresql://invexis:${SHOP_POSTGRES_PASSWORD}@shop-postgres:5432/shopdb
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      shop-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  inventory-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/inventory-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-inventory-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8007
+      DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/inventorydb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  sales-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/sales-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-sales-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 9000
+      DB_MYSQL: mysql://invexis:${SALES_MYSQL_PASSWORD}@sales-mysql:3306/salesdb
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    volumes:
+      - ./shared:/app/shared:ro
+      - sales_uploads:/app/uploads
+    networks:
+      - invexis-prod-network
+    depends_on:
+      sales-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  ecommerce-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/ecommerce-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-ecommerce-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8006
+      DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/ecommercedb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  notification-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/notification-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-notification-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8008
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  payment-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/payment-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-payment-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8009
+      DB_POSTGRES: postgresql://invexis:${PAYMENT_POSTGRES_PASSWORD}@payment-postgres:5432/paymentdb
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      payment-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  analytics-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/analytics-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-analytics-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8002
+      DB_POSTGRES: postgresql://invexis:${ANALYTICS_POSTGRES_PASSWORD}@analytics-postgres:5432/analyticsdb
+      DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/analyticsdb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      analytics-postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  audit-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/audit-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-audit-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8003
+      DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/auditdb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  debt-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/debt-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-debt-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8005
+      DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/debtdb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=false"
+      - "deployment.color=blue"
+
+  websocket-service-blue:
+    image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/websocket-service:${DEPLOY_TAG:-latest}
+    container_name: invexis-websocket-service-blue-prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 9002
+      RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    volumes:
+      - ./shared:/app/shared:ro
+    networks:
+      - invexis-prod-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1001:1001"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.websocket-blue.rule=Host(`ws.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.websocket-blue.tls=true"
+      - "traefik.http.services.websocket-blue.loadbalancer.server.port=9002"
+      - "deployment.color=blue"
+
+# ==================================================================================
+# VOLUMES - PERSISTENT DATA STORAGE
+# ==================================================================================
+volumes:
+  # Database volumes
+  company_postgres_data:
+    driver: local
+    name: invexis_company_postgres_prod_data
+  shop_postgres_data:
+    driver: local
+    name: invexis_shop_postgres_prod_data
+  payment_postgres_data:
+    driver: local
+    name: invexis_payment_postgres_prod_data
+  analytics_postgres_data:
+    driver: local
+    name: invexis_analytics_postgres_prod_data
+  grafana_postgres_data:
+    driver: local
+    name: invexis_grafana_postgres_prod_data
+  sales_mysql_data:
+    driver: local
+    name: invexis_sales_mysql_prod_data
+  mongodb_data:
+    driver: local
+    name: invexis_mongodb_prod_data
+  mongodb_config:
+    driver: local
+    name: invexis_mongodb_config_prod_data
+  redis_data:
+    driver: local
+    name: invexis_redis_prod_data
+  rabbitmq_data:
+    driver: local
+    name: invexis_rabbitmq_prod_data
+
+  # Monitoring volumes
+  prometheus_data:
+    driver: local
+    name: invexis_prometheus_prod_data
+  grafana_data:
+    driver: local
+    name: invexis_grafana_prod_data
+  elasticsearch_data:
+    driver: local
+    name: invexis_elasticsearch_prod_data
+  traefik_data:
+    driver: local
+    name: invexis_traefik_prod_data
+
+  # Application volumes
+  sales_uploads:
+    driver: local
+    name: invexis_sales_uploads_prod_data
+
+# ==================================================================================
+# NETWORKS - ISOLATED PRODUCTION NETWORK
+# ==================================================================================
+networks:
+  invexis-prod-network:
+    driver: bridge
+    name: invexis-prod-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

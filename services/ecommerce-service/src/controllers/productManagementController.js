@@ -35,14 +35,18 @@ exports.bulkDeleteProducts = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'productIds array is required' });
         }
 
-        const result = await Catalog.deleteMany({ productId: { $in: productIds }, companyId });
+        // Soft-delete instead of hard delete
+        const result = await Catalog.updateMany(
+          { productId: { $in: productIds }, companyId },
+          { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user?.id || 'system' } }
+        );
         await publish(exchanges.topic, 'ecommerce.catalog.bulk_deleted', { companyId, productIds, timestamp: Date.now() });
 
         for (const productId of productIds) {
             await cache.del(`catalog:${productId}`);
         }
 
-        res.json({ success: true, message: `Deleted ${result.deletedCount} products`, data: result });
+        res.json({ success: true, message: `Soft-deleted ${result.modifiedCount} products`, data: result });
     } catch (error) {
         logger.error('Error in bulkDeleteProducts:', error);
         next(error);

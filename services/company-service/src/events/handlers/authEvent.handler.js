@@ -244,7 +244,7 @@ async function handleWorkerRemovalRequested(data) {
 
     // Emit event to confirm removal (for audit/sync)
     try {
-      const rabbitmq = require('/app/shared/rabbitmq.js') || require('../../../shared/rabbitmq.js');
+      const rabbitmq = require('/app/shared/rabbitmq.js');
       await rabbitmq.publish({
         exchange: 'events_topic',
         routingKey: 'company.worker_removal_completed',

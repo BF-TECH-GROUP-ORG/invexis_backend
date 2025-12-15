@@ -1,38 +1,107 @@
-const { app, initialize } = require("./app");
-const { close: close } = require("/app/shared/rabbitmq");
+// ecommerce-service production-ready index.js
+require('dotenv').config();
+const express = require('express');
+const { getLogger } = require('/app/shared/logger');
+const HealthChecker = require('/app/shared/health');
+const { SecurityManager } = require('/app/shared/security');
+const { ErrorHandler } = require('/app/shared/errorHandler');
 
-const PORT = process.env.PORT || 8008;
+const app = express();
+const PORT = process.env.PORT || 8006;
+const SERVICE_NAME = 'ecommerce-service';
 
+// Initialize production modules
+const logger = getLogger(SERVICE_NAME);
+const healthChecker = new HealthChecker(SERVICE_NAME, {
+  postgresql: true,
+  redis: true,
+  rabbitmq: true,
+  timeout: 5000
+});
+const security = new SecurityManager(SERVICE_NAME);
+const errorHandler = new ErrorHandler(SERVICE_NAME);
+
+// Request parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Setup security middleware
+security.setupSecurity(app);
+
+// Request logging
+app.use(logger.requestLogger());
+
+// Health check routes
+healthChecker.setupRoutes(app);
+
+// Routes
+try {
+  const ecommerceRoutes = require('./routes/ecommerceRoute');
+  app.use('/', ecommerceRoutes);
+} catch (err) {
+  logger.warn('Ecommerce routes not found, using basic route', { error: err.message });
+  app.get('/', (req, res) => {
+    res.json({
+      service: SERVICE_NAME,
+      status: 'running',
+      version: '1.0.0',
+      timestamp: new Date().toISOString()
+    });
+  });
+}
+
+// Error handling
+errorHandler.setupErrorHandlers(app);
+
+// Start server
 const server = app.listen(PORT, () => {
-  initialize();
-  console.log(`🚀 Ecommerce Service running on port ${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`📍 Health check: http://localhost:${PORT}/health`);
+  logger.info('Ecommerce Service started successfully', {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version,
+    pid: process.pid
+  });
+  
+  console.log(`🛒 Ecommerce Service running on port ${PORT}`);
 });
 
 // Graceful shutdown
-const gracefulShutdown = async (signal) => {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-
-  server.close(async () => {
-    console.log("HTTP server closed");
-
-    try {
-      await close();
-      console.log("RabbitMQ connection closed");
-    } catch (error) {
-      console.error("Error closing RabbitMQ:", error);
+const shutdown = async (signal) => {
+  logger.info(`Received ${signal}, starting graceful shutdown`);
+  
+  server.close(async (err) => {
+    if (err) {
+      logger.error('Error closing server', { error: err.message });
+      process.exit(1);
     }
-
+    
+    logger.info('Ecommerce Service shutdown completed');
     process.exit(0);
   });
-
-  // Force shutdown after 10 seconds
+  
   setTimeout(() => {
-    console.error("Forced shutdown after timeout");
+    logger.error('Forced shutdown after timeout');
     process.exit(1);
-  }, 10000);
+  }, 30000);
 };
 
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Error handling
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Promise Rejection', {
+        reason: reason?.message || reason,
+        stack: reason?.stack
+    });
+    process.exit(1);
+});
+
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+    });
+    process.exit(1);
+});

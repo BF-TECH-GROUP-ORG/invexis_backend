@@ -1,23 +1,27 @@
-/**
- * Debt Service Event Producer
- * Publishes events to RabbitMQ
- */
+"use strict";
 
-const { publish, exchanges } = require('/app/shared/rabbitmq');
+const registerPublishers = require("../utils/events/registerPublisher");
+const publisherConfigs = require("./config/eventPublishers.config");
+
+let publishEvent = null;
+
+const initPublishers = async () => {
+  publishEvent = await registerPublishers(publisherConfigs);
+};
 
 /**
  * Emit event to RabbitMQ
- * @param {string} routingKey - Event routing key
+ * Used by outbox dispatcher to publish events
+ * @param {string} routingKey - Event routing key (e.g., "debt.created")
  * @param {object} payload - Event payload
+ * @param {object} metadata - Optional metadata
  */
-const emit = async (routingKey, payload) => {
-    try {
-        await publish(exchanges.topic, routingKey, payload);
-        console.log(`✅ Published event: ${routingKey}`);
-    } catch (error) {
-        console.error(`❌ Failed to publish ${routingKey}:`, error.message);
-        throw error;
-    }
+const emit = async (routingKey, payload = {}, metadata = {}) => {
+  if (!publishEvent) throw new Error("Publishers not initialized");
+  await publishEvent(routingKey, payload, metadata);
 };
 
-module.exports = { emit };
+module.exports = {
+  initPublishers,
+  emit,
+};

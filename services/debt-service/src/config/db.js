@@ -5,6 +5,11 @@ const connectDB = async () => {
         await mongoose.connect(process.env.MONGO_URI || 'mongodb://root:invexispass@mongodb:27017/debtdb?authSource=admin', {
             serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
+            maxPoolSize: 10, // Connection pooling
+            minPoolSize: 5,
+            maxIdleTimeMS: 30000,
+            retryWrites: true,
+            journal: true,
         });
 
         mongoose.connection.on('error', (err) => {

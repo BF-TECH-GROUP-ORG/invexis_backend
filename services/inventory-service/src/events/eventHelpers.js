@@ -25,7 +25,7 @@ const productEvents = {
           sku: product.sku,
           asin: product.asin,
           upc: product.upc,
-          category: product.category,
+          category: product.categoryId,
           // Pricing & inventory
           pricing: product.pricing,
           inventory: product.inventory,

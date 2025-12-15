@@ -1,27 +1,27 @@
 const { app, initialize } = require("./app");
 const { close: closeRabbitMQ } = require("/app/shared/rabbitmq");
+const { getLogger } = require('/app/shared/logger');
 
+const logger = getLogger('inventory-service');
 const PORT = process.env.PORT || 8007;
 
 const server = app.listen(PORT, () => {
   initialize();
-  console.log(`🚀 Inventory Service running on port ${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`📍 Health check: http://localhost:${PORT}/health`);
+  logger.info(`🚀 Inventory Service running on port ${PORT}`);
 });
 
 // Graceful shutdown
 const gracefulShutdown = async (signal) => {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  logger.info(`\n${signal} received. Starting graceful shutdown...`);
 
   server.close(async () => {
-    console.log("HTTP server closed");
+    logger.info("HTTP server closed");
 
     try {
       await closeRabbitMQ();
-      console.log("RabbitMQ connection closed");
+      logger.info("RabbitMQ connection closed");
     } catch (error) {
-      console.error("Error closing RabbitMQ:", error);
+      logger.error("Error closing RabbitMQ:", error);
     }
 
     process.exit(0);
@@ -29,10 +29,18 @@ const gracefulShutdown = async (signal) => {
 
   // Force shutdown after 10 seconds
   setTimeout(() => {
-    console.error("Forced shutdown after timeout");
+    logger.error("Forced shutdown after timeout");
     process.exit(1);
   }, 10000);
 };
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  logger.error('Unhandled Promise Rejection:', err);
+  server.close(() => {
+    process.exit(1);
+  });
+});

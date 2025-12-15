@@ -15,6 +15,9 @@ const inventoryAdjustmentSchema = new Schema({
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   approvedBy: { type: String, default: null },
   approvedAt: { type: Date, default: null },
+  rejectedBy: { type: String, default: null },
+  rejectedAt: { type: Date, default: null },
+  rejectionReason: { type: String, default: null, trim: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -35,15 +38,16 @@ inventoryAdjustmentSchema.pre('save', async function (next) {
         return next(new Error('Product not found for adjustment'));
       }
 
-      let oldQuantity;
-      if (this.variationId) {
-        const variation = product.variations.find(v => v._id.equals(this.variationId));
-        if (!variation) return next(new Error('Variation not found for adjustment'));
-        oldQuantity = variation.stockQty;
-      } else {
-        oldQuantity = product.inventory.quantity;
-      }
+      // Get current stock from ProductStock model
+      const ProductStock = mongoose.model('ProductStock');
+      const stockRecord = await ProductStock.findOne({
+        productId: this.productId,
+        variationId: this.variationId || null
+      });
 
+      if (!stockRecord) return next(new Error('Stock record not found for adjustment'));
+      
+      const oldQuantity = stockRecord.stockQty;
       const stockDelta = this.quantity * -1; // As per schema, negative for loss
       const newQuantity = Math.max(0, oldQuantity + stockDelta);
 
@@ -67,14 +71,9 @@ inventoryAdjustmentSchema.pre('save', async function (next) {
       });
       await stockChange.save();
 
-      // Update product stock
-      if (this.variationId) {
-        const variation = product.variations.find(v => v._id.equals(this.variationId));
-        variation.stockQty = newQuantity;
-      } else {
-        product.inventory.quantity = newQuantity;
-      }
-      product.availability = newQuantity > 0 ? 'in_stock' : 'out_of_stock';
+      // Update ProductStock
+      stockRecord.stockQty = newQuantity;
+      await stockRecord.save();
       await product.save();
 
       // Add to product auditTrail

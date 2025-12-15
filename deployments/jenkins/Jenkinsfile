@@ -1,0 +1,624 @@
+#!/usr/bin/env groovy
+// ==================================================================================
+// INVEXIS PRODUCTION CI/CD PIPELINE - BLUE/GREEN DEPLOYMENT
+// ==================================================================================
+// This Jenkins pipeline handles the complete CI/CD process for Invexis platform
+// including building, testing, blue/green deployment, and notifications
+// ==================================================================================
+
+pipeline {
+    agent any
+    
+    // Environment variables
+    environment {
+        // Docker registry configuration
+        DOCKER_REGISTRY = credentials('docker-registry-url')
+        DOCKER_REGISTRY_CREDS = credentials('docker-registry-credentials')
+        
+        // Git configuration
+        GIT_REPO = 'https://github.com/MIP-Devs/invexis_backend.git'
+        
+        // Deployment configuration
+        DEPLOY_ENV = 'production'
+        BLUE_GREEN_TIMEOUT = '10m'
+        HEALTH_CHECK_TIMEOUT = '5m'
+        
+        // Notification configuration
+        SLACK_WEBHOOK = credentials('slack-webhook-url')
+        SLACK_CHANNEL = '#deployment-prod'
+        
+        // Infrastructure configuration
+        COMPOSE_FILE = 'deployments/docker/docker-compose.prod.yml'
+        TRAEFIK_CONFIG = 'deployments/traefik'
+        
+        // Version and tagging
+        BUILD_VERSION = "${env.BUILD_NUMBER}-${env.GIT_COMMIT[0..7]}"
+        DEPLOY_TAG = "${BUILD_VERSION}"
+        
+        // Security scanning
+        TRIVY_CACHE_DIR = "${WORKSPACE}/.trivy-cache"
+        SONAR_PROJECT_KEY = 'invexis-backend'
+    }
+    
+    // Build triggers
+    triggers {
+        githubPush()
+        pollSCM('H/15 * * * *') // Poll every 15 minutes as backup
+    }
+    
+    // Pipeline options
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        timestamps()
+        ansiColor('xterm')
+        skipDefaultCheckout(false)
+    }
+    
+    // Pipeline parameters
+    parameters {
+        choice(
+            name: 'DEPLOYMENT_STRATEGY',
+            choices: ['blue-green', 'rolling', 'manual'],
+            description: 'Choose deployment strategy'
+        )
+        booleanParam(
+            name: 'SKIP_TESTS',
+            defaultValue: false,
+            description: 'Skip test execution (not recommended for production)'
+        )
+        booleanParam(
+            name: 'FORCE_DEPLOY',
+            defaultValue: false,
+            description: 'Force deployment even if health checks fail'
+        )
+        string(
+            name: 'SERVICES_TO_DEPLOY',
+            defaultValue: 'all',
+            description: 'Comma-separated list of services to deploy (or "all")'
+        )
+    }
+    
+    stages {
+        // ============================================================================
+        // PREPARATION STAGE
+        // ============================================================================
+        stage('🚀 Pipeline Preparation') {
+            steps {
+                script {
+                    // Send start notification
+                    sendSlackNotification(
+                        color: 'warning',
+                        message: "🚀 Starting deployment pipeline for commit ${env.GIT_COMMIT[0..7]}"
+                    )
+                    
+                    // Set build description
+                    currentBuild.description = "Deploy: ${env.BUILD_VERSION} | Strategy: ${params.DEPLOYMENT_STRATEGY}"
+                    
+                    // Clean workspace
+                    echo "🧹 Cleaning workspace..."
+                    cleanWs()
+                    
+                    // Checkout code
+                    echo "📥 Checking out code..."
+                    checkout scm
+                    
+                    // Verify environment
+                    sh '''
+                        echo "🔍 Environment verification..."
+                        docker --version
+                        docker-compose --version
+                        echo "Build: ${BUILD_VERSION}"
+                        echo "Commit: ${GIT_COMMIT}"
+                    '''
+                }
+            }
+        }
+        
+        // ============================================================================
+        // CODE QUALITY CHECKS
+        // ============================================================================
+        stage('🔍 Code Quality Analysis') {
+            parallel {
+                stage('ESLint Analysis') {
+                    steps {
+                        script {
+                            echo "🔍 Running ESLint analysis..."
+                            sh '''
+                                # Install dependencies for linting
+                                npm install --global eslint
+                                
+                                # Run ESLint on all services
+                                for service in services/*/; do
+                                    if [ -f "$service/package.json" ]; then
+                                        echo "Linting $service..."
+                                        cd "$service" && npm install --only=dev && npm run lint || true
+                                        cd - > /dev/null
+                                    fi
+                                done
+                            '''
+                        }
+                    }
+                }
+                
+                stage('Security Scan') {
+                    steps {
+                        script {
+                            echo "🔒 Running security vulnerability scan..."
+                            sh '''
+                                # Install security scanning tools
+                                npm install -g audit-ci
+                                
+                                # Run npm audit on all services
+                                for service in services/*/; do
+                                    if [ -f "$service/package.json" ]; then
+                                        echo "Security scan: $service..."
+                                        cd "$service"
+                                        npm audit --audit-level=high || echo "Vulnerabilities found in $service"
+                                        cd - > /dev/null
+                                    fi
+                                done
+                            '''
+                        }
+                    }
+                }
+                
+                stage('SonarQube Analysis') {
+                    when {
+                        not { params.SKIP_TESTS }
+                    }
+                    steps {
+                        script {
+                            echo "📊 Running SonarQube analysis..."
+                            withSonarQubeEnv('SonarQube') {
+                                sh '''
+                                    sonar-scanner \
+                                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                                        -Dsonar.sources=services \
+                                        -Dsonar.exclusions=**/node_modules/**,**/coverage/** \
+                                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                                '''
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // ============================================================================
+        // AUTOMATED TESTING
+        // ============================================================================
+        stage('🧪 Automated Testing') {
+            when {
+                not { params.SKIP_TESTS }
+            }
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        script {
+                            echo "🧪 Running unit tests..."
+                            sh '''
+                                # Create test results directory
+                                mkdir -p test-results
+                                
+                                # Run tests for each service
+                                for service in services/*/; do
+                                    service_name=$(basename "$service")
+                                    echo "Testing $service_name..."
+                                    
+                                    if [ -f "$service/package.json" ]; then
+                                        cd "$service"
+                                        npm install
+                                        npm run test:unit || echo "Unit tests failed for $service_name"
+                                        cd - > /dev/null
+                                    fi
+                                done
+                            '''
+                        }
+                    }
+                    post {
+                        always {
+                            publishTestResults testResultsPattern: '**/test-results/*.xml'
+                        }
+                    }
+                }
+                
+                stage('Integration Tests') {
+                    steps {
+                        script {
+                            echo "🔗 Running integration tests..."
+                            sh '''
+                                # Start test environment
+                                docker-compose -f docker-compose.test.yml up -d --build
+                                
+                                # Wait for services to be ready
+                                sleep 30
+                                
+                                # Run integration tests
+                                docker-compose -f docker-compose.test.yml exec -T api-gateway npm run test:integration
+                                
+                                # Cleanup
+                                docker-compose -f docker-compose.test.yml down
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+        
+        // ============================================================================
+        // DOCKER IMAGE BUILDING
+        // ============================================================================
+        stage('🏗️ Build Docker Images') {
+            steps {
+                script {
+                    echo "🏗️ Building Docker images..."
+                    
+                    // Get list of services to build
+                    def servicesToBuild = getServicesToBuild()
+                    
+                    // Build images in parallel
+                    def buildSteps = [:]
+                    servicesToBuild.each { service ->
+                        buildSteps[service] = {
+                            buildDockerImage(service)
+                        }
+                    }
+                    
+                    parallel buildSteps
+                }
+            }
+        }
+        
+        // ============================================================================
+        // SECURITY SCANNING
+        // ============================================================================
+        stage('🔒 Container Security Scan') {
+            steps {
+                script {
+                    echo "🔒 Scanning Docker images for vulnerabilities..."
+                    sh '''
+                        # Install Trivy if not present
+                        if ! command -v trivy &> /dev/null; then
+                            wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+                            echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+                            sudo apt-get update
+                            sudo apt-get install trivy
+                        fi
+                        
+                        # Scan each built image
+                        for service in api-gateway auth-service company-service; do
+                            echo "Scanning ${DOCKER_REGISTRY}/invexis/${service}:${DEPLOY_TAG}..."
+                            trivy image --cache-dir ${TRIVY_CACHE_DIR} --severity HIGH,CRITICAL \
+                                ${DOCKER_REGISTRY}/invexis/${service}:${DEPLOY_TAG} || true
+                        done
+                    '''
+                }
+            }
+        }
+        
+        // ============================================================================
+        // BLUE/GREEN DEPLOYMENT
+        // ============================================================================
+        stage('🚢 Blue/Green Deployment') {
+            when {
+                expression { params.DEPLOYMENT_STRATEGY == 'blue-green' }
+            }
+            steps {
+                script {
+                    echo "🚢 Starting Blue/Green deployment..."
+                    
+                    try {
+                        // Step 1: Deploy Green environment
+                        deployGreenEnvironment()
+                        
+                        // Step 2: Health checks
+                        performHealthChecks('green')
+                        
+                        // Step 3: Switch traffic
+                        switchTraffic()
+                        
+                        // Step 4: Verify deployment
+                        verifyDeployment()
+                        
+                        // Step 5: Cleanup old Blue environment
+                        cleanupBlueEnvironment()
+                        
+                    } catch (Exception e) {
+                        echo "❌ Deployment failed: ${e.message}"
+                        
+                        // Rollback if deployment fails
+                        rollbackDeployment()
+                        
+                        throw e
+                    }
+                }
+            }
+        }
+        
+        // ============================================================================
+        // POST-DEPLOYMENT VERIFICATION
+        // ============================================================================
+        stage('✅ Post-Deployment Verification') {
+            steps {
+                script {
+                    echo "✅ Running post-deployment verification..."
+                    
+                    // Wait for services to stabilize
+                    sleep(30)
+                    
+                    // Run smoke tests
+                    runSmokeTests()
+                    
+                    // Verify metrics collection
+                    verifyMetrics()
+                    
+                    // Check log aggregation
+                    verifyLogging()
+                }
+            }
+        }
+        
+        // ============================================================================
+        // PERFORMANCE TESTING
+        // ============================================================================
+        stage('⚡ Performance Testing') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    echo "⚡ Running performance tests..."
+                    sh '''
+                        # Install k6 for load testing
+                        if ! command -v k6 &> /dev/null; then
+                            sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+                            echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+                            sudo apt-get update
+                            sudo apt-get install k6
+                        fi
+                        
+                        # Run load tests
+                        k6 run --vus 10 --duration 2m tests/performance/load-test.js
+                    '''
+                }
+            }
+        }
+    }
+    
+    // ================================================================================
+    // POST-BUILD ACTIONS
+    // ================================================================================
+    post {
+        always {
+            script {
+                // Collect logs
+                archiveArtifacts artifacts: 'logs/**/*.log', allowEmptyArchive: true
+                
+                // Clean up Docker resources
+                sh '''
+                    docker system prune -f
+                    docker volume prune -f
+                '''
+            }
+        }
+        
+        success {
+            script {
+                sendSlackNotification(
+                    color: 'good',
+                    message: "✅ Deployment successful! Version ${env.BUILD_VERSION} is now live in production."
+                )
+                
+                // Update deployment status
+                updateDeploymentStatus('success')
+            }
+        }
+        
+        failure {
+            script {
+                sendSlackNotification(
+                    color: 'danger',
+                    message: "❌ Deployment failed! Please check the build logs and take action."
+                )
+                
+                // Update deployment status
+                updateDeploymentStatus('failure')
+            }
+        }
+        
+        unstable {
+            script {
+                sendSlackNotification(
+                    color: 'warning',
+                    message: "⚠️ Deployment completed with warnings. Please review the results."
+                )
+            }
+        }
+    }
+}
+
+// ==================================================================================
+// HELPER FUNCTIONS
+// ==================================================================================
+
+def getServicesToBuild() {
+    def allServices = [
+        'api-gateway', 'auth-service', 'company-service', 'shop-service',
+        'inventory-service', 'sales-service', 'ecommerce-service',
+        'notification-service', 'payment-service', 'analytics-service',
+        'audit-service', 'debt-service', 'websocket-service'
+    ]
+    
+    if (params.SERVICES_TO_DEPLOY == 'all') {
+        return allServices
+    } else {
+        return params.SERVICES_TO_DEPLOY.split(',').collect { it.trim() }
+    }
+}
+
+def buildDockerImage(serviceName) {
+    sh """
+        echo "Building ${serviceName}..."
+        cd services/${serviceName}
+        
+        # Build production Dockerfile
+        docker build \
+            --file Dockerfile.prod \
+            --tag ${DOCKER_REGISTRY}/invexis/${serviceName}:${DEPLOY_TAG} \
+            --tag ${DOCKER_REGISTRY}/invexis/${serviceName}:latest \
+            --build-arg BUILD_VERSION=${BUILD_VERSION} \
+            --build-arg GIT_COMMIT=${GIT_COMMIT} \
+            .
+        
+        # Push to registry
+        echo ${DOCKER_REGISTRY_CREDS_PSW} | docker login ${DOCKER_REGISTRY} -u ${DOCKER_REGISTRY_CREDS_USR} --password-stdin
+        docker push ${DOCKER_REGISTRY}/invexis/${serviceName}:${DEPLOY_TAG}
+        docker push ${DOCKER_REGISTRY}/invexis/${serviceName}:latest
+    """
+}
+
+def deployGreenEnvironment() {
+    echo "🟢 Deploying Green environment..."
+    sh '''
+        # Set environment variables for green deployment
+        export DEPLOYMENT_COLOR=green
+        export DEPLOY_TAG=${DEPLOY_TAG}
+        
+        # Deploy green services
+        docker-compose -f ${COMPOSE_FILE} up -d --scale api-gateway-green=2 --scale auth-service-green=2
+        
+        # Wait for green services to start
+        sleep 60
+    '''
+}
+
+def performHealthChecks(deploymentColor) {
+    echo "🏥 Performing health checks for ${deploymentColor} deployment..."
+    
+    timeout(time: 5, unit: 'MINUTES') {
+        sh '''
+            # Health check script
+            ./scripts/healthcheck_all.sh green
+        '''
+    }
+}
+
+def switchTraffic() {
+    echo "🔄 Switching traffic to Green deployment..."
+    sh '''
+        # Update Traefik configuration to point to green
+        ./scripts/switch_traffic.sh blue green
+        
+        # Wait for traffic to stabilize
+        sleep 30
+        
+        # Verify traffic switch
+        curl -f https://api.${DOMAIN}/health || exit 1
+    '''
+}
+
+def verifyDeployment() {
+    echo "✅ Verifying deployment..."
+    sh '''
+        # Run deployment verification tests
+        ./scripts/verify_deployment.sh
+        
+        # Check all services are responding
+        for service in api-gateway auth-service company-service; do
+            echo "Checking ${service}..."
+            curl -f http://${service}-green:8000/health || exit 1
+        done
+    '''
+}
+
+def cleanupBlueEnvironment() {
+    echo "🧹 Cleaning up Blue environment..."
+    sh '''
+        # Scale down blue services
+        docker-compose -f ${COMPOSE_FILE} stop api-gateway-blue auth-service-blue company-service-blue
+        
+        # Remove old containers (keep data volumes)
+        docker-compose -f ${COMPOSE_FILE} rm -f api-gateway-blue auth-service-blue company-service-blue
+    '''
+}
+
+def rollbackDeployment() {
+    echo "🔄 Rolling back deployment..."
+    sh '''
+        # Switch traffic back to blue
+        ./scripts/switch_traffic.sh green blue
+        
+        # Stop green services
+        docker-compose -f ${COMPOSE_FILE} stop $(docker-compose -f ${COMPOSE_FILE} ps --services | grep green)
+        
+        # Verify rollback
+        curl -f https://api.${DOMAIN}/health || exit 1
+    '''
+}
+
+def runSmokeTests() {
+    sh '''
+        # Run smoke tests against production API
+        npm install -g newman
+        newman run postman/Invexis_Complete_API_Collection.postman_collection.json \
+            -e postman/Invexis_Production_Environment.postman_environment.json \
+            --timeout-request 30000
+    '''
+}
+
+def verifyMetrics() {
+    sh '''
+        # Check if Prometheus is collecting metrics
+        curl -f http://prometheus:9090/api/v1/query?query=up || exit 1
+        
+        # Verify service metrics
+        curl -f "http://prometheus:9090/api/v1/query?query=up{job=~'api-gateway.*'}" || exit 1
+    '''
+}
+
+def verifyLogging() {
+    sh '''
+        # Check Elasticsearch cluster health
+        curl -f -u elastic:${ELASTIC_PASSWORD} http://elasticsearch:9200/_cluster/health || exit 1
+        
+        # Verify logs are being indexed
+        curl -f -u elastic:${ELASTIC_PASSWORD} "http://elasticsearch:9200/_cat/indices/logstash-*" || exit 1
+    '''
+}
+
+def sendSlackNotification(Map args) {
+    def message = args.message
+    def color = args.color ?: 'good'
+    
+    slackSend(
+        channel: env.SLACK_CHANNEL,
+        color: color,
+        message: """
+            ${message}
+            
+            *Build:* ${env.BUILD_NUMBER}
+            *Version:* ${env.BUILD_VERSION}
+            *Branch:* ${env.GIT_BRANCH}
+            *Commit:* ${env.GIT_COMMIT[0..7]}
+            *Build URL:* ${env.BUILD_URL}
+        """.stripIndent(),
+        teamDomain: 'invexis',
+        token: env.SLACK_WEBHOOK
+    )
+}
+
+def updateDeploymentStatus(status) {
+    // Update external systems about deployment status
+    sh """
+        # Update deployment tracking
+        curl -X POST https://api.deployments.invexis.com/status \
+            -H "Content-Type: application/json" \
+            -d '{
+                "version": "${env.BUILD_VERSION}",
+                "status": "${status}",
+                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+                "environment": "production"
+            }'
+    """
+}

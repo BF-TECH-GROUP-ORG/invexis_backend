@@ -1,0 +1,347 @@
+# ==================================================================================
+# PROMETHEUS ALERTING RULES - PRODUCTION MONITORING
+# ==================================================================================
+# Comprehensive alerting rules for the Invexis production environment
+# Covers service health, performance, security, and infrastructure monitoring
+# ==================================================================================
+
+groups:
+  # ================================================================================
+  # CRITICAL SERVICE AVAILABILITY ALERTS
+  # ================================================================================
+  - name: service_availability
+    rules:
+      # Service down alerts
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute."
+          runbook_url: "https://wiki.invexis.com/runbooks/service-down"
+
+      # API Gateway critical alert
+      - alert: APIGatewayDown
+        expr: up{job=~"api-gateway.*"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: platform
+          service: api-gateway
+        annotations:
+          summary: "API Gateway is DOWN - CRITICAL"
+          description: "API Gateway {{ $labels.deployment }} deployment is down. All API traffic is affected."
+          runbook_url: "https://wiki.invexis.com/runbooks/api-gateway-down"
+
+      # Database availability
+      - alert: DatabaseDown
+        expr: up{job=~"postgres.*|mysql.*|mongodb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: database
+        annotations:
+          summary: "Database {{ $labels.job }} is down"
+          description: "Database {{ $labels.job }} has been unreachable for more than 1 minute."
+
+  # ================================================================================
+  # PERFORMANCE AND LATENCY ALERTS
+  # ================================================================================
+  - name: performance
+    rules:
+      # High response time alert
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time for {{ $labels.job }} is {{ $value }}s, above 2s threshold."
+
+      # Very high response time - critical
+      - alert: VeryHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "CRITICAL: Very high response time"
+          description: "95th percentile response time for {{ $labels.job }} is {{ $value }}s, above 5s critical threshold."
+
+      # High request rate
+      - alert: HighRequestRate
+        expr: rate(http_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High request rate detected"
+          description: "Request rate for {{ $labels.job }} is {{ $value }} req/s, above normal threshold."
+
+  # ================================================================================
+  # ERROR RATE ALERTS
+  # ================================================================================
+  - name: error_rates
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: (rate(http_requests_total{status=~"4..|5.."}[5m]) / rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate for {{ $labels.job }} is {{ $value | humanizePercentage }}, above 5% threshold."
+
+      # Critical error rate
+      - alert: CriticalErrorRate
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "CRITICAL: High server error rate"
+          description: "Server error rate (5xx) for {{ $labels.job }} is {{ $value | humanizePercentage }}, above 10% critical threshold."
+
+      # Authentication failures
+      - alert: HighAuthFailureRate
+        expr: rate(http_requests_total{job="auth-service-blue",status="401"}[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is {{ $value }} failures/sec, possible attack detected."
+
+  # ================================================================================
+  # INFRASTRUCTURE ALERTS
+  # ================================================================================
+  - name: infrastructure
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}, above 80% threshold."
+
+      # Critical CPU usage
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "CRITICAL: Very high CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}, above 95% critical threshold."
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}."
+
+      # Critical memory usage
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "CRITICAL: Very high memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}."
+
+      # Disk space alerts
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High disk usage detected"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.device }} at {{ $labels.instance }}."
+
+      - alert: CriticalDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "CRITICAL: Very high disk usage"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.device }} at {{ $labels.instance }}."
+
+  # ================================================================================
+  # DATABASE ALERTS
+  # ================================================================================
+  - name: database_health
+    rules:
+      # PostgreSQL connection alerts
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "PostgreSQL connection pool nearly exhausted"
+          description: "PostgreSQL {{ $labels.instance }} is using {{ $value | humanizePercentage }} of available connections."
+
+      # PostgreSQL slow queries
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_database_tup_returned[5m]) / rate(pg_stat_database_tup_fetched[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Query efficiency on {{ $labels.instance }} is below 10%."
+
+      # MySQL connection alerts
+      - alert: MySQLTooManyConnections
+        expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "MySQL connection pool nearly exhausted"
+          description: "MySQL is using {{ $value | humanizePercentage }} of available connections."
+
+      # MongoDB replica set alerts
+      - alert: MongoDBReplicationLag
+        expr: mongodb_replset_member_replication_lag > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "MongoDB replication lag detected"
+          description: "MongoDB replication lag is {{ $value }}s on {{ $labels.instance }}."
+
+      # Redis memory usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_config_maxmemory > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}."
+
+  # ================================================================================
+  # SECURITY ALERTS
+  # ================================================================================
+  - name: security
+    rules:
+      # Unusual request patterns
+      - alert: SuspiciousRequestPattern
+        expr: rate(http_requests_total[1m]) > 500
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Suspicious request pattern detected"
+          description: "Unusual spike in requests: {{ $value }} req/s for {{ $labels.job }}."
+
+      # Failed login attempts
+      - alert: BruteForceAttack
+        expr: rate(http_requests_total{job="auth-service-blue",status="401"}[1m]) > 20
+        for: 1m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Possible brute force attack"
+          description: "High number of authentication failures: {{ $value }} failures/min."
+
+      # SSL certificate expiration
+      - alert: SSLCertificateExpiry
+        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 7
+        for: 1h
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.instance }} expires in less than 7 days."
+
+  # ================================================================================
+  # BUSINESS LOGIC ALERTS
+  # ================================================================================
+  - name: business_metrics
+    rules:
+      # Payment processing alerts
+      - alert: PaymentProcessingDown
+        expr: up{job="payment-service-blue"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: business
+          impact: revenue
+        annotations:
+          summary: "CRITICAL: Payment processing is down"
+          description: "Payment service is unavailable, affecting revenue generation."
+
+      # High cart abandonment (if metrics available)
+      - alert: HighCartAbandonment
+        expr: rate(cart_abandoned_total[1h]) / rate(cart_created_total[1h]) > 0.8
+        for: 30m
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "High cart abandonment rate"
+          description: "Cart abandonment rate is {{ $value | humanizePercentage }} in the last hour."
+
+  # ================================================================================
+  # DEPLOYMENT AND RELEASE ALERTS
+  # ================================================================================
+  - name: deployment
+    rules:
+      # Blue-Green deployment health
+      - alert: GreenDeploymentUnhealthy
+        expr: up{deployment="green"} == 0 and ON() kube_deployment_status_replicas{deployment=~".*-green"} > 0
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Green deployment unhealthy"
+          description: "Green deployment for {{ $labels.job }} is unhealthy but scaled up."
+
+      # Deployment version mismatch
+      - alert: DeploymentVersionMismatch
+        expr: count(count by (version)(up{job=~".*-blue"})) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Multiple versions running in blue deployment"
+          description: "Detected multiple versions in blue deployment, check rollout status."

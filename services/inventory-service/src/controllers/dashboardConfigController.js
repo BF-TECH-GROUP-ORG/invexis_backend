@@ -1,7 +1,10 @@
 // controllers/dashboardConfigController.js
 // Dashboard customization and widget configuration
 
-const asyncHandler = require('express-async-handler');
+// Manual async wrapper instead of express-async-handler
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 const mongoose = require('mongoose');
 const { validateMongoId } = require('../utils/validateMongoId');
 const { logger } = require('../utils/logger');

@@ -7,6 +7,7 @@ const dashboardConfigRoutes = require("./dashboardConfigRoutes");
 const discountRoutes = require("./discountRoutes");
 const alertRoutes = require("./alertRoutes");
 const categoryRoutes = require("./categoryRoutes");
+const analyticsRoutes = require("./analyticsRoutes");
 
 const stockRoutes = require("./stockRoutes");
 const organizationRoutes = require("./organizationRoutes");
@@ -30,6 +31,9 @@ router.use("/v1/stock", stockRoutes);
 
 // NEW: Advanced professional reporting (consolidated)
 router.use("/v1/reports", reportRoutes);
+
+// NEW: Analytics - profit, margin, forecasting
+router.use("/v1/analytics", analyticsRoutes);
 
 // NEW: Dashboard configuration and customization
 router.use("/v1/dashboard", dashboardConfigRoutes);

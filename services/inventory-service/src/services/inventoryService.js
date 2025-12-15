@@ -131,14 +131,14 @@ const getProductByAsin = async (asin, companyId) => {
 
 const getProducts = async (companyId, { category, keyword, page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' }) => {
   const filter = { companyId };
-  if (category) filter.category = category; // Use ID for exact match
+  if (category) filter.categoryId = category; // Use ID for exact match
   if (keyword) filter.$text = { $search: keyword };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const sort = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
 
   const [products, total] = await Promise.all([
-    Product.find(filter).populate('category', 'name').sort(sort).skip(skip).limit(parseInt(limit)).lean(),
+    Product.find(filter).populate('categoryId', 'name').sort(sort).skip(skip).limit(parseInt(limit)).lean(),
     Product.countDocuments(filter)
   ]);
 

@@ -178,8 +178,7 @@ UserSchema.pre("save", async function (next) {
 // Indexes (analytics + perf, strings for companies/shops)
 UserSchema.index({ role: 1, dateOfBirth: 1 }); // Analytics queries
 UserSchema.index({ accountStatus: 1, role: 1 });
-UserSchema.index({ email: 1 }); // Login lookups
-UserSchema.index({ phone: 1 }); // Communication lookups
+// Note: email and phone indexes are created automatically by unique: true
 UserSchema.index({ companies: 1 }); // Worker filtering by company
 UserSchema.index({ isDeleted: 1 }); // Soft-delete filtering
 UserSchema.index({ role: 1, accountStatus: 1 }); // Admin filtering

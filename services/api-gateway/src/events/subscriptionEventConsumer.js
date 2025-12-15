@@ -95,7 +95,10 @@ async function initSubscriptionEventConsumer() {
  * Can be called from company-service or admin panel
  */
 function createCacheInvalidationEndpoint(app) {
-  app.post("/api/gateway/cache/invalidate", async (req, res) => {
+  // Import shared authentication middleware
+  const { authenticateToken, requireRole } = require("/app/shared/middlewares/auth/production-auth");
+  
+  app.post("/api/gateway/cache/invalidate", authenticateToken, async (req, res) => {
     try {
       const { companyId } = req.body;
 
@@ -124,7 +127,7 @@ function createCacheInvalidationEndpoint(app) {
   });
 
   // Invalidate all caches endpoint (admin only)
-  app.post("/api/gateway/cache/clear-all", async (req, res) => {
+  app.post("/api/gateway/cache/clear-all", authenticateToken, requireRole('admin'), async (req, res) => {
     try {
       const redis = getRedisClient();
       if (!redis) {

@@ -1,0 +1,63 @@
+# ==================================================================================
+# KIBANA CONFIGURATION - PRODUCTION
+# ==================================================================================
+
+# Server configuration
+server.host: "0.0.0.0"
+server.port: 5601
+server.name: "invexis-kibana-prod"
+server.publicBaseUrl: "https://kibana.${DOMAIN:-localhost}"
+
+# Elasticsearch configuration
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+elasticsearch.username: "elastic"
+elasticsearch.password: "${ELASTIC_PASSWORD}"
+
+# Security settings
+elasticsearch.ssl.verificationMode: none
+xpack.security.encryptionKey: "${KIBANA_ENCRYPTION_KEY}"
+xpack.reporting.encryptionKey: "${KIBANA_REPORTING_KEY}"
+xpack.encryptedSavedObjects.encryptionKey: "${KIBANA_SAVED_OBJECTS_KEY}"
+
+# Logging configuration
+logging.appenders:
+  file:
+    type: file
+    fileName: /usr/share/kibana/logs/kibana.log
+    layout:
+      type: json
+
+logging.loggers:
+  - name: http.server.response
+    appenders: [file]
+    level: warn
+
+logging.root:
+  appenders: [file]
+  level: info
+
+# Monitoring
+monitoring.ui.container.elasticsearch.enabled: true
+monitoring.kibana.collection.enabled: false
+
+# Index patterns
+kibana.defaultAppId: "dashboard"
+kibana.index: ".kibana"
+
+# Session configuration
+xpack.security.session.idleTimeout: "1h"
+xpack.security.session.lifespan: "8h"
+
+# Advanced settings
+server.maxPayload: 1048576
+elasticsearch.requestTimeout: 30000
+elasticsearch.shardTimeout: 30000
+
+# Maps configuration (if using maps)
+xpack.maps.enabled: false
+
+# Machine learning (disable for basic license)
+xpack.ml.enabled: false
+
+# APM integration
+xpack.apm.enabled: false

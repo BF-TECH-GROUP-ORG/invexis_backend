@@ -1,23 +1,46 @@
-# Use Node 20 LTS
-FROM node:20
+# Multi-stage build for production
+# Build stage
+FROM node:20-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
 
 # Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy package files
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci --only=production && npm cache clean --force
 
-# Install nodemon globally for development
-RUN npm install -g nodemon
+# Production stage
+FROM node:20-alpine AS production
 
-# Copy source code
-COPY . .
+# Create app user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S appuser -u 1001
 
-# Expose default port
-EXPOSE 8009
+# Set working directory
+WORKDIR /app
 
-# Command to start service in dev mode
-CMD ["nodemon", "./src/index.js"]
+# Copy dependencies from builder stage
+COPY --from=builder /app/node_modules ./node_modules
+COPY --chown=appuser:nodejs . .
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+
+# Expose port
+EXPOSE 8002
+
+# Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:8002/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Start the application
+CMD ["node", "src/index.js"]

@@ -1,4 +1,7 @@
-const asyncHandler = require('express-async-handler');
+// Manual async wrapper instead of express-async-handler
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const StockChange = require('../models/StockChange');
@@ -7,6 +10,10 @@ const InventoryAdjustment = require('../models/InventoryAdjustment');
 const Category = require('../models/Category');
 const { validateMongoId } = require('../utils/validateMongoId');
 const { logger } = require('../utils/logger');
+const { getCache, setCache, scanDel, delCache } = require('../utils/redisHelper');
+const ProductVariation = require('../models/ProductVariation');
+const ProductStock = require('../models/ProductStock');
+const ProductPricing = require('../models/ProductPricing');
 
 // ==================== COMPANY LEVEL OPERATIONS ====================
 
@@ -18,104 +25,69 @@ const { logger } = require('../utils/logger');
 const getCompanyOverview = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
 
+    // Try cache first
+    const cacheKey = `company:overview:${companyId}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.json({ success: true, data: cached });
+
     // Total products
     const totalProducts = await Product.countDocuments({ companyId });
 
-    // Total stock (sum of all variations or product inventory)
-    const stockData = await Product.aggregate([
-        { $match: { companyId } },
-        {
-            $group: {
-                _id: null,
-                totalStock: {
-                    $sum: {
-                        $cond: [
-                            { $gt: [{ $size: '$variations' }, 0] },
-                            { $sum: '$variations.stockQty' },
-                            '$inventory.quantity'
-                        ]
-                    }
-                },
-                totalValue: {
-                    $sum: {
-                        $multiply: [
-                            {
-                                $cond: [
-                                    { $gt: [{ $size: '$variations' }, 0] },
-                                    { $sum: '$variations.stockQty' },
-                                    '$inventory.quantity'
-                                ]
-                            },
-                            { $ifNull: ['$pricing.cost', 0] }
-                        ]
-                    }
-                }
-            }
-        }
+    // Total stock and value using ProductStock joined to Product and pricing
+    const stockAgg = await ProductStock.aggregate([
+        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+        { $unwind: '$product' },
+        { $match: { 'product.companyId': companyId } },
+        { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
+        { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
+        { $group: { _id: null, totalStock: { $sum: '$stockQty' }, totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', { $ifNull: ['$pricing.cost', 0] }] }] } } } }
     ]);
 
-    const { totalStock = 0, totalValue = 0 } = stockData[0] || {};
+    const { totalStock = 0, totalValue = 0 } = stockAgg[0] || {};
 
-    // Low stock count
-    const lowStockCount = await Product.countDocuments({
-        companyId,
-        $expr: {
-            $lte: [
-                {
-                    $cond: [
-                        { $gt: [{ $size: '$variations' }, 0] },
-                        { $sum: '$variations.stockQty' },
-                        '$inventory.quantity'
-                    ]
-                },
-                '$inventory.lowStockThreshold'
-            ]
-        }
-    });
+    // Low stock and out-of-stock counts using ProductStock
+    const lowStockAgg = await ProductStock.aggregate([
+        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+        { $unwind: '$product' },
+        { $match: { 'product.companyId': companyId } },
+        { $match: { isLowStock: true } },
+        { $count: 'lowCount' }
+    ]);
 
-    // Out of stock count
-    const outOfStockCount = await Product.countDocuments({
-        companyId,
-        $expr: {
-            $lte: [
-                {
-                    $cond: [
-                        { $gt: [{ $size: '$variations' }, 0] },
-                        { $sum: '$variations.stockQty' },
-                        '$inventory.quantity'
-                    ]
-                },
-                0
-            ]
-        }
-    });
+    const lowStockCount = (lowStockAgg[0] && lowStockAgg[0].lowCount) || 0;
+
+    const outOfStockAgg = await ProductStock.aggregate([
+        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+        { $unwind: '$product' },
+        { $match: { 'product.companyId': companyId } },
+        { $match: { inStock: false } },
+        { $count: 'outCount' }
+    ]);
+
+    const outOfStockCount = (outOfStockAgg[0] && outOfStockAgg[0].outCount) || 0;
 
     // Active alerts
-    const activeAlerts = await Alert.countDocuments({
-        companyId,
-        isResolved: false
-    });
+    const activeAlerts = await Alert.countDocuments({ companyId, isResolved: false });
 
     // Pending adjustments
-    const pendingAdjustments = await InventoryAdjustment.countDocuments({
-        companyId,
-        status: 'pending'
-    });
+    const pendingAdjustments = await InventoryAdjustment.countDocuments({ companyId, status: 'pending' });
 
-    res.json({
-        success: true,
-        data: {
-            companyId,
-            totalProducts,
-            totalStock,
-            totalValue: totalValue.toFixed(2),
-            lowStockCount,
-            outOfStockCount,
-            activeAlerts,
-            pendingAdjustments,
-            lastUpdated: new Date()
-        }
-    });
+    const response = {
+        companyId,
+        totalProducts,
+        totalStock,
+        totalValue: totalValue.toFixed(2),
+        lowStockCount,
+        outOfStockCount,
+        activeAlerts,
+        pendingAdjustments,
+        lastUpdated: new Date()
+    };
+
+    // Cache short-lived overview for faster GETs
+        setCache(cacheKey, response, 60).catch(() => { logger.error('Failed to set cache for company overview'); });
+
+    res.json({ success: true, data: response });
 });
 
 /**
@@ -125,35 +97,43 @@ const getCompanyOverview = asyncHandler(async (req, res) => {
  */
 const getCompanyProducts = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
-    const { page = 1, limit = 20, status, visibility, category, brand, search } = req.query;
+    let { page = 1, limit = 100, status, visibility, category, brand, search } = req.query;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    page = parseInt(page);
+    limit = Math.min(parseInt(limit) || 100, 100);
+    const skip = (page - 1) * limit;
+
+    const cacheKey = `company:products:${companyId}:page:${page}:limit:${limit}:status:${status || ''}:vis:${visibility || ''}:cat:${category || ''}:brand:${brand || ''}:q:${search || ''}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.json({ success: true, data: cached.data, pagination: cached.pagination });
 
     const query = { companyId };
     if (status) query.status = status;
     if (visibility) query.visibility = visibility;
-    if (category) query.category = category;
+    if (category) query.categoryId = category;
     if (brand) query.brand = new RegExp(brand, 'i');
     if (search) query.$text = { $search: search };
 
     const products = await Product.find(query)
-        .populate('category', 'name slug')
+        .populate('categoryId', 'name slug')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(parseInt(limit));
+        .limit(limit)
+        .lean();
 
     const total = await Product.countDocuments(query);
 
-    res.json({
-        success: true,
-        data: products,
-        pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total,
-            pages: Math.ceil(total / parseInt(limit))
-        }
-    });
+    const pagination = {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+    };
+
+    // Cache page for a short TTL
+        setCache(cacheKey, { data: products, pagination }, 60).catch(() => { logger.error('Failed to set cache for company products'); });
+
+    res.json({ success: true, data: products, pagination });
 });
 
 /**
@@ -176,7 +156,7 @@ const getCompanyStockChanges = asyncHandler(async (req, res) => {
     }
 
     const changes = await StockChange.find(query)
-        .populate('productId', 'name sku')
+           .populate('productId', 'name sku')
         .sort({ changeDate: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -211,7 +191,7 @@ const getCompanyAlerts = asyncHandler(async (req, res) => {
     if (isResolved !== undefined) query.isResolved = isResolved === 'true';
 
     const alerts = await Alert.find(query)
-        .populate('productId', 'name sku')
+           .populate('productId', 'name sku')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -246,7 +226,7 @@ const getCompanyAdjustments = asyncHandler(async (req, res) => {
     if (adjustmentType) query.adjustmentType = adjustmentType;
 
     const adjustments = await InventoryAdjustment.find(query)
-        .populate('productId', 'name sku')
+           .populate('productId', 'name sku')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -295,7 +275,7 @@ const getCompanyLowStockProducts = asyncHandler(async (req, res) => {
     if (shopId) query.shopId = shopId;
 
     const products = await Product.find(query)
-        .populate('category', 'name')
+           .populate('categoryId', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -324,7 +304,7 @@ const getCompanyInventorySummary = asyncHandler(async (req, res) => {
 
     // By category
     const byCategoryData = await Product.aggregate([
-        { $match: { companyId } },
+            { $match: { companyId } },
         {
             $lookup: {
                 from: 'categories',
@@ -421,7 +401,7 @@ const getCompanyShops = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
 
     const shopStats = await Product.aggregate([
-        { $match: { companyId } },
+            { $match: { companyId } },
         {
             $group: {
                 _id: '$shopId',
@@ -624,7 +604,7 @@ const getShopProducts = asyncHandler(async (req, res) => {
     };
 
     if (status) query.status = status;
-    if (category) query.category = category;
+    if (category) query.categoryId = category;
     if (brand) query.brand = new RegExp(brand, 'i');
     if (search) {
         query.$text = { $search: search };
@@ -634,7 +614,7 @@ const getShopProducts = asyncHandler(async (req, res) => {
     }
 
     const products = await Product.find(query)
-        .populate('category')
+        .populate('categoryId')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit))
@@ -688,7 +668,7 @@ const getShopProductInventory = asyncHandler(async (req, res) => {
         _id: productId,
         companyId,
         shopId: shopId
-    }).populate('category');
+    }).populate('categoryId');
 
     if (!product) {
         return res.status(404).json({
@@ -1700,7 +1680,7 @@ const getShopLowStockProducts = asyncHandler(async (req, res) => {
     };
 
     const products = await Product.find(query)
-        .populate('category', 'name')
+        .populate('categoryId', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -1781,6 +1761,169 @@ const getShopReport = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Get detailed report for a single product (with stock changes and alerts)
+ * @route   GET /api/v1/companies/:companyId/products/:productId/report
+ * @access  Private
+ */
+const getProductReport = asyncHandler(async (req, res) => {
+    const { companyId, productId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
+
+    validateMongoId(productId);
+
+    // product details
+    const product = await Product.findOne({ _id: productId, companyId })
+        .populate('categoryId', 'name slug')
+        .populate('pricingId')
+        .lean();
+
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+    // current stock from variations (source-of-truth)
+    const pvAgg = await ProductVariation.aggregate([
+        { $match: { productId: mongoose.Types.ObjectId(productId) } },
+        { $group: { _id: '$productId', currentStock: { $sum: '$stockQty' } } }
+    ]);
+    const currentStock = pvAgg[0]?.currentStock ?? (product.inventory?.quantity ?? 0);
+
+    // paginated stock change history
+    const pg = Math.max(1, parseInt(page));
+    const lim = Math.min(Math.max(1, parseInt(limit)), 500);
+    const skip = (pg - 1) * lim;
+
+    const [changes, totalChanges] = await Promise.all([
+        StockChange.find({ productId })
+            .sort({ changeDate: -1 })
+            .skip(skip)
+            .limit(lim)
+            .lean(),
+        StockChange.countDocuments({ productId })
+    ]);
+
+    // recent alerts for this product
+    const recentAlerts = await Alert.find({ productId }).sort({ createdAt: -1 }).limit(10).lean();
+
+    res.json({
+        success: true,
+        data: {
+            product,
+            currentStock,
+            stockChanges: changes,
+            stockChangesPagination: { page: pg, limit: lim, total: totalChanges, pages: Math.ceil(totalChanges / lim) },
+            recentAlerts,
+            auditTrail: product.auditTrail || []
+        }
+    });
+});
+
+/**
+ * @desc    Get aggregated report for a category
+ * @route   GET /api/v1/companies/:companyId/categories/:categoryId/report
+ * @access  Private
+ */
+const getCategoryReport = asyncHandler(async (req, res) => {
+    const { companyId, categoryId } = req.params;
+
+    validateMongoId(categoryId);
+
+    // total products under category
+    const totalProducts = await Product.countDocuments({ companyId, categoryId });
+
+    // aggregate stock & value using ProductVariation and pricing join
+    const agg = await Product.aggregate([
+        { $match: { companyId, categoryId: mongoose.Types.ObjectId(categoryId) } },
+        { $lookup: { from: 'productvariations', localField: '_id', foreignField: 'productId', as: 'variations' } },
+        { $lookup: { from: 'productpricings', localField: 'pricingId', foreignField: '_id', as: 'pricing' } },
+        { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
+        { $project: {
+            productId: '$_id',
+            totalStock: { $sum: { $map: { input: '$variations', as: 'v', in: { $ifNull: ['$$v.stockQty', 0] } } } },
+            cost: { $ifNull: ['$pricing.cost', 0] },
+            lowStockThreshold: '$inventory.lowStockThreshold',
+            qty: '$inventory.quantity'
+        } },
+        { $group: {
+            _id: null,
+            totalStock: { $sum: '$totalStock' },
+            totalValue: { $sum: { $multiply: ['$totalStock', '$cost'] } },
+            lowStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', '$lowStockThreshold'] }, 1, 0] } },
+            outOfStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', 0] }, 1, 0] } }
+        } }
+    ]).allowDiskUse(true);
+
+    const summary = agg[0] || { totalStock: 0, totalValue: 0, lowStockCount: 0, outOfStockCount: 0 };
+
+    res.json({ success: true, data: { categoryId, totalProducts, summary } });
+});
+
+/**
+ * @desc    Get daily report for company (aggregated stock movement and sales)
+ * @route   GET /api/v1/companies/:companyId/reports/daily
+ * @query   date=YYYY-MM-DD (defaults to today)
+ * @access  Private
+ */
+const getDailyReport = asyncHandler(async (req, res) => {
+    const { companyId } = req.params;
+    const { date } = req.query;
+    const day = date ? new Date(date) : new Date();
+    day.setHours(0,0,0,0);
+    const next = new Date(day);
+    next.setDate(next.getDate() + 1);
+
+    // StockChange aggregation by type
+    const movement = await StockChange.aggregate([
+        { $match: { companyId, changeDate: { $gte: day, $lt: next } } },
+        { $group: { _id: '$changeType', count: { $sum: 1 }, totalQuantity: { $sum: '$quantity' } } }
+    ]).allowDiskUse(true);
+
+    // Sales revenue and units
+    const sales = await StockChange.aggregate([
+        { $match: { companyId, changeType: 'sale', changeDate: { $gte: day, $lt: next } } },
+        { $group: { _id: null, unitsSold: { $sum: { $abs: '$quantity' } } } }
+    ]);
+
+    // Alerts created today
+    const alerts = await Alert.find({ companyId, createdAt: { $gte: day, $lt: next } }).lean();
+
+    res.json({ success: true, data: { date: day.toISOString().slice(0,10), movement, sales: sales[0] || { unitsSold: 0 }, alerts } });
+});
+
+/**
+ * @desc    Create end-of-day summary alert for company
+ * @route   POST /api/v1/companies/:companyId/reports/daily/summary
+ * @body    date=YYYY-MM-DD (optional)
+ * @access  Private
+ */
+const createDailySummaryAlert = asyncHandler(async (req, res) => {
+    const { companyId } = req.params;
+    const { date } = req.body;
+    const day = date ? new Date(date) : new Date();
+    day.setHours(0,0,0,0);
+    const next = new Date(day);
+    next.setDate(next.getDate() + 1);
+
+    const movement = await StockChange.aggregate([
+        { $match: { companyId, changeDate: { $gte: day, $lt: next } } },
+        { $group: { _id: '$changeType', count: { $sum: 1 }, totalQuantity: { $sum: '$quantity' } } }
+    ]).allowDiskUse(true);
+
+    const totalAlerts = await Alert.countDocuments({ companyId, createdAt: { $gte: day, $lt: next } });
+    const totalAdjustments = await InventoryAdjustment.countDocuments({ companyId, createdAt: { $gte: day, $lt: next } });
+
+    const summaryText = `Daily summary for ${day.toISOString().slice(0,10)}: movements=${JSON.stringify(movement)}, alerts=${totalAlerts}, adjustments=${totalAdjustments}`;
+
+    const alert = await Alert.create({
+        companyId,
+        type: 'daily-summary',
+        message: summaryText,
+        isResolved: false,
+        createdAt: new Date()
+    });
+
+    res.json({ success: true, data: { alertId: alert._id, message: summaryText } });
+});
+
+/**
  * @desc    Transfer stock between shops
  * @route   POST /api/v1/companies/:companyId/shops/:shopId/transfer
  * @access  Private
@@ -1793,7 +1936,7 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
             message: 'companyId and shopId are required'
         });
     }
-    const { productId, toShopId, quantity, reason, userId } = req.body;
+    const { productId, toShopId, quantity, reason, userId, variationTransfers } = req.body;
 
     if (!productId || !toShopId || !quantity) {
         return res.status(400).json({
@@ -1819,28 +1962,107 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
             throw new Error('Product not found in source shop');
         }
 
-        const fromCurrentStock = fromProduct.inventory.quantity || 0;
-        if (fromCurrentStock < quantity) {
-            throw new Error('Insufficient stock in source shop');
+        // Support variation-level transfers if provided
+        let fromCurrentStock = fromProduct.inventory.quantity || 0;
+        if (Array.isArray(variationTransfers) && variationTransfers.length > 0) {
+            // variationTransfers: [{ variationId, quantity }]
+            let totalRequested = 0;
+            for (const vt of variationTransfers) totalRequested += Number(vt.quantity || 0);
+            if (totalRequested !== Number(quantity)) {
+                throw new Error('Sum of variationTransfers quantities must equal quantity');
+            }
+
+            // Reduce specified variations on the source product
+            for (const vt of variationTransfers) {
+                const vid = vt.variationId;
+                const qtyToReduce = Number(vt.quantity || 0);
+                const variation = fromProduct.variations.find(v => String(v._id) === String(vid) || v._id == vid);
+                if (!variation) throw new Error(`Variation ${vid} not found on source product`);
+                const avail = variation.stockQty || 0;
+                if (avail < qtyToReduce) throw new Error(`Insufficient stock in variation ${vid}`);
+                variation.stockQty = avail - qtyToReduce;
+            }
+            // Recalculate total
+            fromCurrentStock = fromProduct.variations.reduce((s, v) => s + (v.stockQty || 0), 0);
+        } else {
+            fromCurrentStock = fromProduct.inventory.quantity || 0;
+            if (fromCurrentStock < quantity) {
+                throw new Error('Insufficient stock in source shop');
+            }
+            fromProduct.inventory.quantity = fromCurrentStock - quantity;
         }
 
-        fromProduct.inventory.quantity = fromCurrentStock - quantity;
         await fromProduct.save({ session });
 
-        // Add to destination shop
-        const toProduct = await Product.findOne({
+        // Add to destination shop — create a minimal safe copy if it doesn't already exist
+        let toProduct = await Product.findOne({
             _id: productId,
             companyId,
             shopId: toShopId
         }).session(session);
 
         if (!toProduct) {
-            throw new Error('Product not found in destination shop');
-        }
+            // Create a minimal destination product by copying source but removing unique identifiers
+            const destData = fromProduct.toObject();
+            delete destData._id;
+            destData.shopId = toShopId;
+            destData.companyId = companyId;
 
-        const toCurrentStock = toProduct.inventory.quantity || 0;
-        toProduct.inventory.quantity = toCurrentStock + quantity;
-        await toProduct.save({ session });
+            // Set only the transferred quantity for the destination product
+            if (Array.isArray(variationTransfers) && variationTransfers.length > 0) {
+                // Build destination variations only containing transferred variation quantities
+                destData.variations = [];
+                for (const vt of variationTransfers) {
+                    const variation = fromProduct.variations.find(v => String(v._id) === String(vt.variationId) || v._id == vt.variationId);
+                    if (!variation) throw new Error(`Variation ${vt.variationId} not found on source product`);
+                    destData.variations.push({
+                        name: variation.name,
+                        sku: undefined,
+                        stockQty: Number(vt.quantity || 0),
+                        attributes: variation.attributes || []
+                    });
+                }
+            } else if (Array.isArray(destData.variations) && destData.variations.length > 0) {
+                // Zero out variation quantities then add proportional quantity to first variation
+                const total = destData.variations.reduce((s, v) => s + (v.stockQty || 0), 0) || 0;
+                if (total > 0) {
+                    const ratio = quantity / total;
+                    destData.variations.forEach(v => { v.stockQty = Math.max(0, Math.round((v.stockQty || 0) * ratio)); });
+                } else {
+                    // fallback: create a single default variation
+                    destData.variations = [{ sku: undefined, stockQty: quantity }];
+                }
+            } else {
+                destData.inventory = destData.inventory || {};
+                destData.inventory.quantity = quantity;
+            }
+
+            // Remove globally-unique identifiers so pre-save generates new ones (safe copy)
+            delete destData.sku;
+            delete destData.barcode;
+            delete destData.scanId;
+            delete destData.barcodePayload;
+            delete destData.qrPayload;
+
+            // Add audit entry for received transfer
+            destData.auditTrail = destData.auditTrail || [];
+            destData.auditTrail.push({
+                action: 'transfer_received',
+                changedBy: userId || 'system',
+                sourceCompanyId: companyId,
+                sourceShopId: fromShopId,
+                sourceProductId: productId,
+                transferredQuantity: quantity,
+                timestamp: new Date()
+            });
+
+            const created = await Product.create([destData], { session });
+            toProduct = created[0];
+        } else {
+            const toCurrentStock = toProduct.inventory.quantity || 0;
+            toProduct.inventory.quantity = toCurrentStock + quantity;
+            await toProduct.save({ session });
+        }
 
         // Create StockChange records for both shops
         const transferReason = reason || `Transferred from shop ${fromShopId} to shop ${toShopId}`;
@@ -1864,8 +2086,8 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
                     shopId: toShopId,
                     changeType: 'transfer',
                     quantity: quantity,
-                    previousStock: toCurrentStock,
-                    newStock: toCurrentStock + quantity,
+                    previousStock: (toProduct.inventory && toProduct.inventory.quantity) ? (toProduct.inventory.quantity - quantity) : 0,
+                    newStock: (toProduct.inventory && toProduct.inventory.quantity) ? toProduct.inventory.quantity : quantity,
                     reason: transferReason,
                     changedBy: userId || 'system'
                 }
@@ -1876,6 +2098,19 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         await session.commitTransaction();
         logger.info(`✅ Transferred ${quantity} units from shop ${fromShopId} to shop ${toShopId}`);
 
+        // Invalidate related cache entries (best-effort, non-blocking)
+        setImmediate(() => {
+            try {
+                delCache(`company:overview:${companyId}`);
+                scanDel(`company:products:${companyId}:*`);
+                delCache(`product:${productId}`);
+                if (toProduct && toProduct._id) delCache(`product:${toProduct._id}`);
+                scanDel(`products:*"${companyId}"*`);
+            } catch (err) {
+                logger.error('Cache invalidation error after shop transfer:', err);
+            }
+        });
+
         res.json({
             success: true,
             message: 'Stock transferred successfully',
@@ -1883,7 +2118,8 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
                 productId,
                 fromShopId,
                 toShopId,
-                quantityTransferred: quantity
+                quantityTransferred: quantity,
+                destinationProductId: toProduct ? toProduct._id : null
             }
         });
     } catch (error) {
@@ -1911,7 +2147,9 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         toShopId,
         transferQuantity,
         reason,
-        userId
+        userId,
+        variationTransfers,
+        preserveSku = false
     } = req.body;
 
     // Default to params if not provided in body (support new route structure)
@@ -1951,34 +2189,53 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             throw new Error('Product not found in source shop/company');
         }
 
-        // Calculate current stock (handle variations)
+        // Calculate current stock and support variationTransfers
         let currentStock = sourceProduct.inventory.quantity || 0;
         if (sourceProduct.variations && sourceProduct.variations.length > 0) {
             currentStock = sourceProduct.variations.reduce((sum, v) => sum + (v.stockQty || 0), 0);
         }
 
-        // Check if sufficient stock to transfer
-        if (currentStock < transferQuantity) {
-            throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${transferQuantity}`);
-        }
+        if (Array.isArray(variationTransfers) && variationTransfers.length > 0) {
+            // variationTransfers: [{ variationId, quantity }]
+            let totalRequested = 0;
+            for (const vt of variationTransfers) totalRequested += Number(vt.quantity || 0);
+            if (totalRequested !== Number(transferQuantity)) {
+                throw new Error('Sum of variationTransfers quantities must equal transferQuantity');
+            }
 
-        // ========== STEP 2: Update source product (reduce quantity) ==========
-        const newSourceStock = currentStock - transferQuantity;
-
-        if (sourceProduct.variations && sourceProduct.variations.length > 0) {
-            // If product has variations, reduce from total variation stock
-            let remaining = transferQuantity;
-            for (let variation of sourceProduct.variations) {
-                if (remaining <= 0) break;
-                const variationStock = variation.stockQty || 0;
-                const reduce = Math.min(variationStock, remaining);
-                variation.stockQty = variationStock - reduce;
-                remaining -= reduce;
+            // Reduce specified variations
+            for (const vt of variationTransfers) {
+                const variation = sourceProduct.variations.find(v => String(v._id) === String(vt.variationId) || v._id == vt.variationId);
+                if (!variation) throw new Error(`Variation ${vt.variationId} not found on source product`);
+                const avail = variation.stockQty || 0;
+                const qtyToReduce = Number(vt.quantity || 0);
+                if (avail < qtyToReduce) throw new Error(`Insufficient stock in variation ${vt.variationId}`);
+                variation.stockQty = avail - qtyToReduce;
             }
         } else {
-            // Simple product - just reduce inventory.quantity
-            sourceProduct.inventory.quantity = newSourceStock;
+            // No per-variation transfers: check total
+            if (currentStock < transferQuantity) {
+                throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${transferQuantity}`);
+            }
+
+            // Default reduction: proportional across variations or product inventory
+            if (sourceProduct.variations && sourceProduct.variations.length > 0) {
+                let remaining = transferQuantity;
+                for (let variation of sourceProduct.variations) {
+                    if (remaining <= 0) break;
+                    const variationStock = variation.stockQty || 0;
+                    const reduce = Math.min(variationStock, remaining);
+                    variation.stockQty = variationStock - reduce;
+                    remaining -= reduce;
+                }
+            } else {
+                sourceProduct.inventory.quantity = (sourceProduct.inventory.quantity || 0) - transferQuantity;
+            }
         }
+
+        const newSourceStock = sourceProduct.variations && sourceProduct.variations.length > 0
+            ? sourceProduct.variations.reduce((s, v) => s + (v.stockQty || 0), 0)
+            : sourceProduct.inventory.quantity || 0;
 
         await sourceProduct.save({ session });
 
@@ -1988,8 +2245,20 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         destinationProductData.companyId = toCompanyId;
         destinationProductData.shopId = toShopId;
 
-        // Set quantity to transferred amount only
-        if (destinationProductData.variations && destinationProductData.variations.length > 0) {
+        // Set quantity to transferred amount only (support variationTransfers)
+        if (Array.isArray(variationTransfers) && variationTransfers.length > 0) {
+            destinationProductData.variations = [];
+            for (const vt of variationTransfers) {
+                const variation = sourceProduct.variations.find(v => String(v._id) === String(vt.variationId) || v._id == vt.variationId);
+                if (!variation) throw new Error(`Variation ${vt.variationId} not found on source product`);
+                destinationProductData.variations.push({
+                    name: variation.name,
+                    sku: undefined,
+                    stockQty: Number(vt.quantity || 0),
+                    attributes: variation.attributes || []
+                });
+            }
+        } else if (destinationProductData.variations && destinationProductData.variations.length > 0) {
             // For variations: scale them proportionally based on what was transferred
             const sourceVariationTotal = destinationProductData.variations.reduce((sum, v) => sum + (v.stockQty || 0), 0);
             if (sourceVariationTotal > 0) {
@@ -2014,6 +2283,38 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                 timestamp: new Date()
             }
         ];
+
+        // SKU handling: optionally preserve SKU if requested, else remove to allow pre-save generation
+        const sourceSku = sourceProduct.sku;
+        if (preserveSku && sourceSku) {
+            // Check if SKU is available in destination company/shop
+            const exists = await Product.countDocuments({ sku: sourceSku }).session(session);
+            if (!exists) {
+                destinationProductData.sku = sourceSku;
+                destinationProductData.barcode = sourceProduct.barcode || sourceSku;
+            } else {
+                // Make a safe fallback SKU to avoid collisions
+                destinationProductData.sku = `${(sourceSku || 'SKU')}-COPY-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+                destinationProductData.barcode = destinationProductData.sku;
+            }
+        } else {
+            delete destinationProductData.sku;
+            delete destinationProductData.barcode;
+        }
+        delete destinationProductData.scanId;
+        delete destinationProductData.barcodePayload;
+        delete destinationProductData.qrPayload;
+        delete destinationProductData.asin;
+        delete destinationProductData.upc;
+
+        // Ensure variation quantities sum exactly to transferQuantity (fix rounding)
+        if (destinationProductData.variations && destinationProductData.variations.length > 0) {
+            let totalAssigned = destinationProductData.variations.reduce((s, v) => s + (v.stockQty || 0), 0);
+            if (totalAssigned !== transferQuantity) {
+                const diff = transferQuantity - totalAssigned;
+                destinationProductData.variations[0].stockQty = (destinationProductData.variations[0].stockQty || 0) + diff;
+            }
+        }
 
         const destinationProduct = await Product.create([destinationProductData], { session });
 
@@ -2066,6 +2367,20 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         logger.info(
             `✅ Cross-company transfer: ${transferQuantity} units of product ${productId} from ${fromCompanyId}:${fromShopId} to ${toCompanyId}:${toShopId}`
         );
+
+        // Invalidate caches related to source and destination companies/products (synchronous best-effort)
+        try {
+            await delCache(`company:overview:${fromCompanyId}`);
+            await delCache(`company:overview:${toCompanyId}`);
+            await scanDel(`company:products:${fromCompanyId}:*`);
+            await scanDel(`company:products:${toCompanyId}:*`);
+            await delCache(`product:${productId}`);
+            if (destinationProduct && destinationProduct[0] && destinationProduct[0]._id) await delCache(`product:${destinationProduct[0]._id}`);
+            await scanDel(`products:*"${fromCompanyId}"*`);
+            await scanDel(`products:*"${toCompanyId}"*`);
+        } catch (err) {
+            logger.error('Cache invalidation error after cross-company transfer:', err);
+        }
 
         res.json({
             success: true,
@@ -2196,7 +2511,7 @@ const getTransferredProductCopies = asyncHandler(async (req, res) => {
     // Fetch all transferred copies
     const transferredProducts = await Product.find({
         _id: { $in: transferredProductIds }
-    }).populate('category', 'name');
+    }).populate('categoryId', 'name');
 
     res.json({
         success: true,
@@ -2253,6 +2568,10 @@ module.exports = {
     getCompanyAlerts,
     getCompanyAdjustments,
     getCompanyReports,
+    getProductReport,
+    getCategoryReport,
+    getDailyReport,
+    createDailySummaryAlert,
     getCompanyLowStockProducts,
     getCompanyInventorySummary,
     getCompanyShops,

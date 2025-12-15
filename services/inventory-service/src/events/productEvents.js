@@ -15,7 +15,13 @@ const logger = require('../utils/logger');
 const publishProductEvent = async (eventType, data) => {
   try {
     // Emit using the producer which uses eventPublishers.config for routing
-    await producer.emit(eventType, data);
+    // Provide useful metadata (companyId/shopId/traceId) to the underlying publisher
+    const metadata = {
+      companyId: data.companyId || data.payload?.companyId || null,
+      shopId: data.shopId || data.payload?.shopId || null,
+      traceId: data.traceId || data.payload?.traceId || null
+    };
+    await producer.emit(eventType, data, metadata);
     logger.info(`📤 [PRODUCT EVENT] Published: ${eventType}`, {
       productId: data._id,
       productName: data.name,

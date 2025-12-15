@@ -1,0 +1,301 @@
+# ==================================================================================
+# TRAEFIK DYNAMIC CONFIGURATION - BLUE/GREEN DEPLOYMENT
+# ==================================================================================
+# This file contains dynamic configuration for blue/green deployment patterns,
+# middleware definitions, and TLS configuration
+# ==================================================================================
+
+# TLS configuration
+tls:
+  options:
+    default:
+      sslProtocols:
+        - "TLSv1.2"
+        - "TLSv1.3"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_RSA_WITH_AES_128_GCM_SHA256"
+      curvePreferences:
+        - "X25519"
+        - "secp384r1"
+      minVersion: "VersionTLS12"
+    strict:
+      sslProtocols:
+        - "TLSv1.3"
+      minVersion: "VersionTLS13"
+
+# Middleware definitions
+http:
+  middlewares:
+    # Security headers middleware
+    security-headers:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "PATCH"
+          - "OPTIONS"
+        accessControlMaxAge: 100
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        referrerPolicy: "same-origin"
+        customFrameOptionsValue: "DENY"
+        contentTypeNosniff: true
+        browserXssFilter: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsSeconds: 31536000
+        stsPreload: true
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+        customResponseHeaders:
+          X-Robots-Tag: "noindex,nofollow,nosnippet,noarchive"
+          Server: ""
+
+    # Rate limiting middleware
+    rate-limit:
+      rateLimit:
+        period: "1m"
+        average: 100
+        burst: 200
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # API rate limiting (stricter)
+    api-rate-limit:
+      rateLimit:
+        period: "1m"
+        average: 50
+        burst: 100
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # Admin rate limiting (very strict)
+    admin-rate-limit:
+      rateLimit:
+        period: "5m"
+        average: 10
+        burst: 20
+
+    # CORS middleware for API
+    cors:
+      headers:
+        accessControlAllowOriginList:
+          - "https://*.${DOMAIN}"
+          - "https://${DOMAIN}"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "PATCH"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+          - "X-API-Key"
+        accessControlExposeHeaders:
+          - "X-Total-Count"
+          - "X-Page-Count"
+        accessControlMaxAge: 86400
+        addVaryHeader: true
+
+    # Authentication middleware (basic auth for admin interfaces)
+    auth:
+      basicAuth:
+        users:
+          - "${BASIC_AUTH_USERS}"
+
+    # IP whitelist for admin interfaces
+    admin-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "${ADMIN_IP_WHITELIST}"
+
+    # Circuit breaker for resilience
+    circuit-breaker:
+      circuitBreaker:
+        expression: "NetworkErrorRatio() > 0.30"
+        checkPeriod: "3s"
+        fallbackDuration: "10s"
+        recoveryDuration: "10s"
+
+    # Retry middleware
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: "100ms"
+
+    # Compression middleware
+    compression:
+      compress: true
+
+    # Request/response size limits
+    buffering:
+      maxRequestBodyBytes: 10485760 # 10MB
+      memRequestBodyBytes: 2097152 # 2MB
+      maxResponseBodyBytes: 10485760 # 10MB
+      memResponseBodyBytes: 2097152 # 2MB
+      retryExpression: "IsNetworkError() && Attempts() <= 2"
+
+  # Blue/Green routing configuration
+  routers:
+    # API Gateway routing with blue/green support
+    api-gateway:
+      rule: "Host(`api.${DOMAIN:-localhost}`)"
+      service: "api-gateway-active"
+      priority: 100
+      middlewares:
+        - "security-headers"
+        - "cors"
+        - "api-rate-limit"
+        - "circuit-breaker"
+        - "retry"
+        - "compression"
+      tls:
+        certResolver: "letsencrypt"
+
+    # WebSocket routing
+    websocket:
+      rule: "Host(`ws.${DOMAIN:-localhost}`)"
+      service: "websocket-active"
+      middlewares:
+        - "security-headers"
+        - "rate-limit"
+      tls:
+        certResolver: "letsencrypt"
+
+    # Monitoring dashboards
+    prometheus:
+      rule: "Host(`prometheus.${DOMAIN:-localhost}`)"
+      service: "prometheus"
+      middlewares:
+        - "auth"
+        - "admin-whitelist"
+        - "admin-rate-limit"
+        - "security-headers"
+      tls:
+        certResolver: "letsencrypt"
+
+    grafana:
+      rule: "Host(`grafana.${DOMAIN:-localhost}`)"
+      service: "grafana"
+      middlewares:
+        - "security-headers"
+        - "compression"
+      tls:
+        certResolver: "letsencrypt"
+
+    kibana:
+      rule: "Host(`kibana.${DOMAIN:-localhost}`)"
+      service: "kibana"
+      middlewares:
+        - "auth"
+        - "admin-whitelist"
+        - "admin-rate-limit"
+        - "security-headers"
+      tls:
+        certResolver: "letsencrypt"
+
+    rabbitmq:
+      rule: "Host(`rabbitmq.${DOMAIN:-localhost}`)"
+      service: "rabbitmq"
+      middlewares:
+        - "auth"
+        - "admin-whitelist"
+        - "admin-rate-limit"
+        - "security-headers"
+      tls:
+        certResolver: "letsencrypt"
+
+  # Service definitions for blue/green deployment
+  services:
+    # Active API Gateway (points to blue by default, switched by CI/CD)
+    api-gateway-active:
+      loadBalancer:
+        servers:
+          - url: "http://api-gateway-blue:8000"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "10s"
+          headers:
+            Host: "api.${DOMAIN:-localhost}"
+
+    # Standby API Gateway (green, ready for traffic switch)
+    api-gateway-standby:
+      loadBalancer:
+        servers:
+          - url: "http://api-gateway-green:8000"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "10s"
+
+    # Active WebSocket service
+    websocket-active:
+      loadBalancer:
+        servers:
+          - url: "http://websocket-service-blue:9002"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "10s"
+
+    # Monitoring services
+    prometheus:
+      loadBalancer:
+        servers:
+          - url: "http://prometheus:9090"
+
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3000"
+
+    kibana:
+      loadBalancer:
+        servers:
+          - url: "http://kibana:5601"
+
+    rabbitmq:
+      loadBalancer:
+        servers:
+          - url: "http://rabbitmq:15672"
+
+# TCP configuration for database access (if needed for external access)
+tcp:
+  routers:
+    postgres-external:
+      rule: "HostSNI(`*`)"
+      service: "postgres-external"
+      entryPoints:
+        - "postgres"
+
+    mysql-external:
+      rule: "HostSNI(`*`)"
+      service: "mysql-external"
+      entryPoints:
+        - "mysql"
+
+  services:
+    postgres-external:
+      loadBalancer:
+        servers:
+          - address: "company-postgres:5432"
+
+    mysql-external:
+      loadBalancer:
+        servers:
+          - address: "sales-mysql:3306"

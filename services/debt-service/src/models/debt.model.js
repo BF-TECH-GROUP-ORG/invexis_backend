@@ -102,14 +102,17 @@ const DebtSchema = new mongoose.Schema({
 });
 
 // Indexes (remove inline index: true to avoid duplicates)
-DebtSchema.index({ companyId: 1 });
-DebtSchema.index({ shopId: 1 });
-DebtSchema.index({ customerId: 1 });
-DebtSchema.index({ dueDate: 1 });
-DebtSchema.index({ status: 1 });
-DebtSchema.index({ isDeleted: 1 });
-DebtSchema.index({ companyId: 1, shopId: 1 });
-DebtSchema.index({ companyId: 1, customerId: 1 });
-
+// Composite indexes for optimal query performance (background: true allows index creation without blocking)
+DebtSchema.index({ companyId: 1, isDeleted: 1, createdAt: -1 }, { background: true });
+DebtSchema.index({ shopId: 1, isDeleted: 1, createdAt: -1 }, { background: true });
+DebtSchema.index({ customerId: 1, isDeleted: 1, createdAt: -1 }, { background: true });
+DebtSchema.index({ hashedCustomerId: 1, isDeleted: 1 }, { background: true });
+DebtSchema.index({ dueDate: 1, status: 1, isDeleted: 1 }, { background: true });
+DebtSchema.index({ status: 1, isDeleted: 1, createdAt: -1 }, { background: true });
+DebtSchema.index({ companyId: 1, shopId: 1, status: 1, createdAt: -1 }, { background: true });
+DebtSchema.index({ companyId: 1, customerId: 1, isDeleted: 1, createdAt: -1 }, { background: true });
+DebtSchema.index({ createdAt: -1 }, { background: true });
+DebtSchema.index({ updatedAt: -1 }, { background: true });
+DebtSchema.index({ isDeleted: 1, dueDate: 1 }, { background: true }); // For overdue queries
 
 module.exports = mongoose.model('Debt', DebtSchema);

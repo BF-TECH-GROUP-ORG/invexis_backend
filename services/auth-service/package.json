@@ -36,8 +36,12 @@
     "passport-google-oauth20": "^2.0.0",
     "qrcode": "^1.5.4",
     "speakeasy": "^2.0.0",
+    "streamifier": "^0.1.1",
     "uuid": "^13.0.0",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^8.1.0",
+    "xss-clean": "^0.1.4"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",

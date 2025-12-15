@@ -17,14 +17,14 @@ class AlertTriggerService {
      */
     static async triggerNewArrivalAlert(productData) {
         try {
-            const { _id, name, category, companyId, shopId, pricing } = productData;
+            const { _id, name, categoryId, companyId, shopId, pricing } = productData;
 
-            const alert = await Alert.create({
+            const alert = await Alert.createOrUpdate({
                 scope: 'global',
                 companyId: productData.companyId,
                 type: 'new_arrival',
                 productId: _id,
-                categoryId: category,
+                categoryId: categoryId,
                 priority: 'medium',
                 message: `🆕 New Product Arrival: ${name}`,
                 description: `A new product has been added to our catalog. Check it out!`,
@@ -32,7 +32,7 @@ class AlertTriggerService {
                     productId: _id.toString(),
                     productName: name,
                     price: pricing.basePrice,
-                    category: category
+                    categoryId: categoryId
                 }
             });
 
@@ -52,23 +52,9 @@ class AlertTriggerService {
             const { _id, name, inventory } = productData;
             const lowStockThreshold = inventory.lowStockThreshold || 10;
 
-            // Check if alert already exists (avoid duplicates)
-            const existingAlert = await Alert.findOne({
-                companyId,
-                productId: _id,
-                type: 'low_stock',
-                isResolved: false,
-                createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
-            });
-
-            if (existingAlert) {
-                logger.debug(`Low stock alert already exists for product: ${name}`);
-                return null;
-            }
-
             const scope = shopId ? 'shop' : 'company';
 
-            const alert = await Alert.create({
+            const alert = await Alert.createOrUpdate({
                 scope,
                 companyId,
                 shopId,
@@ -87,7 +73,7 @@ class AlertTriggerService {
                 }
             });
 
-            logger.info(`Low stock alert created for product: ${name} (${scope} scope)`);
+            logger.info(`Low stock alert created/updated for product: ${name} (${scope} scope)`);
             return alert;
         } catch (error) {
             logger.error(`Failed to trigger low stock alert: ${error.message}`);
@@ -102,22 +88,9 @@ class AlertTriggerService {
         try {
             const { _id, name } = productData;
 
-            // Check if alert already exists
-            const existingAlert = await Alert.findOne({
-                companyId,
-                productId: _id,
-                type: 'out_of_stock',
-                isResolved: false
-            });
-
-            if (existingAlert) {
-                logger.debug(`Out of stock alert already exists for product: ${name}`);
-                return null;
-            }
-
             const scope = shopId ? 'shop' : 'company';
 
-            const alert = await Alert.create({
+            const alert = await Alert.createOrUpdate({
                 scope,
                 companyId,
                 shopId,
@@ -133,7 +106,7 @@ class AlertTriggerService {
                 }
             });
 
-            logger.warn(`Out of stock alert created for product: ${name}`);
+            logger.warn(`Out of stock alert created/updated for product: ${name}`);
             return alert;
         } catch (error) {
             logger.error(`Failed to trigger out of stock alert: ${error.message}`);
@@ -152,7 +125,7 @@ class AlertTriggerService {
             const priceChange = newPrice - oldPrice;
             const priceChangePercent = ((priceChange / oldPrice) * 100).toFixed(2);
 
-            const alert = await Alert.create({
+            const alert = await Alert.createOrUpdate({
                 scope,
                 companyId,
                 shopId,
@@ -171,7 +144,7 @@ class AlertTriggerService {
                 }
             });
 
-            logger.info(`Price change alert created for product: ${name}`);
+            logger.info(`Price change alert created/updated for product: ${name}`);
             return alert;
         } catch (error) {
             logger.error(`Failed to trigger price change alert: ${error.message}`);
@@ -190,7 +163,7 @@ class AlertTriggerService {
             const adjustmentType = adjustment > 0 ? 'addition' : 'deduction';
             const priority = Math.abs(adjustment) > 50 ? 'high' : 'medium';
 
-            const alert = await Alert.create({
+            const alert = await Alert.createOrUpdate({
                 scope,
                 companyId,
                 shopId,
@@ -209,7 +182,7 @@ class AlertTriggerService {
                 }
             });
 
-            logger.info(`Inventory adjustment alert created for product: ${name}`);
+            logger.info(`Inventory adjustment alert created/updated for product: ${name}`);
             return alert;
         } catch (error) {
             logger.error(`Failed to trigger inventory adjustment alert: ${error.message}`);
@@ -226,7 +199,7 @@ class AlertTriggerService {
 
             const scope = shopId ? 'shop' : 'company';
 
-            const alert = await Alert.create({
+            const alert = await Alert.createOrUpdate({
                 scope,
                 companyId,
                 shopId,
@@ -243,7 +216,7 @@ class AlertTriggerService {
                 }
             });
 
-            logger.info(`Stock received alert created for product: ${name}`);
+            logger.info(`Stock received alert created/updated for product: ${name}`);
             return alert;
         } catch (error) {
             logger.error(`Failed to trigger stock received alert: ${error.message}`);
@@ -569,31 +542,22 @@ class AlertTriggerService {
             ]);
 
             for (const item of velocity) {
-                const exists = await Alert.findOne({
+                const product = await Product.findById(item._id);
+                if (!product) continue;
+
+                const alert = await Alert.createOrUpdate({
+                    scope,
                     companyId,
-                    productId: item._id,
+                    shopId,
                     type: 'high_velocity',
-                    isResolved: false,
-                    createdAt: { $gte: sevenDaysAgo }
+                    productId: item._id,
+                    priority: 'medium',
+                    message: `🔥 High Velocity: ${product.name}`,
+                    description: `${item.unitsSold} units sold in 7 days`,
+                    data: { unitsSold: item.unitsSold, period: '7 days' }
                 });
 
-                if (!exists) {
-                    const product = await Product.findById(item._id);
-                    if (product) {
-                        const alert = await Alert.create({
-                            scope,
-                            companyId,
-                            shopId,
-                            type: 'high_velocity',
-                            productId: item._id,
-                            priority: 'medium',
-                            message: `🔥 High Velocity: ${product.name}`,
-                            description: `${item.unitsSold} units sold in 7 days`,
-                            data: { unitsSold: item.unitsSold, period: '7 days' }
-                        });
-                        alertsGenerated.push(alert);
-                    }
-                }
+                if (alert) alertsGenerated.push(alert);
             }
 
             // 2. Dead Stock Check
@@ -616,30 +580,22 @@ class AlertTriggerService {
                 });
 
                 if (!lastSale) {
-                    const exists = await Alert.findOne({
+                    const alert = await Alert.createOrUpdate({
+                        scope,
                         companyId,
-                        productId: product._id,
+                        shopId,
                         type: 'dead_stock',
-                        isResolved: false
+                        productId: product._id,
+                        priority: 'low',
+                        message: `💤 Dead Stock: ${product.name}`,
+                        description: `No sales in 30 days`,
+                        data: {
+                            lastSaleCheck: thirtyDaysAgo,
+                            currentStock: product.inventory.quantity
+                        }
                     });
 
-                    if (!exists) {
-                        const alert = await Alert.create({
-                            scope,
-                            companyId,
-                            shopId,
-                            type: 'dead_stock',
-                            productId: product._id,
-                            priority: 'low',
-                            message: `💤 Dead Stock: ${product.name}`,
-                            description: `No sales in 30 days`,
-                            data: {
-                                lastSaleCheck: thirtyDaysAgo,
-                                currentStock: product.inventory.quantity
-                            }
-                        });
-                        alertsGenerated.push(alert);
-                    }
+                    if (alert) alertsGenerated.push(alert);
                 }
             }
 
@@ -652,31 +608,23 @@ class AlertTriggerService {
                     const daysLeft = product.inventory.quantity / dailyVelocity;
 
                     if (daysLeft < 7) {
-                        const exists = await Alert.findOne({
+                        const alert = await Alert.createOrUpdate({
+                            scope,
                             companyId,
-                            productId: product._id,
+                            shopId,
                             type: 'stock_out_prediction',
-                            isResolved: false
+                            productId: product._id,
+                            priority: 'high',
+                            message: `⏰ Stock Out in ${Math.ceil(daysLeft)} days: ${product.name}`,
+                            description: `Will run out of stock in ~${Math.ceil(daysLeft)} days`,
+                            data: {
+                                currentStock: product.inventory.quantity,
+                                dailyVelocity: dailyVelocity.toFixed(2),
+                                predictedDaysLeft: Math.ceil(daysLeft)
+                            }
                         });
 
-                        if (!exists) {
-                            const alert = await Alert.create({
-                                scope,
-                                companyId,
-                                shopId,
-                                type: 'stock_out_prediction',
-                                productId: product._id,
-                                priority: 'high',
-                                message: `⏰ Stock Out in ${Math.ceil(daysLeft)} days: ${product.name}`,
-                                description: `Will run out of stock in ~${Math.ceil(daysLeft)} days`,
-                                data: {
-                                    currentStock: product.inventory.quantity,
-                                    dailyVelocity: dailyVelocity.toFixed(2),
-                                    predictedDaysLeft: Math.ceil(daysLeft)
-                                }
-                            });
-                            alertsGenerated.push(alert);
-                        }
+                        if (alert) alertsGenerated.push(alert);
                     }
                 }
             }

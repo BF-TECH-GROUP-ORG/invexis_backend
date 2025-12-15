@@ -9,6 +9,10 @@ const {
     getCompanyAlerts,
     getCompanyAdjustments,
     getCompanyReports,
+    getProductReport,
+    getCategoryReport,
+    getDailyReport,
+    createDailySummaryAlert,
     getCompanyLowStockProducts,
     getCompanyInventorySummary,
     getCompanyShops,
@@ -107,6 +111,15 @@ router.get('/companies/:companyId/adjustments', getCompanyAdjustments);
  * @access  Private
  */
 router.get('/companies/:companyId/reports', getCompanyReports);
+// Product-level report
+router.get('/companies/:companyId/products/:productId/report', getProductReport);
+
+// Category-level report
+router.get('/companies/:companyId/categories/:categoryId/report', getCategoryReport);
+
+// Daily reports
+router.get('/companies/:companyId/reports/daily', getDailyReport);
+router.post('/companies/:companyId/reports/daily/summary', createDailySummaryAlert);
 
 /**
  * @route   GET /api/v1/companies/:companyId/low-stock
