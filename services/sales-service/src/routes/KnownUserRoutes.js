@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const knownUserController = require("../controllers/KnownUserController");
+const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
 // const {
 //   checkSubscriptionActive,
 //   checkFeatureAccess,
@@ -32,27 +33,27 @@ const knownUserController = require("../controllers/KnownUserController");
  * POST /known-users
  * Create a new KnownUser
  */
-router.post("/", knownUserController.createKnownUser);
+router.post("/", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), knownUserController.createKnownUser);
 
 /**
  * GET /known-users/search
  * Search KnownUsers by phone or email
  * Query params: companyId (required), phone or email (required)
  */
-router.get("/search", knownUserController.searchKnownUsers);
+router.get("/search", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), knownUserController.searchKnownUsers);
 
 /**
  * GET /known-users
  * List all KnownUsers for a company
  * Query params: companyId (required), limit, offset, isActive
  */
-router.get("/", knownUserController.listKnownUsers);
+router.get("/", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), knownUserController.listKnownUsers);
 
 /**
  * GET /known-users/:id
  * Get a specific KnownUser by ID
  */
-router.get("/:id", knownUserController.getKnownUser);
+router.get("/:id", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), knownUserController.getKnownUser);
 
 /**
  * PUT /known-users/:id
@@ -62,6 +63,7 @@ router.get("/:id", knownUserController.getKnownUser);
 router.put(
   "/:id",
   // checkFeatureAccess("sales", "internalStaffSales"),
+  authenticateToken, requireRole(['super_admin','company_admin' ,'worker']),
   knownUserController.updateKnownUser
 );
 
@@ -71,6 +73,7 @@ router.put(
  */
 router.delete(
   "/:id",
+  authenticateToken, requireRole(['super_admin','company_admin' ,'worker']),
   // checkFeatureAccess("sales", "internalStaffSales"),
   knownUserController.deactivateKnownUser
 );

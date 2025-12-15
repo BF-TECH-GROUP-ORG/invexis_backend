@@ -105,6 +105,53 @@ outboxSchema.statics.findPending = async function (limit = 50) {
 };
 
 /**
+ * Claim pending events for processing (atomic-like operation)
+ * Finds pending events, marks them as processing, and returns them
+ */
+outboxSchema.statics.claimPending = async function (limit = 50) {
+  const session = await mongoose.startSession();
+  let events = [];
+
+  try {
+    await session.withTransaction(async () => {
+      // Find candidate IDs first
+      const candidates = await this.find({ status: 'pending' })
+        .sort({ createdAt: 1 })
+        .limit(limit)
+        .select('_id')
+        .session(session);
+
+      if (candidates.length === 0) return;
+
+      const ids = candidates.map(c => c._id);
+
+      // Update status to processing
+      await this.updateMany(
+        { _id: { $in: ids } },
+        {
+          $set: {
+            status: 'processing',
+            updatedAt: new Date()
+          }
+        },
+        { session }
+      );
+
+      // Fetch full documents
+      events = await this.find({ _id: { $in: ids } }).session(session).lean();
+    });
+  } catch (error) {
+    // If transaction fails, we return empty array (safe fallback)
+    // logger would be good here but we don't have it imported in model
+    // console.error("Error in claimPending transaction:", error);
+  } finally {
+    session.endSession();
+  }
+
+  return events;
+};
+
+/**
  * Mark event as processing
  */
 outboxSchema.statics.markAsProcessing = async function (id) {
@@ -212,6 +259,10 @@ const OutboxService = {
 
   async resetStale(hoursThreshold = 0.2) {
     return await Outbox.resetStaleProcessing(hoursThreshold);
+  },
+
+  async claimPending(limit = 50) {
+    return await Outbox.claimPending(limit);
   }
 };
 

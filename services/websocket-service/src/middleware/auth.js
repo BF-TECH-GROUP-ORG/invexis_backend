@@ -13,23 +13,22 @@ const logger = require('../utils/logger');
 const extractUserInfo = (socket) => {
   const auth = socket.handshake.auth || {};
   const headers = socket.handshake.headers;
-
   // Get JWT token from auth handshake or Authorization header
-  const token = auth.token || headers.authorization?.split(' ')[1];
+  const token = auth.token || headers.Authorization?.split(' ')[1];
 
   if (!token) {
     return null;
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'sdjnjkdjafd8a79d7fa76yuadsjbjahsgtd76y3498hnjf//dkjsfa');
     return {
       userId: decoded.id || decoded.sub,
       email: decoded.email || null,
       role: decoded.role || 'user',
     };
   } catch (err) {
-    logger.warn('JWT verification failed:', err.message);
+    logger.warn('JWT verification failed:', err);
     return null;
   }
 };

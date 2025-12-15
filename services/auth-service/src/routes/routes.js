@@ -9,7 +9,7 @@ const adminCtrl = require('../controllers/adminController');
 const tokenService = require('../services/tokenService');
 
 // Production middleware
-const { authenticateToken, requireRole, requireAdmin } = require('/app/shared/middlewares/auth/production-auth');
+const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
 
 // Health check
 router.get('/', (req, res) => {
@@ -183,26 +183,27 @@ router.post('/consent/revoke', authenticateToken, authCtrl.revokeConsent);
 // ============================================================================
 
 // User Management (Admin routes)
-router.post('/verify/:userId', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.verify);
-router.get('/users', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.getUsers);
-router.post('/users', authenticateToken, requireRole('super_admin'), authCtrl.createUser);
-router.put('/users/:id', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.updateUser);
-router.delete('/users/:id', authenticateToken, requireRole('super_admin'), authCtrl.deleteUser);
-router.get('/users/:id', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.getUserById);
+router.post('/verify/:userId', authenticateToken, requireRole('super_admin'), authCtrl.verify);
+router.get('/users', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.getUsers);
+router.post('/users', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.createUser);
+router.put('/users/:id', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.updateUser);
+router.delete('/users/:id', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.deleteUser);
+router.get('/users/:id', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.getUserById);
 
 // Company Admin Management (Admin routes)
 router.get('/users/company-admins/:companyId', authenticateToken, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
 router.get('/users/company-admins', authenticateToken, requireRole('super_admin'), adminCtrl.getAllCompanyAdmins);
 
 // Company Worker Management
-router.get('/company/:companyId/workers', authenticateToken, authCtrl.getCompanyWorkers);
-router.delete('/company/:companyId/workers/:workerId', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.deleteWorkerFromCompany);
+router.get('/company/:companyId/workers', authenticateToken, requireRole('company_admin', 'super_admin'), authCtrl.getCompanyWorkers);
+
+router.delete('/company/:companyId/workers/:workerId', authenticateToken, requireRole('company_admin', 'super_admin'), authCtrl.deleteWorkerFromCompany);
 
 // Bulk Operations (Super Admin Only)
 router.post('/users/bulk', authenticateToken, requireRole('super_admin'), authCtrl.bulkUpdateUsers);
 router.post('/users/:id/unlock', authenticateToken, requireRole('super_admin'), authCtrl.unlockAccount);
 
 // Compliance Management (Admin routes)
-router.get('/consents/compliance', authenticateToken, requireRole('admin', 'super_admin'), authCtrl.checkConsentCompliance);
+router.get('/consents/compliance', authenticateToken, requireRole('company_admin','super_admin'), authCtrl.checkConsentCompliance);
 
 module.exports = router;

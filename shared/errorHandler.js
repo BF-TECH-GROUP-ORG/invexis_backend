@@ -288,7 +288,7 @@ class ErrorHandler {
     this.handleUnhandledRejection();
 
     // 404 handler (must be last route)
-    app.all('*', this.notFoundHandler());
+    app.use(this.notFoundHandler());
 
     // Global error handler (must be last middleware)
     app.use(this.globalErrorHandler());

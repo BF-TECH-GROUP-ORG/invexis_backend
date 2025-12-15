@@ -5,8 +5,8 @@
 
 exports.up = function (knex) {
     return knex.schema.table("companies", (table) => {
-        // Add company_admin_id column
-        table.uuid("company_admin_id").nullable().after("tenant_id");
+        // Add company_admin_id column (string to support MongoDB ObjectId from auth service)
+        table.string("company_admin_id").nullable();
 
         // Add index for faster lookups
         table.index(["company_admin_id"], "idx_company_admin_id");

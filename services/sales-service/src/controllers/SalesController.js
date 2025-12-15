@@ -129,6 +129,7 @@ const createSale = async (req, res) => {
       productName: i.productName,
       quantity: i.quantity,
       unitPrice: i.unitPrice,
+      costPrice: i.costPrice || 0,
       discount: i.discount || 0,
       tax: i.tax || 0,
       total:
@@ -398,6 +399,8 @@ const updateSaleContents = async (req, res) => {
           productName: item.productName,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          costPrice: item.costPrice || 0,
+          category: item.category || "Uncategorized",
           discount: item.discount || 0,
           tax: item.tax || 0,
           total: item.total

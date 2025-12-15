@@ -13,6 +13,7 @@ const IP_WHITELIST = process.env.IP_WHITELIST ? process.env.IP_WHITELIST.split('
 // Helper Functions
 function verifyToken(token) {
     try {
+        console.log("token", JWT_SECRET);
         return jwt.verify(token, JWT_SECRET);
     } catch {
         return null;

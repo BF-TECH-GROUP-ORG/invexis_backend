@@ -128,7 +128,14 @@ const googleCallback = async (req, res, next) => {
         );
 
         // Generate access token
-        const accessToken = tokenService.signAccess({ sub: req.user._id.toString() });
+        // Generate access token
+        const accessToken = tokenService.signAccess({
+            sub: req.user._id.toString(),
+            role: req.user.role,
+            email: req.user.email,
+            companies: req.user.companies,
+            shops: req.user.shops
+        });
 
         // Update user session
         req.user.sessions.push(session._id);
@@ -216,34 +223,33 @@ const refresh = async (req, res, next) => {
 };
 
 // ✅ Logout - Optimized for speed (SYNCHRONOUS - no async/await)
-const logout = (req, res, next) => {
+const logout = async (req, res, next) => {
     try {
         const startTime = Date.now();
         const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
-        const userId = req.userId; // ✅ Set by requireAuth (no DB lookup needed)
-        
-        console.log(`[LOGOUT] Starting logout for user ${userId}`);
-        
-        // ✅ Fire-and-forget logout (don't await)
-        // Note: logout() returns Promise but we don't wait for it
-        authService.logout(userId, refreshToken);
-        
-        // Clear cookies immediately (synchronous)
+        const userId = req.user ? req.user._id : null;
+
+        // Call logout service to revoke session
+        const result = await authService.logout(userId, refreshToken);
+
+        // Clear refresh token cookie
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+
+        // Clear access token if in cookie
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
-        
-        // Return immediately - SYNCHRONOUSLY
-        res.json({ 
-            ok: true, 
-            message: 'Logged out successfully' 
+
+        // Return success response
+        res.json({
+            ok: true,
+            message: result.message
         });
         
         console.log(`[LOGOUT] Logout completed in ${Date.now() - startTime}ms`);
@@ -253,38 +259,32 @@ const logout = (req, res, next) => {
 };
 
 // ✅ Logout from all devices/sessions - Optimized (SYNCHRONOUS - no async/await)
-const logoutAll = (req, res, next) => {
+const logoutAll = async (req, res, next) => {
     try {
-        const userId = req.userId; // ✅ Set by requireAuth (no DB lookup needed)
-        
+        const userId = req.user ? req.user._id : null;
+
         if (!userId) {
             return res.status(401).json({
                 ok: false,
                 message: 'User not authenticated'
             });
         }
-        
-        // ✅ Fire-and-forget logout (don't await)
-        // Note: logoutAll() returns Promise but we don't wait for it
-        authService.logoutAll(userId);
-        
-        // Clear cookies immediately
+
+        const result = await authService.logoutAll(userId);
+
+        // Clear refresh token cookie
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
-        res.clearCookie('accessToken', {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'strict'
-        });
-        
-        // Return immediately - SYNCHRONOUSLY
-        res.json({ 
-            ok: true, 
-            message: 'Logged out from all devices',
-            revokedSessions: 0 // Unknown at response time
+
+
+        // Return success response
+        res.json({
+            ok: true,
+            message: result.message,
+            revokedSessions: result.revokedCount
         });
     } catch (err) {
         next(err);
@@ -454,26 +454,26 @@ const getSessions = async (req, res, next) => {
 const revokeSession = async (req, res, next) => {
     try {
         const { sessionId } = req.params;
-        
+
         if (!sessionId) {
             return res.status(400).json({
                 ok: false,
                 message: 'sessionId parameter is required'
             });
         }
-        
+
         const result = await authService.revokeSession(req.user._id, sessionId);
-        
+
         if (!result.ok) {
             return res.status(result.status || 400).json({
                 ok: false,
                 message: result.message
             });
         }
-        
-        res.json({ 
-            ok: true, 
-            message: result.message 
+
+        res.json({
+            ok: true,
+            message: result.message
         });
     } catch (err) {
         next(err);

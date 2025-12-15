@@ -8,7 +8,7 @@
 const amqp = require('amqplib');
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://invexis:invexispass@localhost:5672';
-const userId = process.argv[2] || 'dev-user-O97q3Bag';
+const userId =  '69395ef2ed37e9e3614f370d';
 
 async function sendNotification() {
     let connection, channel;

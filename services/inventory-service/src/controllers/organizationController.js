@@ -1,6 +1,6 @@
 // Manual async wrapper instead of express-async-handler
 const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
+    Promise.resolve(fn(req, res, next)).catch(next);
 };
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
@@ -15,7 +15,8 @@ const ProductVariation = require('../models/ProductVariation');
 const ProductStock = require('../models/ProductStock');
 const ProductPricing = require('../models/ProductPricing');
 const ProductTransfer = require('../models/ProductTransfer');
-
+const { formatEnrichedProduct } = require('../utils/productFormatter');
+const ProductSpecs = require('../models/productSpecs');
 // ==================== COMPANY LEVEL OPERATIONS ====================
 
 /**
@@ -86,7 +87,7 @@ const getCompanyOverview = asyncHandler(async (req, res) => {
     };
 
     // Cache short-lived overview for faster GETs
-        setCache(cacheKey, response, 60).catch(() => { logger.error('Failed to set cache for company overview'); });
+    setCache(cacheKey, response, 60).catch(() => { logger.error('Failed to set cache for company overview'); });
 
     res.json({ success: true, data: response });
 });
@@ -97,7 +98,7 @@ const getCompanyOverview = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const getCompanyProducts = asyncHandler(async (req, res) => {
-    const { companyId } = req.params;
+    const { companyId } = req.params || req.body || req.query;
     let { page = 1, limit = 100, status, visibility, category, brand, search } = req.query;
 
     page = parseInt(page);
@@ -116,13 +117,27 @@ const getCompanyProducts = asyncHandler(async (req, res) => {
     if (search) query.$text = { $search: search };
 
     const products = await Product.find(query)
-        .populate('categoryId', 'name slug')
+        .populate('categoryId', 'name slug level attributes parentCategory isActive')
+        .populate('pricingId')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean();
 
     const total = await Product.countDocuments(query);
+
+    // Enhance products with additional data using shared formatter
+    const enrichedProducts = await Promise.all(products.map(async (product) => {
+        const [variations, stockInfo, specsInfo] = await Promise.all([
+            ProductVariation.find({ productId: product._id })
+                .populate('attributeValues.attributeId', 'name type')
+                .lean(),
+            ProductStock.find({ productId: product._id }).lean(),
+            ProductSpecs.findOne({ productId: product._id }).lean()
+        ]);
+
+        return formatEnrichedProduct(product, variations, stockInfo, specsInfo);
+    }));
 
     const pagination = {
         page,
@@ -132,9 +147,9 @@ const getCompanyProducts = asyncHandler(async (req, res) => {
     };
 
     // Cache page for a short TTL
-        setCache(cacheKey, { data: products, pagination }, 60).catch(() => { logger.error('Failed to set cache for company products'); });
+    setCache(cacheKey, { data: enrichedProducts, pagination }, 60).catch(() => { logger.error('Failed to set cache for company products'); });
 
-    res.json({ success: true, data: products, pagination });
+    res.json({ success: true, data: enrichedProducts, pagination });
 });
 
 /**
@@ -157,7 +172,7 @@ const getCompanyStockChanges = asyncHandler(async (req, res) => {
     }
 
     const changes = await StockChange.find(query)
-           .populate('productId', 'name sku')
+        .populate('productId', 'name sku')
         .sort({ changeDate: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -192,7 +207,7 @@ const getCompanyAlerts = asyncHandler(async (req, res) => {
     if (isResolved !== undefined) query.isResolved = isResolved === 'true';
 
     const alerts = await Alert.find(query)
-           .populate('productId', 'name sku')
+        .populate('productId', 'name sku')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -227,7 +242,7 @@ const getCompanyAdjustments = asyncHandler(async (req, res) => {
     if (adjustmentType) query.adjustmentType = adjustmentType;
 
     const adjustments = await InventoryAdjustment.find(query)
-           .populate('productId', 'name sku')
+        .populate('productId', 'name sku')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -276,7 +291,7 @@ const getCompanyLowStockProducts = asyncHandler(async (req, res) => {
     if (shopId) query.shopId = shopId;
 
     const products = await Product.find(query)
-           .populate('categoryId', 'name')
+        .populate('categoryId', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -305,7 +320,7 @@ const getCompanyInventorySummary = asyncHandler(async (req, res) => {
 
     // By category
     const byCategoryData = await Product.aggregate([
-            { $match: { companyId } },
+        { $match: { companyId } },
         {
             $lookup: {
                 from: 'categories',
@@ -402,7 +417,7 @@ const getCompanyShops = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
 
     const shopStats = await Product.aggregate([
-            { $match: { companyId } },
+        { $match: { companyId } },
         {
             $group: {
                 _id: '$shopId',
@@ -756,7 +771,7 @@ const allocateInventoryToShop = asyncHandler(async (req, res) => {
 
         await stockChange.save();
 
-        
+
 
         logger.info(`✅ Allocated ${quantity} units of product ${productId} to shop ${shopId}`);
 
@@ -772,11 +787,11 @@ const allocateInventoryToShop = asyncHandler(async (req, res) => {
             }
         });
     } catch (error) {
-        
+
         logger.error(`❌ Error allocating inventory: ${error.message}`);
         throw error;
     } finally {
-        
+
     }
 });
 
@@ -1835,20 +1850,24 @@ const getCategoryReport = asyncHandler(async (req, res) => {
         { $lookup: { from: 'productvariations', localField: '_id', foreignField: 'productId', as: 'variations' } },
         { $lookup: { from: 'productpricings', localField: 'pricingId', foreignField: '_id', as: 'pricing' } },
         { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
-        { $project: {
-            productId: '$_id',
-            totalStock: { $sum: { $map: { input: '$variations', as: 'v', in: { $ifNull: ['$$v.stockQty', 0] } } } },
-            cost: { $ifNull: ['$pricing.cost', 0] },
-            lowStockThreshold: '$inventory.lowStockThreshold',
-            qty: '$inventory.quantity'
-        } },
-        { $group: {
-            _id: null,
-            totalStock: { $sum: '$totalStock' },
-            totalValue: { $sum: { $multiply: ['$totalStock', '$cost'] } },
-            lowStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', '$lowStockThreshold'] }, 1, 0] } },
-            outOfStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', 0] }, 1, 0] } }
-        } }
+        {
+            $project: {
+                productId: '$_id',
+                totalStock: { $sum: { $map: { input: '$variations', as: 'v', in: { $ifNull: ['$$v.stockQty', 0] } } } },
+                cost: { $ifNull: ['$pricing.cost', 0] },
+                lowStockThreshold: '$inventory.lowStockThreshold',
+                qty: '$inventory.quantity'
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                totalStock: { $sum: '$totalStock' },
+                totalValue: { $sum: { $multiply: ['$totalStock', '$cost'] } },
+                lowStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', '$lowStockThreshold'] }, 1, 0] } },
+                outOfStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', 0] }, 1, 0] } }
+            }
+        }
     ]).allowDiskUse(true);
 
     const summary = agg[0] || { totalStock: 0, totalValue: 0, lowStockCount: 0, outOfStockCount: 0 };
@@ -1866,7 +1885,7 @@ const getDailyReport = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
     const { date } = req.query;
     const day = date ? new Date(date) : new Date();
-    day.setHours(0,0,0,0);
+    day.setHours(0, 0, 0, 0);
     const next = new Date(day);
     next.setDate(next.getDate() + 1);
 
@@ -1885,7 +1904,7 @@ const getDailyReport = asyncHandler(async (req, res) => {
     // Alerts created today
     const alerts = await Alert.find({ companyId, createdAt: { $gte: day, $lt: next } }).lean();
 
-    res.json({ success: true, data: { date: day.toISOString().slice(0,10), movement, sales: sales[0] || { unitsSold: 0 }, alerts } });
+    res.json({ success: true, data: { date: day.toISOString().slice(0, 10), movement, sales: sales[0] || { unitsSold: 0 }, alerts } });
 });
 
 /**
@@ -1898,7 +1917,7 @@ const createDailySummaryAlert = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
     const { date } = req.body;
     const day = date ? new Date(date) : new Date();
-    day.setHours(0,0,0,0);
+    day.setHours(0, 0, 0, 0);
     const next = new Date(day);
     next.setDate(next.getDate() + 1);
 
@@ -1910,7 +1929,7 @@ const createDailySummaryAlert = asyncHandler(async (req, res) => {
     const totalAlerts = await Alert.countDocuments({ companyId, createdAt: { $gte: day, $lt: next } });
     const totalAdjustments = await InventoryAdjustment.countDocuments({ companyId, createdAt: { $gte: day, $lt: next } });
 
-    const summaryText = `Daily summary for ${day.toISOString().slice(0,10)}: movements=${JSON.stringify(movement)}, alerts=${totalAlerts}, adjustments=${totalAdjustments}`;
+    const summaryText = `Daily summary for ${day.toISOString().slice(0, 10)}: movements=${JSON.stringify(movement)}, alerts=${totalAlerts}, adjustments=${totalAdjustments}`;
 
     const alert = await Alert.create({
         companyId,
@@ -1935,13 +1954,13 @@ const createDailySummaryAlert = asyncHandler(async (req, res) => {
  */
 const transferStockBetweenShops = asyncHandler(async (req, res) => {
     const { companyId, shopId: sourceShopId } = req.params;
-    const { 
-        productId, 
-        toShopId: destinationShopId, 
-        quantity, 
-        reason, 
+    const {
+        productId,
+        toShopId: destinationShopId,
+        quantity,
+        reason,
         userId,
-        notes 
+        notes
     } = req.body;
 
     // Validation
@@ -1973,15 +1992,15 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
 
         // ========== STEP 1: Get source product and verify stock ==========
         logger.info(`🔍 Looking for product: ${productId} (type: ${typeof productId}) in company: ${companyId}`);
-        
+
         // Try without isDeleted first
         let sourceProduct = await Product.findById(productId);
         logger.info(`📦 Product exists in DB: ${sourceProduct ? 'YES' : 'NO'}`);
-        
+
         if (sourceProduct) {
             logger.info(`📊 Product details: companyId=${sourceProduct.companyId}, isDeleted=${sourceProduct.isDeleted}`);
         }
-        
+
         // Now do the full query
         sourceProduct = await Product.findOne({
             _id: productId,
@@ -1993,7 +2012,7 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
             logger.error(`❌ Product not found. Query: {_id: ${productId}, companyId: ${companyId}, isDeleted: false}`);
             throw new Error('Product not found in this company');
         }
-        
+
         logger.info(`✅ Found product: ${sourceProduct.name}`);
 
 
@@ -2040,7 +2059,7 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         delete destinationProductData.qrCode;
         delete destinationProductData.asin;
         delete destinationProductData.upc;
-        
+
         // Product model will auto-generate new unique codes on save
 
         const destinationProduct = await Product.create([destinationProductData]);
@@ -2165,29 +2184,29 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
             transferId: `TRF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
             transferType: 'intra_company',
             status: 'completed',
-            
+
             sourceCompanyId: companyId,
             sourceShopId: sourceShopId,
             sourceShopName: sourceShopId,
-            
+
             destinationCompanyId: companyId,
             destinationShopId: destinationShopId,
             destinationShopName: destinationShopId,
-            
+
             productId: productId,
             productName: sourceProduct.name,
             productSku: sourceProduct.sku,
-            
+
             createdProductId: destinationProductId,
-            
+
             quantity: quantity,
             reason: reason || 'Intra-company stock redistribution',
-            
+
             sourceStockBefore: sourceStockBefore,
             sourceStockAfter: sourceStockChange.new,
             destinationStockBefore: 0,
             destinationStockAfter: destStockChange.new,
-            
+
             transferredProductData: {
                 pricing: {
                     cost: destinationPricing.cost,
@@ -2203,25 +2222,25 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
                 lowStockThreshold: destinationStock.lowStockThreshold,
                 allowBackorder: destinationStock.allowBackorder
             },
-            
+
             performedBy: {
                 userId: userId
             },
-            
+
             sourceStockChangeId: sourceStockChange._id,
             destinationStockChangeId: destStockChange._id,
-            
+
             estimatedValue: transferValue,
             actualValue: transferValue,
-            
+
             notes: notes,
-            
+
             metadata: {
                 isAutomatic: false,
                 priority: 'medium',
                 triggeredBy: 'manual'
             },
-            
+
             initiatedAt: new Date(),
             completedAt: new Date()
         });
@@ -2283,7 +2302,7 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         logger.error(`❌ Intra-company transfer error: ${error.message}`);
         throw error;
     } finally {
-        
+
     }
 });
 
@@ -2330,8 +2349,9 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         });
     }
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // No transaction session - purely linear execution
+    // Logic: If any step fails after source stock is deducted, we must accept manual correction or rely on error handling.
+    // However, user requested "normal codes" without transactions.
 
     try {
         // ========== STEP 1: Get source product ==========
@@ -2400,10 +2420,10 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         delete destinationProductData.qrCode;
         delete destinationProductData.asin;
         delete destinationProductData.upc;
-        
+
         // Product model will auto-generate new unique codes on save
 
-        const destinationProduct = await Product.create([destinationProductData]);
+        const destinationProduct = await Product.create([destinationProductData]); // Returns array
         const destinationProductId = destinationProduct[0]._id;
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
@@ -2509,8 +2529,7 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                         sourceProductId: productId
                     }
                 }
-            ],
-            
+            ]
         );
 
         // ========== STEP 8: Create ProductTransfer record for complete audit ==========
@@ -2519,29 +2538,29 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             transferId: `TRF-CROSS-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
             transferType: 'cross_company',
             status: 'completed',
-            
+
             sourceCompanyId: fromCompanyId,
             sourceShopId: fromShopId,
             sourceShopName: fromShopId,
-            
+
             destinationCompanyId: toCompanyId,
             destinationShopId: toShopId,
             destinationShopName: toShopId,
-            
+
             productId: productId,
             productName: sourceProduct.name,
             productSku: sourceProduct.sku,
-            
+
             createdProductId: destinationProductId,
-            
+
             quantity: transferQuantity,
             reason: reason || 'Cross-company stock transfer (inter-company sale)',
-            
+
             sourceStockBefore: currentStock,
             sourceStockAfter: sourceStock.stockQty,
             destinationStockBefore: 0,
             destinationStockAfter: transferQuantity,
-            
+
             transferredProductData: {
                 pricing: {
                     cost: destinationPricing.cost,
@@ -2557,33 +2576,31 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                 lowStockThreshold: destinationStock.lowStockThreshold,
                 allowBackorder: destinationStock.allowBackorder
             },
-            
+
             performedBy: {
                 userId: userId || 'system'
             },
-            
+
             sourceStockChangeId: stockChangeResults[0]._id,
             destinationStockChangeId: stockChangeResults[1]._id,
-            
+
             estimatedValue: transferValue,
             actualValue: transferValue,
-            
+
             notes: notes,
-            
+
             metadata: {
                 isAutomatic: false,
                 priority: 'high',
                 triggeredBy: 'manual',
                 tags: ['inter_company_sale']
             },
-            
+
             initiatedAt: new Date(),
             completedAt: new Date()
         });
         await productTransfer.save();
 
-        // ========== STEP 9: Commit transaction ==========
-        
         logger.info(
             `✅ Cross-company transfer: ${transferQuantity} units of product ${productId} from ${fromCompanyId}:${fromShopId} to ${toCompanyId}:${toShopId}`
         );
@@ -2638,7 +2655,7 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             }
         });
     } catch (error) {
-        
+
         logger.error(`❌ Cross-company transfer error: ${error.message}`);
 
         // Return user-friendly error
@@ -2657,8 +2674,6 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         }
 
         throw error;
-    } finally {
-        
     }
 });
 // ==================== TRANSFER HISTORY OPERATIONS ====================
@@ -2826,7 +2841,7 @@ async function ensureCategoryInDestinationCompany(sourceCategoryId, destinationC
     try {
         // Get source category
         const sourceCategory = await Category.findById(sourceCategoryId);
-        
+
         if (!sourceCategory) {
             logger.warn(`Source category ${sourceCategoryId} not found`);
             return null;
@@ -2877,21 +2892,21 @@ async function ensureCategoryInDestinationCompany(sourceCategoryId, destinationC
             .replace(/[^a-zA-Z0-9]/g, '-')
             .replace(/-+/g, '-')
             .replace(/^-|-$/g, '');
-        
+
         let uniqueSlug = `${baseSlug}-${destinationCompanyId.substring(0, 8)}`;
         let counter = 1;
-        
+
         // Ensure slug is unique
         while (await Category.findOne({ slug: uniqueSlug })) {
             uniqueSlug = `${baseSlug}-${destinationCompanyId.substring(0, 8)}-${counter}`;
             counter++;
         }
-        
+
         newCategoryData.slug = uniqueSlug;
 
         const newCategory = await Category.create(newCategoryData);
         logger.info(`✓ Created new level 3 category in destination company: ${newCategory.name} (${newCategory._id}) with parent ${newCategory.parentCategory}`);
-        
+
         return newCategory._id;
 
     } catch (error) {
@@ -3179,10 +3194,10 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
                 // ========== HANDLE CATEGORY ==========
                 let destinationCategoryId = null;
-                
+
                 if (sourceProduct.categoryId) {
                     const sourceCatId = sourceProduct.categoryId.toString();
-                    
+
                     // Check if we've already processed this category
                     if (categoryMap.has(sourceCatId)) {
                         destinationCategoryId = categoryMap.get(sourceCatId);
@@ -3192,10 +3207,10 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
                             sourceProduct.categoryId,
                             toCompanyId
                         );
-                        
+
                         if (destinationCategoryId) {
                             categoryMap.set(sourceCatId, destinationCategoryId);
-                            
+
                             // Check if this is a newly created category
                             const isNew = !results.categoriesCreated.find(c => c.categoryId === destinationCategoryId.toString());
                             if (isNew && destinationCategoryId.toString() !== sourceCatId) {
@@ -3216,7 +3231,7 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
                 destinationProductData.companyId = toCompanyId;
                 destinationProductData.shopId = toShopId;
                 destinationProductData.categoryId = destinationCategoryId;
-                
+
                 // Remove unique identifiers
                 delete destinationProductData.sku;
                 delete destinationProductData.barcode;
@@ -3324,8 +3339,6 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
         }
 
         await session.commitTransaction();
-        const sessionCommitted = true;
-        session.endSession();
 
         logger.info(`✅ Bulk cross-company transfer completed: ${results.successful.length}/${results.totalRequested} successful`);
         logger.info(`✅ Categories created/mapped: ${results.categoriesCreated.length}`);
@@ -3340,8 +3353,9 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
         if (session.inTransaction()) {
             await session.abortTransaction();
         }
-        session.endSession();
         throw error;
+    } finally {
+        await session.endSession();
     }
 });
 

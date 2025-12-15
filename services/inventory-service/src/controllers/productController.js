@@ -19,6 +19,7 @@ const ProductVariation = require('../models/ProductVariation');
 const ProductSpecs = require('../models/productSpecs');
 const StockChange = require('../models/StockChange');
 const { validateMongoId } = require('../utils/validateMongoId');
+const { formatEnrichedProduct } = require('../utils/productFormatter');
 const { publishProductEvent } = require('../events/productEvents');
 const { productEvents } = require('../events/eventHelpers');
 const { scanDel, setCache, getCache, delCache } = require('../utils/redisHelper');
@@ -125,87 +126,14 @@ const getAllProducts = asyncHandler(async (req, res) => {
   // Enhance products with additional data
   const enrichedProducts = await Promise.all(products.map(async (product) => {
     const [variations, stockInfo, specsInfo] = await Promise.all([
-      ProductVariation.find({ productId: product._id }).lean(),
+      ProductVariation.find({ productId: product._id })
+        .populate('attributeValues.attributeId', 'name type')
+        .lean(),
       ProductStock.find({ productId: product._id }).lean(),
       ProductSpecs.findOne({ productId: product._id }).lean()
     ]);
 
-    // Calculate total stock across all variations
-    const totalStock = stockInfo.reduce((sum, stock) => sum + (stock.stockQty || 0), 0);
-    const totalReserved = stockInfo.reduce((sum, stock) => sum + (stock.reservedQty || 0), 0);
-    const availableStock = Math.max(0, totalStock - totalReserved);
-    const lowStockThreshold = stockInfo.length > 0 ? Math.min(...stockInfo.map(s => s.lowStockThreshold || 0)) : 0;
-
-    return {
-      ...product,
-      // Variations with their own stock info
-      variations: variations || [],
-      
-      // Consolidated stock information
-      stock: {
-        total: totalStock,
-        available: availableStock,
-        reserved: totalReserved,
-        inStock: availableStock > 0,
-        isLowStock: totalStock <= lowStockThreshold,
-        lowStockThreshold,
-        details: stockInfo || []
-      },
-      
-      // Product specifications
-      specifications: specsInfo ? specsInfo.specs : null,
-      
-      // Enhanced pricing info
-      pricing: product.pricingId ? {
-        basePrice: product.pricingId.basePrice,
-        salePrice: product.pricingId.salePrice,
-        cost: product.pricingId.cost,
-        currency: product.pricingId.currency,
-        marginAmount: product.pricingId.marginAmount,
-        marginPercent: product.pricingId.marginPercent,
-        profitRank: product.pricingId.profitRank,
-        effectiveFrom: product.pricingId.effectiveFrom,
-        effectiveTo: product.pricingId.effectiveTo
-      } : null,
-      
-      // QR and Barcode information
-      codes: {
-        qrCodeUrl: product.qrCodeUrl,
-        barcodeUrl: product.barcodeUrl,
-        qrPayload: product.qrPayload,
-        barcodePayload: product.barcodePayload
-      },
-      
-      // Auto-generated identifiers
-      identifiers: {
-        sku: product.sku,
-        barcode: product.barcode,
-        qrCode: product.qrCode,
-        scanId: product.scanId,
-        asin: product.asin,
-        upc: product.upc
-      },
-      
-      // Category information
-      category: product.categoryId ? {
-        id: product.categoryId._id,
-        name: product.categoryId.name,
-        slug: product.categoryId.slug,
-        level: product.categoryId.level,
-        parentId: product.categoryId.parentCategory,
-        isActive: product.categoryId.isActive
-      } : null,
-      
-      // Status and visibility flags
-      status: {
-        active: product.status === 'active',
-        visible: product.visibility === 'public',
-        featured: product.featured || product.isFeatured,
-        availability: product.availability,
-        condition: product.condition,
-        isDeleted: product.isDeleted
-      }
-    };
+    return formatEnrichedProduct(product, variations, stockInfo, specsInfo);
   }));
 
   const responseData = {
@@ -265,138 +193,8 @@ const getProductById = asyncHandler(async (req, res) => {
     ProductSpecs.findOne({ productId: id }).lean()
   ]);
 
-  // Calculate comprehensive stock information
-  const totalStock = stockInfo.reduce((sum, stock) => sum + (stock.stockQty || 0), 0);
-  const totalReserved = stockInfo.reduce((sum, stock) => sum + (stock.reservedQty || 0), 0);
-  const availableStock = Math.max(0, totalStock - totalReserved);
-  const lowStockThreshold = stockInfo.length > 0 ? Math.min(...stockInfo.map(s => s.lowStockThreshold || 0)) : 0;
-  const hasLowStock = stockInfo.some(s => (s.stockQty || 0) <= (s.lowStockThreshold || 0));
-
   // Build comprehensive enriched product data
-  const enrichedProduct = {
-    ...product,
-    
-    // Complete variations with stock and attributes
-    variations: variations.map(variation => ({
-      ...variation,
-      stock: stockInfo.find(s => String(s.variationId) === String(variation._id)) || null,
-      attributes: variation.attributeValues || []
-    })),
-    
-    // Comprehensive stock information
-    stock: {
-      total: totalStock,
-      available: availableStock,
-      reserved: totalReserved,
-      inStock: availableStock > 0,
-      isLowStock: hasLowStock,
-      lowStockThreshold,
-      trackQuantity: stockInfo.length > 0 ? stockInfo[0].trackQuantity : true,
-      allowBackorder: stockInfo.length > 0 ? stockInfo[0].allowBackorder : false,
-      details: stockInfo.map(stock => ({
-        ...stock,
-        availableQty: Math.max(0, (stock.stockQty || 0) - (stock.reservedQty || 0))
-      }))
-    },
-    
-    // Product specifications and attributes
-    specifications: specsInfo ? specsInfo.specs : {},
-    specsCategory: specsInfo ? specsInfo.l2Category : null,
-    
-    // Enhanced pricing information
-    pricing: product.pricingId ? {
-      id: product.pricingId._id,
-      basePrice: product.pricingId.basePrice,
-      salePrice: product.pricingId.salePrice,
-      cost: product.pricingId.cost,
-      currency: product.pricingId.currency,
-      marginAmount: product.pricingId.marginAmount,
-      marginPercent: product.pricingId.marginPercent,
-      saleMarginAmount: product.pricingId.saleMarginAmount,
-      saleMarginPercent: product.pricingId.saleMarginPercent,
-      profitRank: product.pricingId.profitRank,
-      effectiveFrom: product.pricingId.effectiveFrom,
-      effectiveTo: product.pricingId.effectiveTo,
-      previousBasePrice: product.pricingId.previousBasePrice,
-      priceChangedAt: product.pricingId.priceChangedAt,
-      revenue: product.pricingId.revenue,
-      profit: product.pricingId.profit
-    } : null,
-    
-    // QR and Barcode URLs and data
-    codes: {
-      qrCodeUrl: product.qrCodeUrl,
-      barcodeUrl: product.barcodeUrl,
-      qrPayload: product.qrPayload,
-      barcodePayload: product.barcodePayload,
-      qrCloudinaryId: product.qrCloudinaryId,
-      barcodeCloudinaryId: product.barcodeCloudinaryId
-    },
-    
-    // All auto-generated identifiers
-    identifiers: {
-      sku: product.sku,
-      barcode: product.barcode,
-      qrCode: product.qrCode,
-      scanId: product.scanId,
-      asin: product.asin,
-      upc: product.upc
-    },
-    
-    // Complete category information
-    category: product.categoryId ? {
-      id: product.categoryId._id,
-      name: product.categoryId.name,
-      slug: product.categoryId.slug,
-      level: product.categoryId.level,
-      parentId: product.categoryId.parentCategory,
-      isActive: product.categoryId.isActive,
-      attributes: product.categoryId.attributes || []
-    } : null,
-    
-    // Status and visibility information
-    status: {
-      active: product.status === 'active',
-      visible: product.visibility === 'public',
-      featured: product.featured || product.isFeatured,
-      availability: product.availability,
-      condition: product.condition,
-      isDeleted: product.isDeleted || false,
-      deletedAt: product.deletedAt,
-      deletedBy: product.deletedBy
-    },
-    
-    // SEO and marketing data
-    seo: {
-      keywords: product.seo?.keywords || [],
-      metaTitle: product.seo?.metaTitle,
-      metaDescription: product.seo?.metaDescription
-    },
-    
-    // Sales and performance data
-    sales: {
-      totalSold: product.sales?.totalSold || 0,
-      revenue: product.sales?.revenue || 0,
-      lastSaleDate: product.sales?.lastSaleDate
-    },
-    
-    // Media information
-    media: {
-      images: product.images || [],
-      videos: product.videoUrls || [],
-      primaryImage: product.images?.find(img => img.isPrimary) || (product.images?.[0]) || null
-    },
-    
-    // Metadata
-    metadata: {
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-      slug: product.slug,
-      companyId: product.companyId,
-      shopId: product.shopId,
-      sortOrder: product.sortOrder
-    }
-  };
+  const enrichedProduct = formatEnrichedProduct(product, variations, stockInfo, specsInfo);
 
   // Cache asynchronously (non-blocking)
   setImmediate(() => {
@@ -409,6 +207,8 @@ const getProductById = asyncHandler(async (req, res) => {
     data: enrichedProduct
   });
 });
+
+
 
 const getProductBySlug = asyncHandler(async (req, res) => {
   const { slug } = req.params;
@@ -444,82 +244,9 @@ const getProductBySlug = asyncHandler(async (req, res) => {
     ProductSpecs.findOne({ productId: product._id }).lean()
   ]);
 
-  // Calculate comprehensive stock information
-  const totalStock = stockInfo.reduce((sum, stock) => sum + (stock.stockQty || 0), 0);
-  const totalReserved = stockInfo.reduce((sum, stock) => sum + (stock.reservedQty || 0), 0);
-  const availableStock = Math.max(0, totalStock - totalReserved);
-  const lowStockThreshold = stockInfo.length > 0 ? Math.min(...stockInfo.map(s => s.lowStockThreshold || 0)) : 0;
-  const hasLowStock = stockInfo.some(s => (s.stockQty || 0) <= (s.lowStockThreshold || 0));
+  // Build comprehensive enriched product data
+  const enrichedProduct = formatEnrichedProduct(product, variations, stockInfo, specsInfo);
 
-  // Build comprehensive enriched product data (same as getProductById)
-  const enrichedProduct = {
-    ...product,
-    variations: variations.map(variation => ({
-      ...variation,
-      stock: stockInfo.find(s => String(s.variationId) === String(variation._id)) || null,
-      attributes: variation.attributeValues || []
-    })),
-    stock: {
-      total: totalStock,
-      available: availableStock,
-      reserved: totalReserved,
-      inStock: availableStock > 0,
-      isLowStock: hasLowStock,
-      lowStockThreshold,
-      trackQuantity: stockInfo.length > 0 ? stockInfo[0].trackQuantity : true,
-      allowBackorder: stockInfo.length > 0 ? stockInfo[0].allowBackorder : false,
-      details: stockInfo.map(stock => ({
-        ...stock,
-        availableQty: Math.max(0, (stock.stockQty || 0) - (stock.reservedQty || 0))
-      }))
-    },
-    specifications: specsInfo ? specsInfo.specs : {},
-    specsCategory: specsInfo ? specsInfo.l2Category : null,
-    pricing: product.pricingId ? {
-      id: product.pricingId._id,
-      basePrice: product.pricingId.basePrice,
-      salePrice: product.pricingId.salePrice,
-      cost: product.pricingId.cost,
-      currency: product.pricingId.currency,
-      marginAmount: product.pricingId.marginAmount,
-      marginPercent: product.pricingId.marginPercent,
-      profitRank: product.pricingId.profitRank
-    } : null,
-    codes: {
-      qrCodeUrl: product.qrCodeUrl,
-      barcodeUrl: product.barcodeUrl,
-      qrPayload: product.qrPayload,
-      barcodePayload: product.barcodePayload
-    },
-    identifiers: {
-      sku: product.sku,
-      barcode: product.barcode,
-      qrCode: product.qrCode,
-      scanId: product.scanId,
-      asin: product.asin,
-      upc: product.upc
-    },
-    category: product.categoryId ? {
-      id: product.categoryId._id,
-      name: product.categoryId.name,
-      slug: product.categoryId.slug,
-      level: product.categoryId.level,
-      parentId: product.categoryId.parentCategory,
-      isActive: product.categoryId.isActive
-    } : null,
-    status: {
-      active: product.status === 'active',
-      visible: product.visibility === 'public',
-      featured: product.featured || product.isFeatured,
-      availability: product.availability,
-      condition: product.condition
-    },
-    media: {
-      images: product.images || [],
-      videos: product.videoUrls || [],
-      primaryImage: product.images?.find(img => img.isPrimary) || (product.images?.[0]) || null
-    }
-  };
 
   await setCache(cacheKey, enrichedProduct, 3600);
 
@@ -660,7 +387,7 @@ const createProduct = asyncHandler(async (req, res) => {
 
   // Map frontend fields to backend schema
   const productData = { ...req.body };
-  
+
   // Handle featured field mapping
   if (req.body.isFeatured !== undefined) {
     productData.featured = req.body.isFeatured;
@@ -699,7 +426,7 @@ const createProduct = asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: 'pricing.basePrice is required' });
       }
 
-      const pricingDoc = await ProductPricing.create(Object.assign({}, pricingPayload, { 
+      const pricingDoc = await ProductPricing.create(Object.assign({}, pricingPayload, {
         productId: product._id,
         companyId: product.companyId // EDGE CASE: Ensure pricing is scoped to company
       }));
@@ -746,14 +473,14 @@ const createProduct = asyncHandler(async (req, res) => {
     if (product.sku) {
       // Store ONLY SKU for QR/barcode generation (security & stability)
       await Product.updateOne(
-        { _id: product._id }, 
-        { 
-          $set: { 
-            qrPayload: product.sku, 
+        { _id: product._id },
+        {
+          $set: {
+            qrPayload: product.sku,
             barcodePayload: product.sku,
             qrCode: product.sku,  // Ensure consistency
             barcode: product.sku  // Ensure consistency
-          } 
+          }
         }
       );
       product.qrPayload = product.sku;
@@ -775,22 +502,22 @@ const createProduct = asyncHandler(async (req, res) => {
       inventoryData.quantity ||
       0
     );
-    
+
     const stockData = {
       productId: product._id,
       variationId: null, // Master product stock
       stockQty: initialQty,
       lowStockThreshold: req.body.lowStockThreshold || inventoryData.lowStockThreshold || 10,
       minReorderQty: req.body.minReorderQty || inventoryData.minReorderQty || 20,
-      trackQuantity: req.body.trackQuantity !== undefined ? req.body.trackQuantity : 
-                     (inventoryData.trackQuantity !== undefined ? inventoryData.trackQuantity : true),
+      trackQuantity: req.body.trackQuantity !== undefined ? req.body.trackQuantity :
+        (inventoryData.trackQuantity !== undefined ? inventoryData.trackQuantity : true),
       allowBackorder: req.body.allowBackorder !== undefined ? req.body.allowBackorder :
-                     (inventoryData.allowBackorder !== undefined ? inventoryData.allowBackorder : false),
+        (inventoryData.allowBackorder !== undefined ? inventoryData.allowBackorder : false),
       ...inventoryData
     };
-    
+
     await ProductStock.create(stockData);
-    
+
     // Create initial stock change if quantity > 0
     if (initialQty && initialQty > 0) {
       try {
@@ -811,10 +538,10 @@ const createProduct = asyncHandler(async (req, res) => {
     }
   } catch (err) {
     logger.error('Failed to create ProductStock:', err);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Failed to create product stock record', 
-      error: err.message 
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create product stock record',
+      error: err.message
     });
   }
 
@@ -864,7 +591,7 @@ const createProduct = asyncHandler(async (req, res) => {
 
   // Get stock information
   const stockInfo = await ProductStock.findOne({ productId: product._id }).lean();
-  
+
   // Get specs information if exists
   const specsInfo = await ProductSpecs.findOne({ productId: product._id }).lean();
 
@@ -872,7 +599,7 @@ const createProduct = asyncHandler(async (req, res) => {
   const responseData = {
     // Core product data
     ...populatedProduct,
-    
+
     // Stock/Inventory information
     stock: stockInfo ? {
       quantity: stockInfo.stockQty || 0,
@@ -988,7 +715,7 @@ const createProduct = asyncHandler(async (req, res) => {
         const [qrUpload, barcodeUpload] = await Promise.all([
           uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, `qr_${skuValue}`),
           uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, `bar_${skuValue}`)
-        ]); 
+        ]);
 
         // Update product with URLs and Cloudinary IDs for deletion
         await Product.updateOne(
@@ -1000,7 +727,7 @@ const createProduct = asyncHandler(async (req, res) => {
             barcodeCloudinaryId: barcodeUpload.public_id
           }
         );
-        
+
         logger.info(`✅ QR/Barcode generated and uploaded for SKU: ${skuValue}`);
       } catch (err) {
         logger.error('Background: Failed to generate QR/barcode images:', err);
@@ -1108,7 +835,7 @@ const updateProduct = asyncHandler(async (req, res) => {
         field: 'categoryId'
       });
     }
-    
+
     // Normalize to categoryId for consistency
     if (req.body.category) {
       req.body.categoryId = newCategoryId;
@@ -1162,7 +889,7 @@ const updateProduct = asyncHandler(async (req, res) => {
     req.body,
     { new: true, runValidators: true }
   ).populate('categoryId', 'name slug level')
-  .populate('pricingId');
+    .populate('pricingId');
 
   if (!product) {
     return res.status(404).json({
@@ -1210,7 +937,7 @@ const updateProduct = asyncHandler(async (req, res) => {
       if (Array.isArray(req.body.attributes)) {
         req.body.attributes.forEach(a => { if (a && a.name) specsObj[a.name] = a.value; });
       }
-      
+
       if (Object.keys(specsObj).length > 0) {
         await ProductSpecs.findOneAndUpdate(
           { productId: product._id },
@@ -1396,7 +1123,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
             .catch((err) => logger.warn(`Failed to delete QR code ${product.qrCloudinaryId}:`, err))
         );
       }
-      
+
       if (product.barcodeCloudinaryId) {
         deleteOps.push(
           cloudinary.uploader.destroy(product.barcodeCloudinaryId)
@@ -1404,7 +1131,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
             .catch((err) => logger.warn(`Failed to delete barcode ${product.barcodeCloudinaryId}:`, err))
         );
       }
-      
+
       // Fallback: Delete entire QR/Barcode folder if URLs exist
       if (product.qrCodeUrl || product.barcodeUrl) {
         deleteOps.push(
@@ -2266,7 +1993,7 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
 
   const results = [];
 
-  
+
 
   // Pre-check duplicates within batch by companyId + lowercased name
   // const batchNameMap = new Map();
@@ -2297,7 +2024,7 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
       // Extract specialized fields from payload (similar to createProduct)
       const newImages = payload.images || [];
       const newVideos = payload.videos || [];
-      
+
       // Normalize categoryId vs category field
       let categoryId = payload.categoryId || payload.category;
 
@@ -2417,7 +2144,7 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
           continue;
         }
         try {
-          const pricingDoc = await ProductPricing.create(Object.assign({}, pricingPayload, { 
+          const pricingDoc = await ProductPricing.create(Object.assign({}, pricingPayload, {
             productId: productDoc._id,
             companyId: productDoc.companyId
           }));
@@ -2440,22 +2167,22 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
           inventoryData.quantity ||
           0
         );
-        
+
         const stockData = {
           productId: productDoc._id,
           variationId: null, // Master product stock
           stockQty: initialQty,
           lowStockThreshold: payload.lowStockThreshold || inventoryData.lowStockThreshold || 10,
           minReorderQty: payload.minReorderQty || inventoryData.minReorderQty || 20,
-          trackQuantity: payload.trackQuantity !== undefined ? payload.trackQuantity : 
-                         (inventoryData.trackQuantity !== undefined ? inventoryData.trackQuantity : true),
+          trackQuantity: payload.trackQuantity !== undefined ? payload.trackQuantity :
+            (inventoryData.trackQuantity !== undefined ? inventoryData.trackQuantity : true),
           allowBackorder: payload.allowBackorder !== undefined ? payload.allowBackorder :
-                         (inventoryData.allowBackorder !== undefined ? inventoryData.allowBackorder : false),
+            (inventoryData.allowBackorder !== undefined ? inventoryData.allowBackorder : false),
           ...inventoryData
         };
-        
+
         await ProductStock.create(stockData);
-        
+
         if (initialQty && initialQty > 0) {
           await StockChange.create({
             companyId: productDoc.companyId,
@@ -2476,17 +2203,17 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
       // ========== PRODUCT SPECS PERSISTENCE ==========
       try {
         const specsObj = {};
-        
+
         // Collect specs from specs array
         if (Array.isArray(payload.specs)) {
           payload.specs.forEach(s => { if (s && s.name) specsObj[s.name] = s.value; });
         }
-        
+
         // Collect specs from attributes array
         if (Array.isArray(payload.attributes)) {
           payload.attributes.forEach(a => { if (a && a.name) specsObj[a.name] = a.value; });
         }
-        
+
         // Include any top-level mapped fields from L2 category mapping
         const mapping = categoryValidationService.findL2MappingByName(parentL2Name);
         if (mapping && mapping.commonFields) {
@@ -2533,12 +2260,12 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
         try {
           // Category stats
           if (productDoc.category) {
-            Category.updateOne({ _id: productDoc.category }, { $inc: { 'statistics.totalProducts': 1 } }).catch(() => {});
+            Category.updateOne({ _id: productDoc.category }, { $inc: { 'statistics.totalProducts': 1 } }).catch(() => { });
           }
           // Cache invalidation and create outbox event for reliable publishing
-          scanDel('products:*').catch(() => {});
+          scanDel('products:*').catch(() => { });
           // Use Outbox pattern to enqueue event for dispatcher
-          productEvents.created(productDoc, productDoc.companyId).catch(() => {});
+          productEvents.created(productDoc, productDoc.companyId).catch(() => { });
         } catch (e) {
           logger.warn('BulkCreate: background task error', e.message || e);
         }
@@ -2565,37 +2292,37 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
     try {
       const { id, ...changes } = op;
       if (!id) { itemRes.error = 'id is required for updates'; results.push(itemRes); continue; }
-      
+
       // Validate MongoDB ID format
       try {
         validateMongoId(id);
       } catch (err) {
-        itemRes.error = 'Invalid product ID format'; 
-        results.push(itemRes); 
+        itemRes.error = 'Invalid product ID format';
+        results.push(itemRes);
         continue;
       }
-      
+
       const existing = await Product.findById(id).lean();
       if (!existing) { itemRes.error = 'Product not found'; results.push(itemRes); continue; }
 
       // Prevent SKU change
-      if (changes.sku && changes.sku !== existing.sku) { 
-        itemRes.error = 'SKU cannot be modified after creation'; 
-        results.push(itemRes); 
-        continue; 
+      if (changes.sku && changes.sku !== existing.sku) {
+        itemRes.error = 'SKU cannot be modified after creation';
+        results.push(itemRes);
+        continue;
       }
 
       // If changing name, ensure uniqueness within company
       if (changes.name && changes.name !== existing.name) {
-        const dup = await Product.findOne({ 
-          _id: { $ne: id }, 
-          companyId: existing.companyId, 
-          name: changes.name 
+        const dup = await Product.findOne({
+          _id: { $ne: id },
+          companyId: existing.companyId,
+          name: changes.name
         }).lean();
-        if (dup) { 
-          itemRes.error = 'Another product with this name exists in company'; 
-          results.push(itemRes); 
-          continue; 
+        if (dup) {
+          itemRes.error = 'Another product with this name exists in company';
+          results.push(itemRes);
+          continue;
         }
       }
 
@@ -2605,23 +2332,23 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
         try {
           validateMongoId(newCategoryId);
         } catch (err) {
-          itemRes.error = 'Invalid category ID format'; 
-          results.push(itemRes); 
+          itemRes.error = 'Invalid category ID format';
+          results.push(itemRes);
           continue;
         }
-        
+
         const newCat = await Category.findById(newCategoryId).lean();
-        if (!newCat || newCat.level !== 3) { 
-          itemRes.error = 'Invalid category: must be level-3'; 
-          results.push(itemRes); 
-          continue; 
+        if (!newCat || newCat.level !== 3) {
+          itemRes.error = 'Invalid category: must be level-3';
+          results.push(itemRes);
+          continue;
         }
-        if (!newCat.parentCategory) { 
-          itemRes.error = 'L3 category must have L2 parent'; 
-          results.push(itemRes); 
-          continue; 
+        if (!newCat.parentCategory) {
+          itemRes.error = 'L3 category must have L2 parent';
+          results.push(itemRes);
+          continue;
         }
-        
+
         // Normalize to categoryId
         changes.categoryId = newCategoryId;
         delete changes.category;
@@ -2637,13 +2364,13 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
         }
         const existingImages = existing.images || [];
         const totalImages = existingImages.length + changes.images.length;
-        
+
         if (totalImages > 10) {
           itemRes.error = `Total images would exceed 10 (existing: ${existingImages.length}, new: ${changes.images.length})`;
           results.push(itemRes);
           continue;
         }
-        
+
         // Process new images
         const processedImages = changes.images.map((img, idx) => ({
           url: img.url || img,
@@ -2653,10 +2380,10 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
           isPrimary: img.isPrimary || false,
           sortOrder: existingImages.length + idx
         }));
-        
+
         updatePayload.images = [...existingImages, ...processedImages];
       }
-      
+
       // Video handling
       if (Array.isArray(changes.videos)) {
         const existingVideos = existing.videoUrls || [];
@@ -2664,21 +2391,21 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
         updatePayload.videoUrls = [...existingVideos, ...newVideoUrls];
         delete updatePayload.videos;
       }
-      
+
       // Perform the update
       const updatedProduct = await Product.findByIdAndUpdate(
-        id, 
-        updatePayload, 
+        id,
+        updatePayload,
         { new: true, runValidators: true }
       ).populate('categoryId', 'name slug')
-      .populate('pricingId');
-      
+        .populate('pricingId');
+
       if (!updatedProduct) {
         itemRes.error = 'Product not found after update';
         results.push(itemRes);
         continue;
       }
-      
+
       // Update related data if provided
       if (changes.pricing && updatedProduct.pricingId) {
         try {
@@ -2691,7 +2418,7 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
           logger.warn(`Failed to update pricing for product ${id}:`, err.message);
         }
       }
-      
+
       if (changes.inventory || changes.stock) {
         try {
           const stockData = changes.inventory || changes.stock;
@@ -2704,7 +2431,7 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
           logger.warn(`Failed to update stock for product ${id}:`, err.message);
         }
       }
-      
+
       // Create audit entry
       try {
         await ProductAudit.create({
@@ -2718,25 +2445,25 @@ const bulkUpdateProducts = asyncHandler(async (req, res) => {
       } catch (err) {
         logger.warn(`Failed to create audit entry for product ${id}:`, err.message);
       }
-      
+
       itemRes.success = true;
       itemRes.data = updatedProduct;
       results.push(itemRes);
-      
+
     } catch (err) {
       itemRes.error = err.message || 'Update failed';
       results.push(itemRes);
     }
   }
-  
+
   // Invalidate caches asynchronously
   setImmediate(() => {
     scanDel('products:*').catch((err) => logger.error('Bulk update cache cleanup failed:', err));
   });
-  
+
   const successCount = results.filter(r => r.success).length;
   const failureCount = results.length - successCount;
-  
+
   res.status(207).json({
     success: true,
     message: `Bulk update completed: ${successCount} successful, ${failureCount} failed`,
@@ -2771,41 +2498,41 @@ const bulkDeleteProducts = asyncHandler(async (req, res) => {
         try {
           // Enhanced Cloudinary cleanup (best-effort)
           const { cloudinary } = require('../utils/uploadUtil');
-          
+
           const deleteOps = [];
-          
+
           // Delete product images
           if (product.images && product.images.length) {
             for (const img of product.images) {
               if (img.cloudinary_id) {
-                deleteOps.push(cloudinary.uploader.destroy(img.cloudinary_id).catch(() => {}));
+                deleteOps.push(cloudinary.uploader.destroy(img.cloudinary_id).catch(() => { }));
               }
             }
           }
-          
+
           // Delete QR/Barcode by specific IDs
           if (product.qrCloudinaryId) {
-            deleteOps.push(cloudinary.uploader.destroy(product.qrCloudinaryId).catch(() => {}));
+            deleteOps.push(cloudinary.uploader.destroy(product.qrCloudinaryId).catch(() => { }));
           }
           if (product.barcodeCloudinaryId) {
-            deleteOps.push(cloudinary.uploader.destroy(product.barcodeCloudinaryId).catch(() => {}));
+            deleteOps.push(cloudinary.uploader.destroy(product.barcodeCloudinaryId).catch(() => { }));
           }
-          
+
           // Fallback folder cleanup
           if (product.qrCodeUrl || product.barcodeUrl) {
-            deleteOps.push(cloudinary.api.delete_resources_by_prefix(`QrBar_Codes/${product._id}`).catch(() => {}));
+            deleteOps.push(cloudinary.api.delete_resources_by_prefix(`QrBar_Codes/${product._id}`).catch(() => { }));
           }
-          deleteOps.push(cloudinary.api.delete_resources_by_prefix(`products/${product._id}`).catch(() => {}));
-          
+          deleteOps.push(cloudinary.api.delete_resources_by_prefix(`products/${product._id}`).catch(() => { }));
+
           await Promise.all(deleteOps);
         } catch (e) { logger.warn('BulkDelete: cloud cleanup failed', e.message || e); }
 
         // Category stat decrement, cache invalidation and event
-        if (product.category) Category.updateOne({ _id: product.category }, { $inc: { 'statistics.totalProducts': -1 } }).catch(() => {});
-        delCache(`product:${id}`).catch(() => {});
-        delCache(`product:slug:${product.slug}`).catch(() => {});
-        scanDel('products:*').catch(() => {});
-        publishProductEvent('inventory.product.deleted', { _id: id, ...product }).catch(() => {});
+        if (product.category) Category.updateOne({ _id: product.category }, { $inc: { 'statistics.totalProducts': -1 } }).catch(() => { });
+        delCache(`product:${id}`).catch(() => { });
+        delCache(`product:slug:${product.slug}`).catch(() => { });
+        scanDel('products:*').catch(() => { });
+        publishProductEvent('inventory.product.deleted', { _id: id, ...product }).catch(() => { });
       });
 
     } catch (err) {
@@ -2817,6 +2544,36 @@ const bulkDeleteProducts = asyncHandler(async (req, res) => {
   res.status(207).json({ success: true, results });
 });
 
+
+const deleteAllProducts = asyncHandler(async (req, res) => {
+  try {
+    // Delete all products
+    await Product.deleteMany({});
+
+    // Delete related data to maintain integrity
+    await ProductStock.deleteMany({});
+    await ProductPricing.deleteMany({});
+    await ProductVariation.deleteMany({});
+    await ProductSpecs.deleteMany({});
+
+    // Clear all product-related cache
+    await scanDel('products:*');
+    await scanDel('product:*');
+
+    res.status(200).json({
+      success: true,
+      message: 'All products and related data (stocks, pricing, variations, specs) have been permanently deleted.'
+    });
+  } catch (error) {
+    logger.error('DeleteAllProducts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete all products',
+      error: error.message
+    });
+  }
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -2825,6 +2582,7 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
+  deleteAllProducts, // Export the new function
   updateInventory,
   getLowStockProducts,
   getScheduledProducts,

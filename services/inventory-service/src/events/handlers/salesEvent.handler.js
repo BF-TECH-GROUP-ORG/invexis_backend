@@ -6,7 +6,7 @@
 
 const Product = require('../../models/Product');
 const StockChange = require('../../models/StockChange');
-const { logger } = require('../../utils/logger');
+const logger = require('../../utils/logger');
 const { publishProductEvent } = require('../productEvents');
 const { processEventOnce } = require('../../utils/eventDeduplication');
 

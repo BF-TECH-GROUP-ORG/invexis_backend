@@ -7,14 +7,12 @@ const { initPublishers } = require("./events/producer");
 const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 const db = require("./config/db");
-
 const PORT = process.env.PORT || 9001;
 const app = express();
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 // Routes
 app.get("/", (req, res) => {
   res.json({ message: "Shop Service is running" });

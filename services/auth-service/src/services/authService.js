@@ -92,7 +92,7 @@ function formatTimeForComparison(date) {
 // ✅ Caching helpers - Optimized
 async function getCachedUser(userId, select = '-password -twoFASecret', populate = []) {
     const cacheKey = `user:${userId}`;
-    
+
     // Try Redis cache first (fast path)
     try {
         const cached = await redis.get(cacheKey);
@@ -102,18 +102,18 @@ async function getCachedUser(userId, select = '-password -twoFASecret', populate
     } catch (e) {
         // Redis error - continue to DB
     }
-    
+
     // DB fallback if not in cache
     let query = User.findById(userId).select(select).lean();
     if (populate && populate.length > 0) query = query.populate(populate);
-    
+
     const user = await query;
     if (!user) return null;
-    
+
     // ✅ Cache async (fire-and-forget, don't block)
     redis.set(cacheKey, JSON.stringify(user), 'EX', CACHE_TTLS.user)
-        .catch(() => {});
-    
+        .catch(() => { });
+
     return user;
 }
 
@@ -122,7 +122,7 @@ async function invalidateUserCache(userId) {
     return Promise.all([
         redis.del(`user:${userId}`),
         redis.del(`sessions:${userId}`)
-    ]).catch(() => {});
+    ]).catch(() => { });
 }
 
 async function rateLimit(key, max = 10, window = CACHE_TTLS.rateLimit) {
@@ -306,13 +306,13 @@ async function setupSubscribers() {
  */
 function invalidateUserCache(userId, cacheTypes = ['all']) {
     if (cacheTypes.includes('all') || cacheTypes.includes('user')) {
-        redis.del(`user:${userId}`).catch(() => {});
+        redis.del(`user:${userId}`).catch(() => { });
     }
     if (cacheTypes.includes('all') || cacheTypes.includes('sessions')) {
-        redis.del(`sessions:${userId}`).catch(() => {});
+        redis.del(`sessions:${userId}`).catch(() => { });
     }
     if (cacheTypes.includes('all') || cacheTypes.includes('consents')) {
-        redis.del(`consents:${userId}`).catch(() => {});
+        redis.del(`consents:${userId}`).catch(() => { });
     }
 }
 
@@ -321,8 +321,8 @@ function invalidateUserCache(userId, cacheTypes = ['all']) {
  * @param {String} companyId - Company ID to invalidate
  */
 function invalidateCompanyCache(companyId) {
-    redis.del(`company_workers:${companyId}`).catch(() => {});
-    redis.del(`company:${companyId}`).catch(() => {});
+    redis.del(`company_workers:${companyId}`).catch(() => { });
+    redis.del(`company:${companyId}`).catch(() => { });
 }
 
 // === Core Functions ===
@@ -369,7 +369,7 @@ async function register(data, options = {}) {
         const preference = new Preference({ userId: user._id, ...value.preferences });
         await preference.save();
         user.preferences = preference._id;
-        await user.save();
+        // Optimized: Deferred save to end of function
     }
 
     // Consent
@@ -389,9 +389,11 @@ async function register(data, options = {}) {
         });
         await consent.save();
         user.consent = consent._id;
-        await user.save();
+        // Optimized: Deferred save to end of function
 
-        await publishEvent('user.consent.accepted', { userId: user._id, consentId: consent._id, version: consent.version });
+        // Optimized: Fire-and-forget event
+        publishEvent('user.consent.accepted', { userId: user._id, consentId: consent._id, version: consent.version })
+            .catch(e => console.warn('Failed to publish user.consent.accepted:', e.message));
     }
 
     // Generate OTPs for verification & publish events (notification service handles sending based on role/details)
@@ -404,7 +406,8 @@ async function register(data, options = {}) {
 
         await redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications);
 
-        await publishEvent('verification.requested', {
+        // Optimized: Fire-and-forget event
+        publishEvent('verification.requested', {
             userId: user._id,
             type: 'email',
             details: { email: value.email },
@@ -413,7 +416,7 @@ async function register(data, options = {}) {
             lastName: user.lastName,
             otp: code, // Explicitly pass OTP for notification
             preferences: value.preferences || {} // Pass preferences
-        });
+        }).catch(e => console.warn('Failed to publish verification.requested (email):', e.message));
     }
     if (value.phone && !user.isPhoneVerified) {
         // Generate a 6-digit code
@@ -423,7 +426,8 @@ async function register(data, options = {}) {
 
         await redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications);
 
-        await publishEvent('verification.requested', {
+        // Optimized: Fire-and-forget event
+        publishEvent('verification.requested', {
             userId: user._id,
             type: 'phone',
             details: { phone: value.phone },
@@ -432,23 +436,29 @@ async function register(data, options = {}) {
             lastName: user.lastName,
             otp: code, // Explicitly pass OTP for notification
             preferences: value.preferences || {} // Pass preferences
-        });
+        }).catch(e => console.warn('Failed to publish verification.requested (phone):', e.message));
     }
 
     // Publish user.created event for company service to create company-user relationship
-    await publishUserEvent.created(user);
+    // Optimized: Fire-and-forget
+    publishUserEvent.created(user).catch(e => console.warn('Failed to publish user.created:', e.message));
 
-    // Role-specific events
-    await publishEvent('user.registered', { userId: user._id, role: user.role, email: user.email, phone: user.phone, firstName: user.firstName, lastName: user.lastName });
+    // Role-specific events (Fire-and-forget)
+    publishEvent('user.registered', { userId: user._id, role: user.role, email: user.email, phone: user.phone, firstName: user.firstName, lastName: user.lastName })
+        .catch(e => console.warn('Failed to publish user.registered:', e.message));
+
     if (user.role === 'customer') {
-        await publishEvent('customer.registered', { userId: user._id, firstName: user.firstName, lastName: user.lastName, phone: user.phone, email: user.email }); // Notification: OTP/welcome
+        publishEvent('customer.registered', { userId: user._id, firstName: user.firstName, lastName: user.lastName, phone: user.phone, email: user.email })
+            .catch(e => console.warn('Failed to publish customer.registered:', e.message)); // Notification: OTP/welcome
     } else {
-        await publishEvent('internal.user.registered', { userId: user._id, role: user.role, assignedDepartments: user.assignedDepartments, companies: user.companies, shops: user.shops }); // HR/audit
+        publishEvent('internal.user.registered', { userId: user._id, role: user.role, assignedDepartments: user.assignedDepartments, companies: user.companies, shops: user.shops })
+            .catch(e => console.warn('Failed to publish internal.user.registered:', e.message)); // HR/audit
     }
 
     // Tenancy event if assigned
     if (user.companies.length > 0 || user.shops.length > 0) {
-        await publishEvent('auth.user.tenancy.assigned', { userId: user._id, companies: user.companies, shops: user.shops });
+        publishEvent('auth.user.tenancy.assigned', { userId: user._id, companies: user.companies, shops: user.shops })
+            .catch(e => console.warn('Failed to publish auth.user.tenancy.assigned:', e.message));
     }
 
     // Cache
@@ -490,7 +500,18 @@ async function login(data, options = {}) {
 
         // Cached partial lookup, then full DB for password
         console.log('Looking up user with identifier:', value.identifier);
-        let user = await User.findOne({ $or: [{ email: value.identifier }, { phone: value.identifier }, { username: value.identifier }] }).select('+password');
+
+        // Optimize query based on identifier type to avoid $or scan
+        let query = {};
+        if (value.identifier.includes('@')) {
+            query = { email: value.identifier };
+        } else if (/^\+?[0-9]+$/.test(value.identifier)) {
+            query = { phone: value.identifier };
+        } else {
+            query = { username: value.identifier };
+        }
+
+        let user = await User.findOne(query).select('+password');
         console.log('User found:', user ? 'Yes' : 'No');
 
         // User not found or invalid status
@@ -507,69 +528,52 @@ async function login(data, options = {}) {
             };
         }
 
-        // ✅ Check if user has assigned companies and verify none are disabled
-        if (user.companies && user.companies.length > 0) {
-            // Cache key for disabled companies set
-            const disabledCompaniesKey = 'disabled:companies';
-            let disabledCompanies = await redis.smembers(disabledCompaniesKey);
-
-            // Check if any of user's companies are disabled
-            const hasDisabledCompany = user.companies.some(companyId =>
-                disabledCompanies.includes(companyId)
-            );
-
-            if (hasDisabledCompany) {
-                return {
-                    status: 403,
-                    message: 'Cannot login - your company has been disabled. Contact administrator.'
-                };
-            }
-        }
-
-        // ✅ Check if user has assigned shops and verify all are currently open
-        if (user.shops && user.shops.length > 0) {
-            const closedShops = [];
-
-            for (const shopId of user.shops) {
-                const shopHoursKey = `shop:hours:${shopId}`;
-                const cachedHours = await redis.get(shopHoursKey);
-
-                if (cachedHours) {
-                    // Hours cached in Redis
-                    const hours = JSON.parse(cachedHours);
-                    const { isOpen, message, nextOpenTime } = checkShopOpen(hours);
-
-                    if (!isOpen) {
-                        closedShops.push({
-                            shopId,
-                            message,
-                            nextOpenTime,
-                        });
-                    }
-                }
-                // If no cached hours, assume shop is always open (no restrictions)
-            }
-
-            if (closedShops.length > 0) {
-                const shopMessages = closedShops
-                    .map((s) => `${s.message}${s.nextOpenTime ? ` (opens ${s.nextOpenTime.toLocaleTimeString()})` : ''}`)
-                    .join('; ');
-
-                return {
-                    status: 423, // 423 Locked (similar to account locked)
-                    message: `Cannot login - your shop is currently closed. ${shopMessages}`,
-                    blockedReason: 'shop_closed',
-                    closedShops,
-                };
-            }
-        }
-
         // Account locked
         if (user.lockUntil && user.lockUntil > new Date()) {
             return { status: 423, message: 'Account locked' };
         }
 
-        const passwordMatch = await comparePassword(value.password, user.password);
+        // ✅ Parallelize Checks: Password, Company Status, Shop Hours
+        const passwordPromise = comparePassword(value.password, user.password);
+
+        const companyCheckPromise = (async () => {
+            if (user.companies && user.companies.length > 0) {
+                const disabledCompaniesKey = 'disabled:companies';
+                const disabledCompanies = await redis.smembers(disabledCompaniesKey);
+                if (user.companies.some(cid => disabledCompanies.includes(cid))) {
+                    return { error: { status: 403, message: 'Cannot login - your company has been disabled.' } };
+                }
+            }
+            return null;
+        })();
+
+        const shopCheckPromise = (async () => {
+            if (user.shops && user.shops.length > 0) {
+                const shopHoursPromises = user.shops.map(async (shopId) => {
+                    const cachedHours = await redis.get(`shop:hours:${shopId}`);
+                    return { shopId, cachedHours };
+                });
+                const results = await Promise.all(shopHoursPromises);
+                const closedShops = [];
+                for (const { shopId, cachedHours } of results) {
+                    if (cachedHours) {
+                        const { isOpen, message, nextOpenTime } = checkShopOpen(JSON.parse(cachedHours));
+                        if (!isOpen) closedShops.push({ shopId, message, nextOpenTime });
+                    }
+                }
+                if (closedShops.length > 0) {
+                    const msg = closedShops.map(s => `${s.message}${s.nextOpenTime ? ` (opens ${s.nextOpenTime.toLocaleTimeString()})` : ''}`).join('; ');
+                    return { error: { status: 423, message: `Cannot login - your shop is currently closed. ${msg}`, blockedReason: 'shop_closed', closedShops } };
+                }
+            }
+            return null;
+        })();
+
+        // Wait for all checks
+        const [passwordMatch, companyCheck, shopCheck] = await Promise.all([passwordPromise, companyCheckPromise, shopCheckPromise]);
+
+        if (companyCheck && companyCheck.error) return companyCheck.error;
+        if (shopCheck && shopCheck.error) return shopCheck.error;
 
         if (!passwordMatch) {
             console.log('Password mismatch - incrementing failed attempts');
@@ -579,7 +583,7 @@ async function login(data, options = {}) {
             }
             // ✅ Fire-and-forget: Don't await user save on failed login
             user.save().catch(err => console.warn('Failed to save user on login failure:', err.message));
-            await invalidateUserCache(user._id);
+            invalidateUserCache(user._id); // Fire-and-forget
             console.log('Failed login attempts:', user.failedLoginAttempts);
             return { status: 401, message: 'Invalid credentials' };
         }
@@ -593,36 +597,54 @@ async function login(data, options = {}) {
             method = '2fa';
         }
 
-        // ✅ Prepare all updates in parallel
-        user.failedLoginAttempts = 0;
-        user.lastLoginAt = new Date();
-        
-        // ✅ Create session and history in parallel, don't await yet
-        const sessionPromise = tokenService.createSession(user._id, options.device, options.ip, options.location);
-        const historyPromise = LoginHistory.create({ 
-            userId: user._id, 
-            ip: options.ip, 
-            device: options.device, 
-            location: options.location, 
-            method, 
-            successful: true, 
-            riskScore: 0 
-        });
+        // ✅ Create session (Required for token)
+        const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
 
-        // ✅ Wait for session and history creation
-        const [{ refreshToken, session }, history] = await Promise.all([sessionPromise, historyPromise]);
+        // ✅ Fire-and-forget: Login History & User Update
+        // We don't need to wait for these to return the response
+        (async () => {
+            try {
+                const history = await LoginHistory.create({
+                    userId: user._id,
+                    ip: options.ip,
+                    device: options.device,
+                    location: options.location,
+                    method,
+                    successful: true,
+                    riskScore: 0
+                });
 
-        // ✅ Batch user updates: push both session and history in single save
-        user.sessions.push(session._id);
-        user.loginHistory.push(history._id);
-        await user.save();
+                await User.updateOne(
+                    { _id: user._id },
+                    {
+                        $set: {
+                            failedLoginAttempts: 0,
+                            lastLoginAt: new Date()
+                        },
+                        $push: {
+                            sessions: session._id,
+                            loginHistory: {
+                                $each: [history._id],
+                                $slice: -50
+                            }
+                        }
+                    }
+                );
+            } catch (bgError) {
+                console.error('Background login update failed:', bgError.message);
+            }
+        })();
+
+        // Update local user object for response (since we didn't save it)
+        if (user.sessions) user.sessions.push(session._id);
+        // Note: We don't push to loginHistory here as it's created in background and not needed for response
 
         // ✅ Fire-and-forget: Cache invalidation and event publishing don't block response
-        invalidateUserCache(user._id)
-            // .catch(err => console.warn('Cache invalidation failed:', err.message));
+        invalidateUserCache(user._id);
+        // .catch(err => console.warn('Cache invalidation failed:', err.message));
 
         publishEvent('user.logged_in', { userId: user._id, role: user.role, method, ip: options.ip, device: options.device })
-            // .catch(err => console.warn('Event publish failed:', err.message));
+        // .catch(err => console.warn('Event publish failed:', err.message));
 
         // ✅ Return user object without additional DB lookup (already in memory)
         // Remove sensitive fields from in-memory user object
@@ -632,7 +654,13 @@ async function login(data, options = {}) {
 
         return {
             ok: true,
-            accessToken: tokenService.signAccess({ sub: user._id.toString() }),
+            accessToken: tokenService.signAccess({
+                sub: user._id.toString(),
+                role: user.role,
+                email: user.email,
+                companies: user.companies,
+                shops: user.shops
+            }),
             refreshToken: refreshToken,
             user: userResponse
         };
@@ -667,17 +695,17 @@ async function logout(userId, refreshToken) {
             tokenService.revokeSessionByRefresh(refreshToken)
                 .catch(err => console.warn(`Session revoke failed: ${err.message}`));
         }
-        
+
         if (userId) {
             // Fire-and-forget cache invalidation
             invalidateUserCache(userId)
                 .catch(err => console.warn(`Cache cleanup failed: ${err.message}`));
-            
+
             // Fire-and-forget event publishing
             publishEvent('user.logged_out', { userId })
                 .catch(err => console.warn('Event publish failed:', err.message));
         }
-        
+
         // Return immediately - all cleanup happens in background
         return { message: 'Logged out successfully' };
     } catch (err) {
@@ -698,9 +726,9 @@ async function logoutAll(userId) {
                 { revoked: true }
             ).catch(err => console.warn('Session revoke failed:', err.message))
         ]);
-        
+
         const revokedCount = sessions.length;
-        
+
         // ✅ Parallel invalidations + update (fire-and-forget where possible)
         const promises = [
             User.findByIdAndUpdate(
@@ -710,24 +738,24 @@ async function logoutAll(userId) {
             ),
             invalidateUserCache(userId)
         ];
-        
+
         // ✅ Cache deletion in background (fire-and-forget)
         if (revokedCount > 0) {
             redis.del(...sessions.map(s => `session:${s._id}`))
                 .catch(err => console.warn('Cache cleanup failed:', err.message));
         }
-        
+
         // ✅ Event publishing fire-and-forget
-        publishEvent('user.logged_out_all_devices', { 
+        publishEvent('user.logged_out_all_devices', {
             userId,
             revokedCount,
             timestamp: new Date()
         }).catch(err => console.warn('Event publish failed:', err.message));
-        
+
         // Wait only for critical operations
         await Promise.all(promises);
-        
-        return { 
+
+        return {
             message: `Logged out from all ${revokedCount} device(s) successfully`,
             revokedCount
         };
@@ -1157,7 +1185,7 @@ async function checkConsentCompliance(termsVer, privacyVer) {
 async function getSessions(userId) {
     // Get all active (non-revoked) sessions for user
     const cacheKey = `sessions:${userId}`;
-    
+
     // Try cache first
     try {
         const cached = await redis.get(cacheKey);
@@ -1168,12 +1196,12 @@ async function getSessions(userId) {
     } catch (e) {
         console.warn('Redis get failed (non-blocking):', e && e.message);
     }
-    
+
     // DB fallback
     const sessions = await Session.find({ userId, revoked: false })
         .select('-refreshTokenHash') // Don't expose token hashes
         .sort({ lastActiveAt: -1 });
-    
+
     const sessionData = sessions.map(s => ({
         _id: s._id,
         deviceId: s.deviceId,
@@ -1182,10 +1210,10 @@ async function getSessions(userId) {
         lastActiveAt: s.lastActiveAt,
         createdAt: s.createdAt
     }));
-    
+
     // Cache for 5 minutes
-    redis.set(cacheKey, JSON.stringify(sessionData), 'EX', 300).catch(() => {});
-    
+    redis.set(cacheKey, JSON.stringify(sessionData), 'EX', 300).catch(() => { });
+
     return { sessions: sessionData };
 }
 
@@ -1194,50 +1222,50 @@ async function revokeSession(userId, sessionId) {
     try {
         // Mark session as revoked
         const session = await Session.findByIdAndUpdate(
-            sessionId, 
+            sessionId,
             { revoked: true },
             { new: true }
         );
-        
+
         if (!session) {
-            return { 
-                ok: false, 
-                status: 404, 
-                message: 'Session not found' 
+            return {
+                ok: false,
+                status: 404,
+                message: 'Session not found'
             };
         }
-        
+
         // Verify session belongs to user
         if (session.userId.toString() !== userId.toString()) {
-            return { 
-                ok: false, 
-                status: 403, 
-                message: 'Unauthorized to revoke this session' 
+            return {
+                ok: false,
+                status: 403,
+                message: 'Unauthorized to revoke this session'
             };
         }
-        
+
         // Remove session from user's sessions array
         await User.findByIdAndUpdate(
             userId,
             { $pull: { sessions: sessionId } }
         );
-        
+
         // Clear session from cache
         await redis.del(`session:${sessionId}`);
-        
+
         // Invalidate user cache
         await invalidateUserCache(userId);
-        
+
         // Publish event
-        await publishEvent('user.session.revoked', { 
-            userId, 
+        await publishEvent('user.session.revoked', {
+            userId,
             sessionId,
             timestamp: new Date()
         });
-        
-        return { 
+
+        return {
             ok: true,
-            message: 'Session revoked successfully' 
+            message: 'Session revoked successfully'
         };
     } catch (err) {
         console.error('Error revoking session:', err);
@@ -1248,7 +1276,7 @@ async function revokeSession(userId, sessionId) {
 // Get Consents
 async function getConsents(userId) {
     const cacheKey = `consents:${userId}`;
-    
+
     // Try cache first
     try {
         const cached = await redis.get(cacheKey);
@@ -1259,13 +1287,13 @@ async function getConsents(userId) {
     } catch (e) {
         console.warn('Redis get failed (non-blocking):', e && e.message);
     }
-    
+
     // DB fallback
     const consents = await Consent.find({ userId }).sort({ createdAt: -1 }).lean();
-    
+
     // Cache for 1 hour
-    redis.set(cacheKey, JSON.stringify(consents), 'EX', 3600).catch(() => {});
-    
+    redis.set(cacheKey, JSON.stringify(consents), 'EX', 3600).catch(() => { });
+
     return { consents };
 }
 
@@ -1278,7 +1306,7 @@ async function getCurrentUser(userId) {
 async function getUsers(adminId, role, query) {
     // Create cache key from role and query
     const cacheKey = `users:${role}:${JSON.stringify(query || {})}`;
-    
+
     // Try cache first
     try {
         const cached = await redis.get(cacheKey);
@@ -1289,18 +1317,31 @@ async function getUsers(adminId, role, query) {
     } catch (e) {
         console.warn('Redis get failed (non-blocking):', e && e.message);
     }
-    
+
     // DB fallback with index usage
     const q = query || {};
     const users = await User.find({ ...q, role }).select('-password -twoFASecret').limit(50).lean();
-    
+
     // Cache for 10 minutes
-    redis.set(cacheKey, JSON.stringify(users), 'EX', 600).catch(() => {});
-    
+    redis.set(cacheKey, JSON.stringify(users), 'EX', 600).catch(() => { });
+
     return { users };
 }
 async function createUser(adminId, data) { return { message: 'Use register' }; } // admins should use register or internal
 async function updateUser(adminId, userId, data) {
+    // Handle preferences separately because it's a referenced document
+    if (data.preferences && typeof data.preferences === 'object') {
+        let pref = await Preference.findOne({ userId });
+        if (!pref) {
+            pref = new Preference({ userId });
+        }
+        Object.assign(pref, data.preferences);
+        await pref.save();
+
+        // Use the preference ID for the user update
+        data.preferences = pref._id;
+    }
+
     const u = await User.findByIdAndUpdate(userId, data, { new: true });
     await invalidateUserCache(userId);
     return { user: u };
@@ -1415,7 +1456,7 @@ async function acceptConsent(userId, data) {
 // Get company workers
 async function getCompanyWorkers(companyId) {
     const cacheKey = `company_workers:${companyId}`;
-    
+
     // Try cache first
     try {
         const cached = await redis.get(cacheKey);
@@ -1426,7 +1467,7 @@ async function getCompanyWorkers(companyId) {
     } catch (e) {
         console.warn('Redis get failed (non-blocking):', e && e.message);
     }
-    
+
     // Find users with role 'worker' and the specific companyId in their companies array
     // Also ensuring they are not deleted
     const users = await User.find({
@@ -1436,8 +1477,8 @@ async function getCompanyWorkers(companyId) {
     }).select('-password -twoFASecret -loginHistory -sessions').lean(); // Exclude sensitive fields
 
     // Cache for 5 minutes
-    redis.set(cacheKey, JSON.stringify(users), 'EX', 300).catch(() => {});
-    
+    redis.set(cacheKey, JSON.stringify(users), 'EX', 300).catch(() => { });
+
     return users;
 }
 

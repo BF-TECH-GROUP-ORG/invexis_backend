@@ -24,31 +24,33 @@ const {
   triggerNewArrivalAlert
 } = require('../controllers/alertController');
 
+const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
+
 // Basic CRUD operations
-router.get('/', getAllAlerts);
-router.get('/unresolved', getUnresolvedAlerts);
-router.get('/:id', getAlertById);
-router.post('/', createAlert);
-router.put('/:id', updateAlert);
-router.delete('/:id', deleteAlert);
-router.patch('/:id/resolve', resolveAlert);
+router.get('/', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), getAllAlerts);
+router.get('/unresolved', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), getUnresolvedAlerts);
+router.get('/:id', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), getAlertById);
+router.post('/', authenticateToken, requireRole(['super_admin','company_admin']), createAlert);
+router.put('/:id', authenticateToken, requireRole(['super_admin','company_admin']), updateAlert);
+router.delete('/:id', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), deleteAlert);
+router.patch('/:id/resolve', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), resolveAlert);
 
 // Read/Unread operations
-router.patch('/:id/read', markAlertAsRead);
-router.patch('/:id/unread', markAlertAsUnread);
-router.patch('/bulk/read', markMultipleAlertsAsRead);
-router.get('/unread/alerts', getUnreadAlerts);
-router.get('/unread/count', getUnreadCount);
+router.patch('/:id/read', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), markAlertAsRead);
+router.patch('/:id/unread', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), markAlertAsUnread);
+router.patch('/bulk/read', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), markMultipleAlertsAsRead);
+router.get('/unread/alerts', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), getUnreadAlerts);
+router.get('/unread/count', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), getUnreadCount);
 
 // History and statistics
-router.get('/history/all', getAlertHistory);
-router.get('/stats/overview', getAlertStats);
+router.get('/history/all', authenticateToken, requireRole(['super_admin','company_admin']), getAlertHistory);
+router.get('/stats/overview', authenticateToken, requireRole(['super_admin','company_admin']), getAlertStats);
 
 // Smart Alert Triggers
-router.post('/trigger/new-arrival', triggerNewArrivalAlert);
-router.post('/trigger/daily-summary', generateDailySummary);
-router.post('/trigger/weekly-summary', generateWeeklySummary);
-router.post('/trigger/monthly-summary', generateMonthlySummary);
-router.post('/trigger/smart-checks', runSmartChecks);
+router.post('/trigger/new-arrival', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), triggerNewArrivalAlert);
+router.post('/trigger/daily-summary', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), generateDailySummary);
+router.post('/trigger/weekly-summary', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), generateWeeklySummary);
+router.post('/trigger/monthly-summary', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), generateMonthlySummary);
+router.post('/trigger/smart-checks', authenticateToken, requireRole(['super_admin','company_admin']), runSmartChecks);
 
 module.exports = router;

@@ -106,8 +106,9 @@ services:
 
   # PostgreSQL for analytics-service
   analytics-postgres:
-    image: postgres:15
+    image: timescale/timescaledb:latest-pg15
     container_name: invexis-analytics-postgres
+    command: ["postgres", "-c", "listen_addresses=*"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: invexis
@@ -623,6 +624,12 @@ services:
       DB_POSTGRES: postgresql://invexis:invexispass@analytics-postgres:5432/analyticsdb
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/analyticsdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
+      # Standard PG env vars for HealthChecker
+      PGHOST: analytics-postgres
+      PGUSER: invexis
+      PGPASSWORD: invexispass
+      PGDATABASE: analyticsdb
+      PGPORT: 5432
     volumes:
       - ./shared:/app/shared
       - ./services/analytics-service:/app

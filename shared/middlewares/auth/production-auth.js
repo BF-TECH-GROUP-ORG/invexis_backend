@@ -40,17 +40,41 @@ function verifyJWT(token) {
       audience: 'invexis-apps'
     });
   } catch (err) {
-    logger.warn('JWT verification failed', { error: err.message });
+    logger.warn('JWT verification failed', {
+      error: err.message,
+      expiredAt: err.expiredAt,
+      currentServerTime: new Date().toISOString(),
+      secretDefined: !!JWT_ACCESS_SECRET
+    });
+    // Temporary console log for immediate visibility in terminal
+    console.error(`[JWT DEBUG] Failed: ${err.message}`);
+    if (err.expiredAt) console.error(`[JWT DEBUG] Expired At: ${err.expiredAt} vs Now: ${new Date().toISOString()}`);
+    if (!JWT_ACCESS_SECRET) console.error(`[JWT DEBUG] FATAL: JWT_ACCESS_SECRET is missing!`);
+
     return null;
   }
 }
 
+// Helper to safely get the User model (if running in Auth Service with Mongoose)
+let User = null;
+try {
+  // Only auth-service has mongoose and the User model registered
+  // wrapped in try-catch because other services (like shop-service) might not have mongoose installed
+  const mongoose = require('mongoose');
+  if (mongoose.models && mongoose.models.User) {
+    User = mongoose.models.User;
+    logger.info('ProductionAuth: Local User model detected - using direct DB access');
+  }
+} catch (e) {
+  // Mongoose not available or User model not registered - standard for non-auth services
+}
+
 /**
- * Fetch user from auth service with Redis caching
+ * Fetch user from auth with Redis caching or local DB (if available)
  */
 async function fetchUserData(userId, accessToken) {
   const cacheKey = `user:${userId}`;
-  
+
   try {
     // Try Redis cache first
     const cached = await redis.get(cacheKey);
@@ -59,26 +83,53 @@ async function fetchUserData(userId, accessToken) {
       return JSON.parse(cached);
     }
 
-    // Fetch from auth service
-    const response = await axios.get(`${AUTH_SERVICE_URL}/auth/me`, {
-      headers: { 
-        Authorization: `Bearer ${accessToken}`,
-        'X-Gateway-Request': 'true'
-      },
-      timeout: 5000
-    });
 
-    const userData = response.data.user;
-    
+    let userData;
+
+    // Use local DB if available (prevents infinite loop in auth-service)
+    if (User) {
+      // We are in auth-service, use direct DB access
+      const userDoc = await User.findById(userId).lean();
+      if (userDoc) {
+        // sanitize (similar to what API returns)
+        userData = {
+          _id: userDoc._id,
+          email: userDoc.email,
+          firstName: userDoc.firstName,
+          lastName: userDoc.lastName,
+          role: userDoc.role,
+          requiresProfileCompletion: userDoc.requiresProfileCompletion,
+          isEmailVerified: userDoc.isEmailVerified,
+          companies: userDoc.companies || [],
+          shops: userDoc.shops || [],
+          permissions: userDoc.permissions || []
+        };
+      }
+    } else {
+      // We are in another service, fetch from auth service API
+      const response = await axios.get(`${AUTH_SERVICE_URL}/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'X-Gateway-Request': 'true'
+        },
+        timeout: 5000
+      });
+      userData = response.data.user;
+    }
+
+    if (!userData) {
+      throw new Error('User not found');
+    }
+
     // Cache for 5 minutes
     await redis.set(cacheKey, JSON.stringify(userData), 'EX', REDIS_TTL);
-    
-    logger.debug('User data fetched from auth service', { userId });
+
+    logger.debug('User data fetched', { userId, source: User ? 'db' : 'api' });
     return userData;
-    
+
   } catch (error) {
-    logger.error('Failed to fetch user data', { 
-      userId, 
+    logger.error('Failed to fetch user data', {
+      userId,
       error: error.message,
       status: error.response?.status
     });
@@ -92,20 +143,28 @@ async function fetchUserData(userId, accessToken) {
 function extractToken(req) {
   // Bearer token from Authorization header
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.slice(7);
+  if (authHeader) {
+    const parts = authHeader.split(' ');
+    // Handle "Bearer <token>" format case-insensitively
+    if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
+      return parts[1];
+    }
+    // Handle situations where just the token might be sent in Authorization (fallback)
+    if (parts.length === 1 && parts[0].length > 20) {
+      return parts[0];
+    }
   }
-  
-  // Token from query parameter (for websockets)
+
+  // Token from query parameter (for websockets or special access)
   if (req.query.token) {
     return req.query.token;
   }
-  
+
   // Token from custom header
   if (req.headers['x-access-token']) {
     return req.headers['x-access-token'];
   }
-  
+
   return null;
 }
 
@@ -116,7 +175,7 @@ function extractToken(req) {
 const authenticateToken = async (req, res, next) => {
   try {
     const token = extractToken(req);
-    
+
     if (!token) {
       throw new AuthenticationError('Access token required', 'MISSING_TOKEN');
     }
@@ -144,15 +203,15 @@ const authenticateToken = async (req, res, next) => {
     req.user = userData;
     req.token = token;
     req.decodedToken = decoded;
-    
-    logger.info('User authenticated', { 
-      userId: userData.id || userData._id, 
+
+    logger.info('User authenticated', {
+      userId: userData.id || userData._id,
       email: userData.email,
       role: userData.role
     });
-    
+
     next();
-    
+
   } catch (error) {
     if (error instanceof AuthenticationError || error instanceof AuthorizationError) {
       return res.status(error.statusCode).json({
@@ -161,7 +220,7 @@ const authenticateToken = async (req, res, next) => {
         code: error.code
       });
     }
-    
+
     logger.error('Authentication error', { error: error.message });
     res.status(500).json({
       success: false,
@@ -176,11 +235,11 @@ const authenticateToken = async (req, res, next) => {
  */
 const optionalAuth = async (req, res, next) => {
   const token = extractToken(req);
-  
+
   if (!token) {
     return next(); // Continue without auth
   }
-  
+
   try {
     const decoded = verifyJWT(token);
     if (decoded) {
@@ -194,7 +253,7 @@ const optionalAuth = async (req, res, next) => {
   } catch (error) {
     logger.warn('Optional auth failed', { error: error.message });
   }
-  
+
   next();
 };
 
@@ -210,22 +269,22 @@ const requireRole = (...allowedRoles) => {
         code: 'AUTH_REQUIRED'
       });
     }
-    
+
     const userRole = req.user.role;
     if (!allowedRoles.includes(userRole)) {
-      logger.warn('Insufficient role', { 
+      logger.warn('Insufficient role', {
         userId: req.user.id,
         userRole,
         requiredRoles: allowedRoles
       });
-      
+
       return res.status(403).json({
         success: false,
         error: `Insufficient privileges. Required: ${allowedRoles.join(', ')}`,
         code: 'INSUFFICIENT_ROLE'
       });
     }
-    
+
     next();
   };
 };
@@ -241,9 +300,9 @@ const requireCompanyAccess = (req, res, next) => {
       code: 'AUTH_REQUIRED'
     });
   }
-  
+
   const companyId = req.params.companyId || req.body.companyId || req.query.companyId;
-  
+
   if (!companyId) {
     return res.status(400).json({
       success: false,
@@ -251,27 +310,27 @@ const requireCompanyAccess = (req, res, next) => {
       code: 'MISSING_COMPANY_ID'
     });
   }
-  
+
   // Check if user belongs to company
   const userCompanies = req.user.companies || [];
-  const hasAccess = userCompanies.some(company => 
+  const hasAccess = userCompanies.some(company =>
     company === companyId || company.toString() === companyId
   );
-  
+
   if (!hasAccess) {
-    logger.warn('Company access denied', { 
+    logger.warn('Company access denied', {
       userId: req.user.id,
       companyId,
       userCompanies
     });
-    
+
     return res.status(403).json({
       success: false,
       error: 'Access denied for this company',
       code: 'COMPANY_ACCESS_DENIED'
     });
   }
-  
+
   req.companyId = companyId;
   next();
 };
@@ -288,26 +347,26 @@ const requirePermission = (...requiredPermissions) => {
         code: 'AUTH_REQUIRED'
       });
     }
-    
+
     const userPermissions = req.user.permissions || [];
-    const hasPermission = requiredPermissions.some(permission => 
+    const hasPermission = requiredPermissions.some(permission =>
       userPermissions.includes(permission)
     );
-    
+
     if (!hasPermission) {
-      logger.warn('Permission denied', { 
+      logger.warn('Permission denied', {
         userId: req.user.id,
         userPermissions,
         requiredPermissions
       });
-      
+
       return res.status(403).json({
         success: false,
         error: `Missing required permissions: ${requiredPermissions.join(', ')}`,
         code: 'INSUFFICIENT_PERMISSIONS'
       });
     }
-    
+
     next();
   };
 };

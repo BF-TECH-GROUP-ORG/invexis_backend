@@ -45,13 +45,13 @@ const {
   websocketProxy,
 } = require("./routes/proxy");
 const { limiter, authLimiter } = require("./utils/rateLimiter");
-// const { connect } = require("/app/shared/redis.js");
+const redisClient = require("/app/shared/redis");
 const { initSubscriptionEventConsumer, createCacheInvalidationEndpoint } = require("./events/subscriptionEventConsumer");
 
 const app = express();
 
-// Initialize Redis for subscription/rate limit caching
-// connect();
+// Redis is initialized via require("/app/shared/redis")
+
 
 // Security middleware
 app.use(helmet()); // Set security HTTP headers
@@ -190,6 +190,25 @@ app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);
   next();
 });
+const allowedOrigins = ["http://localhost:3000", "https://yourdomain.com"];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
 
 // Health check and custom routes (no auth required)
 app.use("/", routes);
@@ -228,9 +247,9 @@ app.use("/socket.io", websocketProxy);
 
 // General websocket routes
 app.use("/api/websocket", websocketProxy);
- /**
+/**
 these routes will be applied when uncommented during freemium implementation
- * app.use("/api/auth", authLimiter, authProxy);
+* app.use("/api/auth", authLimiter, authProxy);
 
 // Protected services (require authentication - enforced by services themselves)
 app.use("/api/company", companyProxy);
@@ -251,19 +270,19 @@ app.use("/socket.io", websocketProxy);
 app.use("/api/websocket", websocketProxy);
 
 */
- app.use("/api/auth", authLimiter, authProxy);
+app.use("/api/auth", authLimiter, authProxy);
 
-// Protected services (require JWT authentication at gateway level)
-app.use("/api/company", authenticateToken, companyProxy);
-app.use("/api/shop", authenticateToken, shopProxy);
-app.use("/api/inventory", authenticateToken, inventoryProxy);
-app.use("/api/sales", authenticateToken, salesProxy);
-app.use("/api/payment", authenticateToken, paymentProxy);
-app.use("/api/ecommerce", authenticateToken, ecommerceProxy);
-app.use("/api/notification", authenticateToken, notificationProxy);
-app.use("/api/analytics", authenticateToken, analyticsProxy);
+// Protected services (require authentication - enforced by services themselves)
+app.use("/api/company", companyProxy);
+app.use("/api/shop", shopProxy);
+app.use("/api/inventory", inventoryProxy);
+app.use("/api/sales", salesProxy);
+app.use("/api/payment", paymentProxy);
+app.use("/api/ecommerce", ecommerceProxy);
+app.use("/api/notification", notificationProxy);
+app.use("/api/analytics", analyticsProxy);
 app.use("/api/audit", authenticateToken, auditProxy);
-app.use("/api/debt", authenticateToken, debtProxy);
+app.use("/api/debt", debtProxy);
 
 // Socket.IO specific routes (add these before other websocket routes)
 app.use("/socket.io", websocketProxy);

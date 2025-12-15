@@ -10,7 +10,7 @@ const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const ACCESS_TTL = process.env.ACCESS_TTL || 'm';
 const REFRESH_TTL = process.env.REFRESH_TTL || '30d';
-const CACHE_TTLS = { session: 1800 }; // 30min
+const CACHE_TTLS = { session: 9000 }; // 2.5h
 
 // Sign/Verify (unchanged, but add issuer/audience)
 function signAccess(payload) {
@@ -41,21 +41,29 @@ async function verifyRefresh(token) {
 async function createSession(userId, deviceId = 'unknown', ip, location = {}) {
     const raw = require('crypto').randomBytes(64).toString('hex');
     const hashed = hashToken(raw);
-    const session = await Session.create({
+
+    // Optimistic creation - Generate ID and object in memory
+    const session = new Session({
         userId,
         refreshTokenHash: hashed,
         deviceId,
         ip,
         location
     });
+
     const refreshjwt = signRefresh({ sid: session._id.toString(), uid: userId.toString() });
 
-    // Cache session
+    // Cache session - Fire and forget
     const cacheKey = `session:${session._id}`;
-    await redis.set(cacheKey, JSON.stringify({ ...session.toObject(), raw }), 'EX', CACHE_TTLS.session);
+    redis.set(cacheKey, JSON.stringify({ ...session.toObject(), raw }), 'EX', CACHE_TTLS.session)
+        .catch(err => console.error('Failed to cache session:', err.message));
 
-    // Event
-    await publishRabbitMQ(exchanges.topic, 'auth.session.created', { sessionId: session._id, userId, deviceId, ip }, { headers: { traceId: uuidv4() } });
+    // DB Save - Fire and forget (Optimistic)
+    session.save().catch(err => console.error('Failed to save session to DB:', err.message));
+
+    // Event - Fire and forget
+    publishRabbitMQ(exchanges.topic, 'auth.session.created', { sessionId: session._id, userId, deviceId, ip }, { headers: { traceId: uuidv4() } })
+        .catch(err => console.error('Failed to publish auth.session.created:', err.message));
 
     return { refreshToken: refreshjwt, session, raw };
 }
@@ -90,7 +98,13 @@ async function refreshTokens(refreshToken) {
     const user = await User.findById(uid);
     if (!user) throw new Error("User not found");
 
-    const accessToken = signAccess({ sub: user._id.toString() });
+    const accessToken = signAccess({
+        sub: user._id.toString(),
+        role: user.role,
+        email: user.email,
+        companies: user.companies,
+        shops: user.shops
+    });
     const newRefreshToken = signRefresh({
         sid: session._id.toString(),
         uid: user._id.toString(),

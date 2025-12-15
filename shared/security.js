@@ -286,14 +286,34 @@ class SecurityManager {
     
     // Remove NoSQL injection attempts (if available)
     if (mongoSanitize) {
-      middlewares.push(mongoSanitize());
+      middlewares.push((req, res, next) => {
+        try {
+          mongoSanitize()(req, res, next);
+        } catch (err) {
+          if (err instanceof TypeError && err.message.includes('Cannot set property query')) {
+            // Ignore Express 5 compatibility issue with express-mongo-sanitize
+            return next();
+          }
+          next(err);
+        }
+      });
     } else {
       this.logger.warn('express-mongo-sanitize not available, skipping NoSQL injection protection');
     }
     
     // Clean user input from malicious HTML (if available)
     if (xss) {
-      middlewares.push(xss());
+      middlewares.push((req, res, next) => {
+        try {
+          xss()(req, res, next);
+        } catch (err) {
+          if (err instanceof TypeError && err.message.includes('Cannot set property query')) {
+            // Ignore Express 5 compatibility issue with xss-clean
+            return next();
+          }
+          next(err);
+        }
+      });
     } else {
       this.logger.warn('xss-clean not available, skipping XSS protection');
     }

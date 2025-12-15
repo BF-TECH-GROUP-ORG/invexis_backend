@@ -16,14 +16,14 @@ const logger = require('./logger');
 async function isEventProcessed(eventId, eventType) {
     try {
         const processed = await ProcessedEvent.findOne({
-            eventId,
-            eventType
+            key: eventId,
+            type: eventType
         });
 
         if (processed) {
             logger.warn(`🔄 Duplicate event detected and skipped`, {
-                eventId,
-                eventType,
+                key: eventId,
+                type: eventType,
                 processedAt: processed.processedAt
             });
             return true;
@@ -47,15 +47,15 @@ async function isEventProcessed(eventId, eventType) {
 async function markEventAsProcessed(eventId, eventType, metadata = {}) {
     try {
         const processedEvent = await ProcessedEvent.create({
-            eventId,
-            eventType,
+            key: eventId,
+            type: eventType,
             processedAt: new Date(),
-            metadata
+            payloadSummary: metadata
         });
 
         logger.debug(`✅ Event marked as processed`, {
-            eventId,
-            eventType
+            key: eventId,
+            type: eventType
         });
 
         return processedEvent;

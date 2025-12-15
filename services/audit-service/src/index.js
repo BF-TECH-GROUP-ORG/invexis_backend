@@ -1,6 +1,9 @@
 require('dotenv').config();
 const app = require('./app');
 const connectDB = require('./config/db');
+const consumeEvents = require('./events/consumer');
+const { initPublishers } = require('./events/producer');
+const { startOutboxDispatcher } = require('./workers/outboxDispatcher');
 
 let connectRabbitMQ, redis;
 try {
@@ -19,11 +22,11 @@ try {
     };
 }
 
-const PORT = process.env.PORT || 8005;
+const PORT = process.env.PORT || 8003;
 
 // Validate critical environment variables
 const requiredEnvVars = [
-    'MONGO_URI'
+    'DB_MONGO'
 ];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingEnvVars.length > 0) {
@@ -41,6 +44,11 @@ const startServer = async () => {
 
             // Connect to RabbitMQ
             await connectRabbitMQ();
+
+            // Initialize Event System
+            await consumeEvents();
+            await initPublishers();
+            await startOutboxDispatcher(5000);
 
             // Connect to Redis
             await redis.connect();
@@ -67,7 +75,7 @@ const startServer = async () => {
 const shutdown = async () => {
     console.log('Graceful shutdown initiated...');
     try {
-        await redis.quit();
+        await redis.close();
         console.log('Redis connection closed');
         console.log('Shutting down server');
         process.exit(0);

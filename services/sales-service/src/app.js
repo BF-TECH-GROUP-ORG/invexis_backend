@@ -21,7 +21,7 @@ try {
 // Import shared modules
 const HealthChecker = require('/app/shared/health');
 const { SecurityManager } = require('/app/shared/security');
-const Logger = require('/app/shared/logger');
+const { getLogger } = require('/app/shared/logger');
 const ErrorHandler = require('/app/shared/errorHandler');
 
 const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
@@ -32,11 +32,10 @@ const consumeEvents = require("./events/consumer");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 
 // Initialize logger
-const logger = Logger('sales-service');
+const logger = getLogger('sales-service');
 
-const salesRouter = require("./routes/SalesRoutes");
-const invoiceRouter = require("./routes/InvoiceRoutes");
-const knownUserRouter = require("./routes/KnownUserRoutes");
+const salesRouter = require("./routes");
+
 const PORT = process.env.PORT || 9000;
 
 const app = express();
@@ -80,7 +79,7 @@ if (mongoSanitize) {
             continue;
           }
           if (typeof value === 'object' && value !== null) {
-            sanitized[key] = Array.isArray(value) 
+            sanitized[key] = Array.isArray(value)
               ? value.map(item => sanitizeObj(item))
               : sanitizeObj(value);
           } else {
@@ -112,7 +111,7 @@ if (xss) {
             if (typeof value === 'string') {
               cleaned[key] = value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
             } else if (typeof value === 'object' && value !== null) {
-              cleaned[key] = Array.isArray(value) 
+              cleaned[key] = Array.isArray(value)
                 ? value.map(item => cleanObj(item))
                 : cleanObj(value);
             } else {
@@ -136,9 +135,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`, { 
-    ip: req.ip, 
-    userAgent: req.get('User-Agent') 
+  logger.info(`${req.method} ${req.path}`, {
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
   });
   next();
 });
@@ -167,9 +166,8 @@ app.get("/", (req, res) => {
 });
 
 // API Routes
-app.use("/known-users", knownUserRouter);
 app.use("/sales", salesRouter);
-app.use("/invoices", invoiceRouter);
+
 
 // Serve PDF files statically
 app.use("/invoices/pdf", express.static("storage/invoices"));

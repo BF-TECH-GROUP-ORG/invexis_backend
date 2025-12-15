@@ -90,7 +90,7 @@
   },
   "inventory": {
     "trackQuantity": true,
-    "quantity": 500,
+    "stockQty": 500,
     "lowStockThreshold": 20,
     "minReorderQty": 50,
     "allowBackorder": false,

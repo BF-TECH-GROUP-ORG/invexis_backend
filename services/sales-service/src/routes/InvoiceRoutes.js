@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const invoiceController = require("../controllers/InvoiceController");
+const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
 // const {
 //   checkSubscriptionActive,
 //   checkFeatureAccess,
@@ -39,22 +40,22 @@ const invoiceController = require("../controllers/InvoiceController");
 // );
 
 // Get invoice by ID
-router.get("/:invoiceId", invoiceController.getInvoice);
+router.get("/:invoiceId", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.getInvoice);
 
 // Get all invoices for a company
-router.get("/company/:companyId", invoiceController.getInvoicesByCompany);
+router.get("/company/:companyId", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.getInvoicesByCompany);
 
 // Generate PDF for invoice
-router.post("/:invoiceId/generate-pdf", invoiceController.generateInvoicePdf);
+router.post("/:invoiceId/generate-pdf", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.generateInvoicePdf);
 
 // View PDF in browser (inline)
-router.get("/:invoiceId/view-pdf", invoiceController.viewInvoicePdf);
+router.get("/:invoiceId/view-pdf", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.viewInvoicePdf);
 
 // Download PDF
-router.get("/pdf/:fileName", invoiceController.downloadInvoicePdf);
+router.get("/pdf/:fileName", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.downloadInvoicePdf);
 
 // Delete PDF
-router.delete("/:invoiceId/pdf", invoiceController.deleteInvoicePdf);
+router.delete("/:invoiceId/pdf", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.deleteInvoicePdf);
 
 module.exports = router;
 

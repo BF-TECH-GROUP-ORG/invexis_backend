@@ -269,11 +269,19 @@ class HealthChecker {
     const start = Date.now();
     try {
       const { Pool } = require('pg');
-      const pool = new Pool({
+      const config = {
         connectionTimeoutMillis: this.config.timeout,
         query_timeout: this.config.timeout,
         statement_timeout: this.config.timeout
-      });
+      };
+
+      if (process.env.DB_POSTGRES) {
+        config.connectionString = process.env.DB_POSTGRES;
+      } else if (process.env.DATABASE_URL) {
+        config.connectionString = process.env.DATABASE_URL;
+      }
+
+      const pool = new Pool(config);
 
       const client = await pool.connect();
       await client.query('SELECT 1');

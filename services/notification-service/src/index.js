@@ -58,7 +58,37 @@ try {
 }
 
 // Routes
-app.get("/", (req, res) => {
+// Health endpoint defined before API routes to prevent conflicts
+app.get("/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    service: "notification-service",
+  });
+});
+
+app.get("/ready", async (_req, res) => {
+  try {
+    const redisOk = redisClient.isConnected;
+
+    if (redisOk) {
+      res.json({ ready: true });
+    } else {
+      res.status(503).json({ ready: false, reason: "Dependencies not ready" });
+    }
+  } catch (error) {
+    res.status(503).json({ ready: false, error: error.message });
+  }
+});
+
+// Routes
+const notificationRoutes = require("./routes/notification");
+// Mount at specific api path AND root (for flexibility) AFTER health checks
+app.use("/api/notifications", notificationRoutes);
+app.use("/", notificationRoutes);
+
+
+app.get("/health", (_req, res) => {
   res.json({
     service: SERVICE_NAME,
     status: 'running',

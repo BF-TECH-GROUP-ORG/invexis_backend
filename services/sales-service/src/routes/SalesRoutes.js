@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const salesController = require("../controllers/SalesController");
+const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
 // cmd
 // Apply rate limiting to all sales routes
 // router.use(
@@ -28,6 +29,7 @@ const salesController = require("../controllers/SalesController");
 
 router.post(
   "/",
+  authenticateToken, requireRole(['super_admin','company_admin' ,'worker']),
   // checkFeatureAccess("sales", "internalStaffSales"),
   salesController.createSale
 );
@@ -35,20 +37,22 @@ router.post(
 // Returns
 router.post(
   "/return",
+  authenticateToken, requireRole(['super_admin','company_admin' ,'worker']),
   // checkFeatureAccess("sales", "internalStaffSales"),
   salesController.createReturn
 );
 
 // Reports & trends (specific routes first)
-router.get("/reports/sales", salesController.salesReport);
+router.get("/reports/sales", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), salesController.salesReport);
 router.get(
   "/reports/sales/customer/:knownUserId",
-  salesController.customerSalesReport
+  authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), salesController.customerSalesReport
 );
 
 // Trends - Pro tier only for advanced analytics
 router.get(
   "/trends/top-products",
+  authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
   // checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
   // checkSubscriptionTier("pro"),
   salesController.topSellingProducts
@@ -56,6 +60,7 @@ router.get(
 
 router.get(
   "/trends/revenue",
+  authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
   // checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
   // checkSubscriptionTier("pro"),
   salesController.revenueTrend
@@ -64,6 +69,7 @@ router.get(
 // Track purchases by customer (specific route)
 router.get(
   "/customer/:knownUserId",
+  authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
   // checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
   salesController.getCustomerPurchases
 );
@@ -71,6 +77,7 @@ router.get(
 // List all sales (company scoped)
 router.get(
   "/",
+  authenticateToken, requireRole(['super_admin','company_admin' ,'worker']),
   // checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
   salesController.listSales
 );
@@ -78,21 +85,25 @@ router.get(
 // Single sale operations - place last to avoid shadowing more specific routes
 router.get(
   "/:id",
+  authenticateToken, requireRole(['super_admin','company_admin' ,'worker']),
   // checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
   salesController.getSale
 );
 
 router.put(
   "/:id",
+  authenticateToken, requireRole(['super_admin','company_admin' ,'worker']),
   // checkFeatureAccess("sales", "internalStaffSales"),
   salesController.updateSale
 );
 
 // Update sale contents (customer info + items)
-router.put("/:id/contents", salesController.updateSaleContents);
+router.put("/:id/contents", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), salesController.updateSaleContents);
 
 router.delete(
+
   "/:id",
+  authenticateToken , requireRole(['super_admin' , "company_admin"]),
   // checkFeatureAccess("sales", "internalStaffSales"),
   salesController.deleteSale
 );

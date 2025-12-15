@@ -13,6 +13,8 @@ const stockRoutes = require("./stockRoutes");
 const organizationRoutes = require("./organizationRoutes");
 const shopInventoryRoutes = require("./shopInventoryRoutes");
 
+const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
+
 
 const router = express.Router();
 
@@ -21,28 +23,28 @@ router.get("/", (req, res) => {
 });
 
 // Legacy routes (keep for backward compatibility)
-router.use("/v1/products", productRoutes);
-router.use("/v1/discounts", discountRoutes);
-router.use("/v1/alerts", alertRoutes);
-router.use("/v1/categories", categoryRoutes);
-router.use("/v1/report", reportRoutes);
-router.use("/v1/inventory-adjustment", inventoryAdjustmentRoutes);
+router.use("/v1/products", authenticateToken, requireRole(['super_admin','company_admin' , 'worker']),productRoutes);
+router.use("/v1/discounts", authenticateToken, requireRole(['super_admin','company_admin']),discountRoutes);
+router.use("/v1/alerts", authenticateToken, requireRole(['super_admin','company_admin' , 'worker']),alertRoutes);
+router.use("/v1/categories", authenticateToken, requireRole(['super_admin','company_admin' , 'worker']),categoryRoutes);
+router.use("/v1/report", authenticateToken, requireRole(['super_admin','company_admin']),reportRoutes);
+router.use("/v1/inventory-adjustment", authenticateToken, requireRole(['super_admin','company_admin' , 'worker']),inventoryAdjustmentRoutes);
 router.use("/v1/stock", stockRoutes);
 
 
 // NEW: Advanced professional reporting (consolidated)
-router.use("/v1/reports", reportRoutes);
+router.use("/v1/reports", authenticateToken, requireRole(['super_admin','company_admin']),reportRoutes);
 
 // NEW: Analytics - profit, margin, forecasting
-router.use("/v1/analytics", analyticsRoutes);
+router.use("/v1/analytics", authenticateToken, requireRole(['super_admin','company_admin']),analyticsRoutes);
 
 // NEW: Dashboard configuration and customization
-router.use("/v1/dashboard", dashboardConfigRoutes);
+router.use("/v1/dashboard", authenticateToken, requireRole(['super_admin','company_admin']),dashboardConfigRoutes);
 
 // NEW: Organization routes (Company and Shop management)
-router.use("/v1", organizationRoutes);
+router.use("/v1", authenticateToken, requireRole(['super_admin','company_admin' , 'worker']),organizationRoutes);
 
 // NEW: Shop inventory management
-router.use("/v1/shop-inventory", shopInventoryRoutes);
+router.use("/v1/shop-inventory", authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), shopInventoryRoutes);
 
 module.exports = router
