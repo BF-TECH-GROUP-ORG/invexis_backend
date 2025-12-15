@@ -632,7 +632,13 @@ async function login(data, options = {}) {
 
         return {
             ok: true,
-            accessToken: tokenService.signAccess({ sub: user._id.toString() }),
+            accessToken: tokenService.signAccess({
+                sub: user._id.toString(),
+                role: user.role,
+                email: user.email,
+                companies: user.companies,
+                shops: user.shops
+            }),
             refreshToken: refreshToken,
             user: userResponse
         };

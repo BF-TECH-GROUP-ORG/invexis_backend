@@ -128,7 +128,14 @@ const googleCallback = async (req, res, next) => {
         );
 
         // Generate access token
-        const accessToken = tokenService.signAccess({ sub: req.user._id.toString() });
+        // Generate access token
+        const accessToken = tokenService.signAccess({
+            sub: req.user._id.toString(),
+            role: req.user.role,
+            email: req.user.email,
+            companies: req.user.companies,
+            shops: req.user.shops
+        });
 
         // Update user session
         req.user.sessions.push(session._id);
@@ -220,6 +227,14 @@ const logout = (req, res, next) => {
     try {
         const startTime = Date.now();
         const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+<<<<<<< HEAD
+        const userId = req.user ? req.user._id : null;
+
+        // Call logout service to revoke session
+        const result = await authService.logout(userId, refreshToken);
+
+        // Clear refresh token cookie
+=======
         const userId = req.userId; // ✅ Set by requireAuth (no DB lookup needed)
         
         console.log(`[LOGOUT] Starting logout for user ${userId}`);
@@ -229,21 +244,35 @@ const logout = (req, res, next) => {
         authService.logout(userId, refreshToken);
         
         // Clear cookies immediately (synchronous)
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+<<<<<<< HEAD
+
+        // Clear access token if in cookie
+=======
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+<<<<<<< HEAD
+
+        // Return success response
+        res.json({
+            ok: true,
+            message: result.message
+=======
         
         // Return immediately - SYNCHRONOUSLY
         res.json({ 
             ok: true, 
             message: 'Logged out successfully' 
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         });
         
         console.log(`[LOGOUT] Logout completed in ${Date.now() - startTime}ms`);
@@ -255,36 +284,62 @@ const logout = (req, res, next) => {
 // ✅ Logout from all devices/sessions - Optimized (SYNCHRONOUS - no async/await)
 const logoutAll = (req, res, next) => {
     try {
+<<<<<<< HEAD
+        const userId = req.user ? req.user._id : null;
+
+=======
         const userId = req.userId; // ✅ Set by requireAuth (no DB lookup needed)
         
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         if (!userId) {
             return res.status(401).json({
                 ok: false,
                 message: 'User not authenticated'
             });
         }
+<<<<<<< HEAD
+
+        const result = await authService.logoutAll(userId);
+
+        // Clear refresh token cookie
+=======
         
         // ✅ Fire-and-forget logout (don't await)
         // Note: logoutAll() returns Promise but we don't wait for it
         authService.logoutAll(userId);
         
         // Clear cookies immediately
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+<<<<<<< HEAD
+
+        // Clear access token if in cookie
+=======
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         res.clearCookie('accessToken', {
             httpOnly: true,
             secure: true,
             sameSite: 'strict'
         });
+<<<<<<< HEAD
+
+        // Return success response
+        res.json({
+            ok: true,
+            message: result.message,
+            revokedSessions: result.revokedCount
+=======
         
         // Return immediately - SYNCHRONOUSLY
         res.json({ 
             ok: true, 
             message: 'Logged out from all devices',
             revokedSessions: 0 // Unknown at response time
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
         });
     } catch (err) {
         next(err);
@@ -454,26 +509,26 @@ const getSessions = async (req, res, next) => {
 const revokeSession = async (req, res, next) => {
     try {
         const { sessionId } = req.params;
-        
+
         if (!sessionId) {
             return res.status(400).json({
                 ok: false,
                 message: 'sessionId parameter is required'
             });
         }
-        
+
         const result = await authService.revokeSession(req.user._id, sessionId);
-        
+
         if (!result.ok) {
             return res.status(result.status || 400).json({
                 ok: false,
                 message: result.message
             });
         }
-        
-        res.json({ 
-            ok: true, 
-            message: result.message 
+
+        res.json({
+            ok: true,
+            message: result.message
         });
     } catch (err) {
         next(err);

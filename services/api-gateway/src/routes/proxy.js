@@ -28,7 +28,12 @@ const createServiceProxy = (serviceName, serviceUrl, options = {}) => {
         proxyReq.setHeader("X-User-Id", req.user.id);
         proxyReq.setHeader("X-User-Email", req.user.email);
         proxyReq.setHeader("X-User-Role", req.user.role);
+<<<<<<< HEAD
+        if (req.user.companies) proxyReq.setHeader("X-User-Companies", JSON.stringify(req.user.companies));
+        if (req.user.shops) proxyReq.setHeader("X-User-Shops", JSON.stringify(req.user.shops));
+=======
         proxyReq.setHeader("X-Company-Id", req.user.companyId || "");
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
       }
 
       // Handle body for POST/PUT/PATCH
@@ -247,7 +252,7 @@ const analyticsProxy = createServiceProxy(
  * Routes: /api/audit/* → http://audit-service:8003/*
  */
 const auditProxy = createServiceProxy("AUDIT", services.AUDIT_SERVICE, {
-  pathRewrite: { "^/api/audit": "" },
+  pathRewrite: { "^/api/audit": "/audit" },
 });
 
 /**
@@ -273,7 +278,7 @@ const websocketProxy = createServiceProxy(
     // Add specific handling for Socket.IO
     onProxyReq: (proxyReq, req, res) => {
       console.log(`🔀 [WEBSOCKET] ${req.method} ${req.originalUrl} → ${services.WEBSOCKET_SERVICE}${req.url}`);
-      
+
       // Forward user info if available
       if (req.user) {
         proxyReq.setHeader("X-User-Id", req.user.id);

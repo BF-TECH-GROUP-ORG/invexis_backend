@@ -1,5 +1,5 @@
 const Order = require('../models/Order.models');
-const { publish, exchanges } = require('/app/shared/rabbitmq');
+const { emit } = require('../events/producer');
 
 async function listOrders(userId, opts = {}) {
     const q = { userId };
@@ -24,7 +24,7 @@ async function getOrder(orderId) {
 async function createOrder(userId, data) {
     const order = new Order(Object.assign({ userId }, data));
     await order.save();
-    try { await publish(exchanges.topic, 'ecommerce.order.created', order); } catch (e) { }
+    try { await emit('ecommerce.order.created', order); } catch (e) { }
     // invalidate order cache if any
     try { const cache = require('../utils/cache'); await cache.del(`order:${order._id}`); } catch (e) { }
     return order;
@@ -33,7 +33,7 @@ async function createOrder(userId, data) {
 async function updateOrder(orderId, patch) {
     const o = await Order.findByIdAndUpdate(orderId, { $set: patch }, { new: true });
     if (!o) throw new Error('not found');
-    try { await publish(exchanges.topic, 'ecommerce.order.updated', o); } catch (e) { }
+    try { await emit('ecommerce.order.updated', o); } catch (e) { }
     return o;
 }
 

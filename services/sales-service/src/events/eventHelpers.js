@@ -29,10 +29,14 @@ const saleEvents = {
           totalAmount: sale.totalAmount,
           status: sale.status,
           paymentStatus: sale.paymentStatus,
+          paymentMethod: sale.paymentMethod,
           items: items.map(item => ({
             productId: item.productId,
+            productName: item.productName,
+            category: item.category,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
+            costPrice: item.costPrice,
             total: item.total
           })),
           createdAt: new Date().toISOString(),

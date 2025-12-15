@@ -1,15 +1,35 @@
 {
   "name": "audit-service",
   "version": "1.0.0",
+<<<<<<< HEAD
+  "description": "Audit logging microservice",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+=======
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "test": "jest"
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
   },
   "dependencies": {
     "amqplib": "^0.10.3",
     "cors": "^2.8.5",
+<<<<<<< HEAD
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "ioredis": "^5.8.2",
+    "mongoose": "^8.0.0",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+=======
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-mongo-sanitize": "^2.2.0",
@@ -25,5 +45,6 @@
   "devDependencies": {
     "nodemon": "^3.1.10",
     "jest": "^29.7.0"
+>>>>>>> 883577be20e1755361bcb2d32d7d151da987ea2f
   }
 }

@@ -9,17 +9,16 @@ const stripeGateway = require('./gateways/stripeGateway');
 const mtnMomoGateway = require('./gateways/mtnMomoGateway');
 const airtelMoneyGateway = require('./gateways/airtelMoneyGateway');
 const mpesaGateway = require('./gateways/mpesaGateway');
+const { publishPaymentEvent } = require('../events/producer');
 const { GATEWAY_TYPES, PAYMENT_STATUS, TRANSACTION_TYPE, TRANSACTION_STATUS } = require('../utils/constants');
 
-// Optional: RabbitMQ and Redis for events and caching
-let redis, rabbitmq;
+// Optional: Redis for caching
+let redis;
 try {
     redis = require('/app/shared/redis');
-    rabbitmq = require('/app/shared/rabbitmq');
 } catch (error) {
-    console.warn('Shared services (Redis/RabbitMQ) not available, continuing without them');
+    console.warn('Shared services (Redis) not available, continuing without it');
     redis = null;
-    rabbitmq = null;
 }
 
 class PaymentService {
@@ -160,22 +159,15 @@ class PaymentService {
                 metadata: { gateway_response: gatewayResult }
             });
 
-            // Publish event to RabbitMQ (if available)
-            if (rabbitmq) {
-                try {
-                    await rabbitmq.publish(rabbitmq.exchanges.topic, 'payment.initiated', {
-                        payment_id: payment.payment_id,
-                        user_id,
-                        seller_id,
-                        amount,
-                        currency,
-                        gateway,
-                        timestamp: Date.now()
-                    }, { headers: { source: 'payment-service' } });
-                } catch (error) {
-                    console.warn('Failed to publish payment.initiated event:', error.message);
-                }
-            }
+            // Publish event
+            await publishPaymentEvent.processed({
+                id: payment.payment_id,
+                amount,
+                currency,
+                status: PAYMENT_STATUS.PROCESSING,
+                order_id,
+                metadata,
+            });
 
             return {
                 success: true,
@@ -191,21 +183,12 @@ class PaymentService {
             console.error('Payment initiation error:', error.message);
 
             // Publish failure event (if RabbitMQ available)
-            if (rabbitmq) {
-                try {
-                    await rabbitmq.publish(rabbitmq.exchanges.topic, 'payment.failed', {
-                        user_id,
-                        seller_id,
-                        amount,
-                        currency,
-                        gateway,
-                        error: error.message,
-                        timestamp: Date.now()
-                    }, { headers: { source: 'payment-service' } });
-                } catch (e) {
-                    console.warn('Failed to publish payment.failed event:', e.message);
-                }
-            }
+            // Publish failure event
+            await publishPaymentEvent.failed({
+                id: payment ? payment.payment_id : 'unknown',
+                amount,
+                order_id,
+            }, error.message);
 
             throw error;
         }
@@ -314,22 +297,8 @@ class PaymentService {
             // Mark invoice as paid
             await invoiceService.markAsPaid(invoice.invoice_id);
 
-            // Publish success event
-            if (rabbitmq) {
-                try {
-                    await rabbitmq.publish(rabbitmq.exchanges.topic, 'payment.succeeded', {
-                        payment_id: payment.payment_id,
-                        invoice_id: invoice.invoice_id,
-                        user_id: payment.user_id,
-                        seller_id: payment.seller_id,
-                        amount: payment.amount,
-                        currency: payment.currency,
-                        timestamp: Date.now()
-                    }, { headers: { source: 'payment-service' } });
-                } catch (error) {
-                    console.warn('Failed to publish payment.succeeded event:', error.message);
-                }
-            }
+            // Event publishing handled via payment status updates or specific flows
+            // If needed, we can add publishPaymentEvent.succeeded() here later
 
         } catch (error) {
             console.error('Error handling successful payment:', error.message);
