@@ -73,10 +73,10 @@ exports.getRevenueReport = async (req, res) => {
         // postgres/timescale specific date truncation
         // We query 'sale.created' events which contain totalAmount in payload
 
-        // Note: extracting from JSONB in Sequelize/Postgres: payload->>'totalAmount'
         // We need to cast it to numeric to sum it.
+        const validIntervals = ['hour', 'day', 'week', 'month', 'year'];
+        const intervalStr = validIntervals.includes(interval) ? interval : 'day';
 
-        const intervalStr = interval === 'hour' ? 'hour' : (interval === 'month' ? 'month' : 'day');
         const cacheKey = `analytics:revenue:${companyId || 'all'}:${start.toISOString()}:${end.toISOString()}:${intervalStr}`;
 
         const revenue = await getOrSetCache(cacheKey, CACHE_TTL, async () => {
@@ -191,8 +191,8 @@ exports.getActiveUsers = async (req, res) => {
     try {
         const { start, end } = getTimeRange(req);
         const { interval = 'day', companyId } = req.query;
-
-        const intervalStr = interval === 'hour' ? 'hour' : (interval === 'month' ? 'month' : 'day');
+        const validIntervals = ['hour', 'day', 'week', 'month', 'year'];
+        const intervalStr = validIntervals.includes(interval) ? interval : 'day';
 
         // DAU: Count unique userIds per day from login events
         const stats = await AnalyticsEvent.findAll({
@@ -224,8 +224,8 @@ exports.getNewCustomerStats = async (req, res) => {
     try {
         const { start, end } = getTimeRange(req);
         const { interval = 'day', companyId } = req.query;
-
-        const intervalStr = interval === 'hour' ? 'hour' : (interval === 'month' ? 'month' : 'day');
+        const validIntervals = ['hour', 'day', 'week', 'month', 'year'];
+        const intervalStr = validIntervals.includes(interval) ? interval : 'day';
 
         const stats = await AnalyticsEvent.findAll({
             where: {
@@ -506,7 +506,8 @@ exports.getProfitabilityReport = async (req, res) => {
         const { start, end } = getTimeRange(req);
         const { companyId, interval = 'day' } = req.query;
 
-        const intervalStr = interval === 'hour' ? 'hour' : (interval === 'month' ? 'month' : 'day');
+        const validIntervals = ['hour', 'day', 'week', 'month', 'year'];
+        const intervalStr = validIntervals.includes(interval) ? interval : 'day';
 
         const whereClause = {
             time: { [Op.between]: [start, end] }
@@ -572,6 +573,7 @@ exports.exportReport = async (req, res) => {
             case 'shops-performance': await exports.getShopPerformance(mockReq, mockRes); break;
             case 'employees-performance': await exports.getEmployeePerformance(mockReq, mockRes); break;
             case 'profitability': await exports.getProfitabilityReport(mockReq, mockRes); break;
+            case 'stock-movement': await exports.getStockMovementStats(mockReq, mockRes); break;
             default: return res.status(400).json({ success: false, message: "Invalid report type" });
         }
 
@@ -595,6 +597,90 @@ exports.exportReport = async (req, res) => {
 
     } catch (error) {
         console.error("Export Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * Stock Movement Comparison (In vs Out)
+ */
+exports.getStockMovementStats = async (req, res) => {
+    try {
+        const { start, end } = getTimeRange(req);
+        const { companyId, interval = 'day' } = req.query;
+        const validIntervals = ['hour', 'day', 'week', 'month', 'year'];
+        const intervalStr = validIntervals.includes(interval) ? interval : 'day';
+
+        const whereClause = {
+            time: { [Op.between]: [start, end] }
+        };
+        if (companyId) whereClause.companyId = companyId;
+
+        const cacheKey = `analytics:stockMove:${companyId || 'all'}:${start.toISOString()}:${end.toISOString()}:${intervalStr}`;
+
+        const stats = await getOrSetCache(cacheKey, CACHE_TTL, async () => {
+            return await InventoryMetric.findAll({
+                where: whereClause,
+                attributes: [
+                    [sequelize.fn('date_trunc', intervalStr, sequelize.col('time')), 'date'],
+                    // Stock In: Positive changes (restock, return)
+                    [sequelize.literal(`SUM(CASE WHEN "changeAmount" > 0 THEN "changeAmount" ELSE 0 END)`), 'stockIn'],
+                    // Stock Out: Negative changes (sale) - ABS value
+                    [sequelize.literal(`ABS(SUM(CASE WHEN "changeAmount" < 0 THEN "changeAmount" ELSE 0 END))`), 'stockOut'],
+                    // Net Flow
+                    [sequelize.fn('SUM', sequelize.col('changeAmount')), 'netFlow']
+                ],
+                group: [sequelize.fn('date_trunc', intervalStr, sequelize.col('time'))],
+                order: [[sequelize.fn('date_trunc', intervalStr, sequelize.col('time')), 'ASC']],
+                raw: true
+            });
+        });
+
+        res.json({ success: true, data: stats });
+    } catch (error) {
+        console.error("Stock Movement Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * Best Payment Method (Ranked)
+ */
+exports.getBestPaymentMethod = async (req, res) => {
+    try {
+        const { start, end } = getTimeRange(req);
+        const { companyId } = req.query;
+
+        const whereClause = {
+            time: { [Op.between]: [start, end] }
+        };
+        if (companyId) whereClause.companyId = companyId;
+
+        // Uses SalesMetric
+        const stats = await SalesMetric.findAll({
+            where: whereClause,
+            attributes: [
+                ['paymentMethod', 'method'],
+                [sequelize.fn('COUNT', sequelize.col('id')), 'transactionCount'],
+                [sequelize.fn('SUM', sequelize.col('amount')), 'totalRevenue']
+            ],
+            group: ['paymentMethod'],
+            order: [[sequelize.literal('"transactionCount"'), 'DESC']],
+            raw: true
+        });
+
+        // Determine "Best" (most used)
+        const best = stats.length > 0 ? stats[0] : null;
+
+        res.json({
+            success: true,
+            data: {
+                best,
+                ranking: stats
+            }
+        });
+    } catch (error) {
+        console.error("Best Payment Method Error:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 };
