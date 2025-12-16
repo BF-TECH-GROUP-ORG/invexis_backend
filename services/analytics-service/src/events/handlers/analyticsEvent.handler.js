@@ -15,8 +15,8 @@ const handleAnalyticsEvent = async (event, routingKey) => {
         }
 
         if (!type) {
-             // If we still don't have a type, we can't process it
-             return;
+            // If we still don't have a type, we can't process it
+            return;
         }
 
         // Ignore health checks
@@ -34,14 +34,30 @@ const handleAnalyticsEvent = async (event, routingKey) => {
         });
 
         // 2. Process for Metrics (Ingestion)
-        if (type === "sale.created") {
-            await IngestionController.processSaleCreated(event);
-        } else if (
-            type === "inventory.stock.updated" ||
-            type === "inventory.product.updated"
-        ) {
-            // Basic mapping, can be refined based on exact event names from other services
-            await IngestionController.processInventoryUpdated(event);
+        switch (type) {
+            case "sale.created":
+                await IngestionController.processSaleCreated(event);
+                break;
+            case "inventory.stock.updated":
+            case "inventory.product.updated":
+                await IngestionController.processInventoryUpdated(event);
+                break;
+            case "company.created":
+                await IngestionController.processCompanyCreated(event);
+                break;
+            case "company.updated":
+                await IngestionController.processCompanyUpdated(event);
+                break;
+            case "shop.created":
+                await IngestionController.processShopCreated(event);
+                break;
+            case "auth.user.registered": // standard from auth service usually
+            case "user.created":
+                await IngestionController.processUserRegistered(event);
+                break;
+            default:
+                // Ignore other events for ingestion
+                break;
         }
 
         console.log(`✅ Analytics: Processed ${type} from ${source}`);

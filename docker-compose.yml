@@ -1,10 +1,6 @@
-# docker-compose.yml
-# ======================
-# Services
-# ======================
 services:
   # ----------------------
-  # Reverse Proxy with Load Balancing
+  # Traefik Reverse Proxy
   # ----------------------
   traefik:
     image: traefik:v2.9
@@ -24,17 +20,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - invexis-network
-    deploy:
-      replicas: 1 # Scale for HA if needed
     labels:
       - "traefik.enable=true"
 
   # ----------------------
   # Databases
   # ----------------------
-  # PostgreSQL for company-service
   company-postgres:
-    image: postgis/postgis:15-3.4
+    image: postgis/postgis:16-3.4
     container_name: invexis-company-postgres
     restart: unless-stopped
     environment:
@@ -46,19 +39,16 @@ services:
     volumes:
       - company_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U invexis -d companydb"]
+      test: [ "CMD-SHELL", "pg_isready -U invexis -d companydb" ]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 90s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
 
-  # PostgreSQL for shop-service
   shop-postgres:
-    image: postgis/postgis:15-3.4
+    image: postgis/postgis:16-3.4
     container_name: invexis-shop-postgres
     restart: unless-stopped
     environment:
@@ -70,19 +60,16 @@ services:
     volumes:
       - shop_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U invexis -d shopdb"]
+      test: [ "CMD-SHELL", "pg_isready -U invexis -d shopdb" ]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 90s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
 
-  # PostgreSQL for payment-service
   payment-postgres:
-    image: postgres:15
+    image: postgres:16
     container_name: invexis-payment-postgres
     restart: unless-stopped
     environment:
@@ -94,21 +81,18 @@ services:
     volumes:
       - payment_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U invexis -d paymentdb"]
+      test: [ "CMD-SHELL", "pg_isready -U invexis -d paymentdb" ]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 90s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
 
-  # PostgreSQL for analytics-service
   analytics-postgres:
-    image: timescale/timescaledb:latest-pg15
+    image: timescale/timescaledb:latest-pg16
     container_name: invexis-analytics-postgres
-    command: ["postgres", "-c", "listen_addresses=*"]
+    command: [ "postgres", "-c", "listen_addresses=*" ]
     restart: unless-stopped
     environment:
       POSTGRES_USER: invexis
@@ -119,18 +103,14 @@ services:
     volumes:
       - analytics_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U invexis -d analyticsdb"]
+      test: [ "CMD-SHELL", "pg_isready -U invexis -d analyticsdb" ]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 90s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
-  # ----------------------
-  # Single MongoDB for all services
-  # ----------------------
+
   mongodb:
     image: mongo:6.0
     container_name: mongodb
@@ -139,7 +119,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: invexispass
     ports:
-      - "27018:27017" # host:container
+      - "27018:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
@@ -153,12 +133,8 @@ services:
     networks:
       - invexis-network
 
-  # ======================
-  # MySQL Service
-  # ======================
-
   sales-mysql:
-    image: mysql:8.4.0
+    image: mysql:8.0
     container_name: invexis-sales-mysql
     restart: unless-stopped
     environment:
@@ -170,14 +146,7 @@ services:
       - "3307:3306"
     volumes:
       - sales_mysql_data:/var/lib/mysql
-    command:
-      [
-        "--log-error-verbosity=3",
-        "--innodb-flush-method=fsync",
-        "--skip-log-bin",
-        "--innodb-buffer-pool-size=128M",
-        "--bind-address=0.0.0.0",
-      ]
+    command: [ "--log-error-verbosity=3", "--innodb-flush-method=fsync", "--skip-log-bin", "--innodb-buffer-pool-size=128M", "--bind-address=0.0.0.0" ]
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -188,14 +157,7 @@ services:
       start_period: 90s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
 
-  # ----------------------
-  # Messaging & Caching
-  # ----------------------
-
-  # Redis for notification-service
   redis:
     image: redis:7-alpine
     container_name: invexis-redis
@@ -205,17 +167,14 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 10s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
 
-  # RabbitMQ for messaging
   rabbitmq:
     image: rabbitmq:3.13.7-management-alpine
     container_name: invexis-rabbitmq
@@ -223,555 +182,383 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: invexis
       RABBITMQ_DEFAULT_PASS: invexispass
-      RABBITMQ_DEFAULT_VHOST: /
     ports:
-      - "5672:5672" # AMQP protocol
-      - "15672:15672" # Management UI
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmqctl", "status"]
+      test: [ "CMD", "rabbitmqctl", "status" ]
       interval: 20s
       timeout: 15s
       retries: 10
       start_period: 90s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
 
   # ----------------------
-  # Microservices (All with Shared Volumes & Traefik Routing)
+  # Node Microservices (with persistent logs)
   # ----------------------
-
   api-gateway:
     build: ./services/api-gateway
     container_name: invexis-api-gateway
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     environment:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/api-gateway:/app
+      - ./logs/api-gateway:/app/logs
     depends_on:
-      auth-service:
-        condition: service_healthy
-      company-service:
-        condition: service_healthy
-      shop-service:
-        condition: service_healthy
-      inventory-service:
-        condition: service_healthy
-      sales-service:
-        condition: service_healthy
-      ecommerce-service:
-        condition: service_healthy
-      payment-service:
-        condition: service_healthy
-      notification-service:
-        condition: service_healthy
-      analytics-service:
-        condition: service_healthy
-      audit-service:
-        condition: service_healthy
-      debt-service:
-        condition: service_healthy
-      websocket-service:
-        condition: service_healthy
+      - auth-service
+      - company-service
+      - shop-service
+      - inventory-service
+      - sales-service
+      - ecommerce-service
+      - payment-service
+      - notification-service
+      - analytics-service
+      - audit-service
+      - debt-service
+      - websocket-service
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8000/health"
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1 # Scale for load balancing via Traefik
+    user: "node"
     labels:
       - "traefik.enable=true"
-      # Main API Gateway - handles all /api/* routes
-      - "traefik.http.routers.api-gateway.rule=(Host(`api-gateway.local`) || Host(`localhost`)) && PathPrefix(`/api`)"
-      - "traefik.http.routers.api-gateway.priority=100"
+      - "traefik.http.routers.api-gateway.rule=Host(`api-gateway.local`) && PathPrefix(`/api`)"
       - "traefik.http.services.api-gateway.loadbalancer.server.port=8000"
       - "traefik.http.routers.api-gateway.entrypoints=web"
-      # Health check endpoint
-      - "traefik.http.routers.api-gateway-health.rule=PathPrefix(`/health`)"
-      - "traefik.http.routers.api-gateway-health.priority=100"
-      - "traefik.http.routers.api-gateway-health.entrypoints=web"
 
   auth-service:
     build: ./services/auth-service
     container_name: invexis-auth-service
     restart: unless-stopped
-    ports:
-      - "8001:8001"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/authdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/auth-service:/app
+      - ./logs/auth-service:/app/logs
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8001/health"
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8001/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
-
   company-service:
     build: ./services/company-service
     container_name: invexis-company-service
     restart: unless-stopped
-    ports:
-      - "8004:8004"
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@company-postgres:5432/companydb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/company-service:/app
+      - ./logs/company-service:/app/logs
     depends_on:
-      company-postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - company-postgres
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8004/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8004/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   shop-service:
     build: ./services/shop-service
     container_name: invexis-shop-service
     restart: unless-stopped
-    ports:
-      - "9001:9001"
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@shop-postgres:5432/shopdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/shop-service:/app
+      - ./logs/shop-service:/app/logs
     depends_on:
-      shop-postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - shop-postgres
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:9001/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   inventory-service:
     build: ./services/inventory-service
     container_name: invexis-inventory-service
     restart: unless-stopped
-    ports:
-      - "8007:8007"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/inventorydb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
       JWT_SECRET: your_jwt_secret_invexis_strong_key_change_in_prod
       PORT: 8007
-      LOG_LEVEL: info
-      MAX_STOCK_QTY: 1000000
-      # Cloudinary Configuration
-      CLOUDINARY_CLOUD_NAME: dnetsa2kl
-      CLOUDINARY_API_KEY: 577429559625369
-      CLOUDINARY_API_SECRET: cN2IiS5983Yok8JRz1fFR9T3xVk
     volumes:
       - ./shared:/app/shared
       - ./services/inventory-service:/app
+      - ./logs/inventory-service:/app/logs
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8007/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8007/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   sales-service:
     build: ./services/sales-service
     container_name: invexis-sales-service
     restart: unless-stopped
-    ports:
-      - "9000:9000"
     environment:
       DB_MYSQL: mysql://invexis:invexispass@sales-mysql:3306/salesdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
-      - ./services/sales-service/uploads:/app/uploads
       - ./services/sales-service:/app
+      - ./services/sales-service/uploads:/app/uploads
+      - ./logs/sales-service:/app/logs
     depends_on:
-      sales-mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - sales-mysql
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:9000/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   payment-service:
     build: ./services/payment-service
     container_name: invexis-payment-service
     restart: unless-stopped
-    ports:
-      - "8009:8009"
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@payment-postgres:5432/paymentdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/payment-service:/app
+      - ./logs/payment-service:/app/logs
     depends_on:
-      payment-postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - payment-postgres
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8009/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8009/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   ecommerce-service:
     build: ./services/ecommerce-service
     container_name: invexis-ecommerce-service
     restart: unless-stopped
-    ports:
-      - "8006:8006"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/ecommercedb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/ecommerce-service:/app
+      - ./logs/ecommerce-service:/app/logs
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8006/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8006/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   notification-service:
     build: ./services/notification-service
     container_name: invexis-notification-service
     restart: unless-stopped
-    ports:
-      - "8008:8008"
     environment:
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/notification-service:/app
-      - ./services/notification-service/invexis-b7713-firebase-adminsdk-fbsvc-82c17263cc.json:/app/invexis-b7713-firebase-adminsdk-fbsvc-82c17263cc.json
+      - ./logs/notification-service:/app/logs
     depends_on:
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - redis
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8008/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8008/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   analytics-service:
     build: ./services/analytics-service
     container_name: invexis-analytics-service
     restart: unless-stopped
-    ports:
-      - "8002:8002"
     environment:
       DB_POSTGRES: postgresql://invexis:invexispass@analytics-postgres:5432/analyticsdb
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/analyticsdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
-      # Standard PG env vars for HealthChecker
-      PGHOST: analytics-postgres
-      PGUSER: invexis
-      PGPASSWORD: invexispass
-      PGDATABASE: analyticsdb
-      PGPORT: 5432
     volumes:
       - ./shared:/app/shared
       - ./services/analytics-service:/app
+      - ./logs/analytics-service:/app/logs
     depends_on:
-      analytics-postgres:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - analytics-postgres
+      - mongodb
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8002/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8002/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   audit-service:
     build: ./services/audit-service
     container_name: invexis-audit-service
     restart: unless-stopped
-    ports:
-      - "8003:8003"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/auditdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/audit-service:/app
+      - ./logs/audit-service:/app/logs
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8003/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8003/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   debt-service:
     build: ./services/debt-service
     container_name: invexis-debt-service
     restart: unless-stopped
-    ports:
-      - "8005:8005"
     environment:
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/debtdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/debt-service:/app
+      - ./logs/debt-service:/app/logs
     depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      - mongodb
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:8005/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8005/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only
       - "traefik.enable=false"
 
   websocket-service:
     build: ./services/websocket-service
     container_name: invexis-websocket-service
     restart: unless-stopped
-    ports:
-      - "9002:9002"
     environment:
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
       - ./services/websocket-service:/app
+      - ./logs/websocket-service:/app/logs
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      - rabbitmq
     healthcheck:
-      test:
-        - "CMD"
-        - "wget"
-        - "--no-verbose"
-        - "--tries=1"
-        - "--spider"
-        - "http://localhost:9002/health"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9002/health"]
       interval: 15s
       timeout: 10s
       retries: 3
       start_period: 30s
     networks:
       - invexis-network
-    deploy:
-      replicas: 1
+    user: "node"
     labels:
-      # Disabled - access via API Gateway only (WebSocket upgrade supported)
       - "traefik.enable=false"
 
+
+  # ----------------------
+  # Volumes
 # ======================
 # Volumes
 # ======================
 volumes:
+  # Database volumes
   company_postgres_data:
     name: invexis_company_postgres_data
   shop_postgres_data:
@@ -788,14 +575,31 @@ volumes:
     name: invexis_redis_data
   rabbitmq_data:
     name: invexis_rabbitmq_data
-  # Keep node_modules installed inside the sales-service container
-  sales_service_node_modules:
-    name: invexis_sales_service_node_modules
 
-# ======================
-# Networks
-# ======================
+  # Log volumes for each microservice
+  company_service_logs:
+    name: invexis_company_service_logs
+  shop_service_logs:
+    name: invexis_shop_service_logs
+  inventory_service_logs:
+    name: invexis_inventory_service_logs
+  sales_service_logs:
+    name: invexis_sales_service_logs
+  payment_service_logs:
+    name: invexis_payment_service_logs
+  ecommerce_service_logs:
+    name: invexis_ecommerce_service_logs
+  notification_service_logs:
+    name: invexis_notification_service_logs
+  analytics_service_logs:
+    name: invexis_analytics_service_logs
+  audit_service_logs:
+    name: invexis_audit_service_logs
+  debt_service_logs:
+    name: invexis_debt_service_logs
+  websocket_service_logs:
+    name: invexis_websocket_service_logs
+
 networks:
   invexis-network:
     driver: bridge
-    name: invexis-network
