@@ -193,16 +193,36 @@ const authenticateToken = async (req, res, next) => {
       throw new AuthenticationError('Token has been revoked', 'TOKEN_REVOKED');
     }
 
-    // Fetch full user data
-    const userData = await fetchUserData(decoded.sub || decoded.uid, token);
+    // Fetch full user data or fallback to token
+    let userData = await fetchUserData(decoded.sub || decoded.uid, token);
+
+    // If fetch failed (Auth Service down) or user not found, but we have a valid token,
+    // trust the token claims (Offline Mode / Token-based Auth)
     if (!userData) {
-      throw new AuthenticationError('User data unavailable', 'USER_DATA_ERROR');
+      logger.warn('User data fetch failed, falling back to token data', { userId: decoded.sub || decoded.uid });
+      userData = {
+        _id: decoded.sub || decoded.uid,
+        id: decoded.sub || decoded.uid,
+        email: decoded.email,
+        role: decoded.role,
+        companies: decoded.companies || [],
+        shops: decoded.shops || [],
+        firstName: 'Unknown',
+        lastName: 'User'
+      };
     }
 
     // Attach to request
     req.user = userData;
     req.token = token;
     req.decodedToken = decoded;
+
+    // Ensure critical fields are available from token if missing in DB/API response
+    if (!req.user.role && decoded.role) req.user.role = decoded.role;
+    if ((!req.user.companies || req.user.companies.length === 0) && decoded.companies) req.user.companies = decoded.companies;
+    if ((!req.user.shops || req.user.shops.length === 0) && decoded.shops) req.user.shops = decoded.shops;
+    if (!req.user.email && decoded.email) req.user.email = decoded.email;
+    if (!req.user._id && (decoded.sub || decoded.uid)) req.user._id = decoded.sub || decoded.uid;
 
     logger.info('User authenticated', {
       userId: userData.id || userData._id,
@@ -243,11 +263,28 @@ const optionalAuth = async (req, res, next) => {
   try {
     const decoded = verifyJWT(token);
     if (decoded) {
-      const userData = await fetchUserData(decoded.sub || decoded.uid, token);
+      let userData = await fetchUserData(decoded.sub || decoded.uid, token);
+
+      // Fallback to token if user data fetch fails
+      if (!userData) {
+        userData = {
+          _id: decoded.sub || decoded.uid,
+          id: decoded.sub || decoded.uid,
+          email: decoded.email,
+          role: decoded.role,
+          companies: decoded.companies || [],
+          shops: decoded.shops || []
+        };
+      }
+
       if (userData) {
         req.user = userData;
         req.token = token;
         req.decodedToken = decoded;
+
+        // Ensure critical fields available
+        if (!req.user.role && decoded.role) req.user.role = decoded.role;
+        if ((!req.user.companies || req.user.companies.length === 0) && decoded.companies) req.user.companies = decoded.companies;
       }
     }
   } catch (error) {
@@ -271,7 +308,10 @@ const requireRole = (...allowedRoles) => {
     }
 
     const userRole = req.user.role;
-    if (!allowedRoles.includes(userRole)) {
+    // Flatten roles to handle both requireRole('admin', 'worker') and requireRole(['admin', 'worker'])
+    const roles = allowedRoles.flat();
+
+    if (!roles.includes(userRole)) {
       logger.warn('Insufficient role', {
         userId: req.user.id,
         userRole,

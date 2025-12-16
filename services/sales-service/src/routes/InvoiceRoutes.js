@@ -40,22 +40,22 @@ const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth
 // );
 
 // Get invoice by ID
-router.get("/:invoiceId", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.getInvoice);
+router.get("/:invoiceId", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), invoiceController.getInvoice);
 
 // Get all invoices for a company
-router.get("/company/:companyId", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.getInvoicesByCompany);
+router.get("/company/:companyId", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), invoiceController.getInvoicesByCompany);
 
 // Generate PDF for invoice
-router.post("/:invoiceId/generate-pdf", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.generateInvoicePdf);
+router.post("/:invoiceId/generate-pdf", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), invoiceController.generateInvoicePdf);
 
 // View PDF in browser (inline)
-router.get("/:invoiceId/view-pdf", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.viewInvoicePdf);
+router.get("/:invoiceId/view-pdf", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), invoiceController.viewInvoicePdf);
 
 // Download PDF
-router.get("/pdf/:fileName", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.downloadInvoicePdf);
+router.get("/pdf/:fileName", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), invoiceController.downloadInvoicePdf);
 
 // Delete PDF
-router.delete("/:invoiceId/pdf", authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), invoiceController.deleteInvoicePdf);
+router.delete("/:invoiceId/pdf", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), invoiceController.deleteInvoicePdf);
 
 module.exports = router;
 

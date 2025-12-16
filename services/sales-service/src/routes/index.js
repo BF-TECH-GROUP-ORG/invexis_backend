@@ -7,7 +7,6 @@ const knownUserRoutes = require("./KnownUserRoutes");
 const express = require("express");
 const router = express.Router();
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
-
 // then define all routes here as app.use
 
 router.use('/', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), salesRoutes);

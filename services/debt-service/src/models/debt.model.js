@@ -3,9 +3,9 @@ const mongoose = require('mongoose');
 
 
 const DebtSchema = new mongoose.Schema({
-    companyId: { type: mongoose.Types.ObjectId, required: true },
-    shopId: { type: mongoose.Types.ObjectId, required: true },
-    customerId: { type: mongoose.Types.ObjectId, required: true },
+    companyId: { type: String, required: true },
+    shopId: { type: String, required: true },
+    customerId: { type: String, required: true },
     // Embedded customer object for convenience in front-end (id, name, phone)
     customer: {
         id: { type: String, default: null },
