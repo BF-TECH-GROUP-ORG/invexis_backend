@@ -26,15 +26,8 @@ exports.getLogs = async (req, res) => {
         const { companyId, userId, entityType } = req.query;
 
         // --- Security / Multi-tenancy ---
-        const userRole = req.headers['x-user-role'];
-        const userCompaniesStr = req.headers['x-user-companies'];
-        let allowedCompanies = [];
-
-        if (userCompaniesStr) {
-            try {
-                allowedCompanies = JSON.parse(userCompaniesStr);
-            } catch (e) { }
-        }
+        const userRole = req.user.role;
+        const allowedCompanies = req.user.companies || [];
 
         // If not super_admin, restrict access
         if (userRole !== 'super_admin') {
@@ -100,13 +93,9 @@ exports.getLogDetails = async (req, res) => {
         }
 
         // Security Check
-        const userRole = req.headers['x-user-role'];
+        const userRole = req.user.role;
         if (userRole !== 'super_admin') {
-            const userCompaniesStr = req.headers['x-user-companies'];
-            let allowedCompanies = [];
-            try {
-                allowedCompanies = JSON.parse(userCompaniesStr || '[]');
-            } catch (e) { }
+            const allowedCompanies = req.user.companies || [];
 
             if (log.companyId && !allowedCompanies.includes(log.companyId)) {
                 return res.status(403).json({ success: false, message: "Access denied" });

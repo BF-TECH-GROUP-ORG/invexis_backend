@@ -56,6 +56,9 @@ app.get('/', (req, res) => {
 });
 
 // Initialize Database (Postgres/Sequelize)
+// Load all models
+require("./models");
+
 const initializeDatabase = async () => {
     try {
         await sequelize.authenticate();
@@ -95,6 +98,14 @@ const initializeDatabase = async () => {
             logger.info("✅ Hypertable 'inventory_metrics' ready");
         } catch (err) {
             logger.warn("⚠️ Hypertable 'inventory_metrics' creation skipped/failed:", err.message);
+        }
+
+        // 4. Convert to Hypertable: Sales Item Metrics (Detailed)
+        try {
+            await sequelize.query("SELECT create_hypertable('sales_item_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+            logger.info("✅ Hypertable 'sales_item_metrics' ready");
+        } catch (err) {
+            logger.warn("⚠️ Hypertable 'sales_item_metrics' creation skipped/failed:", err.message);
         }
 
     } catch (error) {

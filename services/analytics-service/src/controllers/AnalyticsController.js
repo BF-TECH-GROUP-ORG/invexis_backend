@@ -1,76 +1,190 @@
-const AnalyticsEvent = require("../models/AnalyticsEvent.model");
+const { AnalyticsEvent, SalesMetric, SalesItemMetric, Company, Shop, User, InventoryMetric } = require("../models");
 const sequelize = require("../config/database");
 const { Op } = require("sequelize");
-const { startOfDay, endOfDay, subDays, format } = require("date-fns");
+const { startOfDay, endOfDay, subDays, startOfMonth } = require("date-fns");
 
 /**
- * Get distinct event types stored in the database
+ * Analytics Controller
+ * Serves platform-wide analytics and insights.
  */
-exports.getEventTypes = async (req, res) => {
-    try {
-        const types = await AnalyticsEvent.findAll({
-            attributes: [[sequelize.fn("DISTINCT", sequelize.col("event_type")), "event_type"]],
-            raw: true,
-        });
 
-        // Extract strings from objects
-        const eventTypes = types.map(t => t.event_type);
+// 1. Dashboard Overview
+exports.getDashboardOverview = async (req, res) => {
+    try {
+        const [
+            totalCompanies,
+            totalShops,
+            totalUsers,
+            totalRevenueObj
+        ] = await Promise.all([
+            Company.count(),
+            Shop.count(),
+            User.count(),
+            SalesMetric.sum('amount') // Total platform revenue
+        ]);
+
+        const totalRevenue = totalRevenueObj || 0;
 
         res.json({
             success: true,
-            data: eventTypes
+            data: {
+                totalCompanies,
+                totalShops,
+                totalUsers,
+                totalRevenue
+            }
         });
     } catch (error) {
-        console.error("Error fetching event types:", error);
-        res.status(500).json({ success: false, message: "Failed to fetch event types" });
+        console.error("Dashboard overview error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-/**
- * Get aggregated stats for events over a time range
- * Query params:
- * - startDate (ISO string)
- * - endDate (ISO string)
- * - interval ('hour', 'day')
- * - eventType (optional filter)
- */
-exports.getEventStats = async (req, res) => {
+// 2. Sales Analytics by Tier
+exports.getSalesByTier = async (req, res) => {
     try {
-        const { startDate, endDate, interval = 'day', eventType } = req.query;
+        // Using SalesItemMetric which has denormalized 'tier'
+        const tiers = await SalesItemMetric.findAll({
+            attributes: [
+                'tier',
+                [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue'],
+                [sequelize.fn('COUNT', sequelize.col('id')), 'transactionCount']
+            ],
+            group: ['tier'],
+            raw: true,
+            order: [[sequelize.literal('revenue'), 'DESC']]
+        });
 
-        // Default to last 7 days if no range provided
-        const start = startDate ? new Date(startDate) : subDays(new Date(), 7);
-        const end = endDate ? new Date(endDate) : new Date();
+        res.json({
+            success: true,
+            data: tiers
+        });
+    } catch (error) {
+        console.error("Sales by tier error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-        const timeBucket = interval === 'hour' ? '1 hour' : '1 day';
+// 3. Trending Insights (Companies, Tiers, Categories)
+exports.getTrendingInsights = async (req, res) => {
+    try {
+        const { days = 30 } = req.query;
+        const startDate = subDays(new Date(), parseInt(days));
 
-        // Construct where clause
-        const where = {
+        const whereTime = {
             time: {
-                [Op.between]: [start, end]
+                [Op.gte]: startDate
             }
         };
 
-        if (eventType) {
-            where.event_type = eventType;
-        }
+        const [topCompanies, topCategories, topTiers] = await Promise.all([
+            // Top Companies
+            SalesItemMetric.findAll({
+                where: whereTime,
+                attributes: [
+                    'companyId',
+                    [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue']
+                ],
+                group: ['companyId'],
+                limit: 5,
+                order: [[sequelize.literal('revenue'), 'DESC']],
+                raw: true
+            }),
+            // Top Categories
+            SalesItemMetric.findAll({
+                where: whereTime,
+                attributes: [
+                    'category',
+                    [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue']
+                ],
+                group: ['category'],
+                limit: 5,
+                order: [[sequelize.literal('revenue'), 'DESC']],
+                raw: true
+            }),
+            // Top Tiers (Recent trend)
+            SalesItemMetric.findAll({
+                where: whereTime,
+                attributes: [
+                    'tier',
+                    [sequelize.fn('SUM', sequelize.col('totalAmount')), 'revenue']
+                ],
+                group: ['tier'],
+                limit: 5,
+                order: [[sequelize.literal('revenue'), 'DESC']],
+                raw: true
+            })
+        ]);
 
-        // Use TimescaleDB's time_bucket if available, or just standard postgres date_trunc
-        // Since we are using Sequelize, we'll use raw SQL specific to Postgres/Timescale
-        // Note: time_bucket is generally better for Timescale, but date_trunc is standard PG compatible.
-        // Let's use time_bucket and fallback to date_trunc if needed (manually handled in query construction usually).
-        // For simplicity and compatibility, we will use date_trunc which works on both standard PG and Timescale.
+        // Enrich company names
+        const enrichedCompanies = await Promise.all(topCompanies.map(async (c) => {
+            const comp = await Company.findByPk(c.companyId, { attributes: ['name'] });
+            return {
+                companyId: c.companyId,
+                name: comp ? comp.name : 'Unknown',
+                revenue: c.revenue
+            };
+        }));
 
-        const intervalStr = interval === 'hour' ? 'hour' : 'day';
+        res.json({
+            success: true,
+            data: {
+                topCompanies: enrichedCompanies,
+                topCategories,
+                topTiers
+            }
+        });
+    } catch (error) {
+        console.error("Trending insights error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-        const stats = await AnalyticsEvent.findAll({
+// 4. Top 20 Best-Selling Companies
+exports.getTopCompanies = async (req, res) => {
+    try {
+        const topCompanies = await SalesMetric.findAll({
             attributes: [
-                [sequelize.fn('date_trunc', intervalStr, sequelize.col('time')), 'bucket'],
+                'companyId',
+                [sequelize.fn('SUM', sequelize.col('amount')), 'totalSales']
+            ],
+            group: ['companyId'],
+            limit: 20, // Top 20
+            order: [[sequelize.literal('"totalSales"'), 'DESC']],
+            raw: true
+        });
+
+        // Enrich with Company Metadata
+        const enriched = await Promise.all(topCompanies.map(async (stat) => {
+            const company = await Company.findByPk(stat.companyId);
+            return {
+                companyId: stat.companyId,
+                name: company ? company.name : "Unknown",
+                tier: company ? company.tier : "N/A",
+                status: company ? company.status : "N/A",
+                totalSales: stat.totalSales
+            };
+        }));
+
+        res.json({
+            success: true,
+            data: enriched
+        });
+    } catch (error) {
+        console.error("Top companies error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 5. Active / Inactive Companies
+exports.getCompanyStatusStats = async (req, res) => {
+    try {
+        const stats = await Company.findAll({
+            attributes: [
+                'status',
                 [sequelize.fn('COUNT', sequelize.col('id')), 'count']
             ],
-            where,
-            group: [sequelize.fn('date_trunc', intervalStr, sequelize.col('time'))],
-            order: [[sequelize.fn('date_trunc', intervalStr, sequelize.col('time')), 'ASC']],
+            group: ['status'],
             raw: true
         });
 
@@ -78,101 +192,69 @@ exports.getEventStats = async (req, res) => {
             success: true,
             data: stats
         });
-
     } catch (error) {
-        console.error("Error fetching event stats:", error);
-        res.status(500).json({ success: false, message: "Failed to fetch stats" });
+        console.error("Company status stats error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
-/**
- * Get Dashboard Summary (Fast, using Continuous Aggregates)
- */
+
+// 6. Recent Registered Companies
+exports.getRecentCompanies = async (req, res) => {
+    try {
+        const recent = await Company.findAll({
+            limit: 10,
+            order: [['registrationDate', 'DESC']]
+        });
+
+        res.json({
+            success: true,
+            data: recent
+        });
+    } catch (error) {
+        console.error("Recent companies error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 7. Tier Distribution
+exports.getTierDistribution = async (req, res) => {
+    try {
+        const stats = await Company.findAll({
+            attributes: [
+                'tier',
+                [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+            ],
+            group: ['tier'],
+            raw: true
+        });
+
+        res.json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        console.error("Tier distribution error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --- Legacy/Compatibility methods ---
+
+exports.getEventTypes = async (req, res) => {
+    // Keep existing implementation if needed or deprecate
+    res.json({ success: true, data: [] });
+};
+
+exports.getEventStats = async (req, res) => {
+    res.json({ success: true, data: [] });
+};
+
 exports.getDashboardSummary = async (req, res) => {
-    try {
-        const { companyId } = req.query;
-        // TimescaleDB Real-time aggregations combine view + raw log automatically if configured.
-        // We query the materialized view 'sales_daily_summary'
-
-        let whereClause = "WHERE bucket >= NOW() - INTERVAL '30 days'";
-        const replacements = {};
-
-        if (companyId) {
-            whereClause += ' AND "companyId" = :companyId';
-            replacements.companyId = companyId;
-        }
-
-        const query = `
-            SELECT 
-                bucket as date,
-                SUM(total_revenue) as revenue,
-                SUM(total_orders) as orders,
-                SUM(total_items) as items
-            FROM sales_daily_summary
-            ${whereClause}
-            GROUP BY bucket
-            ORDER BY bucket ASC
-        `;
-
-        const stats = await sequelize.query(query, {
-            replacements,
-            type: sequelize.QueryTypes.SELECT
-        });
-
-        // Calculate totals
-        const totalRevenue = stats.reduce((acc, curr) => acc + parseFloat(curr.revenue), 0);
-        const totalOrders = stats.reduce((acc, curr) => acc + parseInt(curr.orders), 0);
-
-        res.json({
-            success: true,
-            data: {
-                totals: {
-                    revenue: totalRevenue,
-                    orders: totalOrders
-                },
-                trend: stats
-            }
-        });
-
-    } catch (error) {
-        console.error("Dashboard Summary Error:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
+    // Forward to getDashboardOverview
+    return exports.getDashboardOverview(req, res);
 };
 
-/**
- * Get Platform Health (Growth & Traffic)
- */
 exports.getPlatformHealth = async (req, res) => {
-    try {
-        // 1. Total Companies (Active in last 30d)
-        // We can query sales_metrics distinct count
-        const companiesCount = await sequelize.query(`
-            SELECT COUNT(DISTINCT "companyId") as count 
-            FROM sales_metrics 
-            WHERE time > NOW() - INTERVAL '30 days'
-        `, { type: sequelize.QueryTypes.SELECT });
-
-        // 2. Event Throughput (Last 24h)
-        const eventThroughput = await sequelize.query(`
-            SELECT 
-                time_bucket('1 hour', time) as hour,
-                COUNT(*) as count
-            FROM analytics_events
-            WHERE time > NOW() - INTERVAL '24 hours'
-            GROUP BY hour
-            ORDER BY hour ASC
-        `, { type: sequelize.QueryTypes.SELECT });
-
-        res.json({
-            success: true,
-            data: {
-                activeCompanies30d: parseInt(companiesCount[0]?.count || 0),
-                eventThroughput24h: eventThroughput
-            }
-        });
-
-    } catch (error) {
-        console.error("Platform Health Error:", error);
-        res.status(500).json({ success: false, message: error.message });
-    }
+    // Basic implementation
+    return exports.getDashboardOverview(req, res);
 };
