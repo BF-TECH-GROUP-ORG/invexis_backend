@@ -17,9 +17,25 @@ async function checkOverdues() {
         
         for (const d of debts) {
             const overdueDays = Math.max(0, Math.floor((now - d.dueDate) / (1000 * 60 * 60 * 24)));
-            if (d.overdueDays !== overdueDays) {
-                updates.push({ id: d._id, overdueDays });
-                events.push({ eventType: 'DEBT_OVERDUE', payload: { debtId: d._id, companyId: d.companyId, shopId: d.shopId, customerId: d.customerId, overdueDays } });
+                if (d.overdueDays !== overdueDays) {
+                    updates.push({ id: d._id, overdueDays });
+                    events.push({
+                        eventType: 'DEBT_OVERDUE',
+                        payload: {
+                            debtId: d._id,
+                            companyId: d.companyId,
+                            shopId: d.shopId,
+                            hashedCustomerId: d.hashedCustomerId,
+                            customer: {
+                                name: d.customer?.name || null,
+                                phone: d.customer?.phone || null
+                            },
+                            overdueDays,
+                            totalAmount: d.totalAmount,
+                            balance: d.balance,
+                            dueDate: d.dueDate
+                        }
+                    });
             }
         }
         

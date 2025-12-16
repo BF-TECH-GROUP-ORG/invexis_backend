@@ -15,7 +15,10 @@ module.exports = [
     events: [
       "sale.created",
       "sale.cancelled",
-      "sale.return.confirmed"
+      "sale.canceled",
+      "sale.return.confirmed",
+      "sale.return.fully_returned",
+      "sale.return.restore_stock"
     ]
   },
   {

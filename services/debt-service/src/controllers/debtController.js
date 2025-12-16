@@ -171,8 +171,9 @@ async function listShopUnpaidDebts(req, res) {
 
 async function listCustomerDebts(req, res) {
     try {
-        const customerId = req.params.customerId;
-        const result = await debtService.listDebts({ customerId });
+        // Treat route param as hashedCustomerId (no raw customer ids in Debt)
+        const hashedCustomerId = req.params.customerId;
+        const result = await debtService.listDebts({ hashedCustomerId });
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -183,9 +184,14 @@ async function listCustomerDebts(req, res) {
 // List paid debts for a customer (convenience route)
 async function listCustomerPaidDebts(req, res) {
     try {
-        const customerId = req.params.customerId;
+        const hashedCustomerId = req.params.customerId;
         const { page, limit } = req.query;
-        const result = await debtService.listDebts({ customerId, status: 'PAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        const result = await debtService.listDebts({
+            hashedCustomerId,
+            status: 'PAID',
+            page: Number(page) || 1,
+            limit: Number(limit) || 50
+        });
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -196,9 +202,14 @@ async function listCustomerPaidDebts(req, res) {
 // List partially-paid debts for a customer
 async function listCustomerPartiallyPaidDebts(req, res) {
     try {
-        const customerId = req.params.customerId;
+        const hashedCustomerId = req.params.customerId;
         const { page, limit } = req.query;
-        const result = await debtService.listDebts({ customerId, status: 'PARTIALLY_PAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        const result = await debtService.listDebts({
+            hashedCustomerId,
+            status: 'PARTIALLY_PAID',
+            page: Number(page) || 1,
+            limit: Number(limit) || 50
+        });
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -209,9 +220,14 @@ async function listCustomerPartiallyPaidDebts(req, res) {
 // List unpaid debts for a customer
 async function listCustomerUnpaidDebts(req, res) {
     try {
-        const customerId = req.params.customerId;
+        const hashedCustomerId = req.params.customerId;
         const { page, limit } = req.query;
-        const result = await debtService.listDebts({ customerId, status: 'UNPAID', page: Number(page) || 1, limit: Number(limit) || 50 });
+        const result = await debtService.listDebts({
+            hashedCustomerId,
+            status: 'UNPAID',
+            page: Number(page) || 1,
+            limit: Number(limit) || 50
+        });
         res.json(result);
     } catch (err) {
         console.error(err);
@@ -326,9 +342,9 @@ async function shopAnalytics(req, res) {
 
 async function customerAnalytics(req, res) {
     try {
-        const customerId = req.params.customerId;
+        const hashedCustomerId = req.params.customerId;
         const companyId = req.query.companyId || req.headers['x-company-id'];
-        const data = await debtService.customerAnalytics({ companyId, customerId });
+        const data = await debtService.customerAnalytics({ companyId, hashedCustomerId });
         res.json(data);
     } catch (err) {
         console.error(err);

@@ -45,13 +45,22 @@ module.exports = async function handleInventoryReturnEvent(event) {
 async function handleReturnConfirmed(data) {
   const { returnId, saleId, companyId, confirmedItems = [] } = data;
 
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`✅ [SALES] Received inventory.return.confirmed event`);
+  console.log(`${'='.repeat(80)}`);
+  console.log(`Return ID: ${returnId}`);
+  console.log(`Sale ID: ${saleId}`);
+  console.log(`Company ID: ${companyId}`);
+  console.log(`Confirmed Items:`, JSON.stringify(confirmedItems, null, 2));
+  console.log(`${'='.repeat(80)}\n`);
+
   if (!returnId || !saleId) {
     console.warn("⚠️ Return confirmed event missing returnId or saleId");
     return;
   }
 
   try {
-    console.log(`✅ Inventory confirmed return ${returnId} for sale ${saleId}`);
+    console.log(`🔄 Updating return ${returnId} status to fully_returned...`);
 
     // Update return status to fully_returned
     const [updated] = await SalesReturn.update(
@@ -59,13 +68,14 @@ async function handleReturnConfirmed(data) {
         status: "fully_returned",
         confirmedAt: new Date(),
       },
-      { where: { id: returnId, saleId } }
+      { where: { returnId, saleId } }
     );
 
     if (updated) {
       console.log(`✅ Sales return ${returnId} marked as fully_returned`);
 
       // Update sale status to reflect full return
+      console.log(`🔄 Updating sale ${saleId} payment status to refunded...`);
       await Sale.update(
         { paymentStatus: "refunded" },
         { where: { saleId } }
@@ -75,9 +85,13 @@ async function handleReturnConfirmed(data) {
       // Log confirmed items for audit trail
       if (confirmedItems.length > 0) {
         console.log(
-          `📋 Confirmed items: ${confirmedItems.map((i) => `${i.productId}(qty:${i.quantity})`).join(", ")}`
+          `📋 Confirmed items: ${confirmedItems.map((i) => `${i.productId} (${i.oldQuantity} → ${i.newQuantity})`).join(", ")}`
         );
       }
+
+      console.log(`\n✅ [SALES] Return confirmation completed successfully\n`);
+    } else {
+      console.warn(`⚠️ No return record updated for returnId ${returnId}, saleId ${saleId}`);
     }
   } catch (error) {
     console.error(
@@ -110,18 +124,34 @@ async function handleReturnRejected(data) {
         rejectionReason: reason,
         rejectedAt: new Date(),
       },
-      { where: { id: returnId, saleId } }
+      { where: { returnId, saleId } }
     );
 
     if (updated) {
       console.log(`⚠️ Sales return ${returnId} marked as rejected`);
 
-      // Revert sale payment status back to paid (no refund)
-      await Sale.update(
-        { paymentStatus: "paid" },
-        { where: { saleId } }
-      );
-      console.log(`⚠️ Sale ${saleId} payment status reverted to paid (no refund)`);
+      // Check if there are other non-rejected returns for this sale
+      const otherReturns = await SalesReturn.count({
+        where: {
+          saleId,
+          returnId: { [require('sequelize').Op.ne]: returnId },
+          status: { [require('sequelize').Op.notIn]: ['rejected'] }
+        }
+      });
+
+      // Only revert payment status and isReturned flag if no other active returns exist
+      if (otherReturns === 0) {
+        await Sale.update(
+          {
+            paymentStatus: "paid",
+            isReturned: false
+          },
+          { where: { saleId } }
+        );
+        console.log(`⚠️ Sale ${saleId} payment status reverted to paid and isReturned set to false (no other active returns)`);
+      } else {
+        console.log(`ℹ️ Sale ${saleId} still has ${otherReturns} other active return(s), keeping isReturned as true`);
+      }
     }
   } catch (error) {
     console.error(
@@ -157,7 +187,7 @@ async function handleReturnPartiallyReceived(data) {
         rejectedItemsCount: rejectedItems.length,
         partiallyReceivedAt: new Date(),
       },
-      { where: { id: returnId, saleId } }
+      { where: { returnId, saleId } }
     );
 
     if (updated) {

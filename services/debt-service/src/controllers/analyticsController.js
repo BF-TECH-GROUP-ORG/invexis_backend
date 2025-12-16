@@ -25,9 +25,9 @@ async function shopAnalytics(req, res) {
 
 async function customerAnalytics(req, res) {
     try {
-        const customerId = req.params.customerId;
+        const hashedCustomerId = req.params.customerId;
         const companyId = req.query.companyId || req.headers['x-company-id'];
-        const data = await analyticsService.customerAnalytics({ companyId, customerId });
+        const data = await analyticsService.customerAnalytics({ companyId, hashedCustomerId });
         res.json(data);
     } catch (err) {
         console.error(err);
@@ -77,9 +77,9 @@ async function shopSummary(req, res) {
 
 async function customerSummary(req, res) {
     try {
-        const customerId = req.params.customerId;
-        if (!customerId) return res.status(400).json({ error: 'customerId required' });
-        const summary = await summaryRepo.findCustomerSummary(customerId);
+        const hashedCustomerId = req.params.customerId;
+        if (!hashedCustomerId) return res.status(400).json({ error: 'customerId required' });
+        const summary = await summaryRepo.findCustomerSummary(hashedCustomerId);
         res.json({ summary });
     } catch (err) {
         console.error(err);

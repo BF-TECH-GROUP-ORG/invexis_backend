@@ -6,7 +6,7 @@ async function findByHashedCustomerId(hashedCustomerId) {
 }
 
 // Upsert on debt create: increment totals
-async function upsertOnDebtCreate({ hashedCustomerId, amount = 0, companyId, shareLevel = 'NONE', createdAt }) {
+async function upsertOnDebtCreate({ hashedCustomerId, amount = 0, companyId, createdAt }) {
     if (!hashedCustomerId) return null;
     const now = new Date();
 
@@ -25,19 +25,25 @@ async function upsertOnDebtCreate({ hashedCustomerId, amount = 0, companyId, sha
     doc.companies = Array.isArray(doc.companies) ? doc.companies.filter(Boolean) : [];
     doc.numCompaniesWithDebt = doc.companies.length;
 
-    // Update worstShareLevel (NONE < PARTIAL < FULL)
-    const levels = { NONE: 0, PARTIAL: 1, FULL: 2 };
-    const incoming = levels[shareLevel] || 0;
-    const current = levels[doc.worstShareLevel] || 0;
-    if (incoming > current) doc.worstShareLevel = shareLevel;
-
     // Simple risk scoring heuristic (can be tuned): combine outstanding, counts and largest debt
     const score = computeRiskScore({ totalOutstanding: doc.totalOutstanding, numActiveDebts: doc.numActiveDebts, largestDebt: doc.largestDebt });
     doc.riskScore = score;
     doc.riskLabel = score >= 75 ? 'HIGH' : (score >= 40 ? 'MEDIUM' : 'LOW');
 
     // Persist derived fields back
-    await CrossCompanySummary.findOneAndUpdate({ hashedCustomerId }, { $set: { numCompaniesWithDebt: doc.numCompaniesWithDebt, worstShareLevel: doc.worstShareLevel, riskScore: doc.riskScore, riskLabel: doc.riskLabel, companies: doc.companies } });
+    await CrossCompanySummary.findOneAndUpdate(
+        { hashedCustomerId },
+        {
+            $set: {
+                numCompaniesWithDebt: doc.numCompaniesWithDebt,
+                // worstShareLevel is now effectively always FULL, but we keep the field for compatibility
+                worstShareLevel: 'FULL',
+                riskScore: doc.riskScore,
+                riskLabel: doc.riskLabel,
+                companies: doc.companies
+            }
+        }
+    );
 
     return await CrossCompanySummary.findOne({ hashedCustomerId }).lean();
 }

@@ -495,6 +495,12 @@ const updateProfile = async (req, res, next) => {
     try {
         const profileImage = req.body.profileImage || null;
         const out = await authService.updateProfile(req.user._id, req.body, profileImage);
+        
+        // Handle validation errors from service
+        if (out.status && out.message) {
+            return res.status(out.status).json({ ok: false, message: out.message });
+        }
+        
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -541,6 +547,12 @@ const updateUser = async (req, res, next) => {
     try {
         const { id } = req.params;
         const out = await authService.updateUser(req.user._id, id, req.body);
+        
+        // Handle validation errors from service
+        if (out.status && out.message) {
+            return res.status(out.status).json({ ok: false, message: out.message });
+        }
+        
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);

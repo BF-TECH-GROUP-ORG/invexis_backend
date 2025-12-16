@@ -20,7 +20,6 @@ try {
 const { 
   authenticateToken,
   requireRole,
-  requireCompanyAccess 
 } = require("/app/shared/middlewares/auth/production-auth");
 const {
   checkSubscriptionStatus,
@@ -231,214 +230,29 @@ app.use("/api", limiter);
 app.use("/api/auth", authLimiter, authProxy);
 
 // Protected services (require authentication - enforced by services themselves)
-app.use("/api/company", companyProxy);
-app.use("/api/shop", shopProxy);
-app.use("/api/inventory", inventoryProxy);
-app.use("/api/sales", salesProxy);
-app.use("/api/payment", paymentProxy);
-app.use("/api/ecommerce", ecommerceProxy);
-app.use("/api/notification", notificationProxy);
-app.use("/api/analytics", analyticsProxy);
-app.use("/api/audit", auditProxy);
-app.use("/api/debt", debtProxy);
+app.use("/api/company",authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']), companyProxy);
+app.use("/api/shop", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),shopProxy);
+app.use("/api/inventory", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),inventoryProxy);
+app.use("/api/sales", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),salesProxy);
+app.use("/api/payment", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),paymentProxy);
+app.use("/api/ecommerce",authenticateToken, ecommerceProxy);
+app.use("/api/notification", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']), notificationProxy);
+app.use("/api/analytics",authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']), analyticsProxy);
+app.use("/api/audit", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),auditProxy);
+app.use("/api/debt",authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']), debtProxy);
 
 // Socket.IO specific routes (add these before other websocket routes)
 app.use("/socket.io", websocketProxy);
 
 // General websocket routes
 app.use("/api/websocket", websocketProxy);
-/**
-these routes will be applied when uncommented during freemium implementation
-* app.use("/api/auth", authLimiter, authProxy);
-
-// Protected services (require authentication - enforced by services themselves)
-app.use("/api/company", companyProxy);
-app.use("/api/shop", shopProxy);
-app.use("/api/inventory", inventoryProxy);
-app.use("/api/sales", salesProxy);
-app.use("/api/payment", paymentProxy);
-app.use("/api/ecommerce", ecommerceProxy);
-app.use("/api/notification", notificationProxy);
-app.use("/api/analytics", analyticsProxy);
-app.use("/api/audit", auditProxy);
-app.use("/api/debt", debtProxy);
-
-// Socket.IO specific routes (add these before other websocket routes)
-app.use("/socket.io", websocketProxy);
-
-// General websocket routes
-app.use("/api/websocket", websocketProxy);
-
-*/
 app.use("/api/auth", authLimiter, authProxy);
 
-// Protected services (require authentication - enforced by services themselves)
-app.use("/api/company", companyProxy);
-app.use("/api/shop", shopProxy);
-app.use("/api/inventory", inventoryProxy);
-app.use("/api/sales", salesProxy);
-app.use("/api/payment", paymentProxy);
-app.use("/api/ecommerce", ecommerceProxy);
-app.use("/api/notification", notificationProxy);
-app.use("/api/analytics", analyticsProxy);
-app.use("/api/audit", authenticateToken, auditProxy);
-app.use("/api/debt", debtProxy);
-
 // Socket.IO specific routes (add these before other websocket routes)
 app.use("/socket.io", websocketProxy);
 
 // General websocket routes
-app.use("/api/websocket", authenticateToken, websocketProxy);
-
-// Auth service (public routes, no subscription check needed)
-// app.use("/api/auth", authLimiter, authProxy);
-
-// // ============================================================================
-// // COMPANY SERVICE - /api/company/*
-// // ============================================================================
-// // Features: Company management, roles, subscriptions
-// // Protection: All operations require active subscription
-// app.use("/api/company",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   checkFeatureAccess("staffManagement", "manageRoles"),
-//   companyProxy
-// );
-
-// // ============================================================================
-// // SHOP SERVICE - /api/shop/*
-// // ============================================================================
-// // Features: Single shop (basic), multi-shop (mid+)
-// // Protection: Multi-shop requires mid tier minimum
-// app.use("/api/shop",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   shopProxy  // Shop service applies tier checks internally
-// );
-
-// // ============================================================================
-// // INVENTORY SERVICE - /api/inventory/*
-// // ============================================================================
-// // Features: Stock in/out, reporting (all tiers)
-// // Protection: Basic subscription + feature access
-// app.use("/api/inventory",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   checkFeatureAccess("inventory", "stockInOut"),
-//   inventoryProxy
-// );
-
-// // ============================================================================
-// // SALES SERVICE - /api/sales/*
-// // ============================================================================
-// // Routes:
-// // - POST /receipts          (basic+) - checkFeatureAccess('sales', 'receipts')
-// // - POST /invoices          (pro)    - checkFeatureAccess('sales', 'invoicing')
-// // - GET  /reports           (basic+) - checkFeatureAccess('sales', 'internalSales')
-// // Protection: Subscription + tier-based feature access
-// app.use("/api/sales",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   salesProxy  // Sales service applies feature checks per endpoint
-// );
-
-// // ============================================================================
-// // PAYMENT SERVICE - /api/payment/*
-// // ============================================================================
-// // Routes:
-// // - POST /process           (basic+) - Internal payments
-// // - POST /ecommerce/pay     (pro)    - E-commerce payments
-// // Protection: Basic (internal), Pro (e-commerce)
-// app.use("/api/payment",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   paymentProxy  // Payment service applies tier checks
-// );
-
-// // ============================================================================
-// // ECOMMERCE SERVICE - /api/ecommerce/*
-// // ============================================================================
-// // Routes:
-// // - GET  /products          (pro) - checkFeatureAccess('ecommerce', 'browse')
-// // - GET  /search            (pro) - checkFeatureAccess('ecommerce', 'search')
-// // - POST /checkout          (pro) - checkFeatureAccess('ecommerce', 'checkout')
-// // Protection: Pro tier only
-// app.use("/api/ecommerce",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   checkSubscriptionTier('pro'),
-//   checkFeatureAccess("ecommerce", "browse"),
-//   ecommerceProxy
-// );
-
-// // ============================================================================
-// // NOTIFICATION SERVICE - /api/notification/*
-// // ============================================================================
-// // Features: In-app, email, SMS (all tiers)
-// // Protection: Basic subscription
-// app.use("/api/notification",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   notificationProxy  // Handles tier-specific limits
-// );
-
-// // ============================================================================
-// // ANALYTICS SERVICE - /api/analytics/*
-// // ============================================================================
-// // Routes:
-// // - GET  /summary           (basic+) - checkFeatureAccess('analytics', 'basicSummary')
-// // - GET  /dashboard         (pro)    - checkFeatureAccess('analytics', 'fullDashboards')
-// // Protection: Subscription + feature-based
-// app.use("/api/analytics",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   analyticsProxy  // Handles feature checks per endpoint
-// );
-
-// // ============================================================================
-// // AUDIT SERVICE - /api/audit/*
-// // ============================================================================
-// // Features: Audit logs (all tiers)
-// // Protection: Basic subscription
-// app.use("/api/audit",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   auditProxy
-// );
-
-// // ============================================================================
-// // DEBT SERVICE - /api/debt/*
-// // ============================================================================
-// // Routes:
-// // - POST /record            (mid+) - checkFeatureAccess('debt', 'record')
-// // - GET  /track             (mid+) - checkFeatureAccess('debt', 'track')
-// // - GET  /reports           (mid+) - checkFeatureAccess('debt', 'reports')
-// // Protection: Mid tier minimum
-// app.use("/api/debt",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   checkSubscriptionTier('mid'),
-//   checkFeatureAccess("debt", "record"),
-//   debtProxy
-// );
-
-// // ============================================================================
-// // WEBSOCKET SERVICE - /api/websocket/* and /socket.io/*
-// // ============================================================================
-// // Features: Real-time updates (all tiers)
-// // Protection: Basic subscription
-// app.use("/api/websocket",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   websocketProxy
-// );
-
-// // Socket.IO specific routes (add these before other websocket routes)
-// app.use("/socket.io",
-//   authenticateToken,
-//   checkSubscriptionStatus(),
-//   websocketProxy
-// );
+app.use("/api/websocket", websocketProxy);
 
 // Root endpoint
 app.get("/", (req, res) => {

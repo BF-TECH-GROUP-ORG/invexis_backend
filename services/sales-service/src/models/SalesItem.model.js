@@ -14,7 +14,17 @@ const SaleItem = sequelize.define(
     productId: { type: DataTypes.STRING, allowNull: false },
     productName: { type: DataTypes.STRING, allowNull: false },
     category: { type: DataTypes.STRING, defaultValue: "Uncategorized" },
-    quantity: { type: DataTypes.INTEGER, allowNull: false },
+    originalQuantity: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Original quantity sold (before any returns) - used for validation"
+    },
+    quantity: { type: DataTypes.INTEGER, allowNull: false, comment: "Current quantity (after returns deducted)" },
+    returnedQuantity: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      comment: "Quantity that has been returned from this sale item"
+    },
     unitPrice: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
     costPrice: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
     discount: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },

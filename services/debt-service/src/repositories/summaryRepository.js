@@ -2,10 +2,11 @@ const CustomerSummary = require('../models/customer_summery.model');
 const ShopSummary = require('../models/shop_summery.model');
 const CompanySummary = require('../models/company_summery.model');
 
-async function upsertCustomerOnCreate({ companyId, customerId, totalAmount, amountPaidNow }) {
+// Customer summaries are keyed by companyId + hashedCustomerId
+async function upsertCustomerOnCreate({ companyId, hashedCustomerId, totalAmount, amountPaidNow }) {
     const outstanding = totalAmount - amountPaidNow;
     return CustomerSummary.findOneAndUpdate(
-        { companyId, customerId },
+        { companyId, hashedCustomerId },
         {
             $inc: {
                 totalDebts: 1,
@@ -21,9 +22,9 @@ async function upsertCustomerOnCreate({ companyId, customerId, totalAmount, amou
     );
 }
 
-async function updateCustomerOnRepayment({ companyId, customerId, amountPaid }) {
+async function updateCustomerOnRepayment({ companyId, hashedCustomerId, amountPaid }) {
     return CustomerSummary.findOneAndUpdate(
-        { companyId, customerId },
+        { companyId, hashedCustomerId },
         {
             $inc: { totalOutstanding: -amountPaid, totalRepaid: amountPaid },
             $set: { lastPaymentDate: new Date(), updatedAt: new Date() }
@@ -104,11 +105,27 @@ async function updateMonthlyTrend(companyId, monthKey, { newDebts = 0, repaid = 
     return doc.save();
 }
 
+// Simple find helpers used by analyticsController summary endpoints
+async function findCompanySummary(companyId) {
+    return CompanySummary.findOne({ companyId }).lean();
+}
+
+async function findShopSummary(shopId) {
+    return ShopSummary.findOne({ shopId }).lean();
+}
+
+async function findCustomerSummary(hashedCustomerId) {
+    return CustomerSummary.findOne({ hashedCustomerId }).lean();
+}
+
 module.exports = {
     upsertCustomerOnCreate,
     updateCustomerOnRepayment,
     upsertShopOnCreate,
     updateShopOnRepayment,
     upsertCompanyOnCreate,
-    updateCompanyOnRepayment
+    updateCompanyOnRepayment,
+    findCompanySummary,
+    findShopSummary,
+    findCustomerSummary
 };

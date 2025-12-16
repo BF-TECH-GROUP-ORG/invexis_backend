@@ -115,7 +115,6 @@ const handleDebtRepaid = async (payload) => {
             repaymentId,
             companyId,
             shopId,
-            customerId,
             amountPaid,
             paymentMethod,
             paymentReference,
@@ -130,7 +129,6 @@ const handleDebtRepaid = async (payload) => {
             repaymentId,
             companyId,
             shopId,
-            customerId,
             paymentDetails: {
                 amountPaid,
                 paymentMethod,
@@ -166,7 +164,6 @@ const handleDebtFullyPaid = async (payload) => {
             debtId,
             companyId,
             shopId,
-            customerId,
             totalAmount,
             fullyPaidAt
         } = payload;
@@ -176,7 +173,6 @@ const handleDebtFullyPaid = async (payload) => {
             debtId,
             companyId,
             shopId,
-            customerId,
             debtDetails: {
                 totalAmount
             },

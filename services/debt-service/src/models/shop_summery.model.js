@@ -14,8 +14,9 @@ const ShopSummarySchema = new mongoose.Schema({
 
 
     topCustomers: [
-        {                                
-            customerId: { type: mongoose.Types.ObjectId },
+        {
+            // Track by hashedCustomerId instead of raw customerId
+            hashedCustomerId: { type: String },
             outstanding: { type: Number }
         }
     ],

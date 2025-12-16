@@ -34,33 +34,25 @@ async function processReminders() {
                     debtId: d._id,
                     companyId: d.companyId,
                     shopId: d.shopId,
-                    customerId: d.customerId,
+                    hashedCustomerId: d.hashedCustomerId,
+                    customer: {
+                        name: d.customer?.name || null,
+                        phone: d.customer?.phone || null
+                    },
                     dueDate: d.dueDate,
                     daysUntilDue: days,
                     totalAmount: d.totalAmount,
                     balance: d.balance
                 };
 
-                // If consentRef present, we can send customer reminder; otherwise send only company notification
-                if (d.consentRef) {
-                    // enqueue customer reminder event + best-effort immediate publish
-                    const evType = `DEBT_REMINDER_UPCOMING_${days}`;
-                    try { inMemoryStore.enqueueEvent({ eventType: evType, payload }); } catch (e) { }
-                    try {
-                        if (global && typeof global.rabbitmqPublish === 'function') {
-                            await global.rabbitmqPublish(evType.toLowerCase().replace(/_/g, '.'), payload);
-                        }
-                    } catch (e) { /* best-effort publish failed, outbox will handle */ }
-                } else {
-                    // enqueue company-only reminder + best-effort immediate publish
-                    const evType = `DEBT_REMINDER_UPCOMING_${days}_COMPANY`;
-                    try { inMemoryStore.enqueueEvent({ eventType: evType, payload }); } catch (e) { }
-                    try {
-                        if (global && typeof global.rabbitmqPublish === 'function') {
-                            await global.rabbitmqPublish(evType.toLowerCase().replace(/_/g, '.'), payload);
-                        }
-                    } catch (e) { }
-                }
+                // Always send a single unified reminder event (no consentRef / shareLevel distinction)
+                const evType = `DEBT_REMINDER_UPCOMING_${days}`;
+                try { inMemoryStore.enqueueEvent({ eventType: evType, payload }); } catch (e) { }
+                try {
+                    if (global && typeof global.rabbitmqPublish === 'function') {
+                        await global.rabbitmqPublish(evType.toLowerCase().replace(/_/g, '.'), payload);
+                    }
+                } catch (e) { /* best-effort publish failed, outbox will handle */ }
 
                 // Record reminder history
                 d.reminderHistory = d.reminderHistory || [];
@@ -84,22 +76,20 @@ async function processReminders() {
                     debtId: d._id,
                     companyId: d.companyId,
                     shopId: d.shopId,
-                    customerId: d.customerId,
+                    hashedCustomerId: d.hashedCustomerId,
+                    customer: {
+                        name: d.customer?.name || null,
+                        phone: d.customer?.phone || null
+                    },
                     dueDate: d.dueDate,
                     overdueDays: days,
                     totalAmount: d.totalAmount,
                     balance: d.balance
                 };
 
-                if (d.consentRef) {
-                    const evType = `DEBT_REMINDER_OVERDUE_${days}`;
-                    try { inMemoryStore.enqueueEvent({ eventType: evType, payload }); } catch (e) { }
-                    try { if (global && typeof global.rabbitmqPublish === 'function') await global.rabbitmqPublish(evType.toLowerCase().replace(/_/g, '.'), payload); } catch (e) { }
-                } else {
-                    const evType = `DEBT_REMINDER_OVERDUE_${days}_COMPANY`;
-                    try { inMemoryStore.enqueueEvent({ eventType: evType, payload }); } catch (e) { }
-                    try { if (global && typeof global.rabbitmqPublish === 'function') await global.rabbitmqPublish(evType.toLowerCase().replace(/_/g, '.'), payload); } catch (e) { }
-                }
+                const evType = `DEBT_REMINDER_OVERDUE_${days}`;
+                try { inMemoryStore.enqueueEvent({ eventType: evType, payload }); } catch (e) { }
+                try { if (global && typeof global.rabbitmqPublish === 'function') await global.rabbitmqPublish(evType.toLowerCase().replace(/_/g, '.'), payload); } catch (e) { }
 
                 d.reminderHistory = d.reminderHistory || [];
                 d.reminderHistory.push({ type: marker, date: new Date(), meta: { via: 'cron' } });
@@ -120,7 +110,11 @@ async function processReminders() {
                 debtId: d._id,
                 companyId: d.companyId,
                 shopId: d.shopId,
-                customerId: d.customerId,
+                hashedCustomerId: d.hashedCustomerId,
+                customer: {
+                    name: d.customer?.name || null,
+                    phone: d.customer?.phone || null
+                },
                 dueDate: d.dueDate,
                 overdueDays: Math.max(0, Math.floor((now - d.dueDate) / (1000 * 60 * 60 * 24))),
                 totalAmount: d.totalAmount,

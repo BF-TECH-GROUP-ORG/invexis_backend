@@ -41,6 +41,9 @@ class SalesService {
           customerName: saleData.customerName,
           customerPhone: saleData.customerPhone,
           customerAddress: saleData.customerAddress,
+          hashedCustomerId: saleData.hashedCustomerId || "",
+          idebt: saleData.idebt || false,
+          isTransfer: saleData.isTransfer || false,
         },
         { transaction }
       );
@@ -200,8 +203,11 @@ class SalesService {
     const transaction = await sequelize.transaction();
 
     try {
-      // 1. Find the sale
-      const sale = await Sale.findByPk(saleId, { transaction });
+      // 1. Find the sale with items
+      const sale = await Sale.findByPk(saleId, {
+        include: [{ model: SalesItem, as: "items" }],
+        transaction
+      });
       if (!sale) {
         throw new Error("Sale not found");
       }
@@ -215,18 +221,29 @@ class SalesService {
         { transaction }
       );
 
-      // 3. Record outbox event
+      // 3. Get sale items for stock restoration
+      const items = sale.items ? sale.items.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        costPrice: item.costPrice
+      })) : [];
+
+      // 4. Record outbox event with items for inventory service
       await OutboxService.create(
         {
-          type: "sale.canceled",
-          exchange: "invexis_events",
-          routingKey: "sale.canceled",
+          type: "sale.cancelled",
+          exchange: "events_topic",
+          routingKey: "sale.cancelled",
           payload: {
             saleId: sale.saleId,
             companyId: sale.companyId,
             shopId: sale.shopId,
+            soldBy: sale.soldBy,
             reason,
             canceledBy: actorId,
+            items: items,
             canceledAt: new Date().toISOString(),
             traceId: uuidv4(),
           },
@@ -234,7 +251,7 @@ class SalesService {
         transaction
       );
 
-      // 4. Commit transaction
+      // 5. Commit transaction
       await transaction.commit();
 
       console.log(`✅ Sale ${saleId} canceled successfully`);

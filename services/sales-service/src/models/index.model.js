@@ -47,8 +47,16 @@ Invoice.belongsTo(Sale, {
   as: "sale",
 });
 
-SalesReturnItem.associate = (models) => {
-  SalesReturnItem.belongsTo(models.SalesReturn, { foreignKey: "returnId" });
-};
+// SalesReturn-SalesReturnItem associations
+SalesReturn.hasMany(SalesReturnItem, {
+  foreignKey: "returnId",
+  as: "items",
+  onDelete: "CASCADE",
+});
+
+SalesReturnItem.belongsTo(SalesReturn, {
+  foreignKey: "returnId",
+  as: "return",
+});
 
 module.exports = { Sale, SalesItem, SalesReturn, Invoice, SalesReturnItem, KnownUser };

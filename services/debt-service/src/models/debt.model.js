@@ -5,16 +5,17 @@ const mongoose = require('mongoose');
 const DebtSchema = new mongoose.Schema({
     companyId: { type: String, required: true },
     shopId: { type: String, required: true },
-    customerId: { type: String, required: true },
-    // Embedded customer object for convenience in front-end (id, name, phone)
+    // We no longer store a raw customerId here to avoid leaking local identifiers.
+    // Instead we keep:
+    // - hashedCustomerId: the stable, privacy-preserving identifier
+    // - customer: only the display information needed for the UI (name + phone)
     customer: {
-        id: { type: String, default: null },
         name: { type: String, default: null },
         phone: { type: String, default: null }
     },
 
-    // Hashed customer identifier for cross-company visibility (do NOT store raw phone/NID)
-    hashedCustomerId: { type: String, index: true },
+    // Hashed customer identifier for cross-company and per-customer visibility
+    hashedCustomerId: { type: String, index: true, required: true },
 
     // Sales / staff info
     salesId: { type: mongoose.Types.ObjectId, default: null },
@@ -45,15 +46,7 @@ const DebtSchema = new mongoose.Schema({
 
 
     dueDate: { type: Date },
-    overdueDays: { type: Number, default: 0 },
-
-    // Consent reference and share level control cross-company visibility
-    consentRef: { type: String, default: null },
-    shareLevel: {
-        type: String,
-        enum: ['NONE', 'PARTIAL', 'FULL'],
-        default: 'NONE'
-    },
+    overdueDays: { type: Number, default: 3 },
 
     // Embedded repayment references for fast reads
     repayments: [{ type: mongoose.Types.ObjectId, ref: 'Repayment', default: [] }],
@@ -105,12 +98,11 @@ const DebtSchema = new mongoose.Schema({
 // Composite indexes for optimal query performance (background: true allows index creation without blocking)
 DebtSchema.index({ companyId: 1, isDeleted: 1, createdAt: -1 }, { background: true });
 DebtSchema.index({ shopId: 1, isDeleted: 1, createdAt: -1 }, { background: true });
-DebtSchema.index({ customerId: 1, isDeleted: 1, createdAt: -1 }, { background: true });
 DebtSchema.index({ hashedCustomerId: 1, isDeleted: 1 }, { background: true });
 DebtSchema.index({ dueDate: 1, status: 1, isDeleted: 1 }, { background: true });
 DebtSchema.index({ status: 1, isDeleted: 1, createdAt: -1 }, { background: true });
 DebtSchema.index({ companyId: 1, shopId: 1, status: 1, createdAt: -1 }, { background: true });
-DebtSchema.index({ companyId: 1, customerId: 1, isDeleted: 1, createdAt: -1 }, { background: true });
+// customerId removed from schema; customer-level lookups should now use hashedCustomerId
 DebtSchema.index({ createdAt: -1 }, { background: true });
 DebtSchema.index({ updatedAt: -1 }, { background: true });
 DebtSchema.index({ isDeleted: 1, dueDate: 1 }, { background: true }); // For overdue queries

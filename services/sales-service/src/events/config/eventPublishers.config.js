@@ -55,6 +55,8 @@ module.exports = [
       { key: "sale.return.approved", description: "Return request approved" },
       { key: "sale.return.rejected", description: "Return request rejected" },
       { key: "sale.return.completed", description: "Return process completed" },
+      { key: "sale.return.restore_stock", description: "Restore stock in inventory for returned items" },
+      { key: "sale.return.fully_returned", description: "Return fully processed and confirmed" },
       {
         key: "sale.refund.processed",
         description: "Refund processed for return",

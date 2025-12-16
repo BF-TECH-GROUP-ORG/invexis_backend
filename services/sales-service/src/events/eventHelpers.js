@@ -73,8 +73,18 @@ const saleEvents = {
 
   /**
    * Create outbox event for sale cancellation
+   * @param {number} saleId - Sale ID
+   * @param {string} companyId - Company ID
+   * @param {string} reason - Cancellation reason
+   * @param {object} sale - Optional sale object with shopId, soldBy, etc.
+   * @param {array} items - Optional array of sale items to restore stock
+   * @param {object} trx - Optional transaction
    */
-  async cancelled(saleId, companyId, reason = "", trx = null) {
+  async cancelled(saleId, companyId, reason = "", sale = null, items = [], trx = null) {
+    // If sale object provided, extract shopId and soldBy
+    const shopId = sale?.shopId || null;
+    const soldBy = sale?.soldBy || null;
+
     return await Outbox.create(
       {
         type: "sale.cancelled",
@@ -83,7 +93,16 @@ const saleEvents = {
         payload: {
           saleId,
           companyId,
+          shopId,
+          soldBy,
           reason,
+          items: items.map(item => ({
+            productId: item.productId,
+            productName: item.productName || null,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice || null,
+            costPrice: item.costPrice || null
+          })),
           canceledAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -221,20 +240,23 @@ const invoiceEvents = {
 const returnEvents = {
   /**
    * Create outbox event for return creation
+   * This event is for notification purposes only
    */
-  async created(saleReturn, sale, trx = null) {
+  async created(saleReturn, sale, items = [], trx = null) {
     return await Outbox.create(
       {
         type: "sale.return.created",
         exchange: "events_topic",
         routingKey: "sale.return.created",
         payload: {
-          returnId: saleReturn.id,
+          returnId: saleReturn.returnId,
           saleId: saleReturn.saleId,
           companyId: sale.companyId,
+          shopId: sale.shopId,
           reason: saleReturn.reason,
           refundAmount: saleReturn.refundAmount,
           status: saleReturn.status,
+          items: items, // Include items for reference
           createdAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -287,27 +309,30 @@ const returnEvents = {
   },
 
   /**
-   * Create outbox event requesting inventory confirmation of return
-   * Inventory service will confirm items are returned and update status to fully_returned
+   * Create outbox event to restore stock in inventory
+   * This is a fire-and-forget event - no confirmation needed
+   * Inventory service will restore stock immediately
    */
-  async requestInventoryConfirmation(
+  async restoreStock(
     returnId,
     saleId,
     companyId,
+    shopId,
     items = [],
     trx = null
   ) {
     return await Outbox.create(
       {
-        type: "sale.return.inventory.confirmation.requested",
+        type: "sale.return.restore_stock",
         exchange: "events_topic",
-        routingKey: "sale.return.inventory.confirmation.requested",
+        routingKey: "sale.return.restore_stock",
         payload: {
           returnId,
           saleId,
           companyId,
-          items, // Array of { productId, quantity }
-          requestedAt: new Date().toISOString(),
+          shopId,
+          items, // Array of { productId, quantity, refundAmount }
+          restoredAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
       },

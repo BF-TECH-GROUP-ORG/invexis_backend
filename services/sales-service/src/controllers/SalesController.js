@@ -35,6 +35,8 @@ const createSale = async (req, res) => {
       customerAddress,
       items = [],
       paymentMethod,
+      idebt = false,
+      isTransfer = false,
     } = req.body;
 
     // Basic validation
@@ -51,11 +53,12 @@ const createSale = async (req, res) => {
 
     if (!knownUserId) {
       // If no knownUserId provided, create/find from customer data
-      if (!customerName || !customerPhone || !customerEmail) {
+      // At minimum, we need customerName and customerPhone (email is optional)
+      if (!customerName || !customerPhone) {
         await t.rollback();
         return res.status(400).json({
           message:
-            "Either knownUserId or customer data (name, phone, email) must be provided",
+            "Either knownUserId or customer data (name and phone) must be provided",
         });
       }
 
@@ -66,7 +69,7 @@ const createSale = async (req, res) => {
           customerId,
           customerName,
           customerPhone,
-          customerEmail,
+          customerEmail: customerEmail || null, // Email is optional
           customerAddress,
         },
         t
@@ -104,6 +107,9 @@ const createSale = async (req, res) => {
     const totalAmount = subTotal - discountTotal + taxTotal;
 
     // Create Sale
+    // Ensure we have the KnownUser record so we can copy hashedCustomerId
+    const fullKnownUser = await KnownUser.findByPk(finalKnownUserId);
+
     const sale = await Sale.create(
       {
         companyId,
@@ -118,6 +124,9 @@ const createSale = async (req, res) => {
         paymentMethod,
         status: "initiated",
         paymentStatus: "pending",
+        idebt,
+        isTransfer,
+        hashedCustomerId: fullKnownUser?.hashedCustomerId || "",
       },
       { transaction: t }
     );
@@ -127,6 +136,7 @@ const createSale = async (req, res) => {
       saleId: sale.saleId,
       productId: i.productId,
       productName: i.productName,
+      originalQuantity: i.quantity, // Store original quantity for return validation
       quantity: i.quantity,
       unitPrice: i.unitPrice,
       costPrice: i.costPrice || 0,
@@ -238,7 +248,13 @@ const getSale = async (req, res) => {
     const sale = await Sale.findByPk(id, {
       include: [
         { model: SalesItem, as: "items" },
-        { model: SalesReturn, as: "returns" },
+        {
+          model: SalesReturn,
+          as: "returns",
+          include: [
+            { model: SalesReturnItem, as: "items" }
+          ]
+        },
         { model: Invoice, as: "invoice" },
         { model: KnownUser, as: "knownUser" },
       ],
@@ -246,10 +262,84 @@ const getSale = async (req, res) => {
 
     if (!sale) return res.status(404).json({ message: "Sale not found" });
 
-    // Set cache
-    await setCache(cacheKey, sale.toJSON(), 1800); // 30m
+    // Enrich sale data with return information
+    const saleData = sale.toJSON();
 
-    return res.json(sale);
+    // Calculate return summary if sale has returns
+    if (saleData.returns && saleData.returns.length > 0) {
+      const returnSummary = {
+        hasReturns: true,
+        totalReturns: saleData.returns.length,
+        totalRefundAmount: saleData.returns.reduce((sum, ret) => sum + Number(ret.refundAmount || 0), 0),
+        returnStatuses: saleData.returns.map(ret => ({
+          returnId: ret.returnId,
+          status: ret.status,
+          refundAmount: ret.refundAmount,
+          reason: ret.reason,
+          createdAt: ret.createdAt
+        })),
+        // Calculate returned quantities per product
+        returnedItems: {}
+      };
+
+      // Aggregate returned quantities by product
+      saleData.returns.forEach(returnRecord => {
+        if (returnRecord.items && returnRecord.items.length > 0) {
+          returnRecord.items.forEach(item => {
+            if (!returnSummary.returnedItems[item.productId]) {
+              returnSummary.returnedItems[item.productId] = {
+                productId: item.productId,
+                totalReturnedQuantity: 0,
+                totalRefundAmount: 0
+              };
+            }
+            returnSummary.returnedItems[item.productId].totalReturnedQuantity += Number(item.quantity || 0);
+            returnSummary.returnedItems[item.productId].totalRefundAmount += Number(item.refundAmount || 0);
+          });
+        }
+      });
+
+      // Convert returnedItems object to array and match with sale items
+      returnSummary.returnedItems = Object.values(returnSummary.returnedItems);
+
+      // Enrich sale items with return information
+      if (saleData.items && saleData.items.length > 0) {
+        saleData.items = saleData.items.map(item => {
+          const returnedItem = returnSummary.returnedItems.find(ri => ri.productId === item.productId);
+          return {
+            ...item,
+            returnedQuantity: returnedItem ? returnedItem.totalReturnedQuantity : 0,
+            returnedAmount: returnedItem ? returnedItem.totalRefundAmount : 0,
+            remainingQuantity: item.quantity - (returnedItem ? returnedItem.totalReturnedQuantity : 0)
+          };
+        });
+      }
+
+      saleData.returnSummary = returnSummary;
+    } else {
+      saleData.returnSummary = {
+        hasReturns: false,
+        totalReturns: 0,
+        totalRefundAmount: 0,
+        returnStatuses: [],
+        returnedItems: []
+      };
+
+      // Add default return info to items
+      if (saleData.items && saleData.items.length > 0) {
+        saleData.items = saleData.items.map(item => ({
+          ...item,
+          returnedQuantity: 0,
+          returnedAmount: 0,
+          remainingQuantity: item.quantity
+        }));
+      }
+    }
+
+    // Set cache
+    await setCache(cacheKey, saleData, 1800); // 30m
+
+    return res.json(saleData);
   } catch (error) {
     console.error("getSale error:", error);
     return res.status(500).json({ error: error.message });
@@ -264,6 +354,8 @@ const updateSale = async (req, res) => {
       "paymentStatus",
       "paymentMethod",
       "soldBy",
+      "idebt",
+      "isTransfer",
     ];
     const payload = {};
     for (const key of allowed) {
@@ -505,72 +597,208 @@ const createReturn = async (req, res) => {
   const t = await Sale.sequelize.transaction();
   try {
     const { saleId, reason, items = [], refundAmount = 0 } = req.body;
+
+    // Validate required fields
     if (!saleId) {
       await t.rollback();
       return res.status(400).json({ message: "saleId is required" });
     }
 
-    const sale = await Sale.findByPk(saleId);
+    if (!items || items.length === 0) {
+      await t.rollback();
+      return res.status(400).json({ message: "At least one item is required for return" });
+    }
+
+    if (refundAmount <= 0) {
+      await t.rollback();
+      return res.status(400).json({ message: "refundAmount must be greater than 0" });
+    }
+
+    // Find the sale
+    const sale = await Sale.findByPk(saleId, { transaction: t });
     if (!sale) {
       await t.rollback();
       return res.status(404).json({ message: "Sale not found" });
+    }
+
+    // Validate sale can be returned
+    if (sale.status === "canceled") {
+      await t.rollback();
+      return res.status(400).json({ message: "Cannot return a canceled sale" });
+    }
+
+    // Validate refund amount doesn't exceed total
+    if (refundAmount > Number(sale.totalAmount)) {
+      await t.rollback();
+      return res.status(400).json({
+        message: "Refund amount cannot exceed sale total amount",
+        saleTotal: sale.totalAmount,
+        requestedRefund: refundAmount
+      });
     }
 
     // Create SaleReturn record
     const saleReturn = await SalesReturn.create(
       {
         saleId: sale.saleId,
-        reason,
+        reason: reason || "Customer requested return",
         refundAmount,
         status: "initiated",
       },
       { transaction: t }
     );
 
-    // Insert return items if any
-    if (items.length) {
-      const payload = items.map((it) => ({
-        returnId: saleReturn.id,
-        productId: it.productId,
-        quantity: it.quantity,
-        refundAmount: it.refundAmount || 0,
-      }));
-      (await SalesReturnItem.bulkCreate)
-        ? await SalesReturnItem.bulkCreate(payload, { transaction: t }) // defensive: if model supports
-        : null;
+    // Insert return items
+    const payload = items.map((it) => ({
+      returnId: saleReturn.returnId,
+      productId: it.productId,
+      quantity: it.quantity,
+      refundAmount: it.refundAmount || 0,
+    }));
+
+    await SalesReturnItem.bulkCreate(payload, { transaction: t });
+
+    // Update sale items to deduct returned quantities
+    for (const item of items) {
+      const saleItem = await SalesItem.findOne({
+        where: {
+          saleId: sale.saleId,
+          productId: item.productId
+        },
+        transaction: t
+      });
+
+      if (saleItem) {
+        // Use originalQuantity if available, otherwise use current quantity (for backward compatibility)
+        const originalQty = Number(saleItem.originalQuantity || saleItem.quantity);
+        const currentQuantity = Number(saleItem.quantity);
+        const currentReturnedQty = Number(saleItem.returnedQuantity || 0);
+        const returnQty = Number(item.quantity);
+        const newReturnedQty = currentReturnedQty + returnQty;
+
+        // Validate that returned quantity doesn't exceed ORIGINAL sold quantity
+        if (newReturnedQty > originalQty) {
+          throw new Error(
+            `Cannot return ${returnQty} units of product ${item.productId}. ` +
+            `Originally sold ${originalQty} units, already returned ${currentReturnedQty} units. ` +
+            `Only ${originalQty - currentReturnedQty} units available for return.`
+          );
+        }
+
+        // Deduct the returned quantity from the current sale item quantity
+        const newQuantity = currentQuantity - returnQty;
+
+        // Set originalQuantity if not already set (for existing sales)
+        const updates = {
+          quantity: newQuantity,
+          returnedQuantity: newReturnedQty
+        };
+
+        if (!saleItem.originalQuantity) {
+          updates.originalQuantity = currentQuantity + returnQty; // Reconstruct original
+        }
+
+        // Update quantity, returnedQuantity, and originalQuantity
+        await saleItem.update(updates, { transaction: t });
+
+        console.log(
+          `✅ Updated sale item ${saleItem.saleItemId}: ` +
+          `originalQty: ${originalQty}, ` +
+          `quantity ${currentQuantity} → ${newQuantity}, ` +
+          `returnedQuantity ${currentReturnedQty} → ${newReturnedQty}`
+        );
+      } else {
+        throw new Error(`Sale item not found for product ${item.productId} in sale ${sale.saleId}`);
+      }
     }
 
-    // Update Sale paymentStatus if full refund (simple heuristic)
-    if (refundAmount >= Number(sale.totalAmount || 0)) {
-      await sale.update(
-        { paymentStatus: "partially_returned" },
-        { transaction: t }
-      );
-    }
+    // Calculate new sale totals after deducting returned items
+    const currentTotalAmount = Number(sale.totalAmount);
+    const newTotalAmount = currentTotalAmount - Number(refundAmount);
 
-    // Create outbox events within transaction (will be published by dispatcher)
-    await returnEvents.created(saleReturn, sale, t);
+    console.log(`💰 Updating sale totals: ${currentTotalAmount} - ${refundAmount} = ${newTotalAmount}`);
 
-    // Request inventory service to confirm return and update status to fully_returned
-    // Inventory service will listen for this event and confirm items are returned
-    await returnEvents.requestInventoryConfirmation(
-      saleReturn.id,
+    // Mark the sale as returned and update totals immediately
+    await sale.update({
+      isReturned: true,
+      paymentStatus: "refunded", // Update payment status immediately
+      totalAmount: newTotalAmount, // Deduct refund amount from total
+      subTotal: newTotalAmount // Also update subtotal
+    }, { transaction: t });
+
+    // Update return status to fully_returned immediately
+    await saleReturn.update({
+      status: "fully_returned",
+      confirmedAt: new Date()
+    }, { transaction: t });
+
+    console.log(`✅ Sale ${saleId} marked as returned and refunded`);
+    console.log(`✅ Sale total updated: ${currentTotalAmount} → ${newTotalAmount}`);
+    console.log(`✅ Return ${saleReturn.returnId} marked as fully_returned`);
+
+    // Publish event to inventory service to restore stock
+    // This is fire-and-forget - no confirmation needed
+    console.log(`📤 Publishing sale.return.restore_stock event for return ${saleReturn.returnId}`, {
+      returnId: saleReturn.returnId,
+      saleId: saleReturn.saleId,
+      companyId: sale.companyId,
+      shopId: sale.shopId,
+      itemsCount: items.length,
+      items: items.map(i => ({ productId: i.productId, quantity: i.quantity }))
+    });
+
+    await returnEvents.restoreStock(
+      saleReturn.returnId,
       saleReturn.saleId,
       sale.companyId,
-      items, // Pass items to inventory for confirmation
+      sale.shopId,
+      items,
       t
     );
 
     await t.commit();
+
+    console.log(`✅ Return ${saleReturn.returnId} created for sale ${saleId}`);
+    console.log(`✅ Sale items updated with returned quantities`);
+    console.log(`✅ Event published to restore inventory stock`);
+
+    // Invalidate cache for this sale and company sales list
+    setImmediate(async () => {
+      await delCache(`sale:${saleId}`);
+      if (sale.companyId) {
+        await scanDel(`sales:list:${sale.companyId}*`);
+        await scanDel(`sales:report:${sale.companyId}*`);
+      }
+      console.log(`🗑️ Cache invalidated for sale ${saleId} and company ${sale.companyId}`);
+    });
+
     return res.status(201).json({
-      saleReturn,
-      updatedSale: sale,
-      message: "Return initiated. Awaiting inventory confirmation.",
+      success: true,
+      saleReturn: {
+        returnId: saleReturn.returnId,
+        saleId: saleReturn.saleId,
+        reason: saleReturn.reason,
+        refundAmount: saleReturn.refundAmount,
+        status: saleReturn.status,
+        createdAt: saleReturn.createdAt
+      },
+      sale: {
+        saleId: sale.saleId,
+        totalAmount: sale.totalAmount,
+        paymentStatus: sale.paymentStatus,
+        status: sale.status,
+        isReturned: sale.isReturned
+      },
+      message: "Return created successfully. Stock will be restored in inventory.",
     });
   } catch (error) {
     await t.rollback();
     console.error("createReturn error:", error);
-    return res.status(500).json({ error: error || "Failed to create return" });
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to create return",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
@@ -590,15 +818,78 @@ const listSales = async (req, res) => {
       include: [
         { model: SalesItem, as: "items" },
         { model: Invoice, as: "invoice" },
+        {
+          model: SalesReturn,
+          as: "returns",
+          include: [
+            { model: SalesReturnItem, as: "items" }
+          ]
+        },
+        { model: KnownUser, as: "knownUser" },
       ],
       order: [["createdAt", "DESC"]],
     });
 
+    // Enrich sales data with return information
+    const enrichedSales = sales.map(sale => {
+      const saleData = sale.toJSON();
+
+      // Calculate return summary if sale has returns
+      if (saleData.returns && saleData.returns.length > 0) {
+        const returnSummary = {
+          hasReturns: true,
+          totalReturns: saleData.returns.length,
+          totalRefundAmount: saleData.returns.reduce((sum, ret) => sum + Number(ret.refundAmount || 0), 0),
+          returnStatuses: saleData.returns.map(ret => ({
+            returnId: ret.returnId,
+            status: ret.status,
+            refundAmount: ret.refundAmount,
+            reason: ret.reason,
+            createdAt: ret.createdAt
+          })),
+          // Calculate returned quantities per product
+          returnedItems: {}
+        };
+
+        // Aggregate returned quantities by product
+        saleData.returns.forEach(returnRecord => {
+          if (returnRecord.items && returnRecord.items.length > 0) {
+            returnRecord.items.forEach(item => {
+              if (!returnSummary.returnedItems[item.productId]) {
+                returnSummary.returnedItems[item.productId] = {
+                  productId: item.productId,
+                  totalReturnedQuantity: 0,
+                  totalRefundAmount: 0
+                };
+              }
+              returnSummary.returnedItems[item.productId].totalReturnedQuantity += Number(item.quantity || 0);
+              returnSummary.returnedItems[item.productId].totalRefundAmount += Number(item.refundAmount || 0);
+            });
+          }
+        });
+
+        // Convert returnedItems object to array
+        returnSummary.returnedItems = Object.values(returnSummary.returnedItems);
+
+        saleData.returnSummary = returnSummary;
+      } else {
+        saleData.returnSummary = {
+          hasReturns: false,
+          totalReturns: 0,
+          totalRefundAmount: 0,
+          returnStatuses: [],
+          returnedItems: []
+        };
+      }
+
+      return saleData;
+    });
+
     if (companyId) {
-      await setCache(`sales:list:${companyId}`, sales, 300); // 5m
+      await setCache(`sales:list:${companyId}`, enrichedSales, 300); // 5m
     }
 
-    return res.json(sales);
+    return res.json(enrichedSales);
   } catch (error) {
     console.error("listSales error:", error);
     return res.status(500).json({ error: error.message });
@@ -614,10 +905,60 @@ const getCustomerPurchases = async (req, res) => {
         { model: SalesItem, as: "items" },
         { model: Invoice, as: "invoice" },
         { model: KnownUser, as: "knownUser" },
+        {
+          model: SalesReturn,
+          as: "returns",
+          include: [
+            { model: SalesReturnItem, as: "items" }
+          ]
+        },
       ],
       order: [["createdAt", "DESC"]],
     });
-    return res.json(sales);
+
+    // Enrich sales data with return information
+    const enrichedSales = sales.map(sale => {
+      const saleData = sale.toJSON();
+
+      // Calculate return summary if sale has returns
+      if (saleData.returns && saleData.returns.length > 0) {
+        const returnSummary = {
+          hasReturns: true,
+          totalReturns: saleData.returns.length,
+          totalRefundAmount: saleData.returns.reduce((sum, ret) => sum + Number(ret.refundAmount || 0), 0),
+          returnedItems: {}
+        };
+
+        // Aggregate returned quantities by product
+        saleData.returns.forEach(returnRecord => {
+          if (returnRecord.items && returnRecord.items.length > 0) {
+            returnRecord.items.forEach(item => {
+              if (!returnSummary.returnedItems[item.productId]) {
+                returnSummary.returnedItems[item.productId] = {
+                  productId: item.productId,
+                  totalReturnedQuantity: 0
+                };
+              }
+              returnSummary.returnedItems[item.productId].totalReturnedQuantity += Number(item.quantity || 0);
+            });
+          }
+        });
+
+        returnSummary.returnedItems = Object.values(returnSummary.returnedItems);
+        saleData.returnSummary = returnSummary;
+      } else {
+        saleData.returnSummary = {
+          hasReturns: false,
+          totalReturns: 0,
+          totalRefundAmount: 0,
+          returnedItems: []
+        };
+      }
+
+      return saleData;
+    });
+
+    return res.json(enrichedSales);
   } catch (error) {
     console.error("getCustomerPurchases error:", error);
     return res.status(500).json({ error: error.message });

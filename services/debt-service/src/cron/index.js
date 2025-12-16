@@ -15,7 +15,23 @@ function startOverdueCron() {
                 if (d.overdueDays !== overdueDays) {
                     d.overdueDays = overdueDays;
                     await d.save();
-                    await eventRepo.createEvent({ eventType: 'DEBT_OVERDUE', payload: { debtId: d._id, companyId: d.companyId, shopId: d.shopId, customerId: d.customerId, overdueDays } });
+                    await eventRepo.createEvent({
+                        eventType: 'DEBT_OVERDUE',
+                        payload: {
+                            debtId: d._id,
+                            companyId: d.companyId,
+                            shopId: d.shopId,
+                            hashedCustomerId: d.hashedCustomerId,
+                            customer: {
+                                name: d.customer?.name || null,
+                                phone: d.customer?.phone || null
+                            },
+                            overdueDays,
+                            totalAmount: d.totalAmount,
+                            balance: d.balance,
+                            dueDate: d.dueDate
+                        }
+                    });
                 }
             }
         } catch (err) {

@@ -198,6 +198,18 @@ async function setupSubscribers() {
             const user = await User.findById(userId);
             if (!user) return console.warn(`User ${userId} not found for department update`);
 
+            // Validate department for worker role - must be "sales" or "management"
+            if (user.role === 'worker' && departmentId) {
+                const validDepartments = ['sales', 'management'];
+                const normalizedDept = typeof departmentId === 'string' ? departmentId.trim().toLowerCase() : String(departmentId).trim().toLowerCase();
+                if (!validDepartments.includes(normalizedDept)) {
+                    console.warn(`⚠️ Invalid department "${departmentId}" for worker ${userId}. Must be one of: ${validDepartments.join(', ')}`);
+                    return; // Skip invalid department assignments for workers
+                }
+                // Use normalized department name
+                departmentId = normalizedDept;
+            }
+
             if (!user.assignedDepartments) user.assignedDepartments = [];
 
             switch (type) {
@@ -773,6 +785,27 @@ async function updateProfile(userId, data, profileImage = null) {
     const user = await User.findById(userId);
     if (!user) return { ok: false, status: 404, message: 'User not found' };
 
+    // Validate assignedDepartments for worker role if provided
+    if (value.assignedDepartments && user.role === 'worker') {
+        const validDepartments = ['sales', 'management'];
+        const invalidDepartments = value.assignedDepartments.filter(dept => {
+            const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+            return !validDepartments.includes(normalized);
+        });
+        if (invalidDepartments.length > 0) {
+            return { 
+                ok: false, 
+                status: 400, 
+                message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}` 
+            };
+        }
+        // Normalize to lowercase
+        value.assignedDepartments = value.assignedDepartments.map(dept => {
+            const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+            return normalized;
+        });
+    }
+
     if (profileImage && profileImage.url) {
         value.profilePicture = profileImage.url;
         value.profilePictureCloudinaryId = profileImage.cloudinary_id;
@@ -1329,20 +1362,55 @@ async function getUsers(adminId, role, query) {
 }
 async function createUser(adminId, data) { return { message: 'Use register' }; } // admins should use register or internal
 async function updateUser(adminId, userId, data) {
+    // Validate the update data using updateUserSchema (already imported at top)
+    const { error, value } = updateUserSchema.validate(data, { abortEarly: false });
+    if (error) {
+        const message = error.details.map(detail => detail.message).join(', ');
+        return { ok: false, status: 400, message };
+    }
+
     // Handle preferences separately because it's a referenced document
-    if (data.preferences && typeof data.preferences === 'object') {
+    if (value.preferences && typeof value.preferences === 'object') {
         let pref = await Preference.findOne({ userId });
         if (!pref) {
             pref = new Preference({ userId });
         }
-        Object.assign(pref, data.preferences);
+        Object.assign(pref, value.preferences);
         await pref.save();
 
         // Use the preference ID for the user update
-        data.preferences = pref._id;
+        value.preferences = pref._id;
     }
 
-    const u = await User.findByIdAndUpdate(userId, data, { new: true });
+    // Get existing user to check role if needed for department validation
+    const existingUser = await User.findById(userId);
+    if (!existingUser) {
+        return { ok: false, status: 404, message: 'User not found' };
+    }
+
+    // If updating assignedDepartments and user is a worker, ensure role is in the update or use existing
+    if (value.assignedDepartments && (value.role === 'worker' || existingUser.role === 'worker')) {
+        const validDepartments = ['sales', 'management'];
+        const invalidDepartments = value.assignedDepartments.filter(dept => {
+            const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+            return !validDepartments.includes(normalized);
+        });
+        if (invalidDepartments.length > 0) {
+            return { 
+                ok: false, 
+                status: 400, 
+                message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}` 
+            };
+        }
+        // Normalize to lowercase
+        value.assignedDepartments = value.assignedDepartments.map(dept => {
+            const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+            return normalized;
+        });
+    }
+
+    // Use findByIdAndUpdate with runValidators to ensure schema validation
+    const u = await User.findByIdAndUpdate(userId, value, { new: true, runValidators: true });
     await invalidateUserCache(userId);
     return { user: u };
 }

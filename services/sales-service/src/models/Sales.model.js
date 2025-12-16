@@ -40,6 +40,21 @@ const Sale = sequelize.define(
       type: DataTypes.ENUM("cash", "card", "mobile", "wallet", "bank_transfer"),
     },
     paymentId: { type: DataTypes.BIGINT, defaultValue: 1 },
+    // Hashed customer identifier copied from KnownUser for quick access / joins
+    hashedCustomerId: {
+      type: DataTypes.STRING(128),
+      allowNull: true,
+      comment: "Hashed customer identifier from KnownUser",
+    },
+    // New optional flags
+    idebt: { type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false },
+    isTransfer: { type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false },
+    isReturned: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+      comment: "Indicates if this sale has any returns associated with it"
+    },
   },
   {
     tableName: "sales",
@@ -52,6 +67,10 @@ const Sale = sequelize.define(
       {
         fields: ["knownUserId"],
         name: "idx_sales_known_user_id",
+      },
+      {
+        fields: ["companyId", "hashedCustomerId"],
+        name: "idx_sales_company_hashed_customer",
       },
       {
         fields: ["companyId", "createdAt"],

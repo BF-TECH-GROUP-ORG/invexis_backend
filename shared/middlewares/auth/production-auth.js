@@ -94,6 +94,8 @@ async function fetchUserData(userId, accessToken) {
         // sanitize (similar to what API returns)
         userData = {
           _id: userDoc._id,
+          // Ensure a stable "id" field for all downstream services
+          id: userDoc._id?.toString(),
           email: userDoc.email,
           firstName: userDoc.firstName,
           lastName: userDoc.lastName,

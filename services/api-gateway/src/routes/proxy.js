@@ -19,18 +19,33 @@ const createServiceProxy = (serviceName, serviceUrl, options = {}) => {
         `🔀 [${serviceName}] ${req.method} ${req.originalUrl} → ${serviceUrl}${req.url}`
       );
 
+      // Helper to safely set headers only when value is defined
+      const safeSetHeader = (name, value) => {
+        if (value !== undefined && value !== null) {
+          proxyReq.setHeader(name, String(value));
+        }
+      };
+
       // Add gateway identification header for service trust
       proxyReq.setHeader("X-Gateway-Request", "true");
       proxyReq.setHeader("X-Gateway-Service", serviceName);
       
       // Forward user info from auth middleware if available
       if (req.user) {
-        proxyReq.setHeader("X-User-Id", req.user.id);
-        proxyReq.setHeader("X-User-Email", req.user.email);
-        proxyReq.setHeader("X-User-Role", req.user.role);
-        if (req.user.companies) proxyReq.setHeader("X-User-Companies", JSON.stringify(req.user.companies));
-        if (req.user.shops) proxyReq.setHeader("X-User-Shops", JSON.stringify(req.user.shops));
-        if (req.user.companyId) proxyReq.setHeader("X-Company-Id", req.user.companyId);
+        const user = req.user;
+        // Prefer explicit id, but fall back to _id if necessary
+        const userId = user.id || user._id;
+
+        safeSetHeader("X-User-Id", userId);
+        safeSetHeader("X-User-Email", user.email);
+        safeSetHeader("X-User-Role", user.role);
+        if (user.companies) {
+          safeSetHeader("X-User-Companies", JSON.stringify(user.companies));
+        }
+        if (user.shops) {
+          safeSetHeader("X-User-Shops", JSON.stringify(user.shops));
+        }
+        safeSetHeader("X-Company-Id", user.companyId);
       }
 
       // Handle body for POST/PUT/PATCH
@@ -276,11 +291,20 @@ const websocketProxy = createServiceProxy(
     onProxyReq: (proxyReq, req, res) => {
       console.log(`🔀 [WEBSOCKET] ${req.method} ${req.originalUrl} → ${services.WEBSOCKET_SERVICE}${req.url}`);
 
-      // Forward user info if available
+      // Forward user info if available, safely
       if (req.user) {
-        proxyReq.setHeader("X-User-Id", req.user.id);
-        proxyReq.setHeader("X-User-Email", req.user.email);
-        proxyReq.setHeader("X-User-Role", req.user.role);
+        const user = req.user;
+        const userId = user.id || user._id;
+
+        if (userId !== undefined && userId !== null) {
+          proxyReq.setHeader("X-User-Id", String(userId));
+        }
+        if (user.email) {
+          proxyReq.setHeader("X-User-Email", String(user.email));
+        }
+        if (user.role) {
+          proxyReq.setHeader("X-User-Role", String(user.role));
+        }
       }
     }
   }

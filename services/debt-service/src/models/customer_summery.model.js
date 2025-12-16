@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 
 // models/customerSummary.model.js
+// NOTE: Customer summaries are now keyed by hashedCustomerId instead of raw customerId
 const CustomerSummarySchema = new mongoose.Schema({
     companyId: { type: mongoose.Types.ObjectId, index: true, required: true },
-    customerId: { type: mongoose.Types.ObjectId, index: true, required: true },
+    hashedCustomerId: { type: String, index: true, required: true },
 
     totalDebts: { type: Number, default: 0 },
     activeDebts: { type: Number, default: 0 },
@@ -16,6 +17,6 @@ const CustomerSummarySchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 });
 
-CustomerSummarySchema.index({ companyId: 1, customerId: 1 }, { unique: true });
+CustomerSummarySchema.index({ companyId: 1, hashedCustomerId: 1 }, { unique: true });
 
 module.exports = mongoose.model('CustomerDebtSummary', CustomerSummarySchema);

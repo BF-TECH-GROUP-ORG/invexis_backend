@@ -32,13 +32,21 @@ const KnownUser = sequelize.define(
     customerEmail: {
       type: DataTypes.STRING(255),
       allowNull: true,
-      comment: "Customer email - mandatory",
+      comment: "Customer email - optional",
     },
     customerAddress: {
       type: DataTypes.TEXT,
       allowNull: true,
       comment: "Customer address - optional",
     },
+
+    // Stable hashed identifier for this customer (used by debt-service / cross-company)
+    hashedCustomerId: {
+      type: DataTypes.STRING(128),
+      allowNull: false,
+      comment: "Hashed customer identifier derived from phone/email",
+    },
+
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
@@ -66,8 +74,9 @@ const KnownUser = sequelize.define(
       {
         fields: ["companyId", "customerEmail"],
         name: "idx_known_users_company_email",
-        unique: true,
-        comment: "Unique email per company to avoid duplicity",
+        // Note: Not unique because email is optional (can be NULL)
+        // Multiple NULL emails are allowed per company
+        comment: "Index for email lookups per company",
       },
     ],
   }

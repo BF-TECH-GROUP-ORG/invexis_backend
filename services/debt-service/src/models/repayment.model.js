@@ -4,13 +4,11 @@ const mongoose = require('mongoose');
 const RepaymentSchema = new mongoose.Schema({
     companyId: { type: mongoose.Types.ObjectId, required: true },
     shopId: { type: mongoose.Types.ObjectId, required: true },
-    customerId: { type: mongoose.Types.ObjectId, required: true },
-    // Embedded customer object to provide name/phone for frontend
-    customer: {
-        id: { type: mongoose.Types.ObjectId },
-        name: { type: String },
-        phone: { type: String }
-    },
+
+    // We no longer store raw customerId or embedded customer object here.
+    // All per-customer linkage is done via hashedCustomerId on the Debt.
+    hashedCustomerId: { type: String, required: true },
+
     debtId: { type: mongoose.Types.ObjectId, required: true },
 
 
@@ -38,7 +36,7 @@ const RepaymentSchema = new mongoose.Schema({
 // Composite indexes for optimal query performance
 RepaymentSchema.index({ companyId: 1, createdAt: -1 }, { background: true });
 RepaymentSchema.index({ shopId: 1, createdAt: -1 }, { background: true });
-RepaymentSchema.index({ customerId: 1, createdAt: -1 }, { background: true });
+RepaymentSchema.index({ hashedCustomerId: 1, createdAt: -1 }, { background: true });
 RepaymentSchema.index({ debtId: 1, paidAt: -1 }, { background: true });
 RepaymentSchema.index({ companyId: 1, shopId: 1 }, { background: true });
 RepaymentSchema.index({ paidAt: -1 }, { background: true });

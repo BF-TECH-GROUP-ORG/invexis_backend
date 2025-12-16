@@ -27,28 +27,35 @@ async function createDebt(payload) {
         const {
             companyId,
             shopId,
-            customerId,
-            customer, // optional object: { id, name, phone }
+            // We no longer accept a raw customerId here; all customer linkage is via hashedCustomerId
+            customer, // optional object: { name, phone }
             salesId,
-            salesStaffId,
             createdBy, // optional actor: { id, name }
             items = [], // each item must include itemName
             totalAmount,
             amountPaidNow = 0,
             dueDate,
-            consentRef,
-            shareLevel = 'NONE',
-            hashedCustomerId: providedHashed
+            hashedCustomerId: providedHashed,
+            rawCustomerIdentifier // optional: phone/NID to be hashed if provided
         } = payload;
 
         const balance = Number(totalAmount || 0) - Number(amountPaidNow || 0);
         const status = await computeStatus(totalAmount, amountPaidNow);
 
         // Ensure we never persist raw identifiers: compute hashedCustomerId if a raw identifier is provided
-        const hashedCustomerId = providedHashed || (payload.rawCustomerIdentifier ? hashIdentifier(payload.rawCustomerIdentifier) : undefined);
+        const hashedCustomerId = providedHashed || (rawCustomerIdentifier ? hashIdentifier(rawCustomerIdentifier) : undefined);
 
-        // Normalize customer object: prefer explicit customer object, otherwise use customerId
-        const customerObj = customer && customer.id ? customer : (customerId ? { id: customerId } : undefined);
+        if (!hashedCustomerId) {
+            throw new Error('hashedCustomerId (or rawCustomerIdentifier) is required to create a debt');
+        }
+
+        // Normalize customer object: only keep display data (name, phone)
+        const customerObj = customer
+            ? {
+                name: customer.name || null,
+                phone: customer.phone || null
+            }
+            : undefined;
 
         // Validate items: each item must have itemName
         if (!Array.isArray(items) || items.some(i => !i.itemName)) {
@@ -58,13 +65,10 @@ async function createDebt(payload) {
         const debtDoc = {
             companyId,
             shopId,
-            // keep customerId for queries but also embed customer object for frontend
-            customerId: customerObj ? customerObj.id : undefined,
             customer: customerObj,
             hashedCustomerId,
             salesId,
-            salesStaffId,
-            items, // Include items array
+            items,
             totalAmount,
             amountPaidNow,
             balance,
@@ -72,8 +76,6 @@ async function createDebt(payload) {
             updatedBy: createdBy || undefined,
             status,
             dueDate,
-            consentRef,
-            shareLevel,
             balanceHistory: [{ date: new Date(), balance }],
             isDeleted: false
         };
@@ -95,9 +97,9 @@ async function createDebt(payload) {
             debtId: saved._id,
             companyId,
             shopId,
-            salesStaffId,
-            customer: customerObj || { id: customerId },
-            items: items,
+            hashedCustomerId,
+            customer: customerObj || null,
+            items,
             totalAmount,
             balance,
             amountPaidNow,
@@ -129,40 +131,37 @@ async function createDebt(payload) {
                 } catch (e) { console.error('[DebtService] Failed to enqueue DEBT_CREATED event:', e && e.message ? e.message : e); }
             })(),
             // Enqueue summary updates into the same durable pipeline
-            inMemoryStore.enqueueSummary({ type: 'customer', op: 'onCreate', data: { companyId, customerId: customerObj ? customerObj.id : customerId, totalAmount, amountPaidNow } }),
+            inMemoryStore.enqueueSummary({
+                type: 'customer',
+                op: 'onCreate',
+                data: { companyId, hashedCustomerId, totalAmount, amountPaidNow }
+            }),
             inMemoryStore.enqueueSummary({ type: 'shop', op: 'onCreate', data: { companyId, shopId, totalAmount, amountPaidNow } }),
             inMemoryStore.enqueueSummary({ type: 'company', op: 'onCreate', data: { companyId, totalAmount, amountPaidNow } }),
             // cross-company summary upsert (persisted by persister)
             (async () => {
-                try { inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onCreate', data: { hashedCustomerId, amount: balance, companyId, shareLevel, createdAt: saved.createdAt || new Date() } }); } catch (e) { }
-            })(),
-            // Publish cross-company notification for hashed customers when allowed by shareLevel/consent
-            (async () => {
                 try {
-                    if (hashedCustomerId && (shareLevel === 'PARTIAL' || shareLevel === 'FULL')) {
-                        const payload = {
-                            type: 'CUSTOMER_OWES_DEBT',
+                    inMemoryStore.enqueueSummary({
+                        type: 'cross_company',
+                        op: 'onCreate',
+                        data: {
                             hashedCustomerId,
-                            debtId: saved._id,
+                            amount: balance,
                             companyId,
-                            shopId,
-                            totalAmount,
-                            balance,
-                            dueDate,
-                            shareLevel,
-                            consentRef,
                             createdAt: saved.createdAt || new Date()
-                        };
-                        if (global && typeof global.rabbitmqPublish === 'function') {
-                            await global.rabbitmqPublish('customer.debt.alert', payload);
                         }
-                    }
-                } catch (e) { /* swallow */ }
+                    });
+                } catch (e) { }
             })(),
             (async () => {
                 try {
                     if (global && typeof global.rabbitmqPublish === 'function') {
-                        await global.rabbitmqPublish('debt.created', { debtId: saved._id, companyId, shopId, customerId: customerObj ? customerObj.id : customerId });
+                        await global.rabbitmqPublish('debt.created', {
+                            debtId: saved._id,
+                            companyId,
+                            shopId,
+                            hashedCustomerId
+                        });
                     }
                 } catch (e) { /* swallow */ }
             })(),
@@ -186,7 +185,7 @@ async function createDebt(payload) {
 async function recordRepayment(payload) {
     const perf = require('../utils/perf');
     return perf.measureAsync('recordRepayment', async () => {
-        const { debtId, companyId, shopId, customerId, customer, amountPaid, paymentMethod = 'CASH', paymentReference, paymentId, createdBy } = payload;
+        const { debtId, companyId, shopId, amountPaid, paymentMethod = 'CASH', paymentReference, paymentId, createdBy } = payload;
 
         // Idempotency check: prevent duplicate repayments via Redis deduplication key
         if (paymentId) {
@@ -211,8 +210,7 @@ async function recordRepayment(payload) {
         const repayment = inMemoryStore.createRepayment({
             companyId,
             shopId,
-            customerId: customer && customer.id ? customer.id : customerId,
-            customer: customer || (customerId ? { id: customerId } : undefined),
+            hashedCustomerId: debt.hashedCustomerId,
             debtId,
             paymentId: repaymentId,
             amountPaid,
@@ -242,8 +240,7 @@ async function recordRepayment(payload) {
                 _id: repayment._id,
                 companyId,
                 shopId,
-                customerId: debt.customerId,
-                customer: customer || (customerId ? { id: customerId } : undefined),
+                hashedCustomerId: debt.hashedCustomerId,
                 debtId: debt._id,
                 paymentId: repaymentId,
                 amountPaid,
@@ -296,7 +293,11 @@ async function recordRepayment(payload) {
         
         Promise.all([
             // Enqueue summary updates into the same durable pipeline
-            inMemoryStore.enqueueSummary({ type: 'customer', op: 'onRepayment', data: { companyId, customerId: customer && customer.id ? customer.id : customerId, amountPaid } }),
+            inMemoryStore.enqueueSummary({
+                type: 'customer',
+                op: 'onRepayment',
+                data: { companyId, hashedCustomerId: debt.hashedCustomerId, amountPaid }
+            }),
             inMemoryStore.enqueueSummary({ type: 'shop', op: 'onRepayment', data: { companyId, shopId, amountPaid } }),
             inMemoryStore.enqueueSummary({ type: 'company', op: 'onRepayment', data: { companyId, amountPaid } }),
             // Publish DEBT_REPAID event to RabbitMQ immediately
@@ -307,19 +308,36 @@ async function recordRepayment(payload) {
                         repaymentId: repayment._id,
                         companyId,
                         shopId,
-                        customerId: customer && customer.id ? customer.id : customerId,
                         amountPaid,
                         paymentMethod,
                         paymentReference,
                         newBalance: debt.balance,
                         newStatus: debt.status,
+                        hashedCustomerId: debt.hashedCustomerId,
+                        customer: debt.customer || null,
+                        totalAmount: debt.totalAmount,
                         createdAt: new Date()
                     });
                     console.log(`[DebtService] 🚀 DEBT_REPAID event published to RabbitMQ for repayment ${repayment._id}`);
                 } catch (e) { console.error('[DebtService] Failed to publish DEBT_REPAID event:', e && e.message ? e.message : e); }
             })(),
             // Also store for audit trail
-            (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_REPAID', payload: { debtId: debt._id, repaymentId: repayment._id, companyId, shopId, customerId: customer && customer.id ? customer.id : customerId, amountPaid, newStatus: debt.status, newBalance: debt.balance } }); } catch (e) { } })(),
+            (async () => {
+                try {
+                    inMemoryStore.enqueueEvent({
+                        eventType: 'DEBT_REPAID',
+                        payload: {
+                            debtId: debt._id,
+                            repaymentId: repayment._id,
+                            companyId,
+                            shopId,
+                            amountPaid,
+                            newStatus: debt.status,
+                            newBalance: debt.balance
+                        }
+                    });
+                } catch (e) { }
+            })(),
             // Publish fully paid event if debt is now complete
             (async () => {
                 try {
@@ -328,18 +346,19 @@ async function recordRepayment(payload) {
                             debtId: debt._id,
                             companyId,
                             shopId,
-                            customerId: customer && customer.id ? customer.id : customerId,
                             totalAmount: debt.totalAmount,
+                            hashedCustomerId: debt.hashedCustomerId,
+                            customer: debt.customer || null,
                             fullyPaidAt: new Date()
                         });
                         console.log(`[DebtService] 🎉 DEBT_FULLY_PAID event published to RabbitMQ for debt ${debt._id}`);
                     }
                 } catch (e) { console.error('[DebtService] Failed to publish DEBT_FULLY_PAID event:', e && e.message ? e.message : e); }
             })(),
-            // Notify other companies if debt was fully paid or partially repaid (if sharing allowed)
+            // Notify other companies if debt was fully paid or partially repaid
             (async () => {
                 try {
-                    if (wasAutoPaid && debt.hashedCustomerId && (debt.shareLevel === 'PARTIAL' || debt.shareLevel === 'FULL')) {
+                    if (wasAutoPaid && debt.hashedCustomerId) {
                         const notify = {
                             type: 'CUSTOMER_DEBT_CLEARED',
                             hashedCustomerId: debt.hashedCustomerId,
@@ -353,8 +372,8 @@ async function recordRepayment(payload) {
                         await global.rabbitmqPublish('customer.debt.alert', notify);
                     } else {
                         await global.rabbitmqPublish('debt.status.updated', { debtId: debt._id, status: debt.status, companyId });
-                        // Notify other companies about repayment/progress (partial payment) if sharing allowed
-                        if (debt.hashedCustomerId && (debt.shareLevel === 'PARTIAL' || debt.shareLevel === 'FULL')) {
+                        // Notify other companies about repayment/progress (partial payment)
+                        if (debt.hashedCustomerId) {
                             const notify = {
                                 type: 'CUSTOMER_DEBT_UPDATED',
                                 hashedCustomerId: debt.hashedCustomerId,
@@ -405,25 +424,10 @@ async function crossCompanyCustomerDebts({ hashedCustomerId, requestingCompanyId
     if (!hashedCustomerId) throw new Error('hashedCustomerId required');
     // Find candidate debts
     const candidates = await debtRepo.findByHashedCustomerId(hashedCustomerId, { limit, lean: true });
-    // Map to safe view: only return limited fields and respect shareLevel
+    // Map to safe view: we now always share full details (no shareLevel/consentRef)
     const results = candidates.map(d => {
         // If the debt belongs to the requesting company, reveal full details
         if (String(d.companyId) === String(requestingCompanyId)) return d;
-        // For others, respect shareLevel/consent: NONE -> hide, PARTIAL -> limited, FULL -> full
-        const share = d.shareLevel || 'NONE';
-        if (share === 'NONE') return null;
-        if (share === 'PARTIAL') {
-            return {
-                debtId: d._id,
-                companyId: d.companyId,
-                shopId: d.shopId,
-                status: d.status,
-                balance: d.balance,
-                totalAmount: d.totalAmount,
-                consentRef: !!d.consentRef
-            };
-        }
-        // FULL
         return {
             debtId: d._id,
             companyId: d.companyId,
@@ -474,15 +478,15 @@ async function getDebtWithRepayments({ companyId, debtId }) {
     return plain;
 }
 
-async function listDebts({ companyId, shopId, customerId, status, page = 1, limit = 50 }) {
+async function listDebts({ companyId, shopId, hashedCustomerId, status, page = 1, limit = 50 }) {
     const filter = { isDeleted: false };
     if (companyId) filter.companyId = companyId;
     if (shopId) filter.shopId = shopId;
-    if (customerId) filter.customerId = customerId;
+    if (hashedCustomerId) filter.hashedCustomerId = hashedCustomerId;
     if (status) filter.status = status;
 
     // Build cache key from filters only (not page/limit)
-    const cacheKey = `debts:list:${JSON.stringify({ companyId: !!companyId, shopId: !!shopId, customerId: !!customerId, status, page, limit })}`;
+    const cacheKey = `debts:list:${JSON.stringify({ companyId: !!companyId, shopId: !!shopId, hashedCustomerId: !!hashedCustomerId, status, page, limit })}`;
     const redis = getRedis();
     try {
         if (redis && redis.get) {
@@ -583,9 +587,9 @@ async function shopAnalytics({ shopId }) {
     return result;
 }
 
-async function customerAnalytics({ companyId, customerId }) {
+async function customerAnalytics({ companyId, hashedCustomerId }) {
     const redis = getRedis();
-    const cacheKey = `analytics:customer:${companyId}:${customerId}`;
+    const cacheKey = `analytics:customer:${companyId}:${hashedCustomerId}`;
     try {
         if (redis && redis.get) {
             const cached = await redis.get(cacheKey);
@@ -593,7 +597,7 @@ async function customerAnalytics({ companyId, customerId }) {
         }
     } catch (e) { }
 
-    const debts = await Debt.find({ companyId, customerId, isDeleted: false }).sort({ createdAt: 1 }).lean();
+    const debts = await Debt.find({ companyId, hashedCustomerId, isDeleted: false }).sort({ createdAt: 1 }).lean();
     const totalOwed = debts.reduce((s, d) => s + (d.totalAmount || 0), 0);
     const totalOutstanding = debts.reduce((s, d) => s + (d.balance || 0), 0);
     const highestDebt = debts.reduce((m, d) => Math.max(m, d.totalAmount || 0), 0);
@@ -618,8 +622,8 @@ async function updateDebt({ companyId, debtId, updates }) {
         if (!existingDebt) throw new Error('Debt not found or access denied');
         if (existingDebt.isDeleted) throw new Error('Cannot update deleted debt');
 
-        // Allow updates to: dueDate, shareLevel, consentRef, items (with recalculation), amountPaidNow (with recalculation)
-        const allowedFields = ['dueDate', 'shareLevel', 'consentRef', 'items', 'amountPaidNow'];
+        // Allow updates to: dueDate, items (with recalculation), amountPaidNow (with recalculation)
+        const allowedFields = ['dueDate', 'items', 'amountPaidNow'];
         const updateDoc = {};
 
         for (const field of allowedFields) {
@@ -662,7 +666,6 @@ async function updateDebt({ companyId, debtId, updates }) {
                     if (redis && redis.del) {
                         await redis.del(`company:${companyId}:debts`);
                         await redis.del(`shop:${updated.shopId}:debts`);
-                        await redis.del(`customer:${updated.customerId}:debts`);
                     }
                 } catch (e) { }
             })(),
@@ -704,7 +707,6 @@ async function softDeleteDebt({ companyId, debtId }) {
                     if (redis && redis.del) {
                         await redis.del(`company:${companyId}:debts`);
                         await redis.del(`shop:${deleted.shopId}:debts`);
-                        await redis.del(`customer:${deleted.customerId}:debts`);
                     }
                 } catch (e) { }
             })(),
@@ -736,8 +738,7 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
             repayment = inMemoryStore.createRepayment({
                 companyId,
                 shopId: debt.shopId,
-                customerId: debt.customerId,
-                customer: debt.customer || undefined,
+                hashedCustomerId: debt.hashedCustomerId,
                 debtId: debt._id,
                 paymentId: paymentId || new mongoose.Types.ObjectId(),
                 amountPaid: remaining,
@@ -772,8 +773,7 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
                     _id: repayment._id,
                     companyId,
                     shopId: debt.shopId,
-                    customerId: debt.customerId,
-                    customer: debt.customer || undefined,
+                    hashedCustomerId: debt.hashedCustomerId,
                     debtId: debt._id,
                     paymentId: repayment.paymentId || repayment._id,
                     amountPaid: repayment.amountPaid,
@@ -896,7 +896,19 @@ async function cancelDebt({ companyId, debtId, reason = null, performedBy }) {
             (async () => { try { if (writeOffAmount > 0) inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onRepayment', data: { hashedCustomerId: debt.hashedCustomerId, amountPaid: writeOffAmount, companyId, debtId: debt._id, createdAt: new Date() } }); } catch (e) { } })(),
             (async () => { try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); if (debt.hashedCustomerId) await redis.del(`debt:lookup:${debt.hashedCustomerId}`); } catch (e) { } })(),
             (async () => {
-                try { if (global && typeof global.rabbitmqPublish === 'function') await global.rabbitmqPublish('debt.cancelled', { debtId: debt._id, companyId, reason }); } catch (e) { }
+                try {
+                    if (global && typeof global.rabbitmqPublish === 'function') {
+                        await global.rabbitmqPublish('debt.cancelled', {
+                            debtId: debt._id,
+                            companyId,
+                            reason,
+                            hashedCustomerId: debt.hashedCustomerId,
+                            customer: debt.customer || null,
+                            totalAmount: debt.totalAmount,
+                            balance: debt.balance
+                        });
+                    }
+                } catch (e) { }
             })()
         ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
 

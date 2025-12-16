@@ -151,7 +151,22 @@ UserSchema.pre("save", async function (next) {
         case 'worker':
             if (!this.companies || this.companies.length === 0) return next(new Error("At least one company required"));
             if (!this.shops || this.shops.length === 0) return next(new Error("At least one shop required"));
-            // assignedDepartments optional for worker
+            // Validate assignedDepartments for worker - must be "sales" or "management"
+            if (this.assignedDepartments && Array.isArray(this.assignedDepartments) && this.assignedDepartments.length > 0) {
+                const validDepartments = ['sales', 'management'];
+                const invalidDepartments = this.assignedDepartments.filter(dept => {
+                    const normalizedDept = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+                    return !validDepartments.includes(normalizedDept);
+                });
+                if (invalidDepartments.length > 0) {
+                    return next(new Error(`Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`));
+                }
+                // Normalize to lowercase and trim
+                this.assignedDepartments = this.assignedDepartments.map(dept => {
+                    const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+                    return normalized;
+                });
+            }
             if (!this.nationalId) return next(new Error("National ID required"));
             if (!this.dateOfBirth) return next(new Error("Date of birth required"));
             break;

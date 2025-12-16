@@ -16,7 +16,7 @@ const baseUserSchema = Joi.object({
     companies: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['company-uuid-123']
     shops: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['shop-uuid-456']
     position: Joi.string().trim().max(100).optional(),
-    assignedDepartments: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // e.g., ['dept-uuid-789']
+    assignedDepartments: Joi.array().items(Joi.string().trim()).optional(), // For worker role: must be "sales" or "management"
     employmentStatus: Joi.string().valid("active", "on_leave", "suspended", "terminated").default("active"),
     emergencyContact: Joi.object({
         name: Joi.string().trim().min(2).max(50).optional(),
@@ -85,7 +85,18 @@ const registerSchema = baseUserSchema.keys({
             if (!value.shops?.length) return helpers.error('any.required', { key: 'shops' });
             value.shops = value.shops.map(id => id.toString()); // Ensure strings
         }
-        // assignedDepartments optional for worker
+        // assignedDepartments validation for worker role
+        if (value.role === 'worker' && value.assignedDepartments) {
+            const validDepartments = ['sales', 'management'];
+            const invalidDepartments = value.assignedDepartments.filter(dept => !validDepartments.includes(dept.trim().toLowerCase()));
+            if (invalidDepartments.length > 0) {
+                return helpers.error('any.invalid', { 
+                    message: `Invalid departments: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}` 
+                });
+            }
+            // Normalize to lowercase and trim
+            value.assignedDepartments = value.assignedDepartments.map(dept => dept.trim().toLowerCase());
+        }
         // Company admin: No shops req
         if (value.role === 'company_admin') value.shops = [];
     }
@@ -119,6 +130,7 @@ const updateProfileSchema = baseUserSchema.keys({
     // No role/password change
     companies: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // External updates
     shops: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(),
+    assignedDepartments: Joi.array().items(Joi.string().trim()).optional(), // For worker role: must be "sales" or "management"
     preferences: Joi.object({
         theme: Joi.string().valid("light", "dark", "system").optional(),
         language: Joi.string().optional(),
@@ -128,7 +140,13 @@ const updateProfileSchema = baseUserSchema.keys({
             inApp: Joi.boolean().optional()
         }).optional()
     }).optional()
-}).min(1);
+}).min(1).custom((value, helpers) => {
+    // Note: For updateProfile, we can't validate worker role departments 
+    // because role is not in the update payload. Validation will happen in model pre-save hook.
+    // But if assignedDepartments is provided and we can check the existing user role, we'd validate here.
+    // For now, let the model hook handle it.
+    return value;
+});
 
 // Update user (admin, full, strings)
 const updateUserSchema = baseUserSchema.keys({
@@ -139,8 +157,23 @@ const updateUserSchema = baseUserSchema.keys({
     nationalId: Joi.string().trim().pattern(/^[A-Z0-9]{5,20}$/).optional(),
     companies: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(), // External sync
     shops: Joi.array().items(Joi.string().trim().pattern(/^[a-z0-9-]{5,50}$/i)).optional(),
+    assignedDepartments: Joi.array().items(Joi.string().trim()).optional(), // For worker role: must be "sales" or "management"
     // ... other fields optional
-}).min(1);
+}).min(1).custom((value, helpers) => {
+    // Validate assignedDepartments for worker role when updating
+    if (value.role === 'worker' && value.assignedDepartments) {
+        const validDepartments = ['sales', 'management'];
+        const invalidDepartments = value.assignedDepartments.filter(dept => !validDepartments.includes(dept.trim().toLowerCase()));
+        if (invalidDepartments.length > 0) {
+            return helpers.error('any.invalid', { 
+                message: `Invalid departments: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}` 
+            });
+        }
+        // Normalize to lowercase and trim
+        value.assignedDepartments = value.assignedDepartments.map(dept => dept.trim().toLowerCase());
+    }
+    return value;
+});
 
 // Change password (unchanged)
 const changePasswordSchema = Joi.object({

@@ -200,6 +200,11 @@ module.exports = {
             "channels": ["in-app"],
             "priority": "low"
         },
+        "debt.cancelled": {
+            "service": "Notification-Service",
+            "channels": ["email", "in-app"],
+            "priority": "medium"
+        },
         "debt.overdue": {
             "service": "Notification-Service",
             "channels": ["email", "sms", "push", "in-app"],

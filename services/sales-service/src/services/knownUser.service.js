@@ -1,5 +1,6 @@
 // services/knownUser.service.js
 const { KnownUser } = require("../models/index.model");
+const { hashIdentifier } = require("../utils/hash");
 
 /**
  * Find or create a KnownUser to avoid duplicity
@@ -18,33 +19,50 @@ const findOrCreateKnownUser = async (userData, transaction = null) => {
     customerAddress = null,
   } = userData;
 
-  // Validate required fields
-  if (!companyId || !customerName || !customerPhone || !customerEmail) {
+  // Validate required fields (email is optional)
+  if (!companyId || !customerName || !customerPhone) {
     throw new Error(
-      "Missing required fields: companyId, customerName, customerPhone, customerEmail"
+      "Missing required fields: companyId, customerName, customerPhone"
     );
   }
 
   try {
     // Check if user already exists by phone or email within the company
+    const whereConditions = [{ customerPhone }];
+
+    // Only search by email if it's provided
+    if (customerEmail) {
+      whereConditions.push({ customerEmail });
+    }
+
     let knownUser = await KnownUser.findOne({
       where: {
         companyId,
-        [require("sequelize").Op.or]: [
-          { customerPhone },
-          { customerEmail },
-        ],
+        [require("sequelize").Op.or]: whereConditions,
       },
       transaction,
     });
 
     if (knownUser) {
       // Update if customerId is provided and not already set
+      const updates = {};
       if (customerId && !knownUser.customerId) {
-        await knownUser.update({ customerId }, { transaction });
+        updates.customerId = customerId;
+      }
+      // Backfill hashedCustomerId if missing
+      if (!knownUser.hashedCustomerId) {
+        updates.hashedCustomerId =
+          hashIdentifier(customerPhone || customerEmail || `${companyId}:${knownUser.knownUserId}`) || "";
+      }
+      if (Object.keys(updates).length) {
+        await knownUser.update(updates, { transaction });
       }
       return knownUser;
     }
+
+    // Compute hashedCustomerId for new KnownUser (prefer phone, then email, then fallback)
+    const hashedCustomerId =
+      hashIdentifier(customerPhone || customerEmail || `${companyId}:${customerName}`) || "";
 
     // Create new KnownUser if not found
     knownUser = await KnownUser.create(
@@ -55,6 +73,7 @@ const findOrCreateKnownUser = async (userData, transaction = null) => {
         customerPhone,
         customerEmail,
         customerAddress,
+        hashedCustomerId,
         isActive: true,
       },
       { transaction }

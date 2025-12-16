@@ -3,7 +3,7 @@ const logger = require('../utils/logger');
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.DB_MONGO || 'mongodb://localhost:27017/inventorydb', {
+    await mongoose.connect(process.env.MONGO_URI || 'mongodb://root:invexispass@mongodb:27017/inventorydb?authSource=admin', {
       serverSelectionTimeoutMS: 5000,
       maxPoolSize: 10,
     });
