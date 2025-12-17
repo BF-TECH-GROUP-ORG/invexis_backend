@@ -10,8 +10,14 @@ const ProductTransferSchema = new mongoose.Schema({
     transferId: {
         type: String,
         required: true,
-        unique: true,
-        default: () => `TRF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+        index: true,
+        default: () => {
+            // Generate truly unique ID with timestamp and random components
+            const timestamp = Date.now();
+            const randomPart = Math.random().toString(36).substr(2, 12).toUpperCase();
+            const nanoId = require('crypto').randomBytes(4).toString('hex').toUpperCase();
+            return `TRF-${timestamp}-${randomPart}-${nanoId}`;
+        }
     },
     transferType: {
         type: String,
@@ -169,11 +175,14 @@ const ProductTransferSchema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
+ProductTransferSchema.index({ transferId: 1 }, { sparse: true });
 ProductTransferSchema.index({ sourceCompanyId: 1, status: 1, initiatedAt: -1 });
 ProductTransferSchema.index({ destinationCompanyId: 1, status: 1, initiatedAt: -1 });
 ProductTransferSchema.index({ productId: 1, initiatedAt: -1 });
 ProductTransferSchema.index({ transferType: 1, status: 1 });
-ProductTransferSchema.index({ 'initiatedBy.userId': 1, initiatedAt: -1 });
+ProductTransferSchema.index({ 'performedBy.userId': 1, initiatedAt: -1 });
+ProductTransferSchema.index({ sourceCompanyId: 1, sourceShopId: 1, initiatedAt: -1 });
+ProductTransferSchema.index({ destinationCompanyId: 1, destinationShopId: 1, initiatedAt: -1 });
 
 // Virtual for transfer direction
 ProductTransferSchema.virtual('isCrossCompany').get(function() {

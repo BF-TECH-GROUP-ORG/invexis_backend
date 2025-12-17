@@ -230,16 +230,16 @@ app.use("/api", limiter);
 app.use("/api/auth", authLimiter, authProxy);
 
 // Protected services (require authentication - enforced by services themselves)
-app.use("/api/company",authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']), companyProxy);
-app.use("/api/shop", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),shopProxy);
-app.use("/api/inventory", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),inventoryProxy);
-app.use("/api/sales", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),salesProxy);
-app.use("/api/payment", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),paymentProxy);
+app.use("/api/company",authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']), companyProxy);
+app.use("/api/shop", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),shopProxy);
+app.use("/api/inventory", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),inventoryProxy);
+app.use("/api/sales", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),salesProxy);
+app.use("/api/payment", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),paymentProxy);
 app.use("/api/ecommerce",authenticateToken, ecommerceProxy);
-app.use("/api/notification", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']), notificationProxy);
-app.use("/api/analytics",authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']), analyticsProxy);
-app.use("/api/audit", authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']),auditProxy);
-app.use("/api/debt",authenticateToken,requireRole(['company_admin' , 'super_Admin' , 'worker']), debtProxy);
+app.use("/api/notification", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']), notificationProxy);
+app.use("/api/analytics",authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']), analyticsProxy);
+app.use("/api/audit", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),auditProxy);
+app.use("/api/debt",authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']), debtProxy);
 
 // Socket.IO specific routes (add these before other websocket routes)
 app.use("/socket.io", websocketProxy);

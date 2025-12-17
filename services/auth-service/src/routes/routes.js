@@ -184,6 +184,9 @@ router.post('/consent/revoke', authenticateToken, authCtrl.revokeConsent);
 
 // User Management (Admin routes)
 router.post('/verify/:userId', authenticateToken, requireRole('super_admin'), authCtrl.verify);
+// Company Admin Management (must be registered before param routes to avoid param collisions)
+router.get('/users/company-admins/:companyId', authenticateToken, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
+router.get('/users/company-admins', authenticateToken, requireRole('super_admin'), adminCtrl.getAllCompanyAdmins);
 router.get('/users', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.getUsers);
 router.post('/users', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.createUser);
 router.put('/users/:id', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.updateUser);
@@ -191,8 +194,7 @@ router.delete('/users/:id', authenticateToken, requireRole('super_admin' , 'comp
 router.get('/users/:id', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.getUserById);
 
 // Company Admin Management (Admin routes)
-router.get('/users/company-admins/:companyId', authenticateToken, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
-router.get('/users/company-admins', authenticateToken, requireRole('super_admin'), adminCtrl.getAllCompanyAdmins);
+// (routes moved above to avoid matching by the generic '/users/:id' param route)
 
 // Company Worker Management
 router.get('/company/:companyId/workers', authenticateToken, requireRole('company_admin', 'super_admin'), authCtrl.getCompanyWorkers);
