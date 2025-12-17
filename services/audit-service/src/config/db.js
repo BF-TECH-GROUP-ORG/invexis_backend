@@ -1,10 +1,15 @@
 const mongoose = require('mongoose');
 
+// ✅ Optimized MongoDB connection with enhanced pool settings
 const connectDB = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI || 'mongodb://root:invexispass@mongodb:27017/auditdb?authSource=admin', {
             serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
+            maxPoolSize: 50,           // ✅ Increased for better concurrency
+            minPoolSize: 10,           // ✅ Maintain minimum connections
+            maxIdleTimeMS: 30000,      // ✅ Close idle connections after 30s
+            waitQueueTimeoutMS: 10000, // ✅ Timeout for waiting in queue
         });
 
         mongoose.connection.on('error', (err) => {

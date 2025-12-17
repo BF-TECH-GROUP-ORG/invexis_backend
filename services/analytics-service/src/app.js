@@ -15,6 +15,9 @@ const sequelize = require("./config/database");
 const app = express();
 const PORT = process.env.PORT || 8002; // Default to 9002 for analytics
 
+// ✅ Trust proxy - Required for rate limiting behind API gateway
+app.set('trust proxy', true);
+
 // Middleware
 app.use(express.json());
 app.use(cors());

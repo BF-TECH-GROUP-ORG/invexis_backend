@@ -97,7 +97,7 @@ class Company {
   // Optimized: Select only essential columns for list operations
   static async findAllCompanies({ status, tier, limit = 50, offset = 0 } = {}) {
     let query = db(this.table)
-      .select("id", "name", "domain", "email", "phone", "status", "tier", "country", "city", "createdAt", "updatedAt")
+      .select("id", "name", "domain", "email", "phone", "status", "tier", "country", "city", "category_ids", "createdAt", "updatedAt")
       .limit(limit)
       .offset(offset);
     if (status) query = query.where({ status });

@@ -10,6 +10,9 @@ const app = express();
 const PORT = process.env.PORT || 8006;
 const SERVICE_NAME = 'ecommerce-service';
 
+// ✅ Trust proxy - Required for rate limiting behind API gateway
+app.set('trust proxy', true);
+
 // Initialize production modules
 const logger = getLogger(SERVICE_NAME);
 const healthChecker = new HealthChecker(SERVICE_NAME, {

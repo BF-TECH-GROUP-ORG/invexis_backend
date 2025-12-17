@@ -5,6 +5,11 @@ const connectDB = async () => {
         await mongoose.connect(process.env.DB_MONGO || 'mongodb://root:invexispass@mongodb:27017/authdb?authSource=admin', {
             serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
+            // ✅ Connection pool optimization for better performance
+            maxPoolSize: 50, // Increase pool size for concurrent requests
+            minPoolSize: 10, // Maintain minimum connections
+            maxIdleTimeMS: 30000, // Close idle connections after 30s
+            waitQueueTimeoutMS: 10000, // Timeout for waiting for connection from pool
         });
 
         // Handle connection events

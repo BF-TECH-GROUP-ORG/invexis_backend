@@ -12,6 +12,10 @@ const router = require('./routes/index')
 
 
 const app = express();
+
+// ✅ Trust proxy - Required for rate limiting behind API gateway
+app.set('trust proxy', true);
+
 app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);
   next();

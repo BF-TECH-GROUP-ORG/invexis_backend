@@ -15,6 +15,14 @@ class RedisClient {
             host: process.env.REDIS_HOST || 'redis',
             port: process.env.REDIS_PORT || 6379,
             password: process.env.REDIS_PASSWORD || undefined,
+            // ✅ Connection pool optimization
+            maxRetriesPerRequest: 3,
+            enableReadyCheck: true,
+            enableOfflineQueue: true,
+            connectTimeout: 10000,
+            lazyConnect: false,
+            // ✅ Keep-alive to prevent connection drops
+            keepAlive: 30000,
             retryStrategy(times) {
                 const delay = Math.min(times * 50, 2000);
                 console.warn(`redis reconnect attempt # ${times} in ${delay} ms`);

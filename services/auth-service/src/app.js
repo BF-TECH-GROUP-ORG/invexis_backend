@@ -50,6 +50,9 @@ app.use(
 // --------------------------------------
 // MIDDLEWARE
 // --------------------------------------
+// ✅ Trust proxy - Required for rate limiting behind API gateway
+app.set('trust proxy', true);
+
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

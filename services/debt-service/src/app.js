@@ -29,6 +29,9 @@ try {
 
 const app = express();
 
+// ✅ Trust proxy - Required for rate limiting behind API gateway
+app.set('trust proxy', true);
+
 // Middleware - order matters for performance
 app.use(helmet());
 app.use(compression({ threshold: 512, level: 6 })); // Compress responses > 512 bytes
