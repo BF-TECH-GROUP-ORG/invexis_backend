@@ -134,7 +134,7 @@ services:
       - invexis-network
 
   sales-mysql:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: invexis-sales-mysql
     restart: unless-stopped
     environment:
@@ -203,7 +203,9 @@ services:
     build: ./services/api-gateway
     container_name: invexis-api-gateway
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
@@ -236,12 +238,16 @@ services:
       - "traefik.http.routers.api-gateway.rule=Host(`api-gateway.local`) && PathPrefix(`/api`)"
       - "traefik.http.services.api-gateway.loadbalancer.server.port=8000"
       - "traefik.http.routers.api-gateway.entrypoints=web"
+    ports:
+      - "8000:8000"
 
   auth-service:
     build: ./services/auth-service
     container_name: invexis-auth-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/authdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -262,11 +268,15 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8001:8001"
   company-service:
     build: ./services/company-service
     container_name: invexis-company-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_POSTGRES: postgresql://invexis:invexispass@company-postgres:5432/companydb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -277,7 +287,7 @@ services:
       - company-postgres
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8004/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8004/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -287,12 +297,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8004:8004"
 
   shop-service:
     build: ./services/shop-service
     container_name: invexis-shop-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_POSTGRES: postgresql://invexis:invexispass@shop-postgres:5432/shopdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -303,7 +317,7 @@ services:
       - shop-postgres
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -313,12 +327,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "9001:9001"
 
   inventory-service:
     build: ./services/inventory-service
     container_name: invexis-inventory-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/inventorydb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
       JWT_SECRET: your_jwt_secret_invexis_strong_key_change_in_prod
@@ -331,7 +349,7 @@ services:
       - mongodb
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8007/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8007/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -341,12 +359,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8007:8007"
 
   sales-service:
     build: ./services/sales-service
     container_name: invexis-sales-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_MYSQL: mysql://invexis:invexispass@sales-mysql:3306/salesdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -358,7 +380,7 @@ services:
       - sales-mysql
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -368,12 +390,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "9000:9000"
 
   payment-service:
     build: ./services/payment-service
     container_name: invexis-payment-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_POSTGRES: postgresql://invexis:invexispass@payment-postgres:5432/paymentdb
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -384,7 +410,7 @@ services:
       - payment-postgres
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8009/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8009/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -394,12 +420,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8009:8009"
 
   ecommerce-service:
     build: ./services/ecommerce-service
     container_name: invexis-ecommerce-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/ecommercedb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -410,7 +440,7 @@ services:
       - mongodb
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8006/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8006/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -420,12 +450,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8006:8006"
 
   notification-service:
     build: ./services/notification-service
     container_name: invexis-notification-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -436,7 +470,7 @@ services:
       - redis
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8008/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8008/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -446,12 +480,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8008:8008"
 
   analytics-service:
     build: ./services/analytics-service
     container_name: invexis-analytics-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_POSTGRES: postgresql://invexis:invexispass@analytics-postgres:5432/analyticsdb
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/analyticsdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
@@ -464,7 +502,7 @@ services:
       - mongodb
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8002/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8002/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -474,12 +512,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8002:8002"
 
   audit-service:
     build: ./services/audit-service
     container_name: invexis-audit-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/auditdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -490,7 +532,7 @@ services:
       - mongodb
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8003/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8003/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -500,12 +542,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8003:8003"
 
   debt-service:
     build: ./services/debt-service
     container_name: invexis-debt-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       DB_MONGO: mongodb://root:invexispass@mongodb:27017/debtdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
@@ -516,7 +562,7 @@ services:
       - mongodb
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8005/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8005/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -526,12 +572,16 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
+    ports:
+      - "8005:8005"
 
   websocket-service:
     build: ./services/websocket-service
     container_name: invexis-websocket-service
     restart: unless-stopped
+    command: npm run dev
     environment:
+      NODE_ENV: development
       RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
     volumes:
       - ./shared:/app/shared
@@ -540,7 +590,7 @@ services:
     depends_on:
       - rabbitmq
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9002/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9002/health" ]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -550,13 +600,13 @@ services:
     user: "node"
     labels:
       - "traefik.enable=false"
-
-
+    ports:
+      - "9002:9002"
   # ----------------------
   # Volumes
-# ======================
-# Volumes
-# ======================
+  # ======================
+  # Volumes
+  # ======================
 volumes:
   # Database volumes
   company_postgres_data:

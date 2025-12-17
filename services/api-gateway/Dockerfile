@@ -29,7 +29,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --chown=appuser:nodejs . .
 
 # Set environment variables
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 # Expose port
