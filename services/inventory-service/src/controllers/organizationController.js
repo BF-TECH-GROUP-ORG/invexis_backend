@@ -18,26 +18,29 @@ const ProductTransfer = require('../models/ProductTransfer');
 const { formatEnrichedProduct } = require('../utils/productFormatter');
 const ProductSpecs = require('../models/productSpecs');
 // Helper: sanitize product data before creating destination product copies
+// Delete unique/indexed fields so Product pre-save hooks regenerate them with new unique values
 function sanitizeDestinationProductData(data) {
-    const fieldsToRemove = [
+    // Fields that MUST be deleted so pre-save hooks regenerate them with unique values
+    const fieldsToDelete = [
         '_id',
-        'sku',
-        'barcode',
-        'scanId',
-        'barcodePayload',
-        'qrPayload',
-        'qrCode',
-        'asin',
-        'upc',
-        'slug',
-        'pricingId',
-        'scanCode',
-        'externalId',
-        'ean',
-        'jan',
-        'gtin'
+        'slug',            // Will be auto-generated from name in pre-save
+        'sku',             // Will be auto-generated in pre-save with ensureUnique
+        'barcode',         // Will be set to SKU in pre-save
+        'scanId',          // Will be auto-generated in pre-save with ensureUnique
+        'asin',            // Will be auto-generated in pre-save with ensureUnique
+        'upc',             // Will be auto-generated in pre-save
+        'barcodePayload',  // Will be regenerated from full product object in pre-save
+        'qrPayload',       // Will be regenerated from full product object in pre-save
+        'qrCode',          // Will be regenerated
+        'qrCodeUrl',       // Will be regenerated
+        'qrCloudinaryId',  // Cloudinary ID doesn't apply to new product
+        'barcodeUrl',      // Will be regenerated
+        'barcodeCloudinaryId', // Cloudinary ID doesn't apply to new product
+        'pricingId'        // New pricing will be created separately
     ];
-    fieldsToRemove.forEach((f) => { if (f in data) delete data[f]; });
+    
+    fieldsToDelete.forEach((f) => { if (f in data) delete data[f]; });
+    
     return data;
 }
 // ==================== COMPANY LEVEL OPERATIONS ====================
@@ -2066,9 +2069,16 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         sanitizeDestinationProductData(destinationProductData);
 
         // Product model will auto-generate new unique codes on save
-
         const destinationProduct = await Product.create([destinationProductData]);
         const destinationProductId = destinationProduct[0]._id;
+        
+        // Verify the product was actually created in the database
+        const verifyDest = await Product.findById(destinationProductId);
+        if (!verifyDest) {
+            throw new Error(`Destination product ${destinationProductId} failed to save to database`);
+        }
+        
+        logger.info(`✅ Destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Shop: ${destinationShopId}`);
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
         setImmediate(async () => {
@@ -2125,8 +2135,7 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         // ========== STEP 5: Create destination stock ==========
         const destinationStock = new ProductStock({
             productId: destinationProductId,
-            shopId: destinationShopId,
-            companyId: companyId,
+            variationId: null,
             stockQty: quantity,
             trackQuantity: sourceStock.trackQuantity,
             lowStockThreshold: sourceStock.lowStockThreshold || 5,
@@ -2421,6 +2430,14 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
 
         const destinationProduct = await Product.create([destinationProductData]); // Returns array
         const destinationProductId = destinationProduct[0]._id;
+        
+        // Verify the product was actually created in the database
+        const verifyDestProd = await Product.findById(destinationProductId);
+        if (!verifyDestProd) {
+            throw new Error(`Destination product ${destinationProductId} failed to save to database`);
+        }
+        
+        logger.info(`✅ Cross-company transfer destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Company: ${toCompanyId}`);
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
         setImmediate(async () => {
@@ -3016,6 +3033,14 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
 
                 const destinationProduct = await Product.create(destinationProductData);
                 const destinationProductId = destinationProduct._id;
+                
+                // Verify product was created
+                const verifyBulkIntra = await Product.findById(destinationProductId);
+                if (!verifyBulkIntra) {
+                    throw new Error(`Bulk transfer destination product ${destinationProductId} failed to save`);
+                }
+                
+                logger.info(`✅ Bulk intra-company destination product created: ${destinationProductId}, SKU: ${destinationProduct.sku}`);
 
                 // Create destination pricing
                 await ProductPricing.create({
@@ -3029,8 +3054,7 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
                 // Create destination stock
                 await ProductStock.create({
                     productId: destinationProductId,
-                    shopId: destinationShopId,
-                    companyId: companyId,
+                    variationId: null,
                     stockQty: quantity,
                     trackQuantity: sourceStock.trackQuantity
                 });
@@ -3271,6 +3295,14 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
                 const destinationProduct = await Product.create(destinationProductData);
                 const destinationProductId = destinationProduct._id;
+                
+                // Verify product was created
+                const verifyBulkCross = await Product.findById(destinationProductId);
+                if (!verifyBulkCross) {
+                    throw new Error(`Bulk cross-company transfer destination product ${destinationProductId} failed to save`);
+                }
+                
+                logger.info(`✅ Bulk cross-company destination product created: ${destinationProductId}, SKU: ${destinationProduct.sku}`);
 
                 // Create destination pricing
                 await ProductPricing.create({
@@ -3281,11 +3313,10 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
                     currency: sourcePricing.currency || 'USD'
                 });
 
-                // Create destination stock
+                // Create destination stock (ProductStock only uses productId + variationId)
                 await ProductStock.create({
                     productId: destinationProductId,
-                    shopId: toShopId,
-                    companyId: toCompanyId,
+                    variationId: null,
                     stockQty: quantity,
                     trackQuantity: sourceStock.trackQuantity
                 });

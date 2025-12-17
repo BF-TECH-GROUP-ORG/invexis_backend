@@ -62,7 +62,8 @@ async function handleCompanyDeleted(data) {
       deletionResults
     );
   } catch (error) {
-    logger.error(`❌ Error handling company deleted: ${error.message}`);
+    const errorMsg = error && typeof error === 'object' ? (error.message || JSON.stringify(error)) : String(error);
+    logger.error(`❌ Error handling company deleted: ${errorMsg}`);
     throw error;
   }
 }
@@ -90,7 +91,8 @@ module.exports = async function handleCompanyEvent(event) {
         logger.warn(`⚠️ Unhandled company event type: ${type}`);
     }
   } catch (error) {
-    logger.error(`❌ Error handling company event: ${error.message}`);
+    const errorMsg = error && typeof error === 'object' ? (error.message || JSON.stringify(error)) : String(error);
+    logger.error(`❌ Error handling company event: ${errorMsg}`);
     throw error;
   }
 };

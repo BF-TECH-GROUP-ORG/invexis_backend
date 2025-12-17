@@ -31,7 +31,8 @@ module.exports = async function handleCompanyEvent(event) {
         console.log(`⚠️ Unhandled company event type: ${type}`);
     }
   } catch (error) {
-    console.error(`❌ Error handling company event: ${error.message}`);
+    const errorMsg = error && typeof error === 'object' ? (error.message || JSON.stringify(error)) : String(error);
+    console.error(`❌ Error handling company event: ${errorMsg}`);
     throw error;
   }
 };
@@ -51,7 +52,8 @@ async function handleCompanyCreated(data) {
     console.log(`🏢 New company created: ${companyId} - ${name}`);
     console.log(`✅ Company creation recorded`);
   } catch (error) {
-    console.error(`❌ Error handling company creation:`, error.message);
+    const errorMsg = error && typeof error === 'object' ? (error.message || JSON.stringify(error)) : String(error);
+    console.error(`❌ Error handling company creation:`, errorMsg);
     throw error;
   }
 }
@@ -85,7 +87,8 @@ async function handleCompanySuspended(data) {
 
     console.log(`✅ Company suspension recorded`);
   } catch (error) {
-    console.error(`❌ Error handling company suspension:`, error.message);
+    const errorMsg = error && typeof error === 'object' ? (error.message || JSON.stringify(error)) : String(error);
+    console.error(`❌ Error handling company suspension:`, errorMsg);
     throw error;
   }
 }
@@ -121,7 +124,8 @@ async function handleCompanyStatusChanged(data) {
 
     console.log(`✅ Company status change recorded`);
   } catch (error) {
-    console.error(`❌ Error handling company status change:`, error.message);
+    const errorMsg = error && typeof error === 'object' ? (error.message || JSON.stringify(error)) : String(error);
+    console.error(`❌ Error handling company status change:`, errorMsg);
     throw error;
   }
 }
