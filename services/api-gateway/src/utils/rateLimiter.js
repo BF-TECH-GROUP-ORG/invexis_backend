@@ -1,23 +1,23 @@
 const rateLimit = require('express-rate-limit');
 
-// Global limiter (like reference: 50 req/min)
+// Global limiter (Increased to 300 req/min for dev/testing)
 const limiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 50,
+    max: 300,
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => process.env.NODE_ENV === 'development' || req.path === '/health',
+    skip: (req) => process.env.NODE_ENV === 'development' || req.path === '/health' || req.method === 'OPTIONS',
 });
 
-// Stricter for auth (5 req/min)
+// Stricter for auth (Increased to 50 req/min prevent lockouts during active dev)
 const authLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 5,
+    max: 60,
     message: { error: 'Too many auth attempts, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => process.env.NODE_ENV === 'development' || req.path === '/health',
+    skip: (req) => process.env.NODE_ENV === 'development' || req.path === '/health' || req.method === 'OPTIONS',
 });
 
 module.exports = { limiter, authLimiter };

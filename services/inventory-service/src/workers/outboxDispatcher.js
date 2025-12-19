@@ -9,6 +9,7 @@ const { emit } = require('../events/producer');
 const logger = require('../utils/logger');
 
 let dispatcherInterval = null;
+let isProcessing = false;
 
 /**
  * Start outbox dispatcher
@@ -16,12 +17,13 @@ let dispatcherInterval = null;
 async function startOutboxDispatcher(intervalMs = 1000) {
   try {
     console.log(`🚀 Starting outbox dispatcher (interval: ${intervalMs}ms)`);
+    setImmediate(() => processOutbox());
 
-    dispatcherInterval = setInterval(async () => {
-      try {
-        await processOutbox();
-      } catch (error) {
-        logger.error(`❌ Error in outbox dispatcher: ${error.message}`);
+    dispatcherInterval = setInterval(() => {
+      if (!isProcessing) {
+        processOutbox().catch(error => {
+          logger.error(`❌ Error in outbox dispatcher: ${error.message}`);
+        });
       }
     }, intervalMs);
 
@@ -50,6 +52,9 @@ async function stopOutboxDispatcher() {
  * Process pending outbox events
  */
 async function processOutbox() {
+  if (isProcessing) return;
+  isProcessing = true;
+
   try {
     // Reset stale processing events (older than 12 minutes)
     await Outbox.resetStaleProcessing(10);
@@ -88,6 +93,8 @@ async function processOutbox() {
     }
   } catch (error) {
     logger.error(`❌ Error processing outbox: ${error.message}`);
+  } finally {
+    isProcessing = false;
   }
 }
 

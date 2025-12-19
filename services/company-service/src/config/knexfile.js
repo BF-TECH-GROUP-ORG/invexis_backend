@@ -15,10 +15,10 @@ module.exports = {
       ssl: process.env.DEV_DB_SSL === "true", // optional SSL
     },
     pool: {
-      min: parseInt(process.env.DEV_DB_POOL_MIN) || 5,        // Increased from 2
-      max: parseInt(process.env.DEV_DB_POOL_MAX) || 20,       // Increased from 10
+      min: parseInt(process.env.DEV_DB_POOL_MIN) || 5,
+      max: parseInt(process.env.DEV_DB_POOL_MAX) || 20,
       idleTimeoutMillis: 30000,
-      acquireTimeoutMillis: 5000,
+      acquireTimeoutMillis: 30000,
     },
     migrations: {
       directory: "./migrations",

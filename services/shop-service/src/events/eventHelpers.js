@@ -33,6 +33,8 @@ const shopEvents = {
           capacity: shop.capacity,
           timezone: shop.timezone,
           status: shop.status,
+          userId: shop.created_by, // Add userId for notification recipient
+          createdBy: shop.created_by,
           createdAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -58,6 +60,8 @@ const shopEvents = {
           country: shop.country,
           status: shop.status,
           updatedAt: new Date().toISOString(),
+          userId: shop.updated_by, // Add userId for notification
+          updatedBy: shop.updated_by,
           traceId: uuidv4(),
         },
       },
@@ -101,6 +105,7 @@ const shopEvents = {
           shopId,
           companyId,
           deletedAt: new Date().toISOString(),
+          userId: null, // Deletion often doesn't pass user context in this helper, consider passing it if available
           traceId: uuidv4(),
         },
       },

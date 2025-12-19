@@ -38,9 +38,26 @@ async function processOutboxBatch() {
   }
 }
 
+let isProcessing = false;
+
 async function startOutboxDispatcher(intervalMs = 5000) {
   console.log("🚀 Outbox Dispatcher started");
-  setInterval(processOutboxBatch, intervalMs);
+
+  const run = async () => {
+    if (isProcessing) return;
+    isProcessing = true;
+    try {
+      await processOutboxBatch();
+    } catch (error) {
+      console.error("❌ Error in outbox dispatcher:", error);
+    } finally {
+      isProcessing = false;
+      setTimeout(run, intervalMs);
+    }
+  };
+
+  // Initial start
+  run();
 }
 
 module.exports = { startOutboxDispatcher };
