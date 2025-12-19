@@ -16,7 +16,7 @@ const SERVICE_NAME = 'websocket-service';
 // Initialize production modules
 const logger = getLogger(SERVICE_NAME);
 const healthChecker = new HealthChecker(SERVICE_NAME, {
-  redis: true,
+  redis: false,
   rabbitmq: true,
   timeout: 5000
 });
@@ -70,6 +70,29 @@ app.get('/stats', (req, res) => {
 // WebSocket connection tracking
 const activeConnections = new Map();
 
+// Middleware for Handshake Authentication
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  const userId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
+
+  if (token && userId) {
+    // Verify JWT token here (mocking verification for now, replace with actual)
+    // const user = await security.verifyToken(token);
+
+    socket.userId = userId;
+    socket.authenticated = true;
+
+    // Auto-join user room
+    socket.join(`user-${userId}`);
+
+    logger.info('Socket authenticated via Handshake', {
+      socketId: socket.id,
+      userId: userId
+    });
+  }
+  next();
+});
+
 // Socket.IO event handlers
 io.on('connection', (socket) => {
   logger.info('New WebSocket connection', {
@@ -90,20 +113,20 @@ io.on('connection', (socket) => {
   socket.on('authenticate', (data) => {
     try {
       const { token, userId } = data;
-      
+
       if (token && userId) {
         // Verify JWT token here
         socket.userId = userId;
         socket.authenticated = true;
-        
+
         // Join user-specific room
         socket.join(`user-${userId}`);
-        
+
         logger.info('Socket authenticated', {
           socketId: socket.id,
           userId: userId
         });
-        
+
         socket.emit('authenticated', { success: true, userId });
       } else {
         socket.emit('authentication_error', { error: 'Missing token or userId' });
@@ -150,12 +173,11 @@ io.on('connection', (socket) => {
       userId: socket.userId,
       data: data
     });
-    
+
     // Broadcast to authenticated users
     if (socket.authenticated && data.recipient) {
       io.to(`user-${data.recipient}`).emit('notification', {
-        type: data.type || 'info',
-        message: data.message,
+        ...data,
         timestamp: new Date().toISOString(),
         from: socket.userId
       });
@@ -169,7 +191,7 @@ io.on('connection', (socket) => {
       userId: socket.userId,
       orderId: data.orderId
     });
-    
+
     // Broadcast to relevant users (seller, buyer, admins)
     if (data.orderId && data.status) {
       io.emit('order_status_change', {
@@ -187,7 +209,7 @@ io.on('connection', (socket) => {
       productId: data.productId,
       level: data.level
     });
-    
+
     // Broadcast to relevant users
     if (data.productId && data.level !== undefined) {
       io.emit('inventory_low', {
@@ -208,7 +230,7 @@ io.on('connection', (socket) => {
         roomId: data.roomId,
         messageLength: data.message.length
       });
-      
+
       io.to(data.roomId).emit('chat_message', {
         userId: socket.userId,
         message: data.message,
@@ -224,11 +246,11 @@ io.on('connection', (socket) => {
       socketId: socket.id,
       userId: socket.userId,
       reason: reason,
-      duration: activeConnections.get(socket.id) ? 
+      duration: activeConnections.get(socket.id) ?
         Date.now() - new Date(activeConnections.get(socket.id).connectedAt).getTime() : 0,
       totalConnections: io.engine.clientsCount
     });
-    
+
     activeConnections.delete(socket.id);
   });
 
@@ -247,7 +269,7 @@ io.on('connection', (socket) => {
 app.post('/broadcast', security.apiKeyAuth(), (req, res) => {
   try {
     const { event, data, room } = req.body;
-    
+
     if (!event || !data) {
       return res.status(400).json({
         status: 'error',
@@ -280,7 +302,7 @@ app.post('/broadcast', security.apiKeyAuth(), (req, res) => {
 app.post('/notify-user', security.apiKeyAuth(), (req, res) => {
   try {
     const { userId, notification } = req.body;
-    
+
     if (!userId || !notification) {
       return res.status(400).json({
         status: 'error',
@@ -319,29 +341,29 @@ server.listen(PORT, () => {
     nodeVersion: process.version,
     pid: process.pid
   });
-  
+
   console.log(`🔌 WebSocket Service running on port ${PORT}`);
 });
 
 // Graceful shutdown
 const shutdown = async (signal) => {
   logger.info(`Received ${signal}, starting graceful shutdown`);
-  
+
   // Close all socket connections
   io.close(() => {
     logger.info('Socket.IO server closed');
   });
-  
+
   server.close(async (err) => {
     if (err) {
       logger.error('Error closing server', { error: err.message });
       process.exit(1);
     }
-    
+
     logger.info('WebSocket Service shutdown completed');
     process.exit(0);
   });
-  
+
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');
     process.exit(1);
@@ -353,18 +375,18 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Error handling
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Promise Rejection', {
-        reason: reason?.message || reason,
-        stack: reason?.stack
-    });
-    process.exit(1);
+  logger.error('Unhandled Promise Rejection', {
+    reason: reason?.message || reason,
+    stack: reason?.stack
+  });
+  process.exit(1);
 });
 
 process.on('uncaughtException', (error) => {
-    logger.error('Uncaught Exception', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-    });
-    process.exit(1);
+  logger.error('Uncaught Exception', {
+    message: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  process.exit(1);
 });

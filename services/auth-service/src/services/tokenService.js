@@ -110,12 +110,12 @@ async function refreshTokens(refreshToken) {
         uid: user._id.toString(),
     });
 
-    await publishRabbitMQ(
+    publishRabbitMQ(
         exchanges.topic,
         "auth.session.refreshed",
         { sessionId: sid, userId: uid },
         { headers: { traceId: uuidv4() } }
-    );
+    ).catch(err => console.error('Failed to publish auth.session.refreshed:', err.message));
 
     return {
         accessToken,

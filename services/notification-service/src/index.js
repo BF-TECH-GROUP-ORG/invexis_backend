@@ -55,6 +55,8 @@ try {
   }
 } catch (err) {
   logger.warn('Some notification service modules not available', { error: err.message });
+  console.error("❌ CRITICAL: Notification service module initialization failed:", err);
+  console.error("Stack:", err.stack);
 }
 
 // Routes
@@ -84,8 +86,8 @@ app.get("/ready", async (_req, res) => {
 // Routes
 const notificationRoutes = require("./routes/notification");
 // Mount at specific api path AND root (for flexibility) AFTER health checks
-app.use("/api/notifications", notificationRoutes);
-app.use("/", notificationRoutes);
+app.use("/notification", notificationRoutes);
+// app.use("/", notificationRoutes);
 
 
 app.get("/health", (_req, res) => {

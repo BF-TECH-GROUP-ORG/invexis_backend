@@ -3,19 +3,40 @@
 const AnalyticsEvent = require("../../models/AnalyticsEvent.model");
 const IngestionController = require("../../controllers/IngestionController");
 
+/**
+ * Standard Event Structure Expected:
+ * {
+ *   type: "event.name",           // Required
+ *   source: "service-name",       // Required (defaults to 'unknown')
+ *   data: { ... },                // Event payload
+ *   emittedAt: "ISO date",        // Timestamp
+ *   id: "unique-id"               // Event ID
+ * }
+ */
+
 const handleAnalyticsEvent = async (event, routingKey) => {
     try {
-        const { data, source, emittedAt } = event || {};
-        let { type } = event || {};
+        const { data, emittedAt } = event || {};
+        let { type, source } = event || {};
 
         // Fallback to routingKey if type is not in payload
-        // This is common for simple messages or health checks
         if (!type && routingKey) {
             type = routingKey;
         }
 
+        // Default source if missing
+        if (!source) {
+            // Infer source from event type (e.g., "auth.user.created" -> "auth-service")
+            if (type && type.includes('.')) {
+                const prefix = type.split('.')[0];
+                source = `${prefix}-service`;
+            } else {
+                source = 'unknown-service';
+            }
+        }
+
         if (!type) {
-            // If we still don't have a type, we can't process it
+            console.warn('⚠️ Analytics: Received event without type', { routingKey, source });
             return;
         }
 
@@ -51,12 +72,22 @@ const handleAnalyticsEvent = async (event, routingKey) => {
             case "shop.created":
                 await IngestionController.processShopCreated(event);
                 break;
-            case "auth.user.registered": // standard from auth service usually
+            case "auth.user.registered":
+            case "auth.user.created":
+            case "auth.internal.user.registered":
             case "user.created":
                 await IngestionController.processUserRegistered(event);
                 break;
+            case "auth.verification.requested":
+            case "auth.session.created":
+            case "auth.user.tenancy.assigned":
+                // Expected but no metrics needed yet
+                break;
             default:
-                // Ignore other events for ingestion
+                // Ignore other events
+                if (type.startsWith('auth.')) {
+                    // Silently ignore known auth events that don't need metrics
+                }
                 break;
         }
 

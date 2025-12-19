@@ -216,16 +216,36 @@ const IngestionController = {
     async processUserRegistered(event) {
         const { data, emittedAt } = event;
         try {
+            // Handle different payload structures from auth events
+            // - auth.internal.user.registered: { userId: '...', role: '...', ... }
+            // - auth.user.registered: { phone: '...', firstName: '...', ... } -> ID might be missing or different?
+            // - user.created: { id: '...', ... }
+
+            const userId = data.userId || data.id;
+
+            if (!userId) {
+                console.warn(`⚠️ Ingestion: Skipped user registration event (missing ID):`, data);
+                return;
+            }
+
+            // Defaults
+            const username = data.username || data.phone || data.email || 'Unknown';
+            const email = data.email || (data.phone ? `${data.phone}@placeholder.com` : null);
+
             await User.create({
-                id: data.id,
-                companyId: data.companyId || null,
-                username: data.username,
-                email: data.email,
-                role: data.role,
-                createdAt: data.createdAt || emittedAt,
+                id: userId,
+                companyId: data.companyId || (data.companies && data.companies[0]) || null,
+                username: username,
+                email: email,
+                role: data.role || 'user',
+                createdAt: data.createdAt || emittedAt || new Date(),
             });
-            console.log(`👤 Ingestion: User Registered: ${data.email}`);
+            const userRole = data.role || 'user';
+            console.log(`👤 Ingestion: User Registered: ${userId} (${userRole})`);
         } catch (err) {
+            if (err.name === 'SequelizeUniqueConstraintError') {
+                return; // Already exists
+            }
             console.error("❌ Ingestion: User Register Failed:", err.message);
         }
     }

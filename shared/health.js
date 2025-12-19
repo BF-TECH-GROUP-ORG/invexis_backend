@@ -18,7 +18,7 @@ class HealthChecker {
       rabbitmq: config.rabbitmq || false,
       customChecks: config.customChecks || []
     };
-    
+
     // Metrics collection
     this.metrics = {
       requests: 0,
@@ -57,7 +57,7 @@ class HealthChecker {
       // Run dependency checks
       const dependencies = await this.checkDependencies();
       health.dependencies = dependencies;
-      
+
       // Check if any dependencies are unhealthy
       const unhealthyDeps = dependencies.filter(dep => dep.status !== 'healthy');
       if (unhealthyDeps.length > 0) {
@@ -78,7 +78,7 @@ class HealthChecker {
     try {
       const dependencies = await this.checkDependencies();
       const failedDeps = dependencies.filter(dep => dep.status !== 'healthy');
-      
+
       if (failedDeps.length > 0) {
         return res.status(503).json({
           status: 'not ready',
@@ -175,13 +175,21 @@ class HealthChecker {
   async checkRedis() {
     const start = Date.now();
     try {
-      const redis = new Redis({
-        host: process.env.REDIS_HOST || 'redis',
-        port: process.env.REDIS_PORT || 6379,
-        password: process.env.REDIS_PASSWORD || undefined,
-        connectTimeout: this.config.timeout,
-        lazyConnect: true
-      });
+      let redis;
+      if (process.env.REDIS_URL) {
+        redis = new Redis(process.env.REDIS_URL, {
+          connectTimeout: this.config.timeout,
+          lazyConnect: true
+        });
+      } else {
+        redis = new Redis({
+          host: process.env.REDIS_HOST || 'redis',
+          port: process.env.REDIS_PORT || 6379,
+          password: process.env.REDIS_PASSWORD || undefined,
+          connectTimeout: this.config.timeout,
+          lazyConnect: true
+        });
+      }
 
       await redis.ping();
       await redis.disconnect();
@@ -206,15 +214,22 @@ class HealthChecker {
   async checkRabbitMQ() {
     const start = Date.now();
     try {
-      const connection = await amqp.connect({
-        hostname: process.env.RABBITMQ_HOST || 'rabbitmq',
-        port: process.env.RABBITMQ_PORT || 5672,
-        username: process.env.RABBITMQ_DEFAULT_USER || 'guest',
-        password: process.env.RABBITMQ_DEFAULT_PASS || 'guest',
-        vhost: process.env.RABBITMQ_VHOST || '/',
-        heartbeat: 0,
-        connection_timeout: this.config.timeout
-      });
+      let connection;
+      if (process.env.RABBITMQ_URL) {
+        connection = await amqp.connect(process.env.RABBITMQ_URL, {
+          timeout: this.config.timeout
+        });
+      } else {
+        connection = await amqp.connect({
+          hostname: process.env.RABBITMQ_HOST || 'rabbitmq',
+          port: process.env.RABBITMQ_PORT || 5672,
+          username: process.env.RABBITMQ_DEFAULT_USER || 'guest',
+          password: process.env.RABBITMQ_DEFAULT_PASS || 'guest',
+          vhost: process.env.RABBITMQ_VHOST || '/',
+          heartbeat: 0,
+          timeout: this.config.timeout
+        });
+      }
 
       await connection.close();
 
@@ -240,7 +255,7 @@ class HealthChecker {
     try {
       const mongoose = require('mongoose');
       const mongoUri = process.env.MONGODB_URL || process.env.MONGO_URI || 'mongodb://root:invexispass@mongodb:27017';
-      
+
       if (mongoose.connection.readyState !== 1) {
         throw new Error('MongoDB not connected');
       }
@@ -343,24 +358,19 @@ class HealthChecker {
     return (req, res, next) => {
       this.metrics.requests++;
 
-      const self = this; // preserve HealthChecker instance
       const originalSend = res.send;
       res.send = function (data) {
-        try {
-          if (res.statusCode >= 400) {
-            self.metrics.errors++;
-            self.metrics.lastError = {
-              timestamp: new Date().toISOString(),
-              status: res.statusCode,
-              path: req.path,
-              method: req.method
-            };
-          }
-        } catch (e) {
-          // swallow metric errors to avoid breaking response
+        if (res.statusCode >= 400) {
+          this.metrics.errors++;
+          this.metrics.lastError = {
+            timestamp: new Date().toISOString(),
+            status: res.statusCode,
+            path: req.path,
+            method: req.method
+          };
         }
         return originalSend.call(res, data);
-      };
+      }.bind(this);
 
       next();
     };
@@ -370,7 +380,7 @@ class HealthChecker {
   setupGracefulShutdown() {
     const shutdown = async (signal) => {
       console.log(`\n🔄 Received ${signal}, starting graceful shutdown...`);
-      
+
       try {
         // Close server connections, databases, etc.
         console.log('✅ Graceful shutdown completed');
@@ -391,7 +401,7 @@ class HealthChecker {
     app.get('/health/ready', this.getReadiness.bind(this));
     app.get('/health/live', this.getLiveness.bind(this));
     app.get('/metrics', this.getMetrics.bind(this));
-    
+
     // Use metrics tracking middleware
     app.use(this.trackMetrics());
   }

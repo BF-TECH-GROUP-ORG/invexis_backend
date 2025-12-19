@@ -1,12 +1,24 @@
 "use strict";
 
-const { subscribe } = require("/app/shared/rabbitmq");
+const logger = require("../../utils/logger");
+
+let subscribe;
+try {
+  const rabbitmq = require("/app/shared/rabbitmq");
+  subscribe = rabbitmq.subscribe;
+} catch (err) {
+  logger.warn('RabbitMQ shared module not available in registerConsumer', { error: err.message });
+}
 
 /**
  * Dynamically register all configured event consumers
  * @param {Array} consumerConfigs - List of consumer definitions
  */
 const registerConsumers = async (consumerConfigs) => {
+  if (!subscribe) {
+    console.warn("⚠️ RabbitMQ subscribe function not available. Skipping consumer registration.");
+    return;
+  }
   console.log("🔄 Registering dynamic consumers...");
 
   for (const config of consumerConfigs) {
