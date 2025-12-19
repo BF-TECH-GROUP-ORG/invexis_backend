@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invexis Realtime Notification Tester</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .notification-card {
+            transition: all 0.3s ease;
+        }
+
+        .notification-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .intent-operational {
+            border-left: 4px solid #3b82f6;
+            background-color: #f7fafc;
+        }
+
+        .intent-financial {
+            border-left: 4px solid #22c55e;
+            background-color: #f7fafc;
+        }
+
+        .intent-risk_security {
+            border-left: 4px solid #ef4444;
+            background-color: #f7fafc;
+        }
+
+        .intent-accountability {
+            border-left: 4px solid #eab308;
+            background-color: #f7fafc;
+        }
+
+        .priority-urgent {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: .8;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen p-8 font-sans">
+    <div class="max-w-4xl mx-auto">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">🔔 Notification Debugger</h1>
+                <p class="text-gray-500">Realtime WebSocket Inspector</p>
+            </div>
+            <div id="connectionStatus" class="px-4 py-2 rounded-full text-sm font-semibold bg-red-100 text-red-800">
+                Disconnected
+            </div>
+        </header>
+
+        <!-- Connection Settings -->
+        <div class="bg-white rounded-lg shadow p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Connection Settings</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">WebSocket URL</label>
+                    <input type="text" id="wsUrl" value="http://localhost:9002"
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">User ID (Recipient)</label>
+                    <input type="text" id="userId" placeholder="e.g. 64f..."
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Auth Token (Optional)</label>
+                    <input type="text" id="token" placeholder="JWT..."
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+            <div class="mt-4 flex gap-3">
+                <button onclick="connect()" id="btnConnect"
+                    class="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium transition">
+                    Connect
+                </button>
+                <button onclick="disconnect()" id="btnDisconnect"
+                    class="px-6 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-medium transition hidden">
+                    Disconnect
+                </button>
+                <button onclick="clearLogs()"
+                    class="px-6 py-2 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 font-medium transition ml-auto">
+                    Clear Logs
+                </button>
+            </div>
+        </div>
+
+        <!-- Trigger Notification -->
+        <div class="bg-white rounded-lg shadow p-6 mb-8 hover:shadow-md transition-shadow">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center gap-2">
+                <span>🚀 Trigger Notification</span>
+                <span class="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Sends to other
+                    users</span>
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div class="md:col-span-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Target User ID</label>
+                    <input type="text" id="targetUserId" placeholder="Receiver ID"
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none">
+                </div>
+                <div class="md:col-span-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Type / Intent</label>
+                    <select id="msgType"
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none bg-white">
+                        <option value="info">Info (Generic)</option>
+                        <option value="operational">Operational</option>
+                        <option value="financial">Financial</option>
+                        <option value="risk_security">Risk / Security</option>
+                        <option value="accountability">Accountability</option>
+                    </select>
+                </div>
+                <div class="md:col-span-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                    <input type="text" id="msgBody" placeholder="Hello World..."
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none">
+                </div>
+                <div class="md:col-span-1">
+                    <button onclick="sendNotification()"
+                        class="w-full px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium transition flex justify-center items-center gap-2">
+                        <span>Send</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Feed -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="bg-gray-50 px-6 py-3 border-b flex justify-between items-center">
+                <h2 class="font-semibold text-gray-700">Live Notification Feed</h2>
+                <span id="msgCount" class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs">0 items</span>
+            </div>
+            <div id="logArea" class="p-6 space-y-4 max-h-[600px] overflow-y-auto bg-gray-50/50">
+                <div class="text-center text-gray-400 py-12 italic" id="emptyState">
+                    Waiting for notifications...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket;
+        let count = 0;
+
+        function updateStatus(status, connected) {
+            const el = document.getElementById('connectionStatus');
+            el.textContent = status;
+            el.className = `px-4 py-2 rounded-full text-sm font-semibold ${connected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
+
+            document.getElementById('btnConnect').classList.toggle('hidden', connected);
+            document.getElementById('btnDisconnect').classList.toggle('hidden', !connected);
+        }
+
+        function connect() {
+            const url = document.getElementById('wsUrl').value;
+            const userId = document.getElementById('userId').value;
+            const token = document.getElementById('token').value;
+
+            if (!userId) {
+                alert('User ID is required to subscribe to user channels');
+                return;
+            }
+
+            console.log(`Connecting to ${url}...`);
+
+            // Use Handshake Auth (Matches App Behavior)
+            socket = io(url, {
+                transports: ['websocket'],
+                reconnection: true,
+                auth: {
+                    token: token,
+                    userId: userId
+                }
+            });
+
+            socket.on('connect', () => {
+                console.log('Connected!');
+                updateStatus('Connected', true);
+
+                // Handshake auth happens automatically on connection.
+                // We don't need to emit 'authenticate' anymore if middleware works.
+                logSystem('✅ Connected (Handshake Auth Sent)');
+            });
+
+            socket.on('authenticated', (data) => {
+                logSystem(`✅ Authenticated as user ${data.userId}`);
+            });
+
+            socket.on('authentication_error', (data) => {
+                logSystem(`❌ Authentication Failed: ${data.error}`, 'error');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected');
+                updateStatus('Disconnected', false);
+                logSystem('🔌 Disconnected from server');
+            });
+
+            socket.on('notification', (data) => {
+                console.log('Notification received:', data);
+                count++;
+                document.getElementById('msgCount').textContent = `${count} items`;
+                renderNotification(data);
+            });
+
+            // Listen for other potential events
+            socket.on('broadcast', (data) => renderNotification({ ...data, type: 'BROADCAST' }));
+        }
+
+        function disconnect() {
+            if (socket) socket.disconnect();
+        }
+
+        function clearLogs() {
+            document.getElementById('logArea').innerHTML = '<div class="text-center text-gray-400 py-12 italic" id="emptyState">Logs cleared. Waiting...</div>';
+            count = 0;
+            document.getElementById('msgCount').textContent = '0 items';
+        }
+
+        function logSystem(msg, type = 'info') {
+            const area = document.getElementById('logArea');
+            document.getElementById('emptyState')?.remove();
+
+            const div = document.createElement('div');
+            div.className = `text-xs text-center border-b pb-2 mb-2 ${type === 'error' ? 'text-red-500' : 'text-gray-400'}`;
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            area.prepend(div);
+        }
+
+        function renderNotification(data) {
+            const area = document.getElementById('logArea');
+            document.getElementById('emptyState')?.remove();
+
+            // Extract fields based on your schema
+            const intent = data.payload?.intent || data.intent || 'operational';
+            const role = data.payload?.role || 'unknown';
+            const type = data.payload?.eventType || data.type || 'Generic';
+            const priority = data.priority || 'normal';
+
+            const card = document.createElement('div');
+            card.className = `notification-card bg-white p-4 rounded shadow-sm border border-gray-100 intent-${intent} priority-${priority}`;
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-600">${intent}</span>
+                        ${priority === 'urgent' ? '<span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-800 font-bold">URGENT</span>' : ''}
+                    </div>
+                    <span class="text-xs text-gray-400">${new Date().toLocaleTimeString()}</span>
+                </div>
+                <h3 class="font-bold text-gray-800 mb-1">${data.title || 'No Title'}</h3>
+                <p class="text-gray-600 text-sm mb-3">${data.body || 'No content'}</p>
+                <div class="pt-3 border-t border-gray-50 flex justify-between items-center text-xs text-gray-500">
+                    <div class="flex gap-4">
+                        <span>🏷️ ${type}</span>
+                        <span>👤 ${role}</span>
+                    </div>
+                    <code class="bg-gray-100 px-2 py-0.5 rounded text-gray-500 font-mono">ID: ${data._id || data.notificationId?.slice(-6) || 'N/A'}</code>
+                </div>
+                <div class="mt-2 text-xs text-gray-400 cursor-pointer hover:text-blue-500" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                    ▶ Show Raw Payload
+                </div>
+                <pre class="hidden mt-2 p-2 bg-gray-800 text-green-400 rounded text-xs overflow-x-auto">${JSON.stringify(data, null, 2)}</pre>
+            `;
+
+            area.prepend(card);
+        }
+
+        function sendNotification() {
+            const recipient = document.getElementById('targetUserId').value;
+            const message = document.getElementById('msgBody').value;
+            const type = document.getElementById('msgType').value;
+
+            if (!recipient) {
+                alert('Please enter a Target User ID');
+                return;
+            }
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            if (!socket || !socket.connected) {
+                alert('Please connect first!');
+                return;
+            }
+
+            const payload = {
+                recipient: recipient,
+
+                // Matches Notification Schema for Frontend
+                title: `${type.toUpperCase()} Alert`,
+                body: message,
+                priority: 'normal',
+
+                // Nest semantic data
+                payload: {
+                    intent: type,
+                    role: 'manual_trigger',
+                    eventType: 'manual.test',
+                    source: 'dashboard-debugger'
+                },
+
+                // Fallback for raw websocket handlers
+                message: message,
+                type: type
+            };
+
+            logSystem(`🚀 Sending ${type} message to ${recipient}...`);
+
+            // Emit directly to socket server which forwards to recipient
+            socket.emit('notification', payload);
+
+            // Clear input
+            document.getElementById('msgBody').value = '';
+        }
+    </script>
+</body>
+
+</html>

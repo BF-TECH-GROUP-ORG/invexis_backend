@@ -1,6 +1,6 @@
 "use strict";
 
-const Outbox = require("../models/outbox.model");
+const Outbox = require("../models/Outbox");
 const { publish } = require("/app/shared/rabbitmq");
 
 let dispatcherInterval = null;
@@ -14,7 +14,7 @@ let isProcessing = false;
 const startOutboxDispatcher = async (intervalMs = 5000) => {
     console.log(`⏱️ Starting outbox dispatcher (interval: ${intervalMs}ms)`);
 
-    // Run immediately on startup
+    // Run immediately on startup (but don't await)
     setImmediate(() => processOutbox());
 
     // Then run periodically
@@ -43,45 +43,58 @@ const stopOutboxDispatcher = () => {
  */
 async function processOutbox() {
     if (isProcessing) {
-        return;
+        return; // Skip if already processing
     }
 
     isProcessing = true;
 
     try {
-        // Reset stale events
+        // Reset stale processing events (older than 30 seconds)
         try {
             await Outbox.resetStaleProcessing(0.5);
         } catch (resetErr) {
             console.warn('⚠️ Failed to reset stale events:', resetErr.message);
         }
 
+        // Fetch pending events
         const pendingEvents = await Outbox.findPending(50);
 
         if (pendingEvents.length === 0) {
             return;
         }
 
-        console.log(`📤 Processing ${pendingEvents.length} outbox events`);
+        console.log(`📤 Processing ${pendingEvents.length} pending outbox events`);
 
+        // Process events one by one
         for (const event of pendingEvents) {
             try {
-                await Outbox.markAsProcessing(event._id);
+                // Mark as processing
+                await Outbox.markAsProcessing(event.id);
 
+                // Parse payload if it's a string
+                const payload = typeof event.payload === "string"
+                    ? JSON.parse(event.payload)
+                    : event.payload;
+
+                // Publish to RabbitMQ
                 await publish(
                     event.exchange || 'events_topic',
-                    event.payload,
-                    { routingKey: event.routing_key }
+                    payload,
+                    { routingKey: event.routingKey }
                 );
 
-                await Outbox.markAsSent(event._id);
-                console.log(`✅ Published ${event.routing_key} from outbox (ID: ${event._id})`);
+                // Mark as sent
+                await Outbox.markAsSent(event.id);
+
+                console.log(`✅ Published ${event.routingKey} from outbox (ID: ${event.id})`);
             } catch (error) {
-                console.error(`❌ Failed to publish event ${event._id}:`, error.message);
+                console.error(`❌ Failed to publish event ${event.id}:`, error.message);
+
+                // Mark as failed
                 try {
-                    await Outbox.markAsFailed(event._id, error);
+                    await Outbox.markAsFailed(event.id, error);
                 } catch (markErr) {
-                    console.error(`❌ Failed to mark event as failed:`, markErr.message);
+                    console.error(`❌ Failed to mark event ${event.id} as failed:`, markErr.message);
                 }
             }
         }
@@ -92,4 +105,8 @@ async function processOutbox() {
     }
 }
 
-module.exports = { startOutboxDispatcher, stopOutboxDispatcher, processOutbox };
+module.exports = {
+    startOutboxDispatcher,
+    stopOutboxDispatcher,
+    processOutbox,
+};

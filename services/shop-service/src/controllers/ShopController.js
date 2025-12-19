@@ -25,6 +25,7 @@ const createShop = asyncHandler(async (req, res) => {
     timezone,
     operatingHours,
     preferences,
+    created_by
   } = req.body;
 
   const companyId = req.user?.companyId || req.body.companyId;
@@ -89,7 +90,7 @@ const createShop = asyncHandler(async (req, res) => {
         capacity: capacity || 0,
         timezone: timezone || "UTC",
         status: "open",
-        created_by: req.user?.id || null,
+        created_by: created_by || req.user?.id || null,
       },
       trx
     );

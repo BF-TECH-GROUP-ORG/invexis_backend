@@ -1,0 +1,307 @@
+/**
+ * Recipient Resolver Service
+ * 
+ * Resolves notification recipients by querying auth-service
+ * based on event type, company/shop context, and user roles
+ */
+
+const axios = require('axios');
+const { AUTH_ROLES, ROLE_DISPLAY_NAMES } = require('../constants/roles');
+const logger = require('../utils/logger');
+
+class RecipientResolver {
+    constructor() {
+        this.authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
+        this.cache = new Map(); // Simple in-memory cache
+        this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+    }
+
+    /**
+     * Resolve recipients by role for a given event
+     * @param {string} eventType - Event type (e.g., 'shop.created')
+     * @param {Object} data - Event data
+     * @returns {Promise<Object>} - { role: [userId1, userId2, ...] }
+     */
+    async resolveByRole(eventType, data) {
+        const mapping = this.getRoleMapping(eventType);
+
+        if (!mapping || !mapping.roles || mapping.roles.length === 0) {
+            logger.warn(`⚠️ No role mapping defined for ${eventType}`);
+            return {};
+        }
+
+        logger.info(`🔍 Resolving recipients for ${eventType}`, {
+            roles: mapping.roles,
+            companyId: data.companyId,
+            shopId: data.shopId
+        });
+
+        const recipients = {};
+
+        for (const role of mapping.roles) {
+            try {
+                const userIds = await this.getUsersByRole(role, data, eventType);
+                if (userIds && userIds.length > 0) {
+                    recipients[role] = userIds;
+                    logger.debug(`✓ Found ${userIds.length} ${ROLE_DISPLAY_NAMES[role]}(s)`);
+                }
+            } catch (error) {
+                logger.error(`❌ Failed to resolve ${role} for ${eventType}:`, error.message);
+            }
+        }
+
+        return recipients;
+    }
+
+    /**
+     * Query auth-service for users by role and context
+     * @param {string} role - User role (from AUTH_ROLES)
+     * @param {Object} context - { companyId, shopId, userId, etc. }
+     * @param {string} eventType - Event type for special handling
+     * @returns {Promise<string[]>} - Array of user IDs
+     */
+    async getUsersByRole(role, context, eventType) {
+        const { companyId, shopId, userId, adminId, managerId, affectedUserId } = context;
+
+        // Special case: AFFECTED_USER (the user directly involved in the event)
+        if (role === 'AFFECTED_USER') {
+            const id = affectedUserId || userId || adminId;
+            return id ? [id] : [];
+        }
+
+        // Special case: Event provides explicit role-based IDs
+        if (role === AUTH_ROLES.COMPANY_ADMIN && adminId) {
+            return [adminId];
+        }
+        if (role === AUTH_ROLES.SHOP_MANAGER && managerId) {
+            return [managerId];
+        }
+
+        // Query auth-service for users by role
+        switch (role) {
+            case AUTH_ROLES.SUPER_ADMIN:
+                return await this.getSuperAdmins();
+
+            case AUTH_ROLES.COMPANY_ADMIN:
+                if (!companyId) {
+                    logger.warn(`⚠️ No companyId provided for COMPANY_ADMIN resolution`);
+                    return [];
+                }
+                return await this.getCompanyAdmins(companyId);
+
+            case AUTH_ROLES.SHOP_MANAGER:
+                if (!shopId) {
+                    logger.warn(`⚠️ No shopId provided for SHOP_MANAGER resolution`);
+                    return [];
+                }
+                return await this.getShopManagers(shopId);
+
+            case AUTH_ROLES.WORKER:
+                if (!shopId && !companyId) {
+                    logger.warn(`⚠️ No shopId/companyId for WORKER resolution`);
+                    return [];
+                }
+                return await this.getWorkers(companyId, shopId);
+
+            default:
+                logger.warn(`⚠️ Unknown role: ${role}`);
+                return [];
+        }
+    }
+
+    /**
+     * Get all super admins
+     * @returns {Promise<string[]>}
+     */
+    async getSuperAdmins() {
+        const cacheKey = 'super_admins';
+        const cached = this.getFromCache(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const response = await axios.get(`${this.authServiceUrl}/users`, {
+                params: { role: AUTH_ROLES.SUPER_ADMIN },
+                timeout: 5000
+            });
+
+            const userIds = response.data.map(u => u._id);
+            this.setCache(cacheKey, userIds);
+            return userIds;
+        } catch (error) {
+            logger.error('Failed to fetch super admins:', error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Get company admins for a specific company
+     * @param {string} companyId
+     * @returns {Promise<string[]>}
+     */
+    async getCompanyAdmins(companyId) {
+        const cacheKey = `company_admins:${companyId}`;
+        const cached = this.getFromCache(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const response = await axios.get(`${this.authServiceUrl}/users`, {
+                params: {
+                    role: AUTH_ROLES.COMPANY_ADMIN,
+                    companies: companyId
+                },
+                timeout: 5000
+            });
+
+            const userIds = response.data.map(u => u._id);
+            this.setCache(cacheKey, userIds);
+            return userIds;
+        } catch (error) {
+            logger.error(`Failed to fetch company admins for ${companyId}:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Get shop managers for a specific shop
+     * @param {string} shopId
+     * @returns {Promise<string[]>}
+     */
+    async getShopManagers(shopId) {
+        const cacheKey = `shop_managers:${shopId}`;
+        const cached = this.getFromCache(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const response = await axios.get(`${this.authServiceUrl}/users`, {
+                params: {
+                    role: AUTH_ROLES.SHOP_MANAGER,
+                    shops: shopId
+                },
+                timeout: 5000
+            });
+
+            const userIds = response.data.map(u => u._id);
+            this.setCache(cacheKey, userIds);
+            return userIds;
+        } catch (error) {
+            logger.error(`Failed to fetch shop managers for ${shopId}:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Get workers for a company or shop
+     * @param {string} companyId
+     * @param {string} shopId
+     * @returns {Promise<string[]>}
+     */
+    async getWorkers(companyId, shopId) {
+        const cacheKey = `workers:${companyId}:${shopId}`;
+        const cached = this.getFromCache(cacheKey);
+        if (cached) return cached;
+
+        try {
+            const params = { role: AUTH_ROLES.WORKER };
+            if (shopId) params.shops = shopId;
+            else if (companyId) params.companies = companyId;
+
+            const response = await axios.get(`${this.authServiceUrl}/users`, {
+                params,
+                timeout: 5000
+            });
+
+            const userIds = response.data.map(u => u._id);
+            this.setCache(cacheKey, userIds);
+            return userIds;
+        } catch (error) {
+            logger.error(`Failed to fetch workers:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Define role mappings per event type
+     * Maps event types to roles that should be notified
+     */
+    getRoleMapping(eventType) {
+        const mappings = {
+            // Company Events
+            'company.created': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'company.updated': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'company.status.changed': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'company.suspended': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
+            'company.deleted': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
+            'company.tierChanged': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'company.allSuspended': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
+
+            // Shop Events
+            'shop.created': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
+            'shop.updated': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            'shop.deleted': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
+            'shop.statusChanged': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+
+            // Inventory Events
+            'inventory.low_stock': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            'inventory.out_of_stock': { roles: [AUTH_ROLES.SHOP_MANAGER, AUTH_ROLES.COMPANY_ADMIN] },
+
+            // Sales Events
+            'sale.created': { roles: [AUTH_ROLES.WORKER, AUTH_ROLES.SHOP_MANAGER] },
+            'sale.completed': { roles: [AUTH_ROLES.WORKER] },
+            'sale.cancelled': { roles: [AUTH_ROLES.SHOP_MANAGER, AUTH_ROLES.WORKER] },
+            'sale.refunded': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
+
+            // Payment Events
+            'payment.success': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'payment.failed': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
+            'payment.refunded': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'subscription.expiring': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'subscription.expired': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
+
+            // Auth Events
+            'user.created': { roles: ['AFFECTED_USER'] },
+            'user.verified': { roles: ['AFFECTED_USER'] },
+            'user.password.reset': { roles: ['AFFECTED_USER'] },
+            'user.suspended': { roles: ['AFFECTED_USER', AUTH_ROLES.COMPANY_ADMIN] },
+            'user.deleted': { roles: ['AFFECTED_USER'] },
+
+            // Debt Events
+            'debt.created': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            'debt.repayment.created': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            'debt.fully_paid': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'debt.status.updated': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            'debt.overdue': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
+            'debt.reminder.upcoming': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            'debt.reminder.overdue': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
+        };
+
+        return mappings[eventType] || null;
+    }
+
+    /**
+     * Cache helpers
+     */
+    getFromCache(key) {
+        const cached = this.cache.get(key);
+        if (!cached) return null;
+
+        const { data, timestamp } = cached;
+        if (Date.now() - timestamp > this.cacheTTL) {
+            this.cache.delete(key);
+            return null;
+        }
+
+        logger.debug(`📦 Cache hit: ${key}`);
+        return data;
+    }
+
+    setCache(key, data) {
+        this.cache.set(key, { data, timestamp: Date.now() });
+    }
+
+    clearCache() {
+        this.cache.clear();
+        logger.info('🗑️ Recipient cache cleared');
+    }
+}
+
+module.exports = new RecipientResolver();
