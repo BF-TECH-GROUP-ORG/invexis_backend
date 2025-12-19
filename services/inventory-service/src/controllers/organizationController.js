@@ -41,26 +41,26 @@ function sanitizeDestinationProductData(data, transferType = 'cross_company') {
         'barcodeCloudinaryId', // Cloudinary ID doesn't apply to new product
         'pricingId'        // New pricing will be created separately
     ];
-    
+
     fieldsToDelete.forEach((f) => { if (f in data) delete data[f]; });
-    
+
     // Reset soft-delete flags (destination product is active, not deleted)
     data.isDeleted = false;
     data.deletedAt = null;
     data.deletedBy = null;
-    
+
     // Reset sales metrics for destination product
     if (data.sales) {
         data.sales.totalSold = 0;
         data.sales.revenue = 0;
     }
-    
+
     // For cross-company transfers, do NOT share supplier name (it's company-specific)
     // For intra-company transfers, share the supplier name
     if (transferType === 'cross_company') {
         data.supplierName = null;
     }
-    
+
     return data;
 }
 
@@ -180,7 +180,26 @@ const getCompanyOverview = asyncHandler(async (req, res) => {
         { $match: { 'product.companyId': companyId } },
         { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
         { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
-        { $group: { _id: null, totalStock: { $sum: '$stockQty' }, totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', { $ifNull: ['$pricing.cost', 0] }] }] } } } }
+        {
+            $group: {
+                _id: null,
+                totalStock: { $sum: '$stockQty' },
+                totalValue: {
+                    $sum: {
+                        $multiply: [
+                            '$stockQty',
+                            {
+                                $cond: {
+                                    if: { $gt: [{ $ifNull: ['$avgCost', 0] }, 0] },
+                                    then: '$avgCost',
+                                    else: { $ifNull: ['$pricing.cost', 0] }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
     ]);
 
     const { totalStock = 0, totalValue = 0 } = stockAgg[0] || {};
@@ -497,13 +516,30 @@ const getCompanyShops = asyncHandler(async (req, res) => {
     // Aggregate from ProductStock which stores concrete stock records per product/variation
     const shopStats = await ProductStock.aggregate([
         { $match: { companyId } },
+        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+        { $unwind: '$product' },
+        { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
+        { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
         {
             $group: {
                 _id: '$shopId',
                 shopId: { $first: '$shopId' },
                 productIds: { $addToSet: '$productId' },
                 totalStock: { $sum: '$stockQty' },
-                totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', 0] }] } },
+                totalValue: {
+                    $sum: {
+                        $multiply: [
+                            '$stockQty',
+                            {
+                                $cond: {
+                                    if: { $gt: [{ $ifNull: ['$avgCost', 0] }, 0] },
+                                    then: '$avgCost',
+                                    else: { $ifNull: ['$pricing.cost', 0] }
+                                }
+                            }
+                        ]
+                    }
+                },
                 lowStockCount: { $sum: { $cond: [{ $lte: ['$stockQty', '$lowStockThreshold'] }, 1, 0] } }
             }
         },
@@ -1522,14 +1558,31 @@ const getShopOverview = asyncHandler(async (req, res) => {
     // Total products in shop
     const totalProducts = await Product.countDocuments({ companyId, shopId });
 
-    // Total stock & value
-    const stockData = await Product.aggregate([
+    // Total stock & value from ProductStock
+    const stockData = await ProductStock.aggregate([
         { $match: { companyId, shopId } },
+        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+        { $unwind: '$product' },
+        { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
+        { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
         {
             $group: {
                 _id: null,
-                totalStock: { $sum: '$inventory.quantity' },
-                totalValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }
+                totalStock: { $sum: '$stockQty' },
+                totalValue: {
+                    $sum: {
+                        $multiply: [
+                            '$stockQty',
+                            {
+                                $cond: {
+                                    if: { $gt: [{ $ifNull: ['$avgCost', 0] }, 0] },
+                                    then: '$avgCost',
+                                    else: { $ifNull: ['$pricing.cost', 0] }
+                                }
+                            }
+                        ]
+                    }
+                }
             }
         }
     ]);
@@ -1537,17 +1590,17 @@ const getShopOverview = asyncHandler(async (req, res) => {
     const { totalStock = 0, totalValue = 0 } = stockData[0] || {};
 
     // Low stock
-    const lowStockCount = await Product.countDocuments({
+    const lowStockCount = await ProductStock.countDocuments({
         companyId,
         shopId,
-        $expr: { $lte: ['$inventory.quantity', '$inventory.lowStockThreshold'] }
+        isLowStock: true
     });
 
     // Out of stock
-    const outOfStockCount = await Product.countDocuments({
+    const outOfStockCount = await ProductStock.countDocuments({
         companyId,
         shopId,
-        'inventory.quantity': 0
+        inStock: false
     });
 
     // Active alerts
@@ -1757,15 +1810,39 @@ const getShopReport = asyncHandler(async (req, res) => {
         });
     }
 
-    // Overview
-    const overview = await Product.aggregate([
+    // Overview from ProductStock
+    const overview = await ProductStock.aggregate([
         { $match: { companyId, shopId } },
+        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+        { $unwind: '$product' },
+        { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
+        { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
         {
             $group: {
                 _id: null,
-                totalProducts: { $sum: 1 },
-                totalStock: { $sum: '$inventory.quantity' },
-                totalValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }
+                totalProducts: { $addToSet: '$productId' },
+                totalStock: { $sum: '$stockQty' },
+                totalValue: {
+                    $sum: {
+                        $multiply: [
+                            '$stockQty',
+                            {
+                                $cond: {
+                                    if: { $gt: [{ $ifNull: ['$avgCost', 0] }, 0] },
+                                    then: '$avgCost',
+                                    else: { $ifNull: ['$pricing.cost', 0] }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                totalProducts: { $size: '$totalProducts' },
+                totalStock: 1,
+                totalValue: 1
             }
         }
     ]);
@@ -1872,28 +1949,37 @@ const getCategoryReport = asyncHandler(async (req, res) => {
     // total products under category
     const totalProducts = await Product.countDocuments({ companyId, categoryId });
 
-    // aggregate stock & value using ProductVariation and pricing join
-    const agg = await Product.aggregate([
-        { $match: { companyId, categoryId: mongoose.Types.ObjectId(categoryId) } },
-        { $lookup: { from: 'productvariations', localField: '_id', foreignField: 'productId', as: 'variations' } },
-        { $lookup: { from: 'productpricings', localField: 'pricingId', foreignField: '_id', as: 'pricing' } },
+    // aggregate stock & value using ProductStock and pricing join
+    const agg = await ProductStock.aggregate([
+        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+        { $unwind: '$product' },
+        { $match: { 'product.companyId': companyId, 'product.categoryId': mongoose.Types.ObjectId(categoryId) } },
+        { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
         { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
         {
-            $project: {
-                productId: '$_id',
-                totalStock: { $sum: { $map: { input: '$variations', as: 'v', in: { $ifNull: ['$$v.stockQty', 0] } } } },
-                cost: { $ifNull: ['$pricing.cost', 0] },
-                lowStockThreshold: '$inventory.lowStockThreshold',
-                qty: '$inventory.quantity'
+            $group: {
+                _id: '$productId',
+                productTotalStock: { $sum: '$stockQty' },
+                cost: {
+                    $first: {
+                        $cond: {
+                            if: { $gt: [{ $ifNull: ['$avgCost', 0] }, 0] },
+                            then: '$avgCost',
+                            else: { $ifNull: ['$pricing.cost', 0] }
+                        }
+                    }
+                },
+                lowStockCount: { $first: { $cond: [{ $eq: ['$isLowStock', true] }, 1, 0] } },
+                outOfStockCount: { $first: { $cond: [{ $eq: ['$inStock', false] }, 1, 0] } }
             }
         },
         {
             $group: {
                 _id: null,
-                totalStock: { $sum: '$totalStock' },
-                totalValue: { $sum: { $multiply: ['$totalStock', '$cost'] } },
-                lowStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', '$lowStockThreshold'] }, 1, 0] } },
-                outOfStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', 0] }, 1, 0] } }
+                totalStock: { $sum: '$productTotalStock' },
+                totalValue: { $sum: { $multiply: ['$productTotalStock', '$cost'] } },
+                lowStockCount: { $sum: '$lowStockCount' },
+                outOfStockCount: { $sum: '$outOfStockCount' }
             }
         }
     ]).allowDiskUse(true);
@@ -2082,13 +2168,13 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         // Product model will auto-generate new unique codes on save
         const destinationProduct = await Product.create([destinationProductData]);
         const destinationProductId = destinationProduct[0]._id;
-        
+
         // Verify the product was actually created in the database
         const verifyDest = await Product.findById(destinationProductId);
         if (!verifyDest) {
             throw new Error(`Destination product ${destinationProductId} failed to save to database`);
         }
-        
+
         logger.info(`✅ Destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Shop: ${destinationShopId}`);
 
         // ========== STEP 3.25: Replicate variations and variation stocks ==========
@@ -2536,13 +2622,13 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
 
         const destinationProduct = await Product.create([destinationProductData]); // Returns array
         const destinationProductId = destinationProduct[0]._id;
-        
+
         // Verify the product was actually created in the database
         const verifyDestProd = await Product.findById(destinationProductId);
         if (!verifyDestProd) {
             throw new Error(`Destination product ${destinationProductId} failed to save to database`);
         }
-        
+
         logger.info(`✅ Cross-company transfer destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Company: ${toCompanyId}`);
 
         // ========== STEP 3.25: Replicate variations and variation stocks ==========
@@ -3265,13 +3351,13 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
 
                 const destinationProduct = await Product.create(destinationProductData);
                 const destinationProductId = destinationProduct._id;
-                
+
                 // Verify product was created
                 const verifyBulkIntra = await Product.findById(destinationProductId);
                 if (!verifyBulkIntra) {
                     throw new Error(`Bulk transfer destination product ${destinationProductId} failed to save`);
                 }
-                
+
                 logger.info(`✅ Bulk intra-company destination product created: ${destinationProductId}, SKU: ${destinationProduct.sku}`);
 
                 // Create destination pricing
@@ -3324,7 +3410,7 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
 
                 // Create transfer record
                 const transferIdIntra = `TRF-INTRA-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-                
+
                 await ProductTransfer.create({
                     transferId: transferIdIntra,
                     transferType: 'intra_company',
@@ -3368,12 +3454,12 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
 
         const successCount = results.successful.length;
         const failureCount = results.failed.length;
-        
+
         logger.info(`✅ Bulk intra-company transfer completed: ${successCount}/${results.totalRequested} successful, ${failureCount} failed`);
 
         // Return success even if some items failed (partial success)
         const statusCode = failureCount > 0 ? 207 : 200;
-        
+
         res.status(statusCode).json({
             success: successCount > 0,
             message: `Bulk transfer completed: ${successCount}/${results.totalRequested} successful${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
@@ -3551,13 +3637,13 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
                 const destinationProduct = await Product.create(destinationProductData);
                 const destinationProductId = destinationProduct._id;
-                
+
                 // Verify product was created
                 const verifyBulkCross = await Product.findById(destinationProductId);
                 if (!verifyBulkCross) {
                     throw new Error(`Bulk cross-company transfer destination product ${destinationProductId} failed to save`);
                 }
-                
+
                 logger.info(`✅ Bulk cross-company destination product created: ${destinationProductId}, SKU: ${destinationProduct.sku}`);
 
                 // Create destination pricing
@@ -3612,7 +3698,7 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
                 // Create transfer record
                 const transferIdCross = `TRF-CROSS-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-                
+
                 await ProductTransfer.create({
                     transferId: transferIdCross,
                     transferType: 'cross_company',
@@ -3657,13 +3743,13 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
         const successCount = results.successful.length;
         const failureCount = results.failed.length;
-        
+
         logger.info(`✅ Bulk cross-company transfer completed: ${successCount}/${results.totalRequested} successful, ${failureCount} failed`);
         logger.info(`✅ Categories created/mapped: ${results.categoriesCreated.length}`);
 
         // Return success even if some items failed (partial success)
         const statusCode = failureCount > 0 ? 207 : 200;
-        
+
         res.status(statusCode).json({
             success: successCount > 0,
             message: `Bulk cross-company transfer completed: ${successCount}/${results.totalRequested} successful${failureCount > 0 ? `, ${failureCount} failed` : ''}`,

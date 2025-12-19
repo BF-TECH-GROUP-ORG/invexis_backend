@@ -130,7 +130,14 @@ const IngestionController = {
 
     async processInventoryUpdated(event) {
         const { data, source, emittedAt, id: sourceEventId } = event;
-        const { companyId, shopId, productId, newStock, change, operation } = data;
+        // Robust ID extraction: data.productId (standard) OR data._id (raw document) OR data.id
+        const productId = data.productId || data._id || data.id;
+        const { companyId, shopId, newStock, change, operation } = data;
+
+        if (!productId) {
+            console.warn(`⚠️ Ingestion: Skipped inventory update (missing productId):`, data);
+            return;
+        }
 
         try {
             await InventoryMetric.create({

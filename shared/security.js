@@ -29,7 +29,7 @@ class SecurityManager {
     this.options = {
       // CORS handled by API Gateway - services trust gateway
       rateLimitWindow: options.rateLimitWindow || parseInt(process.env.RATE_LIMIT_WINDOW) || 15,
-      rateLimitMax: options.rateLimitMax || parseInt(process.env.RATE_LIMIT_MAX) || 100, // Lower for services
+      rateLimitMax: options.rateLimitMax || parseInt(process.env.RATE_LIMIT_MAX) || 10000, // Lower for services
       jwtSecret: options.jwtSecret || process.env.JWT_SECRET,
       apiSecretKey: options.apiSecretKey || process.env.API_SECRET,
       trustGateway: options.trustGateway !== false, // Default to trusting gateway
@@ -72,7 +72,7 @@ class SecurityManager {
 
       const gatewayHeader = req.headers['x-gateway-request'];
       const gatewayService = req.headers['x-gateway-service'];
-      
+
       if (!gatewayHeader) {
         this.logger.logSecurity('DIRECT_ACCESS_BLOCKED', {
           ip: req.ip,
@@ -80,8 +80,8 @@ class SecurityManager {
           path: req.path,
           method: req.method
         });
-        
-        return res.status(403).json({ 
+
+        return res.status(403).json({
           error: 'Direct access not allowed. Requests must come through API Gateway.',
           code: 'GATEWAY_REQUIRED'
         });
@@ -126,7 +126,7 @@ class SecurityManager {
           url: req.originalUrl,
           method: req.method
         });
-        
+
         throw new RateLimitError('Too many requests, please try again later');
       },
       skip: (req) => {
@@ -139,7 +139,7 @@ class SecurityManager {
   // API key authentication
   apiKeyAuth(options = {}) {
     const requiredApiKey = options.apiKey || this.options.apiSecretKey;
-    
+
     return (req, res, next) => {
       const apiKey = req.header('X-API-Key') || req.query.apiKey;
 
@@ -169,21 +169,21 @@ class SecurityManager {
   // JWT authentication
   jwtAuth(options = {}) {
     const secret = options.secret || this.options.jwtSecret;
-    
+
     return (req, res, next) => {
       try {
         const authHeader = req.header('Authorization');
-        
+
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
           throw new AuthenticationError('Access token required');
         }
 
         const token = authHeader.substring(7);
         const decoded = jwt.verify(token, secret);
-        
+
         req.user = decoded;
         req.userId = decoded.id || decoded.userId;
-        
+
         this.logger.debug('JWT Authentication Successful', {
           userId: req.userId,
           tokenExp: new Date(decoded.exp * 1000).toISOString()
@@ -199,7 +199,7 @@ class SecurityManager {
           });
           throw new AuthenticationError('Invalid token');
         }
-        
+
         if (error.name === 'TokenExpiredError') {
           this.logger.logSecurity('EXPIRED_JWT_TOKEN', {
             ip: req.ip,
@@ -223,7 +223,7 @@ class SecurityManager {
 
       const userRoles = Array.isArray(req.user.roles) ? req.user.roles : [req.user.role];
       const requiredRoles = Array.isArray(roles) ? roles : [roles];
-      
+
       const hasRole = requiredRoles.some(role => userRoles.includes(role));
 
       if (!hasRole) {
@@ -250,8 +250,8 @@ class SecurityManager {
 
       const userPermissions = req.user.permissions || [];
       const requiredPermissions = Array.isArray(permissions) ? permissions : [permissions];
-      
-      const hasPermission = requiredPermissions.some(permission => 
+
+      const hasPermission = requiredPermissions.some(permission =>
         userPermissions.includes(permission)
       );
 
@@ -283,7 +283,7 @@ class SecurityManager {
   // Input sanitization
   sanitizeInput() {
     const middlewares = [];
-    
+
     // Remove NoSQL injection attempts (if available)
     if (mongoSanitize) {
       middlewares.push((req, res, next) => {
@@ -300,7 +300,7 @@ class SecurityManager {
     } else {
       this.logger.warn('express-mongo-sanitize not available, skipping NoSQL injection protection');
     }
-    
+
     // Clean user input from malicious HTML (if available)
     if (xss) {
       middlewares.push((req, res, next) => {
@@ -317,35 +317,35 @@ class SecurityManager {
     } else {
       this.logger.warn('xss-clean not available, skipping XSS protection');
     }
-    
+
     // Custom sanitization (always available)
     middlewares.push((req, res, next) => {
-        // Trim whitespace from string inputs
-        if (req.body && typeof req.body === 'object') {
-          for (const [key, value] of Object.entries(req.body)) {
-            if (typeof value === 'string') {
-              req.body[key] = value.trim();
-            }
+      // Trim whitespace from string inputs
+      if (req.body && typeof req.body === 'object') {
+        for (const [key, value] of Object.entries(req.body)) {
+          if (typeof value === 'string') {
+            req.body[key] = value.trim();
           }
         }
-        
-        // Limit request size
-        if (req.get('Content-Length') && parseInt(req.get('Content-Length')) > 10 * 1024 * 1024) {
-          this.logger.logSecurity('REQUEST_TOO_LARGE', {
-            contentLength: req.get('Content-Length'),
-            ip: req.ip,
-            url: req.originalUrl
-          });
-          return res.status(413).json({
-            status: 'error',
-            message: 'Request entity too large',
-            code: 'PAYLOAD_TOO_LARGE'
-          });
-        }
+      }
 
-        next();
-      })
-    
+      // Limit request size
+      if (req.get('Content-Length') && parseInt(req.get('Content-Length')) > 10 * 1024 * 1024) {
+        this.logger.logSecurity('REQUEST_TOO_LARGE', {
+          contentLength: req.get('Content-Length'),
+          ip: req.ip,
+          url: req.originalUrl
+        });
+        return res.status(413).json({
+          status: 'error',
+          message: 'Request entity too large',
+          code: 'PAYLOAD_TOO_LARGE'
+        });
+      }
+
+      next();
+    })
+
     return middlewares;
   }
 
@@ -354,19 +354,19 @@ class SecurityManager {
     return (req, res, next) => {
       // Prevent clickjacking
       res.set('X-Frame-Options', 'DENY');
-      
+
       // Prevent MIME sniffing
       res.set('X-Content-Type-Options', 'nosniff');
-      
+
       // Enable XSS protection
       res.set('X-XSS-Protection', '1; mode=block');
-      
+
       // Prevent referrer leakage
       res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-      
+
       // Prevent Adobe Flash and PDF executing
       res.set('X-Permitted-Cross-Domain-Policies', 'none');
-      
+
       // Remove powered by header
       res.removeHeader('X-Powered-By');
 
@@ -379,7 +379,7 @@ class SecurityManager {
     return (req, res, next) => {
       // Log sensitive operations
       const sensitiveEndpoints = ['/auth', '/admin', '/delete', '/update'];
-      const isSensitive = sensitiveEndpoints.some(endpoint => 
+      const isSensitive = sensitiveEndpoints.some(endpoint =>
         req.originalUrl.includes(endpoint)
       );
 
@@ -422,23 +422,23 @@ class SecurityManager {
     // Basic security headers
     app.use(this.getHelmetConfig());
     app.use(this.securityHeaders());
-    
+
     // Request ID
     app.use(this.requestId());
-    
+
     // Gateway trust validation (replaces CORS for services)
     if (options.enableGatewayTrust !== false) {
       app.use(this.getGatewayTrustMiddleware());
     }
-    
+
     // Rate limiting
     if (options.enableRateLimit !== false) {
       app.use(this.getRateLimitConfig(options.rateLimit));
     }
-    
+
     // Input sanitization
     app.use(this.sanitizeInput());
-    
+
     // Audit logging
     if (options.enableAuditLog !== false) {
       app.use(this.auditLogger());
