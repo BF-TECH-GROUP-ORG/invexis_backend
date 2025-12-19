@@ -7,7 +7,7 @@ const { Op } = require("sequelize");
 const { startOfDay, endOfDay, subDays, format } = require("date-fns");
 const redis = require("/app/shared/redis"); // Shared Redis Client
 
-const CACHE_TTL = 300; // 5 minutes default
+const CACHE_TTL = 180; // 3 minutes default
 
 /**
  * Cache Wrapper Helper

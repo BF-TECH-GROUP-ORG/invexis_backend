@@ -242,7 +242,9 @@ class RecipientResolver {
 
             // Inventory Events
             'inventory.low_stock': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            'inventory.low.stock': { roles: [AUTH_ROLES.SHOP_MANAGER] },
             'inventory.out_of_stock': { roles: [AUTH_ROLES.SHOP_MANAGER, AUTH_ROLES.COMPANY_ADMIN] },
+            'inventory.out.of.stock': { roles: [AUTH_ROLES.SHOP_MANAGER, AUTH_ROLES.COMPANY_ADMIN] },
 
             // Sales Events
             'sale.created': { roles: [AUTH_ROLES.WORKER, AUTH_ROLES.SHOP_MANAGER] },

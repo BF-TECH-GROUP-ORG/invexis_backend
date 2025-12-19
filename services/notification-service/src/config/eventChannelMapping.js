@@ -81,7 +81,17 @@ module.exports = {
             "channels": ["email", "push", "in-app"],
             "priority": "high"
         },
+        "inventory.low.stock": {
+            "service": "Notification-Service",
+            "channels": ["email", "push", "in-app"],
+            "priority": "high"
+        },
         "inventory.out_of_stock": {
+            "service": "Notification-Service",
+            "channels": ["email", "sms", "push", "in-app"],
+            "priority": "urgent"
+        },
+        "inventory.out.of.stock": {
             "service": "Notification-Service",
             "channels": ["email", "sms", "push", "in-app"],
             "priority": "urgent"
