@@ -44,7 +44,7 @@ try {
   consumeEvents = require("./events/consumer");
   const { initPublishers: initPub } = require("./events/producer");
   initPublishers = initPub;
-  
+
   // Try to get RabbitMQ connection
   try {
     const rabbitmq = require("/app/shared/rabbitmq");
@@ -102,7 +102,7 @@ app.get("/ready", async (req, res) => {
   try {
     const isRedisConnected = redisClient?.isConnected || false;
     const isMongoConnected = true; // Will be updated after DB connection
-    
+
     if (isRedisConnected && isMongoConnected) {
       res.json({
         status: "ready",
@@ -127,71 +127,6 @@ app.get("/ready", async (req, res) => {
     res.status(503).json({
       status: "not ready",
       error: error.message
-    });
-  }
-});
-
-// Basic notification routes
-app.post("/notifications", security.jwtAuth(), async (req, res) => {
-  try {
-    const { type, recipient, message, data } = req.body;
-    
-    if (!type || !recipient || !message) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Missing required fields: type, recipient, message'
-      });
-    }
-
-    const notification = {
-      id: require('uuid').v4(),
-      type,
-      recipient,
-      message,
-      data: data || {},
-      createdAt: new Date().toISOString(),
-      status: 'pending'
-    };
-
-    logger.info('Notification created', { notificationId: notification.id, type, recipient });
-    
-    res.status(201).json({
-      status: 'success',
-      data: notification
-    });
-  } catch (error) {
-    logger.error('Error creating notification', { error: error.message });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to create notification'
-    });
-  }
-});
-
-app.get("/notifications/:userId", security.jwtAuth(), async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    // Mock response - replace with actual database query
-    const notifications = [
-      {
-        id: 'notif-1',
-        type: 'info',
-        message: 'Welcome to Invexis Platform',
-        createdAt: new Date().toISOString(),
-        read: false
-      }
-    ];
-
-    res.json({
-      status: 'success',
-      data: notifications
-    });
-  } catch (error) {
-    logger.error('Error fetching notifications', { error: error.message, userId: req.params.userId });
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch notifications'
     });
   }
 });
@@ -237,20 +172,20 @@ const startServer = async () => {
         nodeVersion: process.version,
         pid: process.pid
       });
-      
+
       console.log(`🔔 Notification Service running on port ${PORT}`);
     });
 
     // Graceful shutdown
     const shutdown = async (signal) => {
       logger.info(`Received ${signal}, starting graceful shutdown`);
-      
+
       server.close(async (err) => {
         if (err) {
           logger.error('Error closing server', { error: err.message });
           process.exit(1);
         }
-        
+
         try {
           if (redisClient?.quit) {
             await redisClient.quit();
@@ -259,11 +194,11 @@ const startServer = async () => {
         } catch (redisError) {
           logger.warn('Error closing Redis', { error: redisError.message });
         }
-        
+
         logger.info('Notification Service shutdown completed');
         process.exit(0);
       });
-      
+
       setTimeout(() => {
         logger.error('Forced shutdown after timeout');
         process.exit(1);
@@ -282,20 +217,20 @@ const startServer = async () => {
 
 // Error handling
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Promise Rejection', {
-        reason: reason?.message || reason,
-        stack: reason?.stack
-    });
-    process.exit(1);
+  logger.error('Unhandled Promise Rejection', {
+    reason: reason?.message || reason,
+    stack: reason?.stack
+  });
+  process.exit(1);
 });
 
 process.on('uncaughtException', (error) => {
-    logger.error('Uncaught Exception', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-    });
-    process.exit(1);
+  logger.error('Uncaught Exception', {
+    message: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  process.exit(1);
 });
 
 // Start the service
