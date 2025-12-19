@@ -203,30 +203,7 @@ const initializeDatabase = async () => {
     console.log("✅ Database connection established");
     
     // Only create tables if they don't exist, don't alter them
-    await sequelize.sync({ force: false, alter: false });
-    
-    // Manually add the unique constraint if it doesn't exist
-    try {
-      const [results] = await sequelize.query(`
-        SELECT COUNT(*) as index_count 
-        FROM information_schema.STATISTICS 
-        WHERE table_schema = DATABASE() 
-        AND table_name = 'invoices' 
-        AND index_name = 'invoices_invoiceNumber'
-      `);
-      
-      if (results[0].index_count === 0) {
-        console.log("Adding unique index on invoiceNumber...");
-        await sequelize.query(`
-          CREATE UNIQUE INDEX invoices_invoiceNumber 
-          ON invoices(invoiceNumber)
-        `);
-      }
-    } catch (indexError) {
-      console.warn("⚠️ Could not ensure invoiceNumber index:", indexError.message);
-      // Continue running even if index creation fails
-    }
-    
+    await sequelize.sync({ force: false, alter: true });  
     console.log("✅ Database models synchronized");
   } catch (error) {
     console.error("❌ Failed to connect to database:", error);

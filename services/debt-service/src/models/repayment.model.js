@@ -2,12 +2,12 @@ const mongoose = require('mongoose');
 
 // models/repayment.model.js
 const RepaymentSchema = new mongoose.Schema({
-    companyId: { type: mongoose.Types.ObjectId, required: true },
-    shopId: { type: mongoose.Types.ObjectId, required: true },
+    companyId: { type: String ,required: true },
+    shopId: { type: String, required: true },
 
     // We no longer store raw customerId or embedded customer object here.
     // All per-customer linkage is done via hashedCustomerId on the Debt.
-    hashedCustomerId: { type: String, required: true },
+    hashedCustomerId: { type: String, required: false },
 
     debtId: { type: mongoose.Types.ObjectId, required: true },
 

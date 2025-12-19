@@ -3,6 +3,11 @@
 const db = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
 
+// Simple UUID v4 validator to avoid passing invalid values to Postgres uuid columns
+function isValidUuid(val) {
+  if (!val || typeof val !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+}
 class Shop {
   static table = "shops";
 
@@ -52,6 +57,12 @@ class Shop {
    * Find all shops by company
    */
   static async findByCompany(companyId, { limit = 50, offset = 0 } = {}, trx = null) {
+    // Validate companyId early to avoid DB errors when companyId is not a UUID
+    if (!isValidUuid(companyId)) {
+      // Return empty list for invalid company identifiers instead of letting Postgres throw
+      return [];
+    }
+
     let query = db(this.table)
       .where({ company_id: companyId })
       .whereNull("deleted_at")
@@ -65,6 +76,8 @@ class Shop {
    * Find all shops by company and status
    */
   static async findByCompanyAndStatus(companyId, status, trx = null) {
+    if (!isValidUuid(companyId)) return [];
+
     let query = db(this.table)
       .where({ company_id: companyId, status })
       .whereNull("deleted_at");
@@ -129,6 +142,11 @@ class Shop {
    * Check if shop name is unique within company
    */
   static async isNameUnique(companyId, name, excludeId = null, trx = null) {
+    if (!isValidUuid(companyId)) {
+      // If companyId isn't valid, return true to avoid false duplicates and avoid DB errors
+      return true;
+    }
+
     let query = db(this.table)
       .where({ company_id: companyId, name })
       .whereNull("deleted_at");
@@ -146,6 +164,8 @@ class Shop {
    * Get shop count by company
    */
   static async countByCompany(companyId, trx = null) {
+    if (!isValidUuid(companyId)) return 0;
+
     let query = db(this.table)
       .where({ company_id: companyId })
       .whereNull("deleted_at")
@@ -174,6 +194,8 @@ class Shop {
    * Search shops by name
    */
   static async search(companyId, searchTerm, trx = null) {
+    if (!isValidUuid(companyId)) return [];
+
     let query = db(this.table)
       .where({ company_id: companyId })
       .whereNull("deleted_at")

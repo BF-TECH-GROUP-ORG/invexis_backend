@@ -156,7 +156,7 @@ if (xss) {
 }
 
 // Request parsing
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1000mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Trust proxy for accurate IP addresses behind reverse proxy

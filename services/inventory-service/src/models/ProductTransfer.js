@@ -10,7 +10,6 @@ const ProductTransferSchema = new mongoose.Schema({
     transferId: {
         type: String,
         required: true,
-        index: true,
         default: () => {
             // Generate truly unique ID with timestamp and random components
             const timestamp = Date.now();

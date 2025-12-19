@@ -111,7 +111,8 @@ categorySchema.index({ level: 1, parentCategory: 1 });
 categorySchema.index({ isActive: 1, sortOrder: 1 });
 
 // Middleware to generate slug
-categorySchema.pre('save', function (next) {
+// Use async middleware without `next` to avoid next() not a function errors
+categorySchema.pre('save', async function () {
   // Only generate slug if not provided and name is set
   if (!this.slug && this.name) {
     this.slug = this.name
@@ -120,11 +121,11 @@ categorySchema.pre('save', function (next) {
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
   }
-  next();
 });
 
 // Middleware to preserve companyId for level 3 categories
-categorySchema.pre('save', async function (next) {
+// Use async middleware without `next` and throw errors when needed.
+categorySchema.pre('save', async function () {
   // If this is an update (not a new document) and it's level 3, restore the original companyId
   if (!this.isNew && this.level === 3) {
     const original = await this.constructor.findById(this._id);
@@ -132,33 +133,31 @@ categorySchema.pre('save', async function (next) {
       this.companyId = original.companyId;
     }
   }
-  next();
 });
 
 // Middleware to validate parent category level
-categorySchema.pre('save', async function (next) {
+categorySchema.pre('save', async function () {
   if (this.parentCategory) {
     const parent = await this.constructor.findById(this.parentCategory);
     if (!parent) {
-      return next(new Error('Parent category not found'));
+      throw new Error('Parent category not found');
     }
     if (parent.level >= 3) {
-      return next(new Error('Cannot create subcategory under level 3 category'));
+      throw new Error('Cannot create subcategory under level 3 category');
     }
     if (this.level !== parent.level + 1) {
-      return next(new Error('Invalid category level hierarchy'));
+      throw new Error('Invalid category level hierarchy');
     }
   } else if (this.level !== 1) {
-    return next(new Error('Root categories must be level 1'));
+    throw new Error('Root categories must be level 1');
   }
 
   // Validation: level 3 categories must include a companyId
   if (this.level === 3) {
     if (!this.companyId) {
-      return next(new Error('companyId is required for level 3 categories'));
+      throw new Error('companyId is required for level 3 categories');
     }
   }
-  next();
 });
 
 // Static method to get category tree

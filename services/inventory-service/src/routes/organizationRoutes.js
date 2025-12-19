@@ -5,6 +5,7 @@ const {
     // Company Level
     getCompanyOverview,
     getCompanyProducts,
+    getProductBySku,
     getCompanyStockChanges,
     getCompanyAlerts,
     getCompanyAdjustments,
@@ -95,6 +96,8 @@ router.get('/companies/:companyId/overview', getCompanyOverview);
  * @access  Private
  */
 router.get('/companies/:companyId/products', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), getCompanyProducts);
+// Get product by SKU
+router.get('/companies/:companyId/products/sku/:sku', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), getProductBySku);
 
 /**
  * @route   GET /api/v1/companies/:companyId/stock-changes

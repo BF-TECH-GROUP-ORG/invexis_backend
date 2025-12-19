@@ -2,9 +2,9 @@ const rateLimit = require('express-rate-limit');
 
 // Global limiter (like reference: 50 req/min)
 const limiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minute
+    windowMs: 10 * 60 * 1000, // 1 minute
     max: 50,
-    message: { error: 'Too many requests, please try again later.' },
+    message: { error: 'Too many requests, please try again later. ' },
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => process.env.NODE_ENV === 'development' || req.path === '/health',

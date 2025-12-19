@@ -599,9 +599,9 @@ async function login(data, options = {}) {
         }
 
         // Account locked
-        if (user.lockUntil && user.lockUntil > new Date()) {
-            return { status: 423, message: 'Account locked' };
-        }
+        // if (user.lockUntil && user.lockUntil > new Date()) {
+        //     return { status: 423, message: 'Account locked' };
+        // }
 
         // ✅ Parallelize ALL Checks: Password, Company Status, Shop Hours, Session Creation
         // This is the KEY optimization - run everything in parallel

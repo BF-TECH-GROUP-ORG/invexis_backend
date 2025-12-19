@@ -16,10 +16,13 @@ const ProductStock = require('../models/ProductStock');
 const ProductPricing = require('../models/ProductPricing');
 const ProductTransfer = require('../models/ProductTransfer');
 const { formatEnrichedProduct } = require('../utils/productFormatter');
+const InventoryAnalyticsService = require('../services/inventoryAnalyticsService');
 const ProductSpecs = require('../models/productSpecs');
+const { publishProductEvent } = require('../events/productEvents');
 // Helper: sanitize product data before creating destination product copies
 // Delete unique/indexed fields so Product pre-save hooks regenerate them with new unique values
-function sanitizeDestinationProductData(data) {
+// transferType: 'intra_company' or 'cross_company'
+function sanitizeDestinationProductData(data, transferType = 'cross_company') {
     // Fields that MUST be deleted so pre-save hooks regenerate them with unique values
     const fieldsToDelete = [
         '_id',
@@ -41,7 +44,116 @@ function sanitizeDestinationProductData(data) {
     
     fieldsToDelete.forEach((f) => { if (f in data) delete data[f]; });
     
+    // Reset soft-delete flags (destination product is active, not deleted)
+    data.isDeleted = false;
+    data.deletedAt = null;
+    data.deletedBy = null;
+    
+    // Reset sales metrics for destination product
+    if (data.sales) {
+        data.sales.totalSold = 0;
+        data.sales.revenue = 0;
+    }
+    
+    // For cross-company transfers, do NOT share supplier name (it's company-specific)
+    // For intra-company transfers, share the supplier name
+    if (transferType === 'cross_company') {
+        data.supplierName = null;
+    }
+    
     return data;
+}
+
+/**
+ * Replicate variations and create corresponding ProductStock records for destination product
+ * - Copies all ProductVariation documents for source product to destination product
+ * - Copies stock defaults from source variation stocks where available
+ * - Creates ProductStock records for each new variation with receivedQty if provided
+ *
+ * @param {ObjectId} sourceProductId
+ * @param {ObjectId} destinationProductId
+ * @param {String} destCompanyId
+ * @param {String} destShopId
+ * @param {Number} masterReceivedQty - quantity received for master product (used if no per-variation quantities provided)
+ * @param {Object} variationReceivedMap - optional map of sourceVariationId -> qty received
+ */
+async function replicateVariationsAndStocks(sourceProductId, destinationProductId, destCompanyId, destShopId, masterReceivedQty = 0, variationReceivedMap = null) {
+    try {
+        const sourceVariations = await ProductVariation.find({ productId: sourceProductId }).lean();
+        if (!sourceVariations || sourceVariations.length === 0) return;
+
+        // Preload source variation stocks keyed by variationId
+        const sourceVarIds = sourceVariations.map(v => v._id);
+        const sourceStocks = await ProductStock.find({ productId: sourceProductId, variationId: { $in: sourceVarIds } }).lean();
+        const stockByVariation = {};
+        for (const s of sourceStocks) stockByVariation[String(s.variationId)] = s;
+
+        for (const srcVar of sourceVariations) {
+            const varObj = Object.assign({}, srcVar);
+            const originalVarId = varObj._id;
+            delete varObj._id;
+            varObj.productId = destinationProductId;
+
+            // Create new variation
+            let createdVar;
+            try {
+                createdVar = await ProductVariation.create(varObj);
+            } catch (err) {
+                logger.error('Failed to create product variation for destination product:', err);
+                continue;
+            }
+
+            // Prepare stock for this variation
+            const sourceStock = stockByVariation[String(originalVarId)];
+            const trackQuantity = sourceStock ? sourceStock.trackQuantity : true;
+            const lowStockThreshold = sourceStock ? sourceStock.lowStockThreshold || 10 : 10;
+            const allowBackorder = sourceStock ? sourceStock.allowBackorder || false : false;
+            const minReorderQty = sourceStock ? sourceStock.minReorderQty || 20 : 20;
+            const safetyStock = sourceStock ? sourceStock.safetyStock || 0 : 0;
+            const supplierLeadDays = sourceStock ? sourceStock.supplierLeadDays || 7 : 7;
+
+            // Determine received quantity for this variation
+            let receivedQty = 0;
+            if (variationReceivedMap && variationReceivedMap[String(originalVarId)] !== undefined) {
+                receivedQty = Number(variationReceivedMap[String(originalVarId)]) || 0;
+            }
+
+            // If no per-variation quantities provided, keep variation stock 0 and use masterReceivedQty on product-level stock
+            const stockQty = receivedQty;
+
+            try {
+                await ProductStock.create({
+                    productId: destinationProductId,
+                    variationId: createdVar._id,
+                    shopId: destShopId,
+                    companyId: destCompanyId,
+                    stockQty,
+                    reservedQty: 0,
+                    trackQuantity,
+                    lowStockThreshold,
+                    allowBackorder,
+                    minReorderQty,
+                    safetyStock,
+                    // Forecasting fields - reset for new variation
+                    avgDailySales: 0,
+                    stockoutRiskDays: 0,
+                    suggestedReorderQty: minReorderQty,
+                    lastRestockDate: new Date(),
+                    supplierLeadDays,
+                    lastForecastUpdate: new Date(),
+                    // Analytics reset for new variation
+                    totalUnitsSold: 0,
+                    totalRevenue: 0,
+                    avgCost: sourceStock ? sourceStock.avgCost || 0 : 0,
+                    profitMarginPercent: sourceStock ? sourceStock.profitMarginPercent || 0 : 0
+                });
+            } catch (err) {
+                logger.error('Failed to create product stock for variation on destination product:', err);
+            }
+        }
+    } catch (err) {
+        logger.error('Error replicating variations and stocks:', err);
+    }
 }
 // ==================== COMPANY LEVEL OPERATIONS ====================
 
@@ -179,6 +291,40 @@ const getCompanyProducts = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Get a single product by its SKU for a company
+ * @route   GET /api/v1/companies/:companyId/products/sku/:sku
+ * @access  Private
+ */
+const getProductBySku = asyncHandler(async (req, res) => {
+    const { companyId, sku } = req.params || req.body || req.query;
+
+    if (!companyId || !sku) {
+        return res.status(400).json({ success: false, message: 'companyId and sku are required' });
+    }
+
+    // Find product by sku scoped to company (SKU stored uppercase)
+    const product = await Product.findOne({ companyId, sku: sku.toUpperCase() })
+        .populate('categoryId', 'name slug level attributes parentCategory isActive')
+        .populate('pricingId')
+        .lean();
+
+    if (!product) {
+        return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Load related pieces used by formatEnrichedProduct
+    const [variations, stockInfo, specsInfo] = await Promise.all([
+        ProductVariation.find({ productId: product._id }).populate('attributeValues.attributeId', 'name type').lean(),
+        ProductStock.find({ productId: product._id }).lean(),
+        ProductSpecs.findOne({ productId: product._id }).lean()
+    ]);
+
+    const enriched = await formatEnrichedProduct(product, variations, stockInfo, specsInfo);
+
+    res.json({ success: true, data: enriched });
+});
+
+/**
  * @desc    Get all stock changes for a company (audit trail)
  * @route   GET /api/v1/companies/:companyId/stock-changes
  * @access  Private
@@ -296,42 +442,24 @@ const getCompanyLowStockProducts = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
     const { page = 1, limit = 20, shopId } = req.query;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    // Delegate to InventoryAnalyticsService which performs a robust aggregation
+    // against productstocks and productvariations and returns low-stock products.
+    const allLowStock = await InventoryAnalyticsService.getLowStockProducts(companyId, shopId || null);
 
-    const query = {
-        companyId,
-        $expr: {
-            $lte: [
-                {
-                    $cond: [
-                        { $gt: [{ $size: '$variations' }, 0] },
-                        { $sum: '$variations.stockQty' },
-                        '$inventory.quantity'
-                    ]
-                },
-                '$inventory.lowStockThreshold'
-            ]
-        }
-    };
-
-    if (shopId) query.shopId = shopId;
-
-    const products = await Product.find(query)
-        .populate('categoryId', 'name')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit));
-
-    const total = await Product.countDocuments(query);
+    // Simple pagination on the returned array
+    const p = Math.max(1, parseInt(page));
+    const l = Math.max(1, Math.min(parseInt(limit) || 20, 200));
+    const start = (p - 1) * l;
+    const paged = Array.isArray(allLowStock) ? allLowStock.slice(start, start + l) : [];
 
     res.json({
         success: true,
-        data: products,
+        data: paged,
         pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total,
-            pages: Math.ceil(total / parseInt(limit))
+            page: p,
+            limit: l,
+            total: Array.isArray(allLowStock) ? allLowStock.length : 0,
+            pages: Array.isArray(allLowStock) ? Math.ceil(allLowStock.length / l) : 0
         }
     });
 });
@@ -344,91 +472,15 @@ const getCompanyLowStockProducts = asyncHandler(async (req, res) => {
 const getCompanyInventorySummary = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
 
-    // By category
-    const byCategoryData = await Product.aggregate([
-        { $match: { companyId } },
-        {
-            $lookup: {
-                from: 'categories',
-                localField: 'category',
-                foreignField: '_id',
-                as: 'categoryInfo'
-            }
-        },
-        {
-            $group: {
-                _id: '$category',
-                categoryName: { $first: { $arrayElemAt: ['$categoryInfo.name', 0] } },
-                productCount: { $sum: 1 },
-                totalStock: {
-                    $sum: {
-                        $cond: [
-                            { $gt: [{ $size: '$variations' }, 0] },
-                            { $sum: '$variations.stockQty' },
-                            '$inventory.quantity'
-                        ]
-                    }
-                },
-                totalValue: {
-                    $sum: {
-                        $multiply: [
-                            {
-                                $cond: [
-                                    { $gt: [{ $size: '$variations' }, 0] },
-                                    { $sum: '$variations.stockQty' },
-                                    '$inventory.quantity'
-                                ]
-                            },
-                            { $ifNull: ['$pricing.cost', 0] }
-                        ]
-                    }
-                }
-            }
-        },
-        { $sort: { totalValue: -1 } }
-    ]);
-
-    // By shop
-    const byShopData = await Product.aggregate([
-        { $match: { companyId } },
-        {
-            $group: {
-                _id: '$shopId',
-                shopId: { $first: '$shopId' },
-                productCount: { $sum: 1 },
-                totalStock: {
-                    $sum: {
-                        $cond: [
-                            { $gt: [{ $size: '$variations' }, 0] },
-                            { $sum: '$variations.stockQty' },
-                            '$inventory.quantity'
-                        ]
-                    }
-                },
-                totalValue: {
-                    $sum: {
-                        $multiply: [
-                            {
-                                $cond: [
-                                    { $gt: [{ $size: '$variations' }, 0] },
-                                    { $sum: '$variations.stockQty' },
-                                    '$inventory.quantity'
-                                ]
-                            },
-                            { $ifNull: ['$pricing.cost', 0] }
-                        ]
-                    }
-                }
-            }
-        },
-        { $sort: { totalValue: -1 } }
-    ]);
+    // Use internal helpers which provide robust summaries without relying on virtual fields
+    const overview = await getCompanyOverview_Internal(companyId);
+    const summary = await getCompanyInventorySummary_Internal(companyId);
 
     res.json({
         success: true,
         data: {
-            byCategory: byCategoryData,
-            byShop: byShopData,
+            overview,
+            summary,
             lastUpdated: new Date()
         }
     });
@@ -442,60 +494,30 @@ const getCompanyInventorySummary = asyncHandler(async (req, res) => {
 const getCompanyShops = asyncHandler(async (req, res) => {
     const { companyId } = req.params;
 
-    const shopStats = await Product.aggregate([
+    // Aggregate from ProductStock which stores concrete stock records per product/variation
+    const shopStats = await ProductStock.aggregate([
         { $match: { companyId } },
         {
             $group: {
                 _id: '$shopId',
                 shopId: { $first: '$shopId' },
-                productCount: { $sum: 1 },
-                totalStock: {
-                    $sum: {
-                        $cond: [
-                            { $gt: [{ $size: '$variations' }, 0] },
-                            { $sum: '$variations.stockQty' },
-                            '$inventory.quantity'
-                        ]
-                    }
-                },
-                totalValue: {
-                    $sum: {
-                        $multiply: [
-                            {
-                                $cond: [
-                                    { $gt: [{ $size: '$variations' }, 0] },
-                                    { $sum: '$variations.stockQty' },
-                                    '$inventory.quantity'
-                                ]
-                            },
-                            { $ifNull: ['$pricing.cost', 0] }
-                        ]
-                    }
-                },
-                lowStockCount: {
-                    $sum: {
-                        $cond: [
-                            {
-                                $lte: [
-                                    {
-                                        $cond: [
-                                            { $gt: [{ $size: '$variations' }, 0] },
-                                            { $sum: '$variations.stockQty' },
-                                            '$inventory.quantity'
-                                        ]
-                                    },
-                                    '$inventory.lowStockThreshold'
-                                ]
-                            },
-                            1,
-                            0
-                        ]
-                    }
-                }
+                productIds: { $addToSet: '$productId' },
+                totalStock: { $sum: '$stockQty' },
+                totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', 0] }] } },
+                lowStockCount: { $sum: { $cond: [{ $lte: ['$stockQty', '$lowStockThreshold'] }, 1, 0] } }
+            }
+        },
+        {
+            $project: {
+                shopId: 1,
+                productCount: { $size: '$productIds' },
+                totalStock: 1,
+                totalValue: 1,
+                lowStockCount: 1
             }
         },
         { $sort: { totalValue: -1 } }
-    ]);
+    ]).allowDiskUse(true);
 
     res.json({
         success: true,
@@ -571,23 +593,11 @@ const getCompanyReports = asyncHandler(async (req, res) => {
 // Internal helper functions
 async function getCompanyOverview_Internal(companyId) {
     const totalProducts = await Product.countDocuments({ companyId });
-    const stockData = await Product.aggregate([
+    // Use ProductStock as the single source of truth for stock quantities
+    const stockData = await ProductStock.aggregate([
         { $match: { companyId } },
-        {
-            $group: {
-                _id: null,
-                totalStock: {
-                    $sum: {
-                        $cond: [
-                            { $gt: [{ $size: '$variations' }, 0] },
-                            { $sum: '$variations.stockQty' },
-                            '$inventory.quantity'
-                        ]
-                    }
-                }
-            }
-        }
-    ]);
+        { $group: { _id: null, totalStock: { $sum: '$stockQty' } } }
+    ]).allowDiskUse(true);
 
     return {
         totalProducts,
@@ -2066,7 +2076,8 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         destinationProductData.shopId = destinationShopId; // Update to destination shop
 
         // Sanitize fields that may conflict with unique indexes or are shop-specific
-        sanitizeDestinationProductData(destinationProductData);
+        // For intra-company transfers, share supplier name since same company
+        sanitizeDestinationProductData(destinationProductData, 'intra_company');
 
         // Product model will auto-generate new unique codes on save
         const destinationProduct = await Product.create([destinationProductData]);
@@ -2079,6 +2090,10 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         }
         
         logger.info(`✅ Destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Shop: ${destinationShopId}`);
+
+        // ========== STEP 3.25: Replicate variations and variation stocks ==========
+        await replicateVariationsAndStocks(productId, destinationProductId, companyId, destinationShopId, quantity, null);
+        logger.info(`✓ Replicated variations and stocks for destination product ${destinationProductId}`);
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
         setImmediate(async () => {
@@ -2098,48 +2113,138 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
                     generateBarcodeBuffer(skuValue)
                 ]);
 
-                const [qrUpload, barcodeUpload] = await Promise.all([
-                    uploadBuffer(qrBuffer, `QrBar_Codes/${destinationProductId}`, `qr_${skuValue}`),
-                    uploadBuffer(barcodeBuffer, `QrBar_Codes/${destinationProductId}`, `bar_${skuValue}`)
-                ]);
+                // Create placeholders and enqueue background upload tasks
+                const uploadTaskRepo = require('../repositories/uploadTaskRepository');
+                const placeholderQrId = `placeholder_qr_${Date.now()}`;
+                const placeholderBarcodeId = `placeholder_barcode_${Date.now()}`;
+                const placeholderQrUrl = `https://via.placeholder.com/400x300?text=QR+${encodeURIComponent(skuValue)}`;
+                const placeholderBarcodeUrl = `https://via.placeholder.com/400x300?text=BAR+${encodeURIComponent(skuValue)}`;
 
-                await Product.updateOne(
-                    { _id: destinationProductId },
-                    {
-                        qrCodeUrl: qrUpload.secure_url,
-                        barcodeUrl: barcodeUpload.secure_url,
-                        qrCloudinaryId: qrUpload.public_id,
-                        barcodeCloudinaryId: barcodeUpload.public_id
-                    }
-                );
+                await Product.updateOne({ _id: destinationProductId }, {
+                    qrCodeUrl: placeholderQrUrl,
+                    barcodeUrl: placeholderBarcodeUrl,
+                    qrCloudinaryId: placeholderQrId,
+                    barcodeCloudinaryId: placeholderBarcodeId
+                });
 
-                logger.info(`✅ QR/Barcode generated for transferred product SKU: ${skuValue}`);
+                try {
+                    await uploadTaskRepo.createTask({
+                        companyId: destinationProduct[0].companyId,
+                        shopId: destinationProduct[0].shopId,
+                        productId: destinationProductId,
+                        field: 'qr',
+                        placeholderId: placeholderQrId,
+                        placeholderUrl: placeholderQrUrl,
+                        originalName: `qr_${skuValue}.png`,
+                        folder: `QrBar_Codes/${destinationProductId}`,
+                        publicIdHint: `qr_${skuValue}`,
+                        filePath: null,
+                        fileBase64: qrBuffer.toString('base64')
+                    });
+                } catch (e) { logger.warn('Failed to enqueue QR upload task:', e && e.message ? e.message : e); }
+
+                try {
+                    await uploadTaskRepo.createTask({
+                        companyId: destinationProduct[0].companyId,
+                        shopId: destinationProduct[0].shopId,
+                        productId: destinationProductId,
+                        field: 'barcode',
+                        placeholderId: placeholderBarcodeId,
+                        placeholderUrl: placeholderBarcodeUrl,
+                        originalName: `bar_${skuValue}.png`,
+                        folder: `QrBar_Codes/${destinationProductId}`,
+                        publicIdHint: `bar_${skuValue}`,
+                        filePath: null,
+                        fileBase64: barcodeBuffer.toString('base64')
+                    });
+                } catch (e) { logger.warn('Failed to enqueue barcode upload task:', e && e.message ? e.message : e); }
+
+                logger.info(`✅ QR/Barcode generation enqueued for transferred product SKU: ${skuValue}`);
             } catch (err) {
                 logger.error('Failed to generate QR/barcode for transferred product:', err);
             }
         });
 
         // ========== STEP 4: Create pricing for destination product ==========
+        // Copy ALL pricing information from source
         const destinationPricing = new ProductPricing({
             productId: destinationProductId,
-            cost: sourcePricing.cost,
-            price: sourcePricing.price,
             basePrice: sourcePricing.basePrice,
-            compareAtPrice: sourcePricing.compareAtPrice,
-            taxable: sourcePricing.taxable,
-            taxCode: sourcePricing.taxCode,
-            currency: sourcePricing.currency || 'USD'
+            salePrice: sourcePricing.salePrice,
+            listPrice: sourcePricing.listPrice,
+            cost: sourcePricing.cost,
+            currency: sourcePricing.currency || 'USD',
+            priceTiers: sourcePricing.priceTiers || [],
+            effectiveFrom: sourcePricing.effectiveFrom,
+            effectiveTo: sourcePricing.effectiveTo,
+            // Margins will be auto-calculated in pre-save hook
+            profitRank: sourcePricing.profitRank || 'medium',
+            unitsSoldLastMonth: 0, // Reset for new product
+            revenue: 0, // Reset for new product
+            profit: 0 // Reset for new product
         });
         await destinationPricing.save();
 
+        // Link pricing to destination product and assert update succeeded
+        try {
+            const updateRes = await Product.updateOne({ _id: destinationProductId }, { pricingId: destinationPricing._id });
+            const modified = updateRes && (updateRes.modifiedCount || updateRes.nModified || 0);
+            if (!modified) {
+                logger.warn(`Linking pricingId to destination product ${destinationProductId} did not modify document (pricingId: ${destinationPricing._id}). updateResult=${JSON.stringify(updateRes)}`);
+            } else {
+                logger.info(`✓ Linked pricingId ${destinationPricing._id} to destination product ${destinationProductId}`);
+            }
+        } catch (err) {
+            logger.error('Failed to link destination pricing to product:', err);
+        }
+
+        // ========== STEP 4.5: Copy Product Specs (if any) ==========
+        try {
+            const sourceSpecs = await ProductSpecs.findOne({ productId: productId }) || await ProductSpecs.findById(sourceProduct.specsId);
+            if (sourceSpecs) {
+                const specsObj = (typeof sourceSpecs.toObject === 'function') ? sourceSpecs.toObject() : JSON.parse(JSON.stringify(sourceSpecs));
+                delete specsObj._id;
+                specsObj.productId = destinationProductId;
+                const newSpecs = await ProductSpecs.create(specsObj);
+                const res = await Product.updateOne({ _id: destinationProductId }, { specsId: newSpecs._id });
+                const modified = res && (res.modifiedCount || res.nModified || 0);
+                if (!modified) {
+                    logger.warn(`Linking specsId to destination product ${destinationProductId} did not modify document (specsId: ${newSpecs._id}). updateResult=${JSON.stringify(res)}`);
+                } else {
+                    logger.info(`✓ Copied ProductSpecs to destination product ${destinationProductId}`);
+                }
+            }
+        } catch (err) {
+            logger.error('Failed to copy ProductSpecs for destination product:', err);
+        }
+
         // ========== STEP 5: Create destination stock ==========
+        // Transfer ALL stock information except the source stock quantity
+        // Destination gets only the transferred quantity, not the source's remaining stock
         const destinationStock = new ProductStock({
             productId: destinationProductId,
             variationId: null,
+            // Stock quantity is what was transferred, NOT source remaining stock
             stockQty: quantity,
-            trackQuantity: sourceStock.trackQuantity,
-            lowStockThreshold: sourceStock.lowStockThreshold || 5,
-            allowBackorder: sourceStock.allowBackorder || false
+            reservedQty: 0, // Fresh transfer has no reservations
+            // Copy tracking settings from source
+            trackQuantity: sourceStock.trackQuantity || true,
+            allowBackorder: sourceStock.allowBackorder || false,
+            lowStockThreshold: sourceStock.lowStockThreshold || 10,
+            minReorderQty: sourceStock.minReorderQty || 20,
+            safetyStock: sourceStock.safetyStock || 0,
+            // Copy forecasting fields (reset analytics to baseline)
+            avgDailySales: 0, // Reset - new product starts fresh
+            stockoutRiskDays: 0,
+            suggestedReorderQty: sourceStock.minReorderQty || 20,
+            lastRestockDate: new Date(),
+            supplierLeadDays: sourceStock.supplierLeadDays || 7,
+            lastForecastUpdate: new Date(),
+            // Analytics reset for new product
+            totalUnitsSold: 0,
+            totalRevenue: 0,
+            avgCost: sourcePricing.cost || 0,
+            profitMarginPercent: (sourcePricing.marginPercent || 0)
         });
         await destinationStock.save();
 
@@ -2402,9 +2507,9 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${transferQuantity}`);
         }
 
-        // ========== STEP 2: Update source stock ==========
-        sourceStock.stockQty = currentStock - transferQuantity;
-        await sourceStock.save();
+        // ========== STEP 2: (NO OP) Do not deduct source stock for cross-company transfers ==========
+        // Per requested behavior, we do not modify the source stock quantity here.
+        // The system will create a new product & stock in destination without deducting from source.
 
         // ========== STEP 2.5: Handle Category ==========
         // Ensure category exists in destination company, create if needed
@@ -2424,7 +2529,8 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         destinationProductData.categoryId = destinationCategoryId; // Use destination category
 
         // Sanitize fields that may conflict with unique indexes or are company/shop-specific
-        sanitizeDestinationProductData(destinationProductData);
+        // For cross-company transfers, do NOT share supplier name
+        sanitizeDestinationProductData(destinationProductData, 'cross_company');
 
         // Product model will auto-generate new unique codes on save
 
@@ -2438,6 +2544,10 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         }
         
         logger.info(`✅ Cross-company transfer destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Company: ${toCompanyId}`);
+
+        // ========== STEP 3.25: Replicate variations and variation stocks ==========
+        await replicateVariationsAndStocks(productId, destinationProductId, toCompanyId, toShopId, transferQuantity, null);
+        logger.info(`✓ Replicated variations and stocks for destination product ${destinationProductId}`);
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
         setImmediate(async () => {
@@ -2458,11 +2568,11 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                 ]);
 
                 const [qrUpload, barcodeUpload] = await Promise.all([
-                    uploadBuffer(qrBuffer, `QrBar_Codes/${destinationProductId}`, `qr_${skuValue}`),
-                    uploadBuffer(barcodeBuffer, `QrBar_Codes/${destinationProductId}`, `bar_${skuValue}`)
+                    uploadBuffer(qrBuffer, `QrBar_Codes/${destinationProductId}`),
+                    uploadBuffer(barcodeBuffer, `QrBar_Codes/${destinationProductId}`)
                 ]);
 
-                await Product.updateOne(
+                const qrUpdateRes = await Product.updateOne(
                     { _id: destinationProductId },
                     {
                         qrCodeUrl: qrUpload.secure_url,
@@ -2471,79 +2581,113 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                         barcodeCloudinaryId: barcodeUpload.public_id
                     }
                 );
-
-                logger.info(`✅ QR/Barcode generated for cross-company transferred product SKU: ${skuValue}`);
+                const qrModified = qrUpdateRes && (qrUpdateRes.modifiedCount || qrUpdateRes.nModified || 0);
+                if (!qrModified) {
+                    logger.warn(`QR/Barcode upload completed but Product update did not modify ${destinationProductId}. updateResult=${JSON.stringify(qrUpdateRes)}`);
+                } else {
+                    logger.info(`✅ QR/Barcode generated and saved for cross-company transferred product SKU: ${skuValue}`);
+                }
             } catch (err) {
                 logger.error('Failed to generate QR/barcode for cross-company transferred product:', err);
             }
         });
 
         // ========== STEP 4: Create pricing for destination product ==========
+        // Copy ALL pricing information from source
         const destinationPricing = new ProductPricing({
             productId: destinationProductId,
-            cost: pricingOverride?.cost || sourcePricing.cost,
-            price: pricingOverride?.price || sourcePricing.price,
             basePrice: pricingOverride?.basePrice || sourcePricing.basePrice,
-            compareAtPrice: pricingOverride?.compareAtPrice || sourcePricing.compareAtPrice,
-            taxable: sourcePricing.taxable,
-            taxCode: sourcePricing.taxCode,
-            currency: sourcePricing.currency || 'USD'
+            salePrice: pricingOverride?.salePrice || sourcePricing.salePrice,
+            listPrice: pricingOverride?.listPrice || sourcePricing.listPrice,
+            cost: pricingOverride?.cost || sourcePricing.cost,
+            currency: sourcePricing.currency || 'USD',
+            priceTiers: sourcePricing.priceTiers || [],
+            effectiveFrom: sourcePricing.effectiveFrom,
+            effectiveTo: sourcePricing.effectiveTo,
+            // Margins will be auto-calculated in pre-save hook
+            profitRank: sourcePricing.profitRank || 'medium',
+            unitsSoldLastMonth: 0, // Reset for new product
+            revenue: 0, // Reset for new product
+            profit: 0 // Reset for new product
         });
         await destinationPricing.save();
 
+        // Link pricing to destination product
+        try {
+            await Product.updateOne({ _id: destinationProductId }, { pricingId: destinationPricing._id });
+        } catch (err) {
+            logger.error('Failed to link destination pricing to product:', err);
+        }
+
+        // ========== STEP 4.5: Copy Product Specs (if any) ==========
+        try {
+            const sourceSpecs = await ProductSpecs.findOne({ productId: productId }) || await ProductSpecs.findById(sourceProduct.specsId);
+            if (sourceSpecs) {
+                const specsObj = (typeof sourceSpecs.toObject === 'function') ? sourceSpecs.toObject() : JSON.parse(JSON.stringify(sourceSpecs));
+                delete specsObj._id;
+                specsObj.productId = destinationProductId;
+                const newSpecs = await ProductSpecs.create(specsObj);
+                await Product.updateOne({ _id: destinationProductId }, { specsId: newSpecs._id });
+                logger.info(`✓ Copied ProductSpecs to destination product ${destinationProductId}`);
+            }
+        } catch (err) {
+            logger.error('Failed to copy ProductSpecs for destination product:', err);
+        }
+
         // ========== STEP 5: Create destination stock ==========
+        // Transfer ALL stock information except the source stock quantity
+        // Destination gets only the transferred quantity, not the source's remaining stock
         const destinationStock = new ProductStock({
             productId: destinationProductId,
             shopId: toShopId,
             companyId: toCompanyId,
+            variationId: null,
+            // Stock quantity is what was transferred, NOT source remaining stock
             stockQty: transferQuantity,
-            trackQuantity: sourceStock.trackQuantity,
-            lowStockThreshold: sourceStock.lowStockThreshold || 5,
-            allowBackorder: sourceStock.allowBackorder || false
+            reservedQty: 0, // Fresh transfer has no reservations
+            // Copy tracking settings from source
+            trackQuantity: sourceStock.trackQuantity || true,
+            allowBackorder: sourceStock.allowBackorder || false,
+            lowStockThreshold: sourceStock.lowStockThreshold || 10,
+            minReorderQty: sourceStock.minReorderQty || 20,
+            safetyStock: sourceStock.safetyStock || 0,
+            // Copy forecasting fields (reset analytics to baseline)
+            avgDailySales: 0, // Reset - new product starts fresh
+            stockoutRiskDays: 0,
+            suggestedReorderQty: sourceStock.minReorderQty || 20,
+            lastRestockDate: new Date(),
+            supplierLeadDays: sourceStock.supplierLeadDays || 7,
+            lastForecastUpdate: new Date(),
+            // Analytics reset for new product
+            totalUnitsSold: 0,
+            totalRevenue: 0,
+            avgCost: destinationPricing.cost || 0,
+            profitMarginPercent: (destinationPricing.marginPercent || 0)
         });
         await destinationStock.save();
 
-        // ========== STEP 6: Create StockChange records (audit trail) ==========
-        const stockChangeResults = await StockChange.create(
-            [
-                {
-                    companyId: fromCompanyId,
-                    productId: productId,
-                    shopId: fromShopId,
-                    type: 'transfer',
-                    qty: -transferQuantity,
-                    previous: currentStock,
-                    new: sourceStock.stockQty,
-                    reason: reason || `Cross-company transfer to ${toCompanyId} shop ${toShopId}`,
-                    userId: userId || 'system',
-                    metadata: {
-                        transferType: 'cross_company',
-                        direction: 'out',
-                        destinationCompany: toCompanyId,
-                        destinationShop: toShopId,
-                        destinationProductId: destinationProductId
-                    }
-                },
-                {
-                    companyId: toCompanyId,
-                    productId: destinationProductId,
-                    shopId: toShopId,
-                    type: 'transfer',
-                    qty: transferQuantity,
-                    previous: 0,
-                    new: transferQuantity,
-                    reason: reason || `Cross-company transfer from ${fromCompanyId} shop ${fromShopId}`,
-                    userId: userId || 'system',
-                    metadata: {
-                        transferType: 'cross_company',
-                        direction: 'in',
-                        sourceCompany: fromCompanyId,
-                        sourceShop: fromShopId,
-                        sourceProductId: productId
-                    }
+        // ========== STEP 6: Create StockChange record for destination only (audit trail) ==========
+        // We do not create a negative stock change on the source as source stock is unchanged per request.
+        const stockChangeResults = await StockChange.create([
+            {
+                companyId: toCompanyId,
+                productId: destinationProductId,
+                shopId: toShopId,
+                type: 'transfer',
+                qty: transferQuantity,
+                previous: 0,
+                new: transferQuantity,
+                reason: reason || `Cross-company transfer from ${fromCompanyId} shop ${fromShopId}`,
+                userId: userId || 'system',
+                metadata: {
+                    transferType: 'cross_company',
+                    direction: 'in',
+                    sourceCompany: fromCompanyId,
+                    sourceShop: fromShopId,
+                    sourceProductId: productId
                 }
-            ]
-        );
+            }
+        ]);
 
         // ========== STEP 8: Create ProductTransfer record for complete audit ==========
         const transferValue = transferQuantity * (sourcePricing.price || 0);
@@ -2570,7 +2714,7 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             reason: reason || 'Cross-company stock transfer (inter-company sale)',
 
             sourceStockBefore: currentStock,
-            sourceStockAfter: sourceStock.stockQty,
+            sourceStockAfter: currentStock,
             destinationStockBefore: 0,
             destinationStockAfter: transferQuantity,
 
@@ -2594,8 +2738,8 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                 userId: userId || 'system'
             },
 
-            sourceStockChangeId: stockChangeResults[0]._id,
-            destinationStockChangeId: stockChangeResults[1]._id,
+            sourceStockChangeId: null,
+            destinationStockChangeId: stockChangeResults[0]._id,
 
             estimatedValue: transferValue,
             actualValue: transferValue,
@@ -2632,6 +2776,35 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             }
         });
 
+        // Background: update category stats and publish product created event
+        setImmediate(async () => {
+            try {
+                // Update category stats if destination product has a category
+                try {
+                    const destProd = await Product.findById(destinationProductId).lean();
+                    if (destProd && destProd.categoryId) {
+                        await Category.updateOne({ _id: destProd.categoryId }, { $inc: { 'statistics.totalProducts': 1 } });
+                    }
+                } catch (err) {
+                    logger.error('Background: category stats update failed for destination product:', err);
+                }
+
+                // Publish product.created event (fire-and-forget)
+                try {
+                    const prodDoc = await Product.findById(destinationProductId).populate('pricingId').lean();
+                    if (prodDoc) {
+                        await publishProductEvent('inventory.product.created', prodDoc).catch((e) => {
+                            logger.error('Background: publishProductEvent failed:', e);
+                        });
+                    }
+                } catch (err) {
+                    logger.error('Background: failed to publish inventory.product.created:', err);
+                }
+            } catch (err) {
+                logger.error('Background tasks for destination product failed:', err);
+            }
+        });
+
         res.json({
             success: true,
             message: 'Product transferred successfully across companies',
@@ -2644,8 +2817,8 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                     companyId: fromCompanyId,
                     shopId: fromShopId,
                     stockBefore: currentStock,
-                    stockAfter: sourceStock.stockQty,
-                    stockChangeId: stockChangeResults[0]._id
+                    stockAfter: currentStock,
+                    stockChangeId: null
                 },
                 destinationProduct: {
                     productId: destinationProductId,
@@ -2655,7 +2828,7 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                     shopId: toShopId,
                     stockBefore: 0,
                     stockAfter: transferQuantity,
-                    stockChangeId: stockChangeResults[1]._id,
+                    stockChangeId: stockChangeResults[0]._id,
                     pricing: {
                         cost: destinationPricing.cost,
                         price: destinationPricing.price
@@ -2860,70 +3033,167 @@ async function ensureCategoryInDestinationCompany(sourceCategoryId, destinationC
             return null;
         }
 
-        // Only level 3 categories need company-specific replication
+        // Ensure we replicate a LEVEL 3 category in the destination company.
+        // If the source category is not level 3, try to find a level-3 child
+        // beneath it (this is the typical case when a product references a
+        // non-level-3 category by mistake). If none exists, we'll attach the
+        // new level-3 under an appropriate level-2 parent (see below).
+
+        let sourceCatForReplication = sourceCategory;
         if (sourceCategory.level !== 3) {
-            logger.warn(`Category is level ${sourceCategory.level}, expected level 3. Cannot replicate.`);
+            const level3Child = await Category.findOne({ parentCategory: sourceCategory._id, level: 3 });
+            if (level3Child) {
+                sourceCatForReplication = level3Child;
+            } else {
+                // We'll replicate using the sourceCategory's data but FORCE level 3
+                sourceCatForReplication = sourceCategory;
+            }
+        }
+
+        // Determine parentCategory to use for level-3 in destination.
+        const sourceParentLevel2Id = sourceCatForReplication.parentCategory || null;
+        if (!sourceParentLevel2Id) {
+            logger.warn(`Source category ${sourceCatForReplication._id} has no parentCategory; cannot replicate as level-3 using source L2. Aborting.`);
             return null;
         }
 
-        if (!sourceCategory.parentCategory) {
-            logger.error(`Level 3 category ${sourceCategoryId} has no parent! Data inconsistency.`);
-            return null;
+        // Per policy: do NOT create level-1/2 in destination. Reuse the source
+        // parent level-2 ObjectId on the new level-3 category in destination.
+        const parentForLevel3 = sourceParentLevel2Id;
+
+        logger.info(`Replicating category. source=${sourceCatForReplication._id}, parentLevel2=${parentForLevel3}`);
+
+        // Prepare full copy of the source category document
+        const srcObj = (typeof sourceCatForReplication.toObject === 'function')
+            ? sourceCatForReplication.toObject()
+            : JSON.parse(JSON.stringify(sourceCatForReplication));
+
+        // Remove mongoose-specific/internal fields that should not be copied
+        delete srcObj._id;
+        delete srcObj.__v;
+
+        // Ensure required fields are set for destination
+        srcObj.companyId = destinationCompanyId;
+        srcObj.parentCategory = parentForLevel3;
+        srcObj.level = 3;
+
+        // Attempt to preserve slug; if duplicate key error occurs, make it unique
+        let attempt = 0;
+        while (true) {
+            try {
+                const created = await Category.create(srcObj);
+                logger.info(`✓ Created replicated category ${created._id} in company ${destinationCompanyId} using parent ${parentForLevel3}`);
+                return created._id;
+            } catch (err) {
+                // Handle duplicate slug/index conflicts by appending suffix
+                if (err && err.code === 11000 && attempt < 5) {
+                    attempt++;
+                    const suffix = `-${destinationCompanyId.substring(0, 6)}${attempt > 1 ? `-${attempt}` : ''}`;
+                    if (srcObj.slug) {
+                        srcObj.slug = `${srcObj.slug}${suffix}`;
+                    } else if (srcObj.name) {
+                        const base = srcObj.name.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                        srcObj.slug = `${base}${suffix}`;
+                    } else {
+                        srcObj.slug = `cat${Date.now()}${suffix}`;
+                    }
+                    continue;
+                }
+
+                // Log and return null for other errors
+                logger.error('Error creating replicated category in destination:', err);
+                return null;
+            }
         }
-
-        // Check if equivalent category already exists in destination company
-        // Match by: same name, same parent (level 2), destination companyId
-        const existingCategory = await Category.findOne({
-            name: sourceCategory.name,
-            parentCategory: sourceCategory.parentCategory, // Same level 2 parent
-            companyId: destinationCompanyId,
-            level: 3
-        });
-
-        if (existingCategory) {
-            logger.info(`✓ Category already exists in destination company: ${existingCategory.name} (${existingCategory._id})`);
-            return existingCategory._id;
-        }
-
-        // Create new level 3 category in destination company
-        const newCategoryData = {
-            name: sourceCategory.name,
-            description: sourceCategory.description,
-            level: 3,
-            parentCategory: sourceCategory.parentCategory, // Keep same level 2 parent (global)
-            companyId: destinationCompanyId, // Assign to destination company
-            isActive: sourceCategory.isActive,
-            sortOrder: sourceCategory.sortOrder,
-            image: sourceCategory.image,
-            seo: sourceCategory.seo,
-            attributes: sourceCategory.attributes
-        };
-
-        // Generate unique slug for destination company
-        const baseSlug = sourceCategory.name
-            .toLowerCase()
-            .replace(/[^a-zA-Z0-9]/g, '-')
-            .replace(/-+/g, '-')
-            .replace(/^-|-$/g, '');
-
-        let uniqueSlug = `${baseSlug}-${destinationCompanyId.substring(0, 8)}`;
-        let counter = 1;
-
-        // Ensure slug is unique
-        while (await Category.findOne({ slug: uniqueSlug })) {
-            uniqueSlug = `${baseSlug}-${destinationCompanyId.substring(0, 8)}-${counter}`;
-            counter++;
-        }
-
-        newCategoryData.slug = uniqueSlug;
-
-        const newCategory = await Category.create(newCategoryData);
-        logger.info(`✓ Created new level 3 category in destination company: ${newCategory.name} (${newCategory._id}) with parent ${newCategory.parentCategory}`);
-
-        return newCategory._id;
 
     } catch (error) {
         logger.error('Error ensuring category in destination company:', error);
+        return null;
+    }
+}
+
+/**
+ * Ensure we have at least one valid level-3 category for the destination company.
+ * If none exists, attempt to create a sensible fallback 'Uncategorized' level-3
+ * under an existing level-2 parent. This ensures products with no category or
+ * non-replicable categories still get a valid categoryId when transferred.
+ * @param {String} destinationCompanyId
+ * @returns {ObjectId|null}
+ */
+async function getOrCreateFallbackCategory(destinationCompanyId) {
+    try {
+        // 1) Try to find any level-3 category already scoped to the destination company
+        const existingLevel3 = await Category.findOne({ companyId: destinationCompanyId, level: 3 });
+        if (existingLevel3) return existingLevel3._id;
+
+        // 2) Find a global level-2 parent to attach to (level 2 categories are global)
+        let parentLevel2 = await Category.findOne({ level: 2 });
+
+        // 3) If no level-2 exists, we must not create level-1/2 automatically.
+        if (!parentLevel2) {
+            logger.warn('No level-2 category found; cannot auto-create fallback level-3 without a parent.');
+            return null;
+        }
+
+        // 4) Create a level-3 'Uncategorized' category for the destination company
+        const uncategorizedName = 'Uncategorized';
+        const newCat = await Category.create({
+            name: uncategorizedName,
+            description: 'Auto-created fallback category for cross-company transfers',
+            level: 3,
+            parentCategory: parentLevel2._id,
+            companyId: destinationCompanyId,
+            isActive: true
+        });
+
+        logger.info(`✓ Created fallback category for company ${destinationCompanyId}: ${newCat._id}`);
+        return newCat._id;
+    } catch (err) {
+        logger.error('Error creating fallback category for destination company:', err);
+        return null;
+    }
+}
+
+/**
+ * Ensure the source parent chain (level-1 -> level-2) exists in the current
+ * database. Replicates level-1 and level-2 categories by name if they do not
+ * exist and returns the destination level-2 _id to be used as parent for a
+ * level-3 category. Returns null on failure.
+ *
+ * @param {ObjectId} sourceLevel2Id
+ * @returns {ObjectId|null}
+ */
+async function ensureParentChainInDestination(sourceLevel2Id) {
+    try {
+        if (!sourceLevel2Id) return null;
+
+        // Load source level-2 category (or its ancestor) and validate it exists.
+        let sourceLevel2 = await Category.findById(sourceLevel2Id);
+        if (!sourceLevel2) {
+            logger.warn(`Source level-2 category ${sourceLevel2Id} not found`);
+            return null;
+        }
+
+        if (sourceLevel2.level !== 2) {
+            // try to find its level-2 ancestor
+            let ancestor = await Category.findById(sourceLevel2.parentCategory);
+            while (ancestor && ancestor.level !== 2) {
+                ancestor = await Category.findById(ancestor.parentCategory);
+            }
+            if (!ancestor) {
+                logger.warn(`No level-2 ancestor found for category ${sourceLevel2Id}`);
+                return null;
+            }
+            sourceLevel2 = ancestor;
+        }
+
+        // Instead of creating new level-1/level-2 entries in destination, reuse
+        // the exact parent level-2 ObjectId from source. Caller must accept that
+        // this parent id may belong to a global level-2 category.
+        logger.info(`Re-using source level-2 parent id ${sourceLevel2._id} (name=${sourceLevel2.name}) for replication`);
+        return sourceLevel2._id;
+    } catch (err) {
+        logger.error('Error ensuring parent chain in destination:', err);
         return null;
     }
 }
@@ -2943,46 +3213,8 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
     if (!Array.isArray(transfers) || transfers.length === 0) {
         return res.status(400).json({
             success: false,
-            message: 'transfers array is required and must contain at least one item'
+            message: 'transfers must be a non-empty array'
         });
-    }
-
-    if (!destinationShopId || !userId) {
-        return res.status(400).json({
-            success: false,
-            message: 'toShopId and userId are required'
-        });
-    }
-
-    if (sourceShopId === destinationShopId) {
-        return res.status(400).json({
-            success: false,
-            message: 'Source and destination shops cannot be the same'
-        });
-    }
-
-    // Validate all product IDs upfront
-    for (const transfer of transfers) {
-        if (!transfer.productId || !transfer.quantity) {
-            return res.status(400).json({
-                success: false,
-                message: 'Each transfer must have productId and quantity'
-            });
-        }
-        if (transfer.quantity <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Quantity must be greater than 0'
-            });
-        }
-        try {
-            validateMongoId(transfer.productId);
-        } catch (e) {
-            return res.status(400).json({
-                success: false,
-                message: `Invalid product ID format: ${transfer.productId}`
-            });
-        }
     }
 
     const results = {
@@ -3288,6 +3520,30 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
                 const destinationProductData = sourceProduct.toObject();
                 destinationProductData.companyId = toCompanyId;
                 destinationProductData.shopId = toShopId;
+                // If category mapping failed or source product had no category,
+                // ensure we have a valid categoryId for destination product.
+                if (!destinationCategoryId) {
+                    // Try to obtain or create a fallback level-3 category scoped to destination company
+                    destinationCategoryId = await getOrCreateFallbackCategory(toCompanyId);
+                    if (destinationCategoryId) {
+                        // Record that we created/mapped a category for reporting
+                        const isNew = !results.categoriesCreated.find(c => c.categoryId === destinationCategoryId.toString());
+                        if (isNew) {
+                            const destCat = await Category.findById(destinationCategoryId);
+                            results.categoriesCreated.push({
+                                categoryId: destinationCategoryId.toString(),
+                                categoryName: destCat?.name || 'Uncategorized',
+                                sourceCategory: sourceProduct.categoryId ? sourceProduct.categoryId.toString() : null
+                            });
+                        }
+                    }
+                }
+
+                // If after attempts we still don't have a category mapping, abort this product
+                if (!destinationCategoryId) {
+                    throw new Error('Unable to map or create a level-3 category in destination company; no suitable level-2 parent available');
+                }
+
                 destinationProductData.categoryId = destinationCategoryId;
 
                 // Sanitize product data before creating destination product
@@ -3437,6 +3693,7 @@ module.exports = {
     getCompanyLowStockProducts,
     getCompanyInventorySummary,
     getCompanyShops,
+    getProductBySku,
 
     // Shop Level
     getShopOverview,
