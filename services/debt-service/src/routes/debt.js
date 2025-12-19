@@ -54,6 +54,9 @@ router.post('/internal/lookup', ctrl.internalLookup);
 // GET single debt
 router.get('/:companyId/debt/:debtId', ctrl.getDebt);
 
+// GET debt history (repayments + payment summary)
+// Same payload as GET /:companyId/debt/:debtId but available at a dedicated path
+router.get('/:companyId/debt/:debtId/history', ctrl.getDebt);
 // Mark debt as paid (creates repayment for remaining amount and marks PAID)
 router.post('/:debtId/mark-paid', ctrl.markDebtPaid);
 
@@ -99,4 +102,4 @@ router.get('/summary/cross-company/:hashedCustomerId', summaryCtrl.crossCompanyS
 
 router.post('/seed', seedCtrl.seedAllModels);
 
-module.exports = router;
+module.exports = router

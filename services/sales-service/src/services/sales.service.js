@@ -42,7 +42,7 @@ class SalesService {
           customerPhone: saleData.customerPhone,
           customerAddress: saleData.customerAddress,
           hashedCustomerId: saleData.hashedCustomerId || "",
-          idebt: saleData.idebt || false,
+          isDebt: saleData.isDebt || false,
           isTransfer: saleData.isTransfer || false,
         },
         { transaction }
@@ -91,14 +91,23 @@ class SalesService {
           type: "sale.created",
           exchange: "invexis_events",
           routingKey: "sale.created",
+          // Include debt-related metadata so debt-service can correlate and update debts reliably
           payload: {
             saleId: sale.saleId,
             companyId: sale.companyId,
             shopId: sale.shopId,
             customerId: sale.customerId,
+            // Pass known hashedCustomerId if we have it (copied from KnownUser at sale creation)
+            hashedCustomerId: sale.hashedCustomerId || null,
+            // Flag indicating this sale may result in a debt (useful for quick routing)
+            isDebt: !!saleData.isDebt,
+            // Helpful customer display fields for debt-service to attach immediately
+            customerName: sale.customerName || null,
+            customerPhone: sale.customerPhone || null,
             totalAmount: sale.totalAmount,
             saleType: sale.saleType,
             status: sale.status,
+            items: items && items.length ? items.map(i => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice, total: i.totalPrice })) : [],
             createdAt: new Date().toISOString(),
             traceId: uuidv4(),
           },

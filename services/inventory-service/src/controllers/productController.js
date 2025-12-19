@@ -712,23 +712,54 @@ const createProduct = asyncHandler(async (req, res) => {
           generateBarcodeBuffer(skuValue)
         ]);
 
-        const [qrUpload, barcodeUpload] = await Promise.all([
-          uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, `qr_${skuValue}`),
-          uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, `bar_${skuValue}`)
-        ]);
+        // Create placeholders, update product immediately and enqueue UploadTasks for background processing
+        const uploadTaskRepo = require('../repositories/uploadTaskRepository');
+        const placeholderQrId = `placeholder_qr_${Date.now()}`;
+        const placeholderBarcodeId = `placeholder_barcode_${Date.now()}`;
+        const placeholderQrUrl = `https://via.placeholder.com/400x300?text=QR+${encodeURIComponent(skuValue)}`;
+        const placeholderBarcodeUrl = `https://via.placeholder.com/400x300?text=BAR+${encodeURIComponent(skuValue)}`;
 
-        // Update product with URLs and Cloudinary IDs for deletion
-        await Product.updateOne(
-          { _id: product._id },
-          {
-            qrCodeUrl: qrUpload.secure_url,
-            barcodeUrl: barcodeUpload.secure_url,
-            qrCloudinaryId: qrUpload.public_id,
-            barcodeCloudinaryId: barcodeUpload.public_id
-          }
-        );
+        await Product.updateOne({ _id: product._id }, {
+          qrCodeUrl: placeholderQrUrl,
+          barcodeUrl: placeholderBarcodeUrl,
+          qrCloudinaryId: placeholderQrId,
+          barcodeCloudinaryId: placeholderBarcodeId
+        });
 
-        logger.info(`✅ QR/Barcode generated and uploaded for SKU: ${skuValue}`);
+        // Enqueue tasks with base64 payloads so worker can upload and patch product
+        try {
+          await uploadTaskRepo.createTask({
+            companyId: product.companyId,
+            shopId: product.shopId,
+            productId: product._id,
+            field: 'qr',
+            placeholderId: placeholderQrId,
+            placeholderUrl: placeholderQrUrl,
+            originalName: `qr_${skuValue}.png`,
+            folder: `QrBar_Codes/${product._id}`,
+            publicIdHint: `qr_${skuValue}`,
+            filePath: null,
+            fileBase64: qrBuffer.toString('base64')
+          });
+        } catch (e) { logger.warn('Failed to enqueue QR upload task:', e && e.message ? e.message : e); }
+
+        try {
+          await uploadTaskRepo.createTask({
+            companyId: product.companyId,
+            shopId: product.shopId,
+            productId: product._id,
+            field: 'barcode',
+            placeholderId: placeholderBarcodeId,
+            placeholderUrl: placeholderBarcodeUrl,
+            originalName: `bar_${skuValue}.png`,
+            folder: `QrBar_Codes/${product._id}`,
+            publicIdHint: `bar_${skuValue}`,
+            filePath: null,
+            fileBase64: barcodeBuffer.toString('base64')
+          });
+        } catch (e) { logger.warn('Failed to enqueue barcode upload task:', e && e.message ? e.message : e); }
+
+        logger.info(`✅ QR/Barcode generation enqueued for SKU: ${skuValue}`);
       } catch (err) {
         logger.error('Background: Failed to generate QR/barcode images:', err);
       }
@@ -1022,8 +1053,8 @@ const updateProduct = asyncHandler(async (req, res) => {
       ]);
 
       const [qrUpload, barcodeUpload] = await Promise.all([
-        uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode'),
-        uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode')
+        uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`),
+        uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`)
       ]);
 
       // Update product with new URLs
@@ -1813,8 +1844,8 @@ const smartCreateProduct = asyncHandler(async (req, res) => {
     const payload = product.sku || product._id.toString();
     const qrBuffer = await generateQRCodeBuffer(payload);
     const barcodeBuffer = await generateBarcodeBuffer(payload);
-    const qrUpload = await uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`, 'qrcode');
-    const barcodeUpload = await uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`, 'barcode');
+    const qrUpload = await uploadBuffer(qrBuffer, `QrBar_Codes/${product._id}`);
+    const barcodeUpload = await uploadBuffer(barcodeBuffer, `QrBar_Codes/${product._id}`);
     await Product.updateOne({ _id: product._id }, { $set: { qrCodeUrl: qrUpload.secure_url, barcodeUrl: barcodeUpload.secure_url } });
   } catch (err) {
     logger.error('Failed to generate/upload barcode/QR code images (smart-create):', err);

@@ -3,7 +3,7 @@ const debtService = require('../services/debtService');
 async function createDebt(req, res) {
     try {
         // enforce multi-tenancy
-        const companyId = req.body.companyId || req.headers['x-company-id'];
+        const companyId = req.body.companyId|| req.query.companyId || req.params.companyId;
         if (!companyId) return res.status(400).json({ error: 'companyId required' });
 
         // Validate hashedCustomerId format if provided (sales-service should produce the hash)
@@ -34,7 +34,9 @@ async function recordRepayment(req, res) {
         res.status(201).json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 404 if debt not found, 400 for validation errors, 500 for others
+        const status = err.message.includes('not found') ? 404 : err.message.includes('required') || err.message.includes('Invalid') ? 400 : 500;
+        res.status(status).json({ error: err.message });
     }
 }
 
@@ -65,7 +67,9 @@ async function listCompanyDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -79,7 +83,9 @@ async function listCompanyPaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -93,7 +99,9 @@ async function listCompanyPartiallyPaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -107,7 +115,9 @@ async function listCompanyUnpaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -120,7 +130,9 @@ async function listShopDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -135,7 +147,9 @@ async function listShopPaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -150,7 +164,9 @@ async function listShopPartiallyPaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -165,7 +181,9 @@ async function listShopUnpaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -177,7 +195,9 @@ async function listCustomerDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -195,7 +215,9 @@ async function listCustomerPaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -213,7 +235,9 @@ async function listCustomerPartiallyPaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -231,7 +255,9 @@ async function listCustomerUnpaidDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -242,7 +268,9 @@ async function listAllDebts(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 400 for validation/query errors, 500 for others
+        const status_code = err.message.includes('Invalid') || err.message.includes('required') ? 400 : 500;
+        res.status(status_code).json({ error: err.message });
     }
 }
 
@@ -419,7 +447,9 @@ async function markDebtPaid(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 404 if debt not found, 400 for validation errors, 500 for others
+        const status = err.message.includes('not found') ? 404 : err.message.includes('required') || err.message.includes('Invalid') ? 400 : 500;
+        res.status(status).json({ error: err.message });
     }
 }
 
@@ -437,7 +467,9 @@ async function cancelDebt(req, res) {
         res.json(result);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+        // Return 404 if debt not found, 400 for validation errors, 500 for others
+        const status = err.message.includes('not found') ? 404 : err.message.includes('required') || err.message.includes('Invalid') ? 400 : 500;
+        res.status(status).json({ error: err.message });
     }
 }
 

@@ -22,10 +22,15 @@ const saleEvents = {
           companyId: sale.companyId,
           shopId: sale.shopId,
           customerId: sale.customerId,
+          // Helpful customer display fields
           customerName: sale.customerName,
           customerPhone: sale.customerPhone,
           customerEmail: sale.customerEmail,
           soldBy: sale.soldBy,
+          // hashedCustomerId copied from KnownUser for downstream correlation
+          hashedCustomerId: sale.hashedCustomerId || null,
+          // Debt flag from sale model
+          isDebt: !!sale.isDebt,
           totalAmount: sale.totalAmount,
           status: sale.status,
           paymentStatus: sale.paymentStatus,

@@ -23,10 +23,13 @@ function verifyToken(token) {
 async function fetchUserFromAuthService(userId, accessToken) {
     try {
         const response = await axios.get(`${AUTH_SERVICE_URL}/me`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: 5000
         });
         return response.data.user;
     } catch {
+        // Log the error for observability (don't throw to avoid crashing middleware)
+        try { console.error('[AuthMiddleware] Failed to fetch user from auth service', { userId }); } catch (e) { }
         return null;
     }
 }

@@ -47,7 +47,7 @@ const Sale = sequelize.define(
       comment: "Hashed customer identifier from KnownUser",
     },
     // New optional flags
-    idebt: { type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false },
+    isDebt: { type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false },
     isTransfer: { type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false },
     isReturned: {
       type: DataTypes.BOOLEAN,

@@ -245,13 +245,34 @@ class RabbitMQ {
             ...msg.properties.headers,
             'x-retries': (msg.properties.headers?.['x-retries'] || 0) + 1
         };
-        await this.channel.publish(
-            '',  // Default exchange
-            this.queues.retry,
-            msg.content,
-            { headers: updateHeaders, persistent: true }
-        );
-        this.channel.ack(msg);
+        // Route retries via the topic exchange instead of publishing directly
+        // to a queue name on the default exchange. This avoids a 404 when the
+        // queue hasn't been declared on the current channel. The retry queue
+        // is bound to the topic exchange with pattern 'retry.#' in
+        // `setupInfrastructure()` so publishing to `retry.<routingKey>` will
+        // route the message into the retry queue.
+        const originalRoutingKey = msg.fields?.routingKey || '';
+        const retryRoutingKey = originalRoutingKey ? `retry.${originalRoutingKey}` : 'retry';
+        try {
+            const ok = this.channel.publish(
+                this.exchanges.topic,
+                retryRoutingKey,
+                msg.content,
+                { headers: updateHeaders, persistent: true }
+            );
+            if (!ok) console.warn('RabbitMQ: retry publish returned false (buffer full)');
+            this.channel.ack(msg);
+        } catch (err) {
+            console.error('RabbitMQ: Retry publish failed', err.message);
+            // Fallback: send to DLX so the message isn't lost and avoid crashing
+            try {
+                await this.sendToDlx(msg);
+            } catch (dlxErr) {
+                console.error('RabbitMQ: Failed to send to DLX as fallback', dlxErr.message);
+                // As a last resort, ack to avoid blocking the consumer
+                try { this.channel.ack(msg); } catch (ackErr) { console.error('RabbitMQ: Ack failed', ackErr.message); }
+            }
+        }
     }
 
     async sendToDlx(msg) {

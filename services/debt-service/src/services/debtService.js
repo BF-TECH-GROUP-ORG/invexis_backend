@@ -45,9 +45,9 @@ async function createDebt(payload) {
         // Ensure we never persist raw identifiers: compute hashedCustomerId if a raw identifier is provided
         const hashedCustomerId = providedHashed || (rawCustomerIdentifier ? hashIdentifier(rawCustomerIdentifier) : undefined);
 
-        if (!hashedCustomerId) {
-            throw new Error('hashedCustomerId (or rawCustomerIdentifier) is required to create a debt');
-        }
+        // if (!hashedCustomerId) {
+        //     throw new Error('hashedCustomerId (or rawCustomerIdentifier) is required to create a debt');
+        // }
 
         // Normalize customer object: only keep display data (name, phone)
         const customerObj = customer
@@ -858,48 +858,48 @@ async function cancelDebt({ companyId, debtId, reason = null, performedBy }) {
         const inMemoryStore = require('../utils/inMemoryStore');
         inMemoryStore.createDebt(debt);
 
-        // DIRECT DB WRITE: persist cancelled debt immediately to DB
-        (async () => {
+        // DIRECT DB WRITE: persist cancelled debt immediately to DB (SYNC - must complete before returning)
+        let savedDebt = null;
+        try {
+            // Convert companyId to ObjectId if needed (allow UUID/string passed from client)
+            let companyIdQuery = companyId;
             try {
-                // Convert companyId to ObjectId if needed (allow UUID/string passed from client)
-                let companyIdQuery = companyId;
-                try {
-                    if (typeof companyId === 'string' && companyId.length !== 24) {
-                        companyIdQuery = companyId;
-                    } else if (typeof companyId === 'string') {
-                        companyIdQuery = mongoose.Types.ObjectId(companyId);
-                    }
-                } catch (e) {
+                if (typeof companyId === 'string' && companyId.length !== 24) {
                     companyIdQuery = companyId;
+                } else if (typeof companyId === 'string') {
+                    companyIdQuery = mongoose.Types.ObjectId(companyId);
                 }
-
-                await Debt.findOneAndUpdate(
-                    { _id: debtId, companyId: companyIdQuery, isDeleted: false },
-                    {
-                        status: debt.status,
-                        cancelledAt: debt.cancelledAt,
-                        cancelReason: debt.cancelReason,
-                        cancelledBy: debt.cancelledBy,
-                        updatedBy: debt.updatedBy,
-                        updatedAt: debt.updatedAt
-                    },
-                    { new: true, lean: true }
-                );
             } catch (e) {
-                console.error('Direct DB write failed (will retry via persister):', e.message);
+                companyIdQuery = companyId;
             }
-        })();
+
+            savedDebt = await Debt.findOneAndUpdate(
+                { _id: debtId, companyId: companyIdQuery, isDeleted: false },
+                {
+                    status: 'CANCELLED',
+                    cancelledAt: debt.cancelledAt,
+                    cancelReason: debt.cancelReason,
+                    cancelledBy: debt.cancelledBy,
+                    updatedBy: debt.updatedBy,
+                    updatedAt: debt.updatedAt
+                },
+                { new: true, lean: true }
+            );
+        } catch (e) {
+            console.error('Direct DB write failed for cancelDebt:', e.message);
+            throw new Error(`Failed to cancel debt: ${e.message}`);
+        }
 
         // Fire-and-forget: enqueue events and adjust summaries (treat as repayment for summary adjustment)
         Promise.all([
-            (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_CANCELLED', payload: { debtId: debt._id, companyId, reason } }); } catch (e) { } })(),
+            (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_CANCELLED', payload: { debtId: savedDebt._id || debt._id, companyId, reason } }); } catch (e) { } })(),
             (async () => { try { if (writeOffAmount > 0) inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onRepayment', data: { hashedCustomerId: debt.hashedCustomerId, amountPaid: writeOffAmount, companyId, debtId: debt._id, createdAt: new Date() } }); } catch (e) { } })(),
             (async () => { try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); if (debt.hashedCustomerId) await redis.del(`debt:lookup:${debt.hashedCustomerId}`); } catch (e) { } })(),
             (async () => {
                 try {
                     if (global && typeof global.rabbitmqPublish === 'function') {
                         await global.rabbitmqPublish('debt.cancelled', {
-                            debtId: debt._id,
+                            debtId: savedDebt._id || debt._id,
                             companyId,
                             reason,
                             hashedCustomerId: debt.hashedCustomerId,
@@ -912,7 +912,8 @@ async function cancelDebt({ companyId, debtId, reason = null, performedBy }) {
             })()
         ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
 
-        return { debt };
+        // Return DB-persisted debt with CANCELLED status
+        return { debt: savedDebt || debt };
     });
 }
 

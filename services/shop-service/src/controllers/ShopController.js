@@ -40,6 +40,32 @@ const createShop = asyncHandler(async (req, res) => {
     throw new Error("Missing required fields: name, address_line1, city, country");
   }
 
+  // Validate latitude and longitude if provided
+  if (latitude !== undefined && latitude !== null) {
+    const lat = parseFloat(latitude);
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      res.status(400);
+      throw new Error("Invalid latitude. Must be a number between -90 and 90");
+    }
+  }
+
+  if (longitude !== undefined && longitude !== null) {
+    const lon = parseFloat(longitude);
+    if (isNaN(lon) || lon < -180 || lon > 180) {
+      res.status(400);
+      throw new Error("Invalid longitude. Must be a number between -180 and 180");
+    }
+  }
+
+  // Validate capacity if provided
+  if (capacity !== undefined && capacity !== null) {
+    const cap = parseInt(capacity, 10);
+    if (isNaN(cap) || cap < 0) {
+      res.status(400);
+      throw new Error("Invalid capacity. Must be a non-negative integer");
+    }
+  }
+
   // Check if shop name is unique within company
   const isUnique = await Shop.isNameUnique(companyId, name);
   if (!isUnique) {
@@ -214,6 +240,32 @@ const updateShop = asyncHandler(async (req, res) => {
     if (!isUnique) {
       res.status(409);
       throw new Error("Shop name already exists in this company");
+    }
+  }
+
+  // Validate latitude and longitude if provided
+  if (latitude !== undefined && latitude !== null) {
+    const lat = parseFloat(latitude);
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      res.status(400);
+      throw new Error("Invalid latitude. Must be a number between -90 and 90");
+    }
+  }
+
+  if (longitude !== undefined && longitude !== null) {
+    const lon = parseFloat(longitude);
+    if (isNaN(lon) || lon < -180 || lon > 180) {
+      res.status(400);
+      throw new Error("Invalid longitude. Must be a number between -180 and 180");
+    }
+  }
+
+  // Validate capacity if provided
+  if (capacity !== undefined && capacity !== null) {
+    const cap = parseInt(capacity, 10);
+    if (isNaN(cap) || cap < 0) {
+      res.status(400);
+      throw new Error("Invalid capacity. Must be a non-negative integer");
     }
   }
 

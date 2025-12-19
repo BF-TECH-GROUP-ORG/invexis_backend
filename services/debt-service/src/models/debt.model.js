@@ -15,12 +15,10 @@ const DebtSchema = new mongoose.Schema({
     },
 
     // Hashed customer identifier for cross-company and per-customer visibility
-    hashedCustomerId: { type: String, index: true, required: true },
+    hashedCustomerId: { type: String, required: false },
 
     // Sales / staff info
-    salesId: { type: mongoose.Types.ObjectId, default: null },
-    salesStaffId: { type: mongoose.Types.ObjectId, required: true, default: null },
-
+    salesId: { type:String, default: null },
 
     items: [
         {
@@ -40,7 +38,7 @@ const DebtSchema = new mongoose.Schema({
 
     status: {
         type: String,
-        enum: ["UNPAID", "PARTIALLY_PAID", "PAID"],
+        enum: ["UNPAID", "PARTIALLY_PAID", "PAID", "CANCELLED"],
         default: "UNPAID"
     },
 
@@ -54,18 +52,15 @@ const DebtSchema = new mongoose.Schema({
     // Audit: who created/updated the debt (store id + human name)
     createdBy: {
         // allow actor ids to be strings (external/system ids) to avoid casting errors
-        id: { type: String, default: null },
-        name: { type: String, default: null }
+        type: String, default: null
     },
     updatedBy: {
-        id: { type: String, default: null },
-        name: { type: String, default: null }
+type: String, default: null
     },
     cancelledAt: { type: Date },
     cancelReason: { type: String },
     cancelledBy: {
-        id: { type: String, default: null },
-        name: { type: String }
+        type: String, default: null
     },
 
     // Track balance over time (simple denormalized history)

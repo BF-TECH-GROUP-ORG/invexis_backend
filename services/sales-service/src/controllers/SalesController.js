@@ -35,7 +35,7 @@ const createSale = async (req, res) => {
       customerAddress,
       items = [],
       paymentMethod,
-      idebt = false,
+      isDebt = false,
       isTransfer = false,
     } = req.body;
 
@@ -46,6 +46,24 @@ const createSale = async (req, res) => {
         message:
           "Missing required fields: companyId, shopId, soldBy, items",
       });
+    }
+
+    // Validate and normalize paymentMethod
+    const validPaymentMethods = ["cash", "card", "mobile", "wallet", "bank_transfer"];
+    let normalizedPaymentMethod = paymentMethod;
+    
+    // Map common variations to valid enum values
+    if (normalizedPaymentMethod) {
+      const lowerMethod = String(normalizedPaymentMethod).toLowerCase();
+      if (lowerMethod === "transfer") {
+        normalizedPaymentMethod = "bank_transfer";
+      } else if (!validPaymentMethods.includes(lowerMethod)) {
+        await t.rollback();
+        return res.status(400).json({
+          message: `Invalid paymentMethod. Must be one of: ${validPaymentMethods.join(", ")}`,
+          received: paymentMethod,
+        });
+      }
     }
 
     // Handle KnownUser: either use provided knownUserId or create from customer data
@@ -121,10 +139,10 @@ const createSale = async (req, res) => {
         discountTotal,
         taxTotal,
         totalAmount,
-        paymentMethod,
+        paymentMethod: normalizedPaymentMethod,
         status: "initiated",
         paymentStatus: "pending",
-        idebt,
+        isDebt,
         isTransfer,
         hashedCustomerId: fullKnownUser?.hashedCustomerId || "",
       },
@@ -354,12 +372,32 @@ const updateSale = async (req, res) => {
       "paymentStatus",
       "paymentMethod",
       "soldBy",
-      "idebt",
+      "isDebt",
       "isTransfer",
     ];
     const payload = {};
+    
+    // Validate and normalize paymentMethod if provided
+    const validPaymentMethods = ["cash", "card", "mobile", "wallet", "bank_transfer"];
+    
     for (const key of allowed) {
-      if (req.body[key] !== undefined) payload[key] = req.body[key];
+      if (req.body[key] !== undefined) {
+        if (key === "paymentMethod" && req.body[key]) {
+          const lowerMethod = String(req.body[key]).toLowerCase();
+          if (lowerMethod === "transfer") {
+            payload[key] = "bank_transfer";
+          } else if (!validPaymentMethods.includes(lowerMethod)) {
+            return res.status(400).json({
+              message: `Invalid paymentMethod. Must be one of: ${validPaymentMethods.join(", ")}`,
+              received: req.body[key],
+            });
+          } else {
+            payload[key] = req.body[key];
+          }
+        } else {
+          payload[key] = req.body[key];
+        }
+      }
     }
 
     const sale = await Sale.findByPk(id);

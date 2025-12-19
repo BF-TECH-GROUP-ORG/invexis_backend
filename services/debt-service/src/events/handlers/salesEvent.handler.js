@@ -22,10 +22,21 @@ async function handleSaleCreated(data) {
         totalAmount,
         paymentStatus,
         items,
-        traceId
+        traceId,
+        // New fields from sales-service
+        hashedCustomerId,
+        isDebt,
+        customerPhone,
+        amountPaid
     } = data;
 
-    logger.info(`💰 [sale.created] Processing sale ${saleId} for debt check`, { traceId, companyId });
+    logger.info(`💰 [sale.created] Processing sale ${saleId} for debt check`, { traceId, companyId, isDebt });
+
+    // Check if this sale is marked as a debt; if not, skip debt creation
+    if (!isDebt) {
+        logger.info(`ℹ️ Sale ${saleId} is not marked as debt (isDebt: false), no debt creation needed`);
+        return { success: true, message: 'Not marked as debt' };
+    }
 
     // Normalize payment status
     const status = paymentStatus ? paymentStatus.toUpperCase() : 'UNKNOWN';
@@ -37,38 +48,97 @@ async function handleSaleCreated(data) {
     }
 
     try {
-        // Calculate amount paid (if partial) - payload doesn't explicitly have amountPaid, 
-        // but we can infer or default to 0 for UNPAID. 
-        // For PARTIAL, we might need more info, but for now let's assume 0 if not provided
-        // or we might need to fetch the sale details if payload is insufficient.
-        // However, the payload has totalAmount. 
-        // Let's assume for now amountPaidNow is 0 for UNPAID.
-        // If PARTIAL, we might be missing the paid amount in the event payload shown earlier.
-        // The event payload in sales-service has: saleId, companyId, shopId, customerId, customerName, totalAmount, status, paymentStatus, items.
-        // It DOES NOT have amountPaid. This is a potential gap.
-        // For now, we will create the debt with 0 paid and let subsequent payment events update it,
-        // OR we can try to find if there's a payment event that comes with it.
-        // But wait, if it's partial, there MUST be a payment. 
-        // Let's check if we can get amountPaid from somewhere. 
-        // If not, we'll default to 0 and log a warning for PARTIAL.
-
-        const amountPaidNow = 0; // Default for now as payload is missing this
+        // Determine amount paid now: prefer explicit `amountPaid` from event when present
+        const amountPaidNow = typeof amountPaid === 'number' ? amountPaid : 0;
         const balance = totalAmount - amountPaidNow;
 
-        // Create Debt Record
+        // Try to find an existing debt record by salesId first (strong correlation)
+        let existing = null;
+        if (saleId) {
+            existing = await Debt.findOne({ salesId: saleId });
+        }
+
+        // If we found a debt by salesId, make sure the phone matches the sale's customerPhone
+        // If it doesn't match, we will fall back to finding the most recent debt for this company
+        // that matches either the hashedCustomerId or the customer phone (last index / newest).
+        if (existing) {
+            const existingPhone = existing.customer && existing.customer.phone ? String(existing.customer.phone) : null;
+            const eventPhone = customerPhone ? String(customerPhone) : null;
+
+            if (existingPhone && eventPhone && existingPhone !== eventPhone) {
+                logger.warn(`⚠️ Found debt for sale ${saleId} but phone mismatch (debt:${existingPhone} vs sale:${eventPhone}). Falling back to recent matching debt.`);
+                existing = null; // force fallback search below
+            }
+        }
+
+        // If not found (or we cleared due to phone mismatch), fallback to most recent debt matching hashedCustomerId OR customer.phone
+        if (!existing) {
+            const orClauses = [];
+            if (hashedCustomerId) orClauses.push({ hashedCustomerId: hashedCustomerId });
+            if (customerPhone) orClauses.push({ 'customer.phone': customerPhone });
+
+            if (orClauses.length > 0) {
+                // Pick the most recent matching debt (last index semantics)
+                existing = await Debt.findOne({ companyId, isDeleted: { $ne: true }, $or: orClauses }).sort({ createdAt: -1 });
+                if (existing) {
+                    logger.info(`🔎 Fallback matched existing debt ${existing._id} for sale ${saleId} (by hashedCustomerId/customer.phone)`);
+                }
+            }
+        }
+
+        if (existing) {
+            let changed = false;
+            if (hashedCustomerId && (!existing.hashedCustomerId || String(existing.hashedCustomerId) !== String(hashedCustomerId))) {
+                existing.hashedCustomerId = hashedCustomerId;
+                changed = true;
+            }
+            // If we have a saleId from the event and the debt doesn't have it, attach it for stronger correlation
+            if (saleId) {
+                if (!existing.salesId) {
+                    existing.salesId = saleId;
+                    changed = true;
+                } else if (String(existing.salesId) !== String(saleId)) {
+                    // Don't overwrite an existing salesId that differs; log for manual reconciliation
+                    logger.warn(`⚠️ Existing debt ${existing._id} has different salesId (${existing.salesId}) than event (${saleId}). Skipping overwrite.`);
+                }
+            }
+            if (customerName && (!existing.customer || existing.customer.name !== customerName)) {
+                existing.customer = existing.customer || {};
+                existing.customer.name = customerName;
+                changed = true;
+            }
+            if (customerPhone && (!existing.customer || existing.customer.phone !== customerPhone)) {
+                existing.customer = existing.customer || {};
+                existing.customer.phone = customerPhone;
+                changed = true;
+            }
+            if (changed) {
+                existing.updatedAt = new Date();
+                await existing.save();
+                logger.info(`🔄 Updated existing debt ${existing._id} with hashedCustomerId/customer info for sale ${saleId}`);
+                // Publish updated event so downstream systems know
+                try { await debtEvents.updated(existing, { updatedFields: ['hashedCustomerId','customer'] }); } catch (e) { /* non-critical */ }
+            }
+            return { success: true, debtId: existing._id };
+        }
+
+        // Create Debt Record (new)
         const debt = new Debt({
             companyId,
             shopId,
             customerId,
             customer: {
                 id: customerId,
-                name: customerName
+                name: customerName,
+                phone: customerPhone || null
             },
+            // attach hashedCustomerId when provided so cross-company lookups can work
+            hashedCustomerId: hashedCustomerId || undefined,
             salesId: saleId, // Mapping saleId to salesId field in Debt model
-            salesStaffId: null, // We don't have this in event payload, might need to be optional or fetched
-            items: items.map(item => ({
+            salesStaffId: null, // We don't have this in event payload, might be optional
+            items: (items || []).map(item => ({
                 itemId: item.productId,
-                itemName: 'Product ' + item.productId, // We don't have name in items payload, just productId
+                itemName: item.productName || ('Product ' + item.productId),
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
                 totalPrice: item.total

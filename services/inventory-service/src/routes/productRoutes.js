@@ -25,7 +25,7 @@ const {
   lookupByBarcode
 } = require('../controllers/productController');
 
-const { handleUploads } = require('../utils/uploadUtil');
+const { handleUploads, sanitizeFilenamesPreprocessor } = require('../utils/uploadUtil');
 
 
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
@@ -58,9 +58,9 @@ router.get('/old/unbought', authenticateToken, requireRole(['super_admin', 'comp
 router.get('/:id', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), getProductById);
 router.get('/slug/:slug', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), getProductBySlug);
 router.get('/category/:categoryId', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), getProductsByCategory);
-router.post('/', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), handleUploads, createProduct);
+router.post('/', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), sanitizeFilenamesPreprocessor, handleUploads, createProduct);
 // For updates, copy :id to productId param so uploads go to the same folder
-router.put('/:id', authenticateToken, requireRole(['super_admin', 'company_admin']), (req, res, next) => { req.params.productId = req.params.id; next(); }, handleUploads, updateProduct);
+router.put('/:id', authenticateToken, requireRole(['super_admin', 'company_admin']), (req, res, next) => { req.params.productId = req.params.id; next(); }, sanitizeFilenamesPreprocessor, handleUploads, updateProduct);
 router.delete('/:id', authenticateToken, requireRole(['super_admin', 'company_admin']), deleteProduct);
 router.patch('/:id/inventory', authenticateToken, requireRole(['super_admin', 'company_admin']), updateInventory);
 

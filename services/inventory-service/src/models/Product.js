@@ -40,8 +40,7 @@ const ProductSchema = new Schema({
   /* ------------------------------ Status & Visibility -------------------- */
   status: {
     type: String,
-    enum: ['draft', 'active', 'inactive', 'discontinued', 'archived'],
-    default: 'draft',
+    default: 'active',
     index: true
   },
   visibility: {
@@ -141,11 +140,27 @@ ProductSchema.virtual('mainImage').get(function () {
 // 1. Auto slug
 ProductSchema.pre('save', async function () {
   if (this.isModified('name') || !this.slug) {
-    this.slug = this.name
+    const base = this.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')
-      .slice(0, 100);
+      .slice(0, 90); // leave room for suffix
+
+    // Ensure slug uniqueness across products
+    const Product = this.constructor;
+    let candidate = base;
+    let attempt = 0;
+    // If updating existing doc, exclude self
+    const excludeSelf = this._id ? { _id: { $ne: this._id } } : {};
+    while (attempt < 10) {
+      const exists = await Product.countDocuments({ slug: candidate, ...excludeSelf }).lean();
+      if (!exists) break;
+      attempt++;
+      candidate = `${base}-${Date.now().toString(36).slice(-5)}${attempt > 1 ? `-${attempt}` : ''}`;
+      // keep candidate within 100 chars
+      if (candidate.length > 100) candidate = candidate.slice(0, 100);
+    }
+    this.slug = candidate;
   }
 });
 
