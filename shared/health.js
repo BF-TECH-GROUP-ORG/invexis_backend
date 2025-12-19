@@ -342,20 +342,25 @@ class HealthChecker {
   trackMetrics() {
     return (req, res, next) => {
       this.metrics.requests++;
-      
+
+      const self = this; // preserve HealthChecker instance
       const originalSend = res.send;
-      res.send = function(data) {
-        if (res.statusCode >= 400) {
-          this.metrics.errors++;
-          this.metrics.lastError = {
-            timestamp: new Date().toISOString(),
-            status: res.statusCode,
-            path: req.path,
-            method: req.method
-          };
+      res.send = function (data) {
+        try {
+          if (res.statusCode >= 400) {
+            self.metrics.errors++;
+            self.metrics.lastError = {
+              timestamp: new Date().toISOString(),
+              status: res.statusCode,
+              path: req.path,
+              method: req.method
+            };
+          }
+        } catch (e) {
+          // swallow metric errors to avoid breaking response
         }
-        return originalSend.call(this, data);
-      }.bind(this);
+        return originalSend.call(res, data);
+      };
 
       next();
     };
