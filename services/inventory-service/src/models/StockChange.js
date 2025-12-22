@@ -33,12 +33,21 @@ const StockChangeSchema = new Schema({
 /* -------------------------------------------------------------------------- */
 /*                            SUPER-FAST INDEXES                              */
 /* -------------------------------------------------------------------------- */
+
+// Core operational indexes
 StockChangeSchema.index({ companyId: 1, shopId: 1, createdAt: -1 });
-StockChangeSchema.index({ userId: 1, createdAt: -1 });           // Worker performance
-StockChangeSchema.index({ shopId: 1, userId: 1, type: 1 });      // Sales per worker
 StockChangeSchema.index({ productId: 1, createdAt: -1 });
+
+// User tracking & performance (NEW - for user-specific queries)
+StockChangeSchema.index({ userId: 1, companyId: 1, shopId: 1, createdAt: -1 }); // CRITICAL for user-changes
+StockChangeSchema.index({ userId: 1, createdAt: -1 });                          // User performance
+
+// Worker performance & shop analysis
+StockChangeSchema.index({ shopId: 1, userId: 1, type: 1 });      // Sales per worker
 StockChangeSchema.index({ variationId: 1, createdAt: -1 });
-// Note: orderId index automatically created by index: true property
+
+// Compound index for shop-level user filtering
+StockChangeSchema.index({ companyId: 1, userId: 1, type: 1 });   // User activities by type
 
 /* -------------------------------------------------------------------------- */
 /*                          PRE-SAVE: ATOMIC + AUDIT + ALERT                  */

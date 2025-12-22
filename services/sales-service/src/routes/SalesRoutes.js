@@ -74,6 +74,14 @@ router.get(
   salesController.getCustomerPurchases
 );
 
+// List sales sold by a specific user (soldBy)
+router.get(
+  "/sold-by",
+  authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
+  // Query params: soldBy, companyId, page, limit, startDate, endDate
+  salesController.getSalesBySoldBy
+);
+
 // List all sales (company scoped)
 router.get(
   "/",

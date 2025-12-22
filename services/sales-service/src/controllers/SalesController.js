@@ -1159,6 +1159,137 @@ const revenueTrend = async (req, res) => {
   }
 };
 
+const getSalesBySoldBy = async (req, res) => {
+  try {
+    const { soldBy, companyId, page = 1, limit = 20, startDate, endDate } = req.query;
+
+    if (!soldBy) return res.status(400).json({ message: 'soldBy (user id) is required' });
+    if (!companyId) return res.status(400).json({ message: 'companyId is required' });
+
+    const pageNum = Math.max(parseInt(page) || 1, 1);
+    const perPage = Math.min(parseInt(limit) || 20, 200);
+    const offset = (pageNum - 1) * perPage;
+
+    const where = { soldBy, companyId };
+    if (startDate && endDate) {
+      where.createdAt = {
+        [Op.between]: [new Date(startDate), new Date(endDate)],
+      };
+    } else if (startDate) {
+      where.createdAt = { [Op.gte]: new Date(startDate) };
+    } else if (endDate) {
+      where.createdAt = { [Op.lte]: new Date(endDate) };
+    }
+
+    const total = await Sale.count({ where });
+
+    const sales = await Sale.findAll({
+      where,
+      include: [
+        { model: SalesItem, as: "items" },
+        { model: Invoice, as: "invoice" },
+        {
+          model: SalesReturn,
+          as: "returns",
+          include: [{ model: SalesReturnItem, as: "items" }],
+        },
+        { model: KnownUser, as: "knownUser" },
+      ],
+      order: [["createdAt", "DESC"]],
+      offset,
+      limit: perPage,
+    });
+
+    // Enrich each sale with a compact returnSummary and normalize items
+    const enriched = sales.map((s) => {
+      const saleData = s.toJSON();
+
+      // Build return summary
+      if (saleData.returns && saleData.returns.length > 0) {
+        const returnSummary = {
+          hasReturns: true,
+          totalReturns: saleData.returns.length,
+          totalRefundAmount: saleData.returns.reduce((sum, r) => sum + Number(r.refundAmount || 0), 0),
+          returnedItems: {},
+        };
+
+        saleData.returns.forEach((ret) => {
+          if (ret.items && ret.items.length > 0) {
+            ret.items.forEach((it) => {
+              if (!returnSummary.returnedItems[it.productId]) {
+                returnSummary.returnedItems[it.productId] = {
+                  productId: it.productId,
+                  totalReturnedQuantity: 0,
+                  totalRefundAmount: 0,
+                };
+              }
+              returnSummary.returnedItems[it.productId].totalReturnedQuantity += Number(it.quantity || 0);
+              returnSummary.returnedItems[it.productId].totalRefundAmount += Number(it.refundAmount || 0);
+            });
+          }
+        });
+
+        returnSummary.returnedItems = Object.values(returnSummary.returnedItems);
+
+        // attach to saleData
+        saleData.returnSummary = returnSummary;
+      } else {
+        saleData.returnSummary = { hasReturns: false, totalReturns: 0, totalRefundAmount: 0, returnedItems: [] };
+      }
+
+      // Normalize items: ensure returnedQuantity/remainingQuantity present
+      if (saleData.items && saleData.items.length) {
+        saleData.items = saleData.items.map((item) => {
+          const returned = (saleData.returnSummary.returnedItems || []).find((ri) => ri.productId === item.productId);
+          const returnedQty = returned ? returned.totalReturnedQuantity : 0;
+          return {
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discount: item.discount || 0,
+            tax: item.tax || 0,
+            total: item.total,
+            returnedQuantity: returnedQty,
+            remainingQuantity: Number(item.quantity) - Number(returnedQty || 0),
+          };
+        });
+      }
+
+      // Return a compact, clean representation
+      return {
+        saleId: saleData.saleId,
+        companyId: saleData.companyId,
+        shopId: saleData.shopId,
+        soldBy: saleData.soldBy,
+        totalAmount: saleData.totalAmount,
+        paymentMethod: saleData.paymentMethod,
+        paymentStatus: saleData.paymentStatus,
+        status: saleData.status,
+        createdAt: saleData.createdAt,
+        items: saleData.items || [],
+        invoice: saleData.invoice || null,
+        knownUser: saleData.knownUser || null,
+        returnSummary: saleData.returnSummary,
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: enriched,
+      pagination: {
+        page: pageNum,
+        limit: perPage,
+        total,
+        pages: Math.ceil(total / perPage),
+      },
+    });
+  } catch (error) {
+    console.error("getSalesBySoldBy error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
 // Export all handlers at the bottom as requested
 module.exports = {
   createSale,
@@ -1169,6 +1300,7 @@ module.exports = {
   createReturn,
   listSales,
   getCustomerPurchases,
+  getSalesBySoldBy,
   customerSalesReport,
   salesReport,
   topSellingProducts,

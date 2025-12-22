@@ -347,8 +347,8 @@ async function register(data, options = {}) {
         Promise.resolve() // Placeholder for sync validation
     ]);
 
-    if (!rateLimitResult.ok) return { ok: false, status: 429, message: 'Too many registration attempts' };
-    if (!data) return { ok: false, status: 400, message: "Request body is required" };
+    // if (!rateLimitResult.ok) return { ok: false, status: 429, message: 'Too many registration attempts' };
+    // if (!data) return { ok: false, status: 400, message: "Request body is required" };
 
     const { error, value } = registerSchema.validate(data, { abortEarly: false });
     if (error) {

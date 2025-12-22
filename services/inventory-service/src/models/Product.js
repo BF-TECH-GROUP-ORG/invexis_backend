@@ -249,12 +249,26 @@ ProductSchema.pre('save', async function () {
 /*                                   INDEXES                                  */
 /* -------------------------------------------------------------------------- */
 
+// POS Ultra-fast lookup (critical for sub-50ms response)
+ProductSchema.index({ companyId: 1, sku: 1 }, { unique: true, sparse: true });
+
+// Core filtering indexes
 ProductSchema.index({ companyId: 1, shopId: 1, status: 1 });
 ProductSchema.index({ companyId: 1, shopId: 1, visibility: 1 });
-// Note: barcode, scanId, sku indexes created automatically by unique: true
+
+// Category & featured
 ProductSchema.index({ categoryId: 1, status: 1 });
 ProductSchema.index({ isFeatured: 1, sortOrder: -1 });
+
+// Status & visibility
 ProductSchema.index({ status: 1, visibility: 1 });
+
+// Full text search (name, brand, sku, tags)
 ProductSchema.index({ name: 'text', brand: 'text', sku: 'text', tags: 'text' });
+
+// Deletion tracking
+ProductSchema.index({ isDeleted: 1, deletedAt: 1 });
+
+// Note: barcode, scanId, sku indexes created automatically by unique: true
 
 module.exports = mongoose.model('Product', ProductSchema);

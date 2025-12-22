@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const                 router = express.Router();
 const {
     getProductByScan,
     stockIn,
@@ -9,7 +9,11 @@ const {
     getAllStockChanges,
     getStockChangeById,
     createStockChange,
-    getStockHistory
+    getStockHistory,
+    getStockChangesByUser,
+    getStockChangesSummaryByUser,
+    getCompanyStockChanges,
+    getShopStockChanges
 } = require('../controllers/stockController');
 
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
@@ -79,5 +83,41 @@ router.get('/changes/:id', authenticateToken, requireRole(['super_admin','compan
  * @access  Private
  */
 router.post('/changes', authenticateToken, requireRole(['super_admin','company_admin' ,'worker']), createStockChange);
+
+// ==================== USER-SPECIFIC STOCK TRACKING ====================
+
+/**
+ * @route   GET /v1/stock/user-changes
+ * @desc    Get stock changes made by specific user in company/shop
+ * @access  Private
+ * @query   userId (required), companyId (required), shopId (optional), changeType (optional), startDate (optional), endDate (optional), page (optional), limit (optional)
+ */
+router.get('/user-changes', authenticateToken, requireRole(['super_admin','company_admin' ,'manager', 'worker']), getStockChangesByUser);
+
+/**
+ * @route   GET /v1/stock/user-summary
+ * @desc    Get summary statistics for user stock changes
+ * @access  Private
+ * @query   userId (required), companyId (required), shopId (optional), startDate (optional), endDate (optional)
+ */
+router.get('/user-summary', authenticateToken, requireRole(['super_admin','company_admin' ,'manager', 'worker']), getStockChangesSummaryByUser);
+
+// ==================== COMPANY & SHOP-WIDE STOCK TRACKING ====================
+
+/**
+ * @route   GET /v1/stock/company-changes
+ * @desc    Get ALL stock changes across entire company (all shops, all users)
+ * @access  Private
+ * @query   companyId (required), changeType (optional), startDate (optional), endDate (optional), page (optional), limit (optional)
+ */
+router.get('/company-changes', authenticateToken, requireRole(['super_admin','company_admin' , 'worker']), getCompanyStockChanges);
+
+/** 
+ * @route   GET /v1/stock/shop-changes
+ * @desc    Get ALL stock changes for specific shop (all users in that shop)
+ * @access  Private
+ * @query   companyId (required), shopId (required), changeType (optional), userId (optional), startDate (optional), endDate (optional), page (optional), limit (optional)
+ */
+router.get('/shop-changes', authenticateToken, requireRole(['super_admin','company_admin', 'worker']), getShopStockChanges);
 
 module.exports = router;

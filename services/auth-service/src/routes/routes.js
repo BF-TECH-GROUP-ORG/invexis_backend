@@ -197,7 +197,7 @@ router.get('/users/:id', authenticateToken, requireRole('super_admin' , 'company
 // (routes moved above to avoid matching by the generic '/users/:id' param route)
 
 // Company Worker Management
-router.get('/company/:companyId/workers', authenticateToken, requireRole('company_admin', 'super_admin'), authCtrl.getCompanyWorkers);
+router.get('/company/:companyId/workers', authenticateToken, requireRole('company_admin', 'super_admin','worker'), authCtrl.getCompanyWorkers);
 
 router.delete('/company/:companyId/workers/:workerId', authenticateToken, requireRole('company_admin', 'super_admin'), authCtrl.deleteWorkerFromCompany);
 

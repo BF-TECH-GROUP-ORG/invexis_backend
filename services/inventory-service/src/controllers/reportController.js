@@ -217,6 +217,111 @@ const getDailyReport = asyncHandler(async (req, res) => {
   res.json({ success: true, data: report });
 });
 
+/**
+ * Get user activity report
+ * GET /v1/report/user-activity
+ * Query: userId (required), companyId (required), shopId (optional), startDate, endDate, page, limit
+ */
+const getUserActivityReport = asyncHandler(async (req, res) => {
+  const { userId, companyId, shopId, startDate, endDate, page = 1, limit = 50 } = req.query;
+  if (!userId) return res.status(400).json({ success: false, message: 'userId is required' });
+  if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
+
+  const fromDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const toDate = endDate ? new Date(endDate) : new Date();
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const safeLimit = Math.min(parseInt(limit) || 50, 200);
+
+  // Build base filters
+  const stockFilter = { companyId, userId, createdAt: { $gte: fromDate, $lte: toDate } };
+  if (shopId) stockFilter.shopId = shopId;
+
+  const adjFilter = { companyId, createdAt: { $gte: fromDate, $lte: toDate }, createdBy: userId };
+  if (shopId) adjFilter.shopId = shopId;
+
+  const auditFilter = { 'changedBy': userId, 'companyId': companyId, timestamp: { $gte: fromDate, $lte: toDate } };
+
+  try {
+    // Parallel queries: recent stock changes, adjustments, audits
+    const [changes, adjustments, audits, countsAgg, topProducts, shopsAgg] = await Promise.all([
+      StockChange.find(stockFilter).populate('productId', 'name sku').sort({ createdAt: -1 }).limit(safeLimit).lean(),
+      InventoryAdjustment.find(adjFilter).sort({ createdAt: -1 }).limit(100).lean(),
+      require('../models/ProductAudit').find(auditFilter).sort({ timestamp: -1 }).limit(100).lean(),
+      // Counts by type and qty sums
+      StockChange.aggregate([
+        { $match: stockFilter },
+        { $group: { _id: '$type', count: { $sum: 1 }, totalQty: { $sum: '$qty' } } },
+        { $sort: { count: -1 } }
+      ]),
+      // Top products affected by this user
+      StockChange.aggregate([
+        { $match: stockFilter },
+        { $group: { _id: '$productId', actions: { $sum: 1 }, qtyChanged: { $sum: '$qty' } } },
+        { $sort: { actions: -1 } },
+        { $limit: 10 },
+        { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
+        { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+        { $project: { productId: '$_id', productName: '$product.name', sku: '$product.sku', actions: 1, qtyChanged: 1 } }
+      ]),
+      // Shops activity
+      StockChange.aggregate([
+        { $match: stockFilter },
+        { $group: { _id: '$shopId', actions: { $sum: 1 }, qtyChanged: { $sum: '$qty' } } },
+        { $sort: { actions: -1 } }
+      ])
+    ]);
+
+    // Merge timeline items (normalize and sort)
+    const normalized = [];
+    (changes || []).forEach(c => normalized.push({ kind: 'stock_change', createdAt: c.createdAt, data: c }));
+    (adjustments || []).forEach(a => normalized.push({ kind: 'adjustment', createdAt: a.createdAt || a.createdAt, data: a }));
+    (audits || []).forEach(audit => normalized.push({ kind: 'audit', createdAt: audit.timestamp || audit.createdAt || new Date(), data: audit }));
+
+    normalized.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const totalItems = normalized.length;
+    const paged = normalized.slice(skip, skip + safeLimit);
+
+    // Build summary
+    const totalActions = (countsAgg || []).reduce((sum, r) => sum + (r.count || 0), 0);
+    const totalInbound = (countsAgg || []).reduce((sum, r) => sum + ((r.totalQty > 0) ? r.totalQty : 0), 0);
+    const totalOutbound = (countsAgg || []).reduce((sum, r) => sum + ((r.totalQty < 0) ? Math.abs(r.totalQty) : 0), 0);
+
+    const summary = {
+      userId,
+      companyId,
+      period: `${fromDate.toISOString().split('T')[0]} to ${toDate.toISOString().split('T')[0]}`,
+      totalActions,
+      totalInbound,
+      totalOutbound,
+      byType: countsAgg,
+      topProducts: topProducts,
+      shops: shopsAgg
+    };
+
+    // Simple insights
+    const insights = {
+      mostActiveShop: shopsAgg && shopsAgg.length ? shopsAgg[0]._id : null,
+      mostCommonAction: countsAgg && countsAgg.length ? countsAgg[0]._id : null,
+      recommendation: (totalActions > 100 ? 'High activity — consider training/monitoring' : 'Normal activity')
+    };
+
+    res.json({
+      success: true,
+      data: {
+        summary,
+        recentTimeline: paged,
+        pagination: { page: parseInt(page), limit: safeLimit, total: totalItems, pages: Math.ceil(totalItems / safeLimit) },
+        insights
+      }
+    });
+  } catch (err) {
+    logger.error('getUserActivityReport error:', err);
+    res.status(500).json({ success: false, message: 'Failed to generate user activity report', error: err.message });
+  }
+});
+
 
 const getProductReport = asyncHandler(async (req, res) => {
   const { productId } = req.params;
@@ -1662,6 +1767,8 @@ module.exports = {
   getWarehouseReport,
   getAlertSummary,
   getDiscountImpact,
+  // User activity
+  getUserActivityReport,
   // Advanced Reports
   getExecutiveDashboard,
   getRealTimeMetrics,

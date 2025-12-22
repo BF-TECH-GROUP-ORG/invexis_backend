@@ -39,6 +39,12 @@ router.get('/adjustments', authenticateToken, requireRole(['super_admin','compan
 router.get('/alerts', authenticateToken, requireRole(['super_admin','company_admin']), getAlertSummary);
 router.get('/discount-impact', authenticateToken, requireRole(['super_admin','company_admin']), getDiscountImpact);
 
+// User activity report - actions, audits, adjustments for a user
+router.get('/user-activity', authenticateToken, requireRole(['super_admin','company_admin','manager']), (req, res, next) => {
+  // allow managers and above to query user activity; workers should query their own via other endpoints
+  return getUserActivityReport(req, res, next);
+});
+
 // ==================== ADVANCED REPORTS ====================
 router.get('/dashboard', authenticateToken, requireRole(['super_admin','company_admin']), getExecutiveDashboard);
 router.get('/metrics/realtime', authenticateToken, requireRole(['super_admin','company_admin']), getRealTimeMetrics);

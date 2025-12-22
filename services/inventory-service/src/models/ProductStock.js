@@ -74,17 +74,24 @@ const ProductStockSchema = new Schema({
 /* -------------------------------------------------------------------------- */
 /*                            OPTIMIZED INDEXES FOR SUPER FAST QUERIES        */
 /* -------------------------------------------------------------------------- */
+
 // UNIQUE INDEX: ONE RECORD PER (product + variation)
 ProductStockSchema.index(
   { productId: 1, variationId: 1 },
   { unique: true }
 );
 
+// POS CRITICAL: Fast product lookup with stock (sub-50ms requirement)
+ProductStockSchema.index({ productId: 1, shopId: 1 });
+ProductStockSchema.index({ productId: 1 });
+
 // PERFORMANCE INDEXES
 ProductStockSchema.index({ stockQty: 1, lowStockThreshold: 1 }); // Low stock alerts
 ProductStockSchema.index({ inStock: 1, isLowStock: 1 });         // Stock status queries
-ProductStockSchema.index({ productId: 1, inStock: 1 });         // Product availability
-ProductStockSchema.index({ lastRestockDate: 1 });               // Restock analysis
+ProductStockSchema.index({ productId: 1, inStock: 1 });          // Product availability
+ProductStockSchema.index({ lastRestockDate: 1 });                // Restock analysis
+ProductStockSchema.index({ lowStockThreshold: 1 });
+ProductStockSchema.index({ allowBackorder: 1 });
 
 /* -------------------------------------------------------------------------- */
 /*                            PRE-SAVE: COMPUTE FAST ACCESS FIELDS            */
@@ -129,11 +136,5 @@ ProductStockSchema.statics.getStockSummary = function (productId, variationId = 
 
   return this.findOne(query).lean().exec();
 };
-
-/* -------------------------------------------------------------------------- */
-/*                            INDEXES FOR ALERTS & REPORTS                     */
-/* -------------------------------------------------------------------------- */
-ProductStockSchema.index({ lowStockThreshold: 1 });
-ProductStockSchema.index({ allowBackorder: 1 });
 
 module.exports = mongoose.model('ProductStock', ProductStockSchema);

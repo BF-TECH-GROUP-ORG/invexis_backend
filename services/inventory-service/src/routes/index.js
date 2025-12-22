@@ -29,7 +29,9 @@ router.use("/v1/alerts", authenticateToken, requireRole(['super_admin', 'company
 router.use("/v1/categories", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), categoryRoutes);
 router.use("/v1/report", authenticateToken, requireRole(['super_admin', 'company_admin']), reportRoutes);
 router.use("/v1/inventory-adjustment", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), inventoryAdjustmentRoutes);
-router.use("/v1/stock", stockRoutes);
+
+// New modularized stock routes
+router.use("/v1/stock", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), stockRoutes);
 
 
 // NEW: Advanced professional reporting (consolidated)

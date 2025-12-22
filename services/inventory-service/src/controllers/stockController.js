@@ -15,31 +15,19 @@ const { validateMongoId } = require('../utils/validateMongoId');
 const { publishProductEvent } = require('../events/productEvents');
 const redis = require('/app/shared/redis');
 const { scanDel } = require('../utils/redisHelper');
-const ProductVariation = require('../models/ProductVariation');
 const ProductStock = require('../models/ProductStock');
 const StockMonitoringService = require('../services/stockMonitoringService');
 const logger = require('../utils/logger');
 
 const getProductByScan = asyncHandler(async (req, res) => {
-    const { scanData, productId } = req.body;
+    const { productId } = req.body;
 
-    if (!scanData && !productId) {
-        return res.status(400).json({ success: false, message: 'Scan data is required' });
+    if (!productId) {
+        return res.status(400).json({ success: false, message: 'Product ID is required' });
     }
 
-    // Allow direct productId input or scanData (sku / id)
-    let product;
-    if (productId) {
-        validateMongoId(productId);
-        product = await Product.findById(productId).populate('categoryId', 'name slug').populate('pricingId');
-    } else if (scanData) {
-        if (scanData.id) {
-            validateMongoId(scanData.id);
-            product = await Product.findById(scanData.id).populate('categoryId', 'name slug').populate('pricingId');
-        } else if (scanData.sku) {
-            product = await Product.findOne({ sku: scanData.sku }).populate('categoryId', 'name slug').populate('pricingId');
-        }
-    }
+    validateMongoId(productId);
+    const product = await Product.findById(productId).populate('categoryId', 'name slug').populate('pricingId');
 
     if (!product) {
         return res.status(404).json({
@@ -81,32 +69,32 @@ const getProductByScan = asyncHandler(async (req, res) => {
  * POST /v1/stock-operations/stock-in
  */
 const stockIn = asyncHandler(async (req, res) => {
-    const { scanData, productId, quantity, reason, userId, companyId, shopId } = req.body;
+    const { productId, quantity, userId, companyId, shopId, reason = 'Stock In' } = req.body;
 
     // Validation
-    if ((!scanData && !productId) || !quantity) {
-        return res.status(400).json({ success: false, message: 'Either scan data or productId and quantity are required' });
+    if (!productId || !quantity) {
+        return res.status(400).json({ success: false, message: 'Product ID and quantity are required' });
+    }
+    if (!companyId) {
+        return res.status(400).json({ success: false, message: 'Company ID is required' });
+    }
+    if (!shopId) {
+        return res.status(400).json({ success: false, message: 'Shop ID is required' });
     }
     if (!Number.isFinite(Number(quantity)) || Number(quantity) <= 0) {
         return res.status(400).json({ success: false, message: 'Quantity must be a positive number' });
     }
 
     // Resolve product
-    let product = null;
-    if (productId) {
-        validateMongoId(productId);
-        product = await Product.findById(productId);
-    } else if (scanData) {
-        if (scanData.id) {
-            validateMongoId(scanData.id);
-            product = await Product.findById(scanData.id);
-        } else if (scanData.sku) {
-            product = await Product.findOne({ sku: scanData.sku });
-        }
-    }
+    validateMongoId(productId);
+    const product = await Product.findById(productId);
 
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-    if (companyId && product.companyId !== companyId) return res.status(403).json({ success: false, message: 'Product does not belong to this company' });
+    
+    // Validate company ownership
+    if (product.companyId.toString() !== companyId.toString()) {
+        return res.status(403).json({ success: false, message: 'Product does not belong to the specified company' });
+    }
 
     // Get current stock from ProductStock
     const stockRecord = await ProductStock.findOne({ productId: product._id });
@@ -117,13 +105,13 @@ const stockIn = asyncHandler(async (req, res) => {
     // Build StockChange payload (StockChange pre-save will apply atomic update)
     const scPayload = {
         companyId: product.companyId,
-        shopId: shopId || product.shopId || 'default',
+        shopId: shopId,
         productId: product._id,
         variationId: null,
         type: 'restock',
         qty: Math.abs(Number(quantity)),
         previous: previous,
-        reason: reason || 'Stock in operation',
+        reason: reason,
         userId: userId || 'system'
     };
 
@@ -185,28 +173,24 @@ const stockIn = asyncHandler(async (req, res) => {
  * POST /v1/stock-operations/stock-out
  */
 const stockOut = asyncHandler(async (req, res) => {
-    const { scanData, productId, quantity, reason = "sold", changeType = 'sale', userId, companyId, shopId } = req.body;
+    const { productId, quantity, userId, companyId, shopId, reason = 'Stock Out', changeType = 'sale' } = req.body;
 
     // Validation
-    if ((!scanData && !productId) || !quantity) return res.status(400).json({ success: false, message: 'Either scan data or productId and quantity are required' });
+    if (!productId || !quantity) return res.status(400).json({ success: false, message: 'Product ID and quantity are required' });
+    if (!companyId) return res.status(400).json({ success: false, message: 'Company ID is required' });
+    if (!shopId) return res.status(400).json({ success: false, message: 'Shop ID is required' });
     if (!Number.isFinite(Number(quantity)) || Number(quantity) <= 0) return res.status(400).json({ success: false, message: 'Quantity must be a positive number' });
 
     // Resolve product
-    let product = null;
-    if (productId) {
-        validateMongoId(productId);
-        product = await Product.findById(productId);
-    } else if (scanData) {
-        if (scanData.id) {
-            validateMongoId(scanData.id);
-            product = await Product.findById(scanData.id);
-        } else if (scanData.sku) {
-            product = await Product.findOne({ sku: scanData.sku });
-        }
-    }
+    validateMongoId(productId);
+    const product = await Product.findById(productId);
 
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-    if (companyId && product.companyId !== companyId) return res.status(403).json({ success: false, message: 'Product does not belong to this company' });
+    
+    // Validate company ownership
+    if (product.companyId.toString() !== companyId.toString()) {
+        return res.status(403).json({ success: false, message: 'Product does not belong to the specified company' });
+    }
 
     // Get current stock from ProductStock
     const stockRecord = await ProductStock.findOne({ productId: product._id });
@@ -221,13 +205,13 @@ const stockOut = asyncHandler(async (req, res) => {
 
     const scPayload = {
         companyId: product.companyId,
-        shopId: shopId || product.shopId || 'default',
+        shopId: shopId,
         productId: product._id,
         variationId: null,
         type: changeType === 'sale' ? 'sale' : 'adjustment',
         qty: -Math.abs(Number(quantity)),
         previous: previous,
-        reason: reason || `Stock out - ${changeType}`,
+        reason: reason,
         userId: userId || 'system'
     };
 
@@ -313,6 +297,18 @@ const bulkStockIn = asyncHandler(async (req, res) => {
             message: 'Items array is required'
         });
     }
+    if (!companyId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Company ID is required'
+        });
+    }
+    if (!shopId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Shop ID is required'
+        });
+    }
 
     const results = {
         successful: [],
@@ -321,84 +317,74 @@ const bulkStockIn = asyncHandler(async (req, res) => {
 
     for (const item of items) {
         try {
-            const { scanData, productId: itemProductId, quantity, reason } = item;
+            const { productId: itemProductId, quantity, reason = 'Stock In' } = item;
 
-            if ((!scanData && !itemProductId) || !quantity || Number(quantity) <= 0) {
-                results.failed.push({ scanData: item.scanData, error: 'Invalid scan data or quantity' });
+            if (!itemProductId || !quantity || Number(quantity) <= 0) {
+                results.failed.push({ productId: item.productId, error: 'Invalid product ID or quantity' });
                 continue;
             }
 
-            // Resolve product & variation
-            let product = null;
-            let variation = null;
-            if (itemProductId) {
-                validateMongoId(itemProductId);
-                product = await Product.findById(itemProductId);
-            } else if (scanData) {
-                if (scanData.id) {
-                    validateMongoId(scanData.id);
-                    product = await Product.findById(scanData.id);
-                } else if (scanData.sku) {
-                    variation = await ProductVariation.findOne({ sku: scanData.sku }).lean();
-                    if (variation) {
-                        product = await Product.findById(variation.productId);
-                    } else {
-                        product = await Product.findOne({ sku: scanData.sku });
-                    }
-                }
-            }
+            // Resolve product
+            validateMongoId(itemProductId);
+            const product = await Product.findById(itemProductId);
 
             if (!product) {
-                results.failed.push({ scanData: item.scanData, error: 'Product not found' });
+                results.failed.push({ productId: item.productId, error: 'Product not found' });
                 continue;
             }
 
             if (companyId && product.companyId !== companyId) {
-                results.failed.push({ scanData: item.scanData, productName: product.name, error: 'Product does not belong to this company' });
+                results.failed.push({ productId: item.productId, productName: product.name, error: 'Product does not belong to this company' });
                 continue;
             }
 
-            // Compute previous
-            const prevAgg = variation
-                ? { total: variation.stockQty || 0 }
-                : (await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]))[0] || { total: 0 };
-            const previous = prevAgg.total || 0;
+            // Get stock from ProductStock
+            const stockRecord = await ProductStock.findOne({ productId: product._id }).lean();
+            const previous = stockRecord?.stockQty || 0;
 
-            // Create stock change (let StockChange pre-save update variation atomically)
+            // Create stock change
             const scPayload = {
                 companyId: product.companyId,
-                shopId: shopId || product.shopId || 'default',
+                shopId: shopId,
                 productId: product._id,
-                variationId: variation ? variation._id : null,
+                variationId: null,
                 type: 'restock',
                 qty: Math.abs(Number(quantity)),
                 previous: previous,
-                reason: reason || 'Bulk stock in operation',
+                reason: reason,
                 userId: userId || 'system'
             };
 
             try {
                 await StockChange.create(scPayload);
             } catch (err) {
-                results.failed.push({ scanData: item.scanData, error: err.message || String(err) });
+                results.failed.push({ productId: item.productId, error: err.message || String(err) });
                 continue;
             }
 
-            // Recompute totals
-            const aggAfter = await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]);
-            const totalAfter = aggAfter[0]?.total || 0;
+            // Get updated stock
+            const updatedStock = await ProductStock.findOne({ productId: product._id }).lean();
+            const totalAfter = updatedStock?.stockQty || 0;
 
             // Audit
-            try { await require('../models/ProductAudit').create({ productId: product._id, action: 'stock_change', changedBy: userId || 'system', oldValue: variation ? { sku: variation.sku, quantity: previous } : { quantity: previous }, newValue: variation ? { sku: variation.sku, quantity: undefined, operation: 'bulk-stock-in' } : { quantity: totalAfter, operation: 'bulk-stock-in' } }); } catch (e) {}
+            try {
+                await require('../models/ProductAudit').create({
+                    productId: product._id,
+                    action: 'stock_change',
+                    changedBy: userId || 'system',
+                    oldValue: { quantity: previous },
+                    newValue: { quantity: totalAfter, operation: 'bulk-stock-in' }
+                });
+            } catch (e) {}
 
             // Invalidate cache
             await redis.del(`product:${product._id}`);
             await redis.del(`product:slug:${product.slug}`);
 
-            results.successful.push({ productId: product._id, productName: product.name, sku: variation ? variation.sku : product.sku, previousStock: previous, newStock: totalAfter, quantityAdded: Number(quantity) });
+            results.successful.push({ productId: product._id, productName: product.name, sku: product.sku, previousStock: previous, newStock: totalAfter, quantityAdded: Number(quantity) });
 
         } catch (err) {
-            results.failed.push({ scanData: item.scanData, error: err.message });
+            results.failed.push({ productId: item.productId, error: err.message });
         }
     }
 
@@ -425,6 +411,18 @@ const bulkStockOut = asyncHandler(async (req, res) => {
             message: 'Items array is required'
         });
     }
+    if (!companyId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Company ID is required'
+        });
+    }
+    if (!shopId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Shop ID is required'
+        });
+    }
 
     const results = {
         successful: [],
@@ -433,84 +431,65 @@ const bulkStockOut = asyncHandler(async (req, res) => {
 
     for (const item of items) {
         try {
-            const { scanData, productId: itemProductId, quantity, reason, changeType = 'sale' } = item;
+            const { productId: itemProductId, quantity, reason = 'Stock Out', changeType = 'sale' } = item;
 
-            if ((!scanData && !itemProductId) || !quantity || Number(quantity) <= 0) {
-                results.failed.push({ scanData: item.scanData, error: 'Invalid scan data or quantity' });
+            if (!itemProductId || !quantity || Number(quantity) <= 0) {
+                results.failed.push({ productId: item.productId, error: 'Invalid product ID or quantity' });
                 continue;
             }
 
-            // Resolve product & variation
-            let product = null;
-            let variation = null;
-            if (itemProductId) {
-                validateMongoId(itemProductId);
-                product = await Product.findById(itemProductId);
-            } else if (scanData) {
-                if (scanData.id) {
-                    validateMongoId(scanData.id);
-                    product = await Product.findById(scanData.id);
-                } else if (scanData.sku) {
-                    variation = await ProductVariation.findOne({ sku: scanData.sku }).lean();
-                    if (variation) {
-                        product = await Product.findById(variation.productId);
-                    } else {
-                        product = await Product.findOne({ sku: scanData.sku });
-                    }
-                }
-            }
+            // Resolve product
+            validateMongoId(itemProductId);
+            const product = await Product.findById(itemProductId);
 
             if (!product) {
-                results.failed.push({ scanData: item.scanData, error: 'Product not found' });
+                results.failed.push({ productId: item.productId, error: 'Product not found' });
                 continue;
             }
 
             if (companyId && product.companyId !== companyId) {
-                results.failed.push({ scanData: item.scanData, productName: product.name, error: 'Product does not belong to this company' });
+                results.failed.push({ productId: item.productId, productName: product.name, error: 'Product does not belong to this company' });
                 continue;
             }
 
-            // Compute previous
-            const prevAgg = variation
-                ? { total: variation.stockQty || 0 }
-                : (await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]))[0] || { total: 0 };
-            const previous = prevAgg.total || 0;
+            // Get stock from ProductStock
+            const stockRecord = await ProductStock.findOne({ productId: product._id }).lean();
+            const previous = stockRecord?.stockQty || 0;
 
             // Check sufficient stock
-            const stockSettings = await ProductStock.findOne({ productId: product._id }).lean();
-            if (previous < Number(quantity) && !(stockSettings?.allowBackorder)) {
-                results.failed.push({ scanData: item.scanData, productName: product.name, error: `Insufficient stock. Available: ${previous}, Requested: ${quantity}` });
+            if (previous < Number(quantity) && !(stockRecord?.allowBackorder)) {
+                results.failed.push({ productId: item.productId, productName: product.name, error: `Insufficient stock. Available: ${previous}, Requested: ${quantity}` });
                 continue;
             }
 
             // Create stock change
             const scPayload = {
                 companyId: product.companyId,
-                shopId: shopId || product.shopId || 'default',
+                shopId: shopId,
                 productId: product._id,
-                variationId: variation ? variation._id : null,
+                variationId: null,
                 type: changeType === 'sale' ? 'sale' : 'adjustment',
                 qty: -Math.abs(Number(quantity)),
                 previous: previous,
-                reason: reason || `Bulk stock out - ${changeType}`,
+                reason: reason,
                 userId: userId || 'system'
             };
 
             try {
                 await StockChange.create(scPayload);
             } catch (err) {
-                results.failed.push({ scanData: item.scanData, error: err.message || String(err) });
+                results.failed.push({ productId: item.productId, error: err.message || String(err) });
                 continue;
             }
 
-            // Recompute totals
-            const aggAfter = await ProductVariation.aggregate([{ $match: { productId: product._id } }, { $group: { _id: null, total: { $sum: '$stockQty' } } }]);
-            const totalAfter = aggAfter[0]?.total || 0;
+            // Get updated stock
+            const updatedStock = await ProductStock.findOne({ productId: product._id }).lean();
+            const totalAfter = updatedStock?.stockQty || 0;
 
             // Low stock alert
             let lowStockAlert = false;
             try {
-                const lowThresh = stockSettings?.lowStockThreshold ?? 5;
+                const lowThresh = stockRecord?.lowStockThreshold ?? 5;
                 if (totalAfter <= lowThresh) {
                     lowStockAlert = true;
                     const Alert = require('../models/Alert');
@@ -523,10 +502,10 @@ const bulkStockOut = asyncHandler(async (req, res) => {
             await redis.del(`product:${product._id}`);
             await redis.del(`product:slug:${product.slug}`);
 
-            results.successful.push({ productId: product._id, productName: product.name, sku: variation ? variation.sku : product.sku, previousStock: previous, newStock: totalAfter, quantityRemoved: Number(quantity), lowStockAlert });
+            results.successful.push({ productId: product._id, productName: product.name, sku: product.sku, previousStock: previous, newStock: totalAfter, quantityRemoved: Number(quantity), lowStockAlert });
 
         } catch (err) {
-            results.failed.push({ scanData: item.scanData, error: err.message });
+            results.failed.push({ productId: item.productId, error: err.message });
         }
     }
 
@@ -604,13 +583,26 @@ const createStockChange = asyncHandler(async (req, res) => {
 });
 
 const getStockHistory = asyncHandler(async (req, res) => {
-    const { productId, variationId, shopId, startDate, endDate, changeType, limit = 50 } = req.query;
+    const {
+        productId,
+        variationId,
+        shopId,
+        startDate,
+        endDate,
+        changeType,
+        page = 1,
+        limit = 50,
+        groupBy = 'day' // optional: 'day'|'week'|'month'
+    } = req.query;
 
     if (!productId) {
         return res.status(400).json({ success: false, message: 'Product ID is required' });
     }
     validateMongoId(productId);
     if (variationId) validateMongoId(variationId);
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const safeLimit = Math.min(parseInt(limit) || 50, 200);
 
     // Build query
     const query = { productId };
@@ -620,15 +612,680 @@ const getStockHistory = asyncHandler(async (req, res) => {
     if (startDate || endDate) {
         query.createdAt = {};
         if (startDate) query.createdAt.$gte = new Date(startDate);
-        if (endDate) query.createdAt.$lte = new Date(endDate);
+        if (endDate) {
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999);
+            query.createdAt.$lte = endDateObj;
+        }
     }
 
-    const changes = await StockChange.find(query)
+    // Resolve product and current stock snapshot in parallel
+    const [product, stockRecord] = await Promise.all([
+        Product.findById(productId).select('name sku brand images companyId').lean(),
+        ProductStock.findOne({ productId, ...(shopId ? { shopId } : {}) }).lean()
+    ]);
+
+    // Recent changes (paginated) - include product info for context
+    const changesPromise = StockChange.find(query)
+        .populate('productId', 'name sku brand categoryId')
         .sort({ createdAt: -1 })
-        .limit(parseInt(limit))
+        .skip(skip)
+        .limit(safeLimit)
         .lean();
 
-    res.status(200).json({ success: true, data: { changes, totalChanges: changes.length } });
+    const countPromise = StockChange.countDocuments(query);
+
+    // Aggregation: overall summary, type breakdown, top users, time-series
+    const groupFormat = groupBy === 'month' ? '%Y-%m' : groupBy === 'week' ? '%Y-%m-%d' : '%Y-%m-%d';
+
+    const aggPromise = StockChange.aggregate([
+        { $match: query },
+        {
+            $facet: {
+                overall: [
+                    {
+                        $group: {
+                            _id: null,
+                            totalChanges: { $sum: 1 },
+                            totalInbound: { $sum: { $cond: [{ $gt: ['$qty', 0] }, '$qty', 0] } },
+                            totalOutbound: { $sum: { $cond: [{ $lt: ['$qty', 0] }, { $multiply: ['$qty', -1] }, 0] } },
+                            netChange: { $sum: '$qty' },
+                            avgQtyPerTransaction: { $avg: { $abs: '$qty' } }
+                        }
+                    }
+                ],
+                byType: [
+                    { $group: { _id: '$type', count: { $sum: 1 }, totalQty: { $sum: '$qty' } } },
+                    { $sort: { count: -1 } }
+                ],
+                byUser: [
+                    { $group: { _id: '$userId', userId: { $first: '$userId' }, transactionCount: { $sum: 1 }, totalQtyChanged: { $sum: { $abs: '$qty' } } } },
+                    { $sort: { transactionCount: -1 } },
+                    { $limit: 10 }
+                ],
+                timeSeries: [
+                    {
+                        $group: {
+                            _id: { $dateToString: { format: groupFormat, date: '$createdAt' } },
+                            count: { $sum: 1 },
+                            qty: { $sum: '$qty' }
+                        }
+                    },
+                    { $sort: { _id: 1 } }
+                ]
+            }
+        }
+    ]);
+
+    const [changes, total, agg] = await Promise.all([changesPromise, countPromise, aggPromise]);
+
+    const agg0 = (agg && agg[0]) || {};
+    const overall = (agg0.overall && agg0.overall[0]) || { totalChanges: 0, totalInbound: 0, totalOutbound: 0, netChange: 0, avgQtyPerTransaction: 0 };
+    const byType = agg0.byType || [];
+    const byUser = agg0.byUser || [];
+    const timeSeries = (agg0.timeSeries || []).map(item => ({ period: item._id, count: item.count, qty: item.qty }));
+
+    // Enrich some quick insights
+    const insights = {
+        product: product ? { id: product._id, name: product.name, sku: product.sku, brand: product.brand } : null,
+        currentStock: stockRecord ? stockRecord.stockQty || 0 : null,
+        lowStockThreshold: stockRecord ? stockRecord.lowStockThreshold ?? null : null,
+        topChangeTypes: byType.slice(0, 5).map(t => ({ type: t._id, count: t.count, qty: t.totalQty })),
+        topUsers: byUser.map(u => ({ userId: u.userId, transactions: u.transactionCount, totalQtyChanged: u.totalQtyChanged })),
+        timeSeries
+    };
+
+    res.status(200).json({
+        success: true,
+        data: {
+            productSnapshot: insights.product,
+            stockSnapshot: {
+                currentStock: insights.currentStock,
+                lowStockThreshold: insights.lowStockThreshold
+            },
+            summary: overall,
+            breakdown: {
+                byType,
+                byUser
+            },
+            recentChanges: changes,
+            pagination: {
+                page: parseInt(page),
+                limit: safeLimit,
+                total,
+                pages: Math.ceil(total / safeLimit)
+            },
+            insights: {
+                topChangeTypes: insights.topChangeTypes,
+                topUsers: insights.topUsers
+            }
+        }
+    });
+});
+
+/**
+ * Get stock changes per User, Company, and Shop
+ * GET /v1/stock-operations/user-changes
+ * 
+ * Allows control and management of all stock changes made by specific users
+ * in specific companies and shops
+ * 
+ * Query params:
+ * - userId (required): The user who made the stock changes
+ * - companyId (required): The company context
+ * - shopId (optional): Filter by specific shop
+ * - changeType (optional): 'sale', 'restock', 'return', 'adjustment', 'damage', 'transfer'
+ * - startDate (optional): ISO date string
+ * - endDate (optional): ISO date string
+ * - page (optional): Page number (default 1)
+ * - limit (optional): Items per page (default 20, max 100)
+ */
+const getStockChangesByUser = asyncHandler(async (req, res) => {
+    const { userId, companyId, shopId, changeType, startDate, endDate, page = 1, limit = 20 } = req.body || req.body || req.params;
+
+    // Validation
+    if (!userId) {
+        return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    if (!companyId) {
+        return res.status(400).json({ success: false, message: 'Company ID is required' });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const safeLimitr = Math.min(parseInt(limit) || 20, 100); // Max 100 per page
+
+    // Build query with required filters
+    const query = {
+        userId: userId,
+        companyId: companyId
+    };
+
+    // Optional filters
+    if (shopId) {
+        query.shopId = shopId;
+    }
+    if (changeType) {
+        query.type = changeType;
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+        query.createdAt = {};
+        if (startDate) {
+            query.createdAt.$gte = new Date(startDate);
+        }
+        if (endDate) {
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999); // Include entire end day
+            query.createdAt.$lte = endDateObj;
+        }
+    }
+
+    try {
+        // Get stock changes with product information
+        const changes = await StockChange.find(query)
+            .populate('productId', 'name sku brand categoryId')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(safeLimitr)
+            .lean();
+
+        // Get total count for pagination
+        const total = await StockChange.countDocuments(query);
+
+        // Calculate statistics
+        const stats = await StockChange.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: null,
+                    totalChanges: { $sum: 1 },
+                    totalQtyIn: {
+                        $sum: {
+                            $cond: [{ $gt: ['$qty', 0] }, '$qty', 0]
+                        }
+                    },
+                    totalQtyOut: {
+                        $sum: {
+                            $cond: [{ $lt: ['$qty', 0] }, { $multiply: ['$qty', -1] }, 0]
+                        }
+                    },
+                    byType: {
+                        $push: '$type'
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    typeBreakdown: {
+                        $reduce: {
+                            input: '$byType',
+                            initialValue: {},
+                            in: {
+                                $mergeObjects: [
+                                    '$$value',
+                                    {
+                                        $cond: [
+                                            { $eq: ['$$this', 'sale'] },
+                                            { sale: { $add: [{ $ifNull: ['$$value.sale', 0] }, 1] } },
+                                            {
+                                                $cond: [
+                                                    { $eq: ['$$this', 'restock'] },
+                                                    { restock: { $add: [{ $ifNull: ['$$value.restock', 0] }, 1] } },
+                                                    {
+                                                        $cond: [
+                                                            { $eq: ['$$this', 'return'] },
+                                                            { return: { $add: [{ $ifNull: ['$$value.return', 0] }, 1] } },
+                                                            {
+                                                                $cond: [
+                                                                    { $eq: ['$$this', 'adjustment'] },
+                                                                                                                                        { adjustment: { $add: [{ $ifNull: ['$$value.adjustment', 0] }, 1] } },
+                                                                                                                                        '$$value'
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    totalChanges: 1,
+                    totalQtyIn: 1,
+                    totalQtyOut: 1,
+                    typeBreakdown: 1,
+                    netChange: { $subtract: ['$totalQtyIn', '$totalQtyOut'] }
+                }
+            }
+        ]);
+
+        const summary = stats[0] || {
+            totalChanges: 0,
+            totalQtyIn: 0,
+            totalQtyOut: 0,
+            netChange: 0,
+            typeBreakdown: {}
+        };
+
+        res.status(200).json({
+            success: true,
+            data: {
+                changes,
+                summary,
+                pagination: {
+                    page: parseInt(page),
+                    limit: safeLimitr,
+                    total,
+                    pages: Math.ceil(total / safeLimitr)
+                }
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching stock changes by user:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch stock changes',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Get stock changes summary by user and company
+ * GET /v1/stock-operations/user-summary
+ * 
+ * Shows high-level stats about user activity in company/shop
+ */
+const getStockChangesSummaryByUser = asyncHandler(async (req, res) => {
+    const { userId, companyId, shopId, startDate, endDate } = req.body|| req.body || req.params;;
+
+    if (!userId || !companyId) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'User ID and Company ID are required' 
+        });
+    }
+
+    const query = {
+        userId,
+        companyId
+    };
+
+    if (shopId) query.shopId = shopId;
+
+    if (startDate || endDate) {
+        query.createdAt = {};
+        if (startDate) query.createdAt.$gte = new Date(startDate);
+        if (endDate) {
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999);
+            query.createdAt.$lte = endDateObj;
+        }
+    }
+
+    try {
+        const summary = await StockChange.aggregate([
+            { $match: query },
+            {
+                $facet: {
+                    overall: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalTransactions: { $sum: 1 },
+                                totalInbound: { $sum: { $cond: [{ $gt: ['$qty', 0] }, '$qty', 0] } },
+                                totalOutbound: { $sum: { $cond: [{ $lt: ['$qty', 0] }, { $multiply: ['$qty', -1] }, 0] } },
+                                firstTransaction: { $min: '$createdAt' },
+                                lastTransaction: { $max: '$createdAt' }
+                            }
+                        }
+                    ],
+                    byType: [
+                        {
+                            $group: {
+                                _id: '$type',
+                                count: { $sum: 1 },
+                                totalQty: { $sum: '$qty' }
+                            }
+                        },
+                        { $sort: { count: -1 } }
+                    ],
+                    byProduct: [
+                        {
+                            $group: {
+                                _id: '$productId',
+                                productName: { $first: '$productId' },
+                                transactionCount: { $sum: 1 },
+                                totalQtyChanged: { $sum: '$qty' }
+                            }
+                        },
+                        { $sort: { transactionCount: -1 } },
+                        { $limit: 10 } // Top 10 products
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    details: {
+                        userId: userId,
+                        companyId: companyId,
+                        shopId: shopId || 'all',
+                        generatedAt: new Date()
+                    }
+                }
+            }
+        ]);
+
+        const data = summary[0] || {
+            overall: [],
+            byType: [],
+            byProduct: [],
+            details: {}
+        };
+
+        res.status(200).json({
+            success: true,
+            data
+        });
+    } catch (error) {
+        logger.error('Error generating stock changes summary:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate summary',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Get all stock changes for an entire company
+ * GET /v1/stock-operations/company-changes
+ * 
+ * Shows all stock changes across entire company (all shops, all users)
+ * with complete information for management and analysis
+ */
+const getCompanyStockChanges = asyncHandler(async (req, res) => {
+    const { companyId, changeType, startDate, endDate, page = 1, limit = 20 } = req.query || req.body || req.params;
+
+    if (!companyId) {
+        return res.status(400).json({ success: false, message: 'Company ID is required' });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const safeLimit = Math.min(parseInt(limit) || 20, 100);
+
+    // Build query
+    const query = { companyId };
+
+    if (changeType) {
+        query.type = changeType;
+    }
+
+    if (startDate || endDate) {
+        query.createdAt = {};
+        if (startDate) query.createdAt.$gte = new Date(startDate);
+        if (endDate) {
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999);
+            query.createdAt.$lte = endDateObj;
+        }
+    }
+
+    try {
+        // Get stock changes with full information
+        const changes = await StockChange.find(query)
+            .populate('productId', 'name sku brand categoryId')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(safeLimit)
+            .lean();
+
+        // Get total count
+        const total = await StockChange.countDocuments(query);
+
+        // Calculate company-wide statistics
+        const stats = await StockChange.aggregate([
+            { $match: query },
+            {
+                $facet: {
+                    summary: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalChanges: { $sum: 1 },
+                                totalInbound: { $sum: { $cond: [{ $gt: ['$qty', 0] }, '$qty', 0] } },
+                                totalOutbound: { $sum: { $cond: [{ $lt: ['$qty', 0] }, { $multiply: ['$qty', -1] }, 0] } },
+                                avgQtyPerTransaction: { $avg: { $abs: '$qty' } },
+                                minValue: { $min: '$qty' },
+                                maxValue: { $max: '$qty' }
+                            }
+                        }
+                    ],
+                    byType: [
+                        {
+                            $group: {
+                                _id: '$type',
+                                count: { $sum: 1 },
+                                totalQty: { $sum: '$qty' }
+                            }
+                        },
+                        { $sort: { count: -1 } }
+                    ],
+                    byShop: [
+                        {
+                            $group: {
+                                _id: '$shopId',
+                                shopId: { $first: '$shopId' },
+                                transactionCount: { $sum: 1 },
+                                totalInbound: { $sum: { $cond: [{ $gt: ['$qty', 0] }, '$qty', 0] } },
+                                totalOutbound: { $sum: { $cond: [{ $lt: ['$qty', 0] }, { $multiply: ['$qty', -1] }, 0] } }
+                            }
+                        },
+                        { $sort: { transactionCount: -1 } }
+                    ],
+                    byUser: [
+                        {
+                            $group: {
+                                _id: '$userId',
+                                userId: { $first: '$userId' },
+                                transactionCount: { $sum: 1 },
+                                totalQtyChanged: { $sum: { $abs: '$qty' } }
+                            }
+                        },
+                        { $sort: { transactionCount: -1 } },
+                        { $limit: 10 } // Top 10 users
+                    ]
+                }
+            }
+        ]);
+
+        const statsData = stats[0] || {
+            summary: [],
+            byType: [],
+            byShop: [],
+            byUser: []
+        };
+
+        res.status(200).json({
+            success: true,
+            data: {
+                changes,
+                statistics: {
+                    summary: statsData.summary[0] || {},
+                    byType: statsData.byType,
+                    byShop: statsData.byShop,
+                    topUsers: statsData.byUser
+                },
+                pagination: {
+                    page: parseInt(page),
+                    limit: safeLimit,
+                    total,
+                    pages: Math.ceil(total / safeLimit)
+                }
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching company stock changes:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch company stock changes',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Get all stock changes for a specific shop
+ * GET /v1/stock-operations/shop-changes
+ * 
+ * Shows all stock changes for a specific shop across all users
+ * with complete information for shop management and analysis
+ */
+const getShopStockChanges = asyncHandler(async (req, res) => {
+    const { companyId, shopId, changeType, userId, startDate, endDate, page = 1, limit = 20 } = req.query|| req.body || req.params;
+
+    if (!companyId || !shopId) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Company ID and Shop ID are required' 
+        });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const safeLimit = Math.min(parseInt(limit) || 20, 100);
+
+    // Build query
+    const query = { companyId, shopId };
+
+    if (changeType) {
+        query.type = changeType;
+    }
+
+    if (userId) {
+        query.userId = userId;
+    }
+
+    if (startDate || endDate) {
+        query.createdAt = {};
+        if (startDate) query.createdAt.$gte = new Date(startDate);
+        if (endDate) {
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999);
+            query.createdAt.$lte = endDateObj;
+        }
+    }
+
+    try {
+        // Get stock changes with full information
+        const changes = await StockChange.find(query)
+            .populate('productId', 'name sku brand categoryId')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(safeLimit)
+            .lean();
+
+        // Get total count
+        const total = await StockChange.countDocuments(query);
+
+        // Calculate shop-wide statistics
+        const stats = await StockChange.aggregate([
+            { $match: query },
+            {
+                $facet: {
+                    summary: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalChanges: { $sum: 1 },
+                                totalInbound: { $sum: { $cond: [{ $gt: ['$qty', 0] }, '$qty', 0] } },
+                                totalOutbound: { $sum: { $cond: [{ $lt: ['$qty', 0] }, { $multiply: ['$qty', -1] }, 0] } },
+                                netChange: { $sum: '$qty' },
+                                avgQtyPerTransaction: { $avg: { $abs: '$qty' } },
+                                firstChange: { $min: '$createdAt' },
+                                lastChange: { $max: '$createdAt' }
+                            }
+                        }
+                    ],
+                    byType: [
+                        {
+                            $group: {
+                                _id: '$type',
+                                count: { $sum: 1 },
+                                totalQty: { $sum: '$qty' }
+                            }
+                        },
+                        { $sort: { count: -1 } }
+                    ],
+                    byUser: [
+                        {
+                            $group: {
+                                _id: '$userId',
+                                userId: { $first: '$userId' },
+                                transactionCount: { $sum: 1 },
+                                totalInbound: { $sum: { $cond: [{ $gt: ['$qty', 0] }, '$qty', 0] } },
+                                totalOutbound: { $sum: { $cond: [{ $lt: ['$qty', 0] }, { $multiply: ['$qty', -1] }, 0] } }
+                            }
+                        },
+                        { $sort: { transactionCount: -1 } }
+                    ],
+                    byProduct: [
+                        {
+                            $group: {
+                                _id: '$productId',
+                                productName: { $first: '$productId' },
+                                transactionCount: { $sum: 1 },
+                                totalQtyChanged: { $sum: '$qty' }
+                            }
+                        },
+                        { $sort: { transactionCount: -1 } },
+                        { $limit: 10 } // Top 10 products
+                    ]
+                }
+            }
+        ]);
+
+        const statsData = stats[0] || {
+            summary: [],
+            byType: [],
+            byUser: [],
+            byProduct: []
+        };
+
+        res.status(200).json({
+            success: true,
+            data: {
+                shopId,
+                changes,
+                statistics: {
+                    summary: statsData.summary[0] || {},
+                    byType: statsData.byType,
+                    byUser: statsData.byUser,
+                    topProducts: statsData.byProduct
+                },
+                pagination: {
+                    page: parseInt(page),
+                    limit: safeLimit,
+                    total,
+                    pages: Math.ceil(total / safeLimit)
+                }
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching shop stock changes:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch shop stock changes',
+            error: error.message
+        });
+    }
 });
 
 module.exports = {
@@ -640,5 +1297,9 @@ module.exports = {
     getAllStockChanges,
     getStockChangeById,
     createStockChange,
-    getStockHistory
+    getStockHistory,
+    getStockChangesByUser,
+    getStockChangesSummaryByUser,
+    getCompanyStockChanges,
+    getShopStockChanges
 };
