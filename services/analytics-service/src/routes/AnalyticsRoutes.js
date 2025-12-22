@@ -59,6 +59,10 @@ router.get("/reports/shops/performance", requireRole(reportRoles), ReportControl
 router.get("/reports/employees/performance", requireRole(reportRoles), ReportController.getEmployeePerformance);
 
 // Financial Reports
+router.get("/reports/returns/financial", requireRole(reportRoles), ReportController.getFinancialReturnsReport);
+router.get("/reports/customers/health", requireRole(reportRoles), ReportController.getCustomerHealthReport);
+
+// Financial Reports
 router.get("/reports/sales/profitability", requireRole(reportRoles), ReportController.getProfitabilityReport);
 
 // Inventory Reports

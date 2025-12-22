@@ -32,4 +32,58 @@ outboxSchema.statics.markAsFailed = function (id, error) {
     });
 };
 
+// Static method to reset stale processing events
+outboxSchema.statics.resetStaleProcessing = async function (staleMinutes = 5) {
+    const staleTime = new Date(Date.now() - staleMinutes * 60 * 1000);
+    const result = await this.updateMany(
+        {
+            status: "PENDING",
+            created_at: { $lt: staleTime },
+            retries: { $lt: 3 }
+        },
+        {
+            $set: { updated_at: new Date() }
+        }
+    );
+    return result.modifiedCount;
+};
+
+// Static method to retry failed events
+outboxSchema.statics.retryFailed = async function (maxRetries = 3) {
+    return this.updateMany(
+        {
+            status: "FAILED",
+            retries: { $lt: maxRetries }
+        },
+        {
+            $set: { status: "PENDING", updated_at: new Date() }
+        }
+    );
+};
+
+// Static method to cleanup old sent events
+outboxSchema.statics.cleanupSent = async function (daysOld = 7) {
+    const cutoffDate = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+    return this.deleteMany({
+        status: "SENT",
+        updated_at: { $lt: cutoffDate }
+    });
+};
+
+// Static method to get stats
+outboxSchema.statics.getStats = async function () {
+    const stats = await this.aggregate([
+        {
+            $group: {
+                _id: "$status",
+                count: { $sum: 1 }
+            }
+        }
+    ]);
+    return stats.reduce((acc, stat) => {
+        acc[stat._id] = stat.count;
+        return acc;
+    }, {});
+};
+
 module.exports = mongoose.model("Outbox", outboxSchema);

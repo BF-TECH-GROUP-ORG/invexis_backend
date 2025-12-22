@@ -8,6 +8,9 @@ const consumeEvents = require("./events/consumer");
 const AnalyticsEvent = require("./models/AnalyticsEvent.model");
 const SalesMetric = require("./models/SalesMetric.model");
 const InventoryMetric = require("./models/InventoryMetric.model");
+const DebtMetric = require("./models/DebtMetric.model");
+const ReturnMetric = require("./models/ReturnMetric.model");
+const CustomerMetric = require("./models/CustomerMetric.model");
 const Outbox = require("./models/outbox.model");
 const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 const sequelize = require("./config/database");
@@ -101,7 +104,31 @@ const initializeDatabase = async () => {
             console.warn("⚠️ Hypertable 'inventory_metrics' creation skipped/failed:", err.message);
         }
 
-        // 4. Create Continuous Aggregates (Materialized Views)
+        // 4. Convert to Hypertable: Debt Metrics
+        try {
+            await sequelize.query("SELECT create_hypertable('debt_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+            console.log("✅ Hypertable 'debt_metrics' ready");
+        } catch (err) {
+            console.warn("⚠️ Hypertable 'debt_metrics' creation skipped/failed:", err.message);
+        }
+
+        // 5. Convert to Hypertable: Return Metrics
+        try {
+            await sequelize.query("SELECT create_hypertable('return_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+            console.log("✅ Hypertable 'return_metrics' ready");
+        } catch (err) {
+            console.warn("⚠️ Hypertable 'return_metrics' creation skipped/failed:", err.message);
+        }
+
+        // 6. Convert to Hypertable: Customer Metrics
+        try {
+            await sequelize.query("SELECT create_hypertable('customer_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+            console.log("✅ Hypertable 'customer_metrics' ready");
+        } catch (err) {
+            console.warn("⚠️ Hypertable 'customer_metrics' creation skipped/failed:", err.message);
+        }
+
+        // 7. Create Continuous Aggregates (Materialized Views)
         try {
             // Daily Sales Summary
             await sequelize.query(`

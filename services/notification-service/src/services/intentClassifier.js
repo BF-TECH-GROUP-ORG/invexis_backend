@@ -26,6 +26,7 @@ class IntentClassifier {
             'payment.success': NOTIFICATION_INTENTS.FINANCIAL,
             'payment.refunded': NOTIFICATION_INTENTS.FINANCIAL,
             'sale.refunded': NOTIFICATION_INTENTS.FINANCIAL,
+            'sale.return.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.fully_paid': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.repayment.created': NOTIFICATION_INTENTS.FINANCIAL,

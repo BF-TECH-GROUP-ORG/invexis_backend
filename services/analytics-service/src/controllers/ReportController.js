@@ -684,3 +684,102 @@ exports.getBestPaymentMethod = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
+/**
+ * Financial Returns Report
+ * Uses ReturnMetric for accurate financial data
+ */
+exports.getFinancialReturnsReport = async (req, res) => {
+    try {
+        const { start, end } = getTimeRange(req);
+        const { companyId, interval = 'day' } = req.query;
+        const validIntervals = ['hour', 'day', 'week', 'month', 'year'];
+        const intervalStr = validIntervals.includes(interval) ? interval : 'day';
+
+        const { ReturnMetric } = require("../models");
+
+        const whereClause = {
+            time: { [Op.between]: [start, end] }
+        };
+        if (companyId) whereClause.companyId = companyId;
+
+        const cacheKey = `analytics:returns:financial:${companyId || 'all'}:${start.toISOString()}:${end.toISOString()}:${intervalStr}`;
+
+        const stats = await getOrSetCache(cacheKey, CACHE_TTL, async () => {
+            return await ReturnMetric.findAll({
+                where: whereClause,
+                attributes: [
+                    [sequelize.fn('date_trunc', intervalStr, sequelize.col('time')), 'date'],
+                    [sequelize.fn('SUM', sequelize.col('refundAmount')), 'totalRefunded'],
+                    [sequelize.fn('COUNT', sequelize.fn('DISTINCT', sequelize.col('returnId'))), 'returnCount'],
+                    [sequelize.fn('SUM', sequelize.col('quantity')), 'itemsReturned']
+                ],
+                group: [sequelize.fn('date_trunc', intervalStr, sequelize.col('time'))],
+                order: [[sequelize.fn('date_trunc', intervalStr, sequelize.col('time')), 'ASC']],
+                raw: true
+            });
+        });
+
+        res.json({ success: true, data: stats });
+    } catch (error) {
+        console.error("Financial Returns Report Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * Customer Health Report (LTV & Churn Risks)
+ * Uses CustomerMetric
+ */
+exports.getCustomerHealthReport = async (req, res) => {
+    try {
+        const { start, end } = getTimeRange(req);
+        const { companyId } = req.query;
+
+        const { CustomerMetric } = require("../models");
+
+        const whereClause = {
+            time: { [Op.between]: [start, end] }
+        };
+        if (companyId) whereClause.companyId = companyId;
+
+        const cacheKey = `analytics:customers:health:${companyId || 'all'}:${start.toISOString()}:${end.toISOString()}`;
+
+        const stats = await getOrSetCache(cacheKey, CACHE_TTL, async () => {
+            // 1. Calculate Net LTV Change in Period (Purchases - Returns)
+            const ltvStats = await CustomerMetric.findAll({
+                where: whereClause,
+                attributes: [
+                    'type',
+                    [sequelize.fn('SUM', sequelize.col('value')), 'totalValue'],
+                    [sequelize.fn('COUNT', sequelize.col('id')), 'eventCount']
+                ],
+                group: ['type'],
+                raw: true
+            });
+
+            // 2. Identify High Value Customers (Top 5 LTV increase)
+            const topCustomers = await CustomerMetric.findAll({
+                where: { ...whereClause, type: 'PURCHASE' },
+                attributes: [
+                    'hashedCustomerId',
+                    [sequelize.fn('SUM', sequelize.col('value')), 'periodSpend']
+                ],
+                group: ['hashedCustomerId'],
+                order: [[sequelize.literal('"periodSpend"'), 'DESC']],
+                limit: 5,
+                raw: true
+            });
+
+            return {
+                summary: ltvStats,
+                topCustomers
+            };
+        });
+
+        res.json({ success: true, data: stats });
+    } catch (error) {
+        console.error("Customer Health Report Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};

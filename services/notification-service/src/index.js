@@ -166,6 +166,12 @@ const startServer = async () => {
       logger.info('Event publishers initialized');
     }
 
+    // Ensure queue is ready to process
+    if (notificationQueue) {
+      await notificationQueue.isReady();
+      logger.info('Notification Delivery Queue ready');
+    }
+
     // Start HTTP server
     const server = app.listen(PORT, () => {
       logger.info('Notification Service started successfully', {

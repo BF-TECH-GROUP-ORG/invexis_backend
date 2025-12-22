@@ -1,19 +1,35 @@
-/**
- * Recipient Resolver Service
- * 
- * Resolves notification recipients by querying auth-service
- * based on event type, company/shop context, and user roles
- */
-
 const axios = require('axios');
+const jwt = require('jsonwebtoken'); // Added jsonwebtoken
 const { AUTH_ROLES, ROLE_DISPLAY_NAMES } = require('../constants/roles');
 const logger = require('../utils/logger');
 
 class RecipientResolver {
     constructor() {
         this.authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
+        this.jwtSecret = process.env.JWT_ACCESS_SECRET; // Shared secret for internal JWT
         this.cache = new Map(); // Simple in-memory cache
         this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+    }
+
+    /**
+     * Generate a short-lived system token for service-to-service auth
+     */
+    getSystemToken() {
+        if (!this.jwtSecret) {
+            logger.warn('⚠️ JWT_ACCESS_SECRET not defined in Notification Service');
+            return null;
+        }
+
+        return jwt.sign(
+            {
+                sub: 'notification-service',
+                role: 'super_admin', // Elevate privileges for internal lookups
+                iss: 'invexis-auth',
+                aud: 'invexis-apps'
+            },
+            this.jwtSecret,
+            { expiresIn: '1m' }
+        );
     }
 
     /**
@@ -119,12 +135,17 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
+            const token = this.getSystemToken();
             const response = await axios.get(`${this.authServiceUrl}/users`, {
                 params: { role: AUTH_ROLES.SUPER_ADMIN },
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 timeout: 5000
             });
 
-            const userIds = response.data.map(u => u._id);
+            // Handle { ok: true, users: [...] } format from production auth-service
+            const users = response.data.users || response.data || [];
+            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
@@ -144,15 +165,19 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
+            const token = this.getSystemToken();
             const response = await axios.get(`${this.authServiceUrl}/users`, {
                 params: {
                     role: AUTH_ROLES.COMPANY_ADMIN,
                     companies: companyId
                 },
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 timeout: 5000
             });
 
-            const userIds = response.data.map(u => u._id);
+            const users = response.data.users || response.data || [];
+            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
@@ -172,15 +197,19 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
+            const token = this.getSystemToken();
             const response = await axios.get(`${this.authServiceUrl}/users`, {
                 params: {
                     role: AUTH_ROLES.SHOP_MANAGER,
                     shops: shopId
                 },
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 timeout: 5000
             });
 
-            const userIds = response.data.map(u => u._id);
+            const users = response.data.users || response.data || [];
+            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
@@ -201,16 +230,20 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
+            const token = this.getSystemToken();
             const params = { role: AUTH_ROLES.WORKER };
             if (shopId) params.shops = shopId;
             else if (companyId) params.companies = companyId;
 
             const response = await axios.get(`${this.authServiceUrl}/users`, {
                 params,
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 timeout: 5000
             });
 
-            const userIds = response.data.map(u => u._id);
+            const users = response.data.users || response.data || [];
+            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
@@ -251,6 +284,7 @@ class RecipientResolver {
             'sale.completed': { roles: [AUTH_ROLES.WORKER] },
             'sale.cancelled': { roles: [AUTH_ROLES.SHOP_MANAGER, AUTH_ROLES.WORKER] },
             'sale.refunded': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
+            'sale.return.created': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
 
             // Payment Events
             'payment.success': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
@@ -292,7 +326,8 @@ class RecipientResolver {
             return null;
         }
 
-        logger.debug(`📦 Cache hit: ${key}`);
+        const count = Array.isArray(data) ? data.length : 1;
+        logger.debug(`📦 Cache hit: ${key} (${count} item(s))`);
         return data;
     }
 
