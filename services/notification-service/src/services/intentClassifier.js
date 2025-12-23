@@ -58,29 +58,25 @@ class IntentClassifier {
         this.channelMatrix = {
             [NOTIFICATION_INTENTS.OPERATIONAL]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['in-app'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['in-app'],
                 [AUTH_ROLES.WORKER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['in-app']
             },
 
             [NOTIFICATION_INTENTS.FINANCIAL]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['in-app'],
                 [AUTH_ROLES.WORKER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app']
             },
 
             [NOTIFICATION_INTENTS.RISK_SECURITY]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app', 'sms'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['email', 'in-app'],
-                [AUTH_ROLES.WORKER]: ['in-app'],
+                [AUTH_ROLES.WORKER]: ['email', 'in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app'],
                 [AUTH_ROLES.CUSTOMER]: ['email', 'in-app']
             },
 
             [NOTIFICATION_INTENTS.ACCOUNTABILITY]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['in-app'],
                 [AUTH_ROLES.WORKER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app'],
                 [AUTH_ROLES.CUSTOMER]: ['email', 'in-app']
@@ -88,7 +84,6 @@ class IntentClassifier {
 
             [NOTIFICATION_INTENTS.STRATEGIC_INSIGHT]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['in-app']
             }
         };
