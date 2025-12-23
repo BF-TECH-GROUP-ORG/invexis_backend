@@ -26,6 +26,7 @@ class IntentClassifier {
             'payment.success': NOTIFICATION_INTENTS.FINANCIAL,
             'payment.refunded': NOTIFICATION_INTENTS.FINANCIAL,
             'sale.refunded': NOTIFICATION_INTENTS.FINANCIAL,
+            'sale.return.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.fully_paid': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.repayment.created': NOTIFICATION_INTENTS.FINANCIAL,
@@ -57,29 +58,25 @@ class IntentClassifier {
         this.channelMatrix = {
             [NOTIFICATION_INTENTS.OPERATIONAL]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['in-app'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['in-app'],
                 [AUTH_ROLES.WORKER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['in-app']
             },
 
             [NOTIFICATION_INTENTS.FINANCIAL]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['in-app'],
                 [AUTH_ROLES.WORKER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app']
             },
 
             [NOTIFICATION_INTENTS.RISK_SECURITY]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app', 'sms'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['email', 'in-app'],
-                [AUTH_ROLES.WORKER]: ['in-app'],
+                [AUTH_ROLES.WORKER]: ['email', 'in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app'],
                 [AUTH_ROLES.CUSTOMER]: ['email', 'in-app']
             },
 
             [NOTIFICATION_INTENTS.ACCOUNTABILITY]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['in-app'],
                 [AUTH_ROLES.WORKER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app'],
                 [AUTH_ROLES.CUSTOMER]: ['email', 'in-app']
@@ -87,7 +84,6 @@ class IntentClassifier {
 
             [NOTIFICATION_INTENTS.STRATEGIC_INSIGHT]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.SHOP_MANAGER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['in-app']
             }
         };

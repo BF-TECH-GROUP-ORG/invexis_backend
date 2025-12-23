@@ -1,5 +1,7 @@
 const Notification = require('../models/Notification');
 const redisClient = require('/app/shared/redis');
+const notificationEventProcessor = require('../services/notificationEventProcessor');
+const { v4: uuidv4 } = require('uuid');
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -156,6 +158,44 @@ exports.createNotification = async (req, res) => {
 
     } catch (error) {
         console.error("Error creating notification:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 4. Simulate Event (Testing/Dev only)
+exports.simulateEvent = async (req, res) => {
+    try {
+        const { type, data, source } = req.body;
+        // Require lazily or ensure it's imported at top
+        const recipientResolver = require('../services/recipientResolver');
+
+        // Force clear cache to ensure fresh data for simulation
+        recipientResolver.clearCache();
+
+        if (!type || !data) {
+            return res.status(400).json({ success: false, message: "Type and data are required" });
+        }
+
+        const event = {
+            id: uuidv4(),
+            type,
+            data,
+            source: source || 'notification-debugger',
+            emittedAt: new Date()
+        };
+
+        // Fire-and-forget processing to mimic event queue
+        notificationEventProcessor.processEvent(event, 'simulated.topic');
+
+        res.json({
+            success: true,
+            message: "Event injected into processor",
+            eventId: event.id,
+            event
+        });
+
+    } catch (error) {
+        console.error("Error simulating event:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

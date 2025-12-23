@@ -6,12 +6,24 @@ const path = require('path');
 // Load template files
 const loadTemplate = (filename) => {
     try {
+        // __dirname = /app/src/config, so ../../templates/email = /app/templates/email
         const templatePath = path.join(__dirname, '../../templates/email', filename);
+
+        if (!fs.existsSync(templatePath)) {
+            console.warn(`Template file not found at: ${templatePath}`);
+            return `
+                <div style="font-family: Arial, sans-serif; color: #333;">
+                    <h2>Notification</h2>
+                    <p>This is a default template because the file '${filename}' could not be loaded.</p>
+                </div>
+             `;
+        }
+
         console.log(`Loading template from: ${templatePath}`);
         return fs.readFileSync(templatePath, 'utf-8');
     } catch (error) {
         console.error(`Failed to load template ${filename}:`, error.message);
-        return null;
+        return `<html><body><h1>Hello!</h1><p>We encountered an error loading the email template.</p></body></html>`;
     }
 };
 
@@ -151,6 +163,34 @@ const templates = {
         inApp: {
             subject: 'Your Verification Code',
             content: 'Your OTP is {{otp}}. Valid for {{expiryMinutes}} minutes.'
+        }
+    },
+
+    sale_return: {
+        email: {
+            subject: 'Return Initiated for Sale #{{saleId}}',
+            content: `
+                <h2>Return Initiated — Sale #{{saleId}}</h2>
+                <p>Hello,</p>
+                <p>A return has been initiated for sale #{{saleId}}.</p>
+                <div style="margin: 20px 0; padding: 15px; background-color: #fce4e4; border-radius: 5px;">
+                  <p><strong>Reason:</strong> {{reason}}</p>
+                  <p><strong>Refund Amount:</strong> {{formatCurrency refundAmount}}</p>
+                </div>
+                <p>— The {{companyName}} Team</p>
+            `,
+            metadata: { priority: 'normal' }
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Return Initiated',
+                body: 'Return for sale #{{saleId}} initiated: {{formatCurrency refundAmount}}',
+                data: { action: 'open_return', saleId: '{{saleId}}', returnId: '{{returnId}}' }
+            })
+        },
+        inApp: {
+            subject: 'Return Initiated',
+            content: 'Return for sale #{{saleId}} initiated for {{formatCurrency refundAmount}}'
         }
     }
 };

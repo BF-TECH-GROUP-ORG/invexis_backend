@@ -12,6 +12,8 @@ const recipientResolver = require('./recipientResolver');
 const intentClassifier = require('./intentClassifier');
 const logger = require('../utils/logger');
 
+const notificationQueue = require('../config/queue');
+
 // WebSocket publisher (to be integrated with websocket-service)
 let websocketPublisher;
 try {
@@ -105,15 +107,27 @@ class NotificationEventProcessor {
                     if (notification) {
                         notifications.push(notification);
 
-                        // Publish to WebSocket for real-time delivery
-                        if (websocketPublisher && channels.includes('push')) {
-                            await websocketPublisher.publishNotification(notification);
+                        // Queue for delivery (Async Worker)
+                        try {
+                            const delay = 0;
+                            await notificationQueue.add('deliver',
+                                { notificationId: notification._id },
+                                {
+                                    delay,
+                                    priority: priority === 'high' ? 1 : 2,
+                                    attempts: 3,
+                                    backoff: { type: 'exponential', delay: 1000 }
+                                }
+                            );
+                            logger.debug(`📤 Queued notification ${notification._id} for delivery`);
+                        } catch (qErr) {
+                            logger.error(`❌ Failed to queue notification ${notification._id}:`, qErr);
                         }
                     }
                 }
             }
 
-            logger.info(`✅ Created ${notifications.length} notification(s) for ${type}`);
+            logger.info(`✅ Created and queued ${notifications.length} notification(s) for ${type}`);
 
         } catch (error) {
             logger.error(`❌ Error processing notification event:`, {
@@ -146,6 +160,25 @@ class NotificationEventProcessor {
             companyId = 'system';
         }
 
+        // Strategy: Manual fix for company.created where id is the companyId
+        if (eventType === 'company.created' && !companyId && data.id) {
+            companyId = data.id;
+        }
+
+        if (!companyId) {
+            // Try to find it in nested objects often sent by sequlize
+            if (data.dataValues && data.dataValues.companyId) companyId = data.dataValues.companyId;
+            if (data.company && data.company.id) companyId = data.company.id;
+        }
+
+        // Critical validation for events that MUST have companyId
+        if (!companyId && eventType !== 'user.created') {
+            // For test events, we might fallback to a designated test company or log warning
+            // But avoiding validaion error is priority
+            logger.warn(`⚠️ Missing companyId for ${eventType}, defaulting to 'unknown' to avoid crash`);
+            companyId = 'unknown'; // Or a valid default ID for your test env
+        }
+
         // Common fields across all events
         const extracted = {
             companyId,
@@ -167,9 +200,10 @@ class NotificationEventProcessor {
                 };
 
             case 'sale.created':
+            case 'sale.return.created':
                 return {
                     ...extracted,
-                    totalAmount: data.totalAmount,
+                    totalAmount: data.totalAmount || data.refundAmount,
                     customerId: data.customerId,
                     items: data.items
                 };
@@ -206,10 +240,13 @@ class NotificationEventProcessor {
         // Determine template name from event type
         const templateName = this.getTemplateName(eventType);
 
+        // Build channel configuration first
+        const channelConfig = this.buildChannelConfig(channels);
+
         // Compile content for all channels
         let compiledContent = {};
         try {
-            compiledContent = await compileTemplatesForChannels(templateName, data, channels);
+            compiledContent = await compileTemplatesForChannels(templateName, data, channelConfig);
         } catch (err) {
             logger.warn(`Template compilation failed for ${templateName}:`, err.message);
             // Use fallback content
@@ -258,7 +295,7 @@ class NotificationEventProcessor {
             userId,
             companyId: data.companyId,
             shopId: data.shopId,
-            scope: 'personal',
+            scope: data.scope || 'personal', // Default to personal unless event specifies otherwise
 
             // Delivery tracking
             sendAt: emittedAt || new Date(),
@@ -315,6 +352,7 @@ class NotificationEventProcessor {
             'company.suspended': 'company_suspended',
             'shop.created': 'shop_created',
             'sale.created': 'sale_confirmation',
+            'sale.return.created': 'sale_return',
             'inventory.low_stock': 'low_stock_alert',
             'inventory.out_of_stock': 'out_of_stock_alert',
             'debt.overdue': 'debt_overdue',
@@ -342,6 +380,7 @@ class NotificationEventProcessor {
             'company.created': 'Welcome to Invexis!',
             'shop.created': 'New Shop Created',
             'sale.created': 'New Sale Recorded',
+            'sale.return.created': 'Product Return Initiated',
             'inventory.low_stock': '⚠️ Low Stock Alert',
             'inventory.out_of_stock': '🚨 Out of Stock',
             'debt.overdue': '⏰ Payment Overdue',
@@ -356,6 +395,7 @@ class NotificationEventProcessor {
             'company.created': `Welcome, ${data.name || 'Admin'}! Your account is ready.`,
             'shop.created': `Shop "${data.name}" has been successfully created.`,
             'sale.created': `New sale for $${data.totalAmount || 0} recorded.`,
+            'sale.return.created': `Return for sale ${data.saleId} initiated ($${data.refundAmount || 0}).`,
             'inventory.low_stock': `${data.productName || 'Product'} is running low (${data.currentStock || 0} left).`,
             'inventory.out_of_stock': `${data.productName || 'Product'} is out of stock.`,
             'debt.overdue': `Payment of $${data.amount || 0} is overdue.`

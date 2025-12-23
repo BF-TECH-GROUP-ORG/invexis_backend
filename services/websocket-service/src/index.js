@@ -83,7 +83,7 @@ io.use((socket, next) => {
     socket.authenticated = true;
 
     // Auto-join user room
-    socket.join(`user-${userId}`);
+    socket.join(`user:${userId}`);
 
     logger.info('Socket authenticated via Handshake', {
       socketId: socket.id,
@@ -120,7 +120,7 @@ io.on('connection', (socket) => {
         socket.authenticated = true;
 
         // Join user-specific room
-        socket.join(`user-${userId}`);
+        socket.join(`user:${userId}`);
 
         logger.info('Socket authenticated', {
           socketId: socket.id,
@@ -343,6 +343,15 @@ server.listen(PORT, () => {
   });
 
   console.log(`🔌 WebSocket Service running on port ${PORT}`);
+
+  // Start RabbitMQ Consumer
+  // Delayed slightly to ensure server is fully ready
+  setTimeout(() => {
+    const { startRealtimeConsumer } = require('./consumers/realtime');
+    startRealtimeConsumer(io).catch(err => {
+      logger.error('Failed to start realtime consumer:', err);
+    });
+  }, 1000);
 });
 
 // Graceful shutdown

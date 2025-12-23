@@ -13,6 +13,9 @@ router.post('/mark-read', NotificationController.markAsRead);
 // Create (Manual/Admin)
 router.post('/', NotificationController.createNotification);
 
+// Simulate Event (Dev/Test)
+router.post('/simulate', NotificationController.simulateEvent);
+
 // Get notifications
 // Supports /:userId param for backward compatibility or explicit targeting, 
 // but Controller defaults to req.user.id if param matches or is missing.
