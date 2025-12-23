@@ -8,16 +8,15 @@
 // Auth Service Roles (from auth-service/src/models/User.models.js)
 const AUTH_ROLES = {
     SUPER_ADMIN: 'super_admin',
-    COMPANY_ADMIN: 'company_admin',  // Company owner
-    SHOP_MANAGER: 'shop_manager',
+    COMPANY_ADMIN: 'company_admin',
     WORKER: 'worker',                // Staff/employee
     CUSTOMER: 'customer'
 };
 
-// Company-level roles for workers (from company-service/src/constants/companyRoles.js)
-const COMPANY_ROLES = {
-    MANAGER: 'manager',   // Worker with management responsibilities
-    SELLER: 'seller'      // Worker handling sales
+// Departments for workers (from company-service/src/constants/departments.js)
+const DEPARTMENTS = {
+    SALES: 'sales',
+    MANAGEMENT: 'management'
 };
 
 // Notification Intent Classification
@@ -33,11 +32,14 @@ const NOTIFICATION_INTENTS = {
 const ROLE_DISPLAY_NAMES = {
     [AUTH_ROLES.SUPER_ADMIN]: 'Super Admin',
     [AUTH_ROLES.COMPANY_ADMIN]: 'Company Owner',
-    [AUTH_ROLES.SHOP_MANAGER]: 'Shop Manager',
     [AUTH_ROLES.WORKER]: 'Worker',
-    [AUTH_ROLES.CUSTOMER]: 'Customer',
-    [COMPANY_ROLES.MANAGER]: 'Manager',
-    [COMPANY_ROLES.SELLER]: 'Seller'
+    [AUTH_ROLES.CUSTOMER]: 'Customer'
+};
+
+// Department display names
+const DEPARTMENT_DISPLAY_NAMES = {
+    [DEPARTMENTS.SALES]: 'Sales',
+    [DEPARTMENTS.MANAGEMENT]: 'Management'
 };
 
 // Intent display names for logging
@@ -51,8 +53,9 @@ const INTENT_DISPLAY_NAMES = {
 
 module.exports = {
     AUTH_ROLES,
-    COMPANY_ROLES,
+    DEPARTMENTS,
     NOTIFICATION_INTENTS,
     ROLE_DISPLAY_NAMES,
+    DEPARTMENT_DISPLAY_NAMES,
     INTENT_DISPLAY_NAMES
 };

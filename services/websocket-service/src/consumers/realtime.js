@@ -7,13 +7,23 @@ const { rabbitmq } = shared;
 // Helper to extract userId from various payload shapes
 const extractUserId = (content) => {
   if (!content) return null;
-  return content._id || content.userId || content.user?._id || null;
+  // Check root level first (new standard), then nested objects
+  return content.userId || content._id || content.user?._id || content.data?.userId || null;
 };
 
 // Helper to emit to multiple targets
 const emitToTargets = (io, targets, eventName, data) => {
   targets.forEach((target) => {
     try {
+      // Debug: Check if room has active sockets
+      const room = io.sockets.adapter.rooms.get(target);
+      const socketCount = room ? room.size : 0;
+
+      logger.info(`Attempting to emit ${eventName} to ${target}`, {
+        socketCount,
+        hasSockets: socketCount > 0
+      });
+
       io.to(target).emit(eventName, {
         ...data,
         event: eventName,
@@ -135,6 +145,13 @@ const startRealtimeConsumer = async (io) => {
         const targetUserIds = content?.targetUserIds || [];
         const rooms = content?.rooms || [];
 
+        // Debug log for routing
+        logger.debug(`Processing notification event ${routingKey}`, {
+          userId,
+          targetCount: targetUserIds.length,
+          roomCount: rooms.length
+        });
+
         if (!userId && targetUserIds.length === 0) {
           logger.warn(`Notification event ${routingKey} missing userId/targetUserIds`);
           return;
@@ -150,10 +167,8 @@ const startRealtimeConsumer = async (io) => {
               notificationData
             );
           } else if (userId) {
-            io.to(`user:${userId}`).emit("notification", {
-              ...notificationData,
-              ts: Date.now(),
-            });
+            // Use emitToTargets for consistent logging
+            emitToTargets(io, [`user:${userId}`], "notification", notificationData);
           }
           if (rooms.length > 0) {
             emitToTargets(io, rooms, "notification", notificationData);

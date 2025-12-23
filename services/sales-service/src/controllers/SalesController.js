@@ -51,7 +51,7 @@ const createSale = async (req, res) => {
     // Validate and normalize paymentMethod
     const validPaymentMethods = ["cash", "card", "mobile", "wallet", "bank_transfer"];
     let normalizedPaymentMethod = paymentMethod;
-    
+
     // Map common variations to valid enum values
     if (normalizedPaymentMethod) {
       const lowerMethod = String(normalizedPaymentMethod).toLowerCase();
@@ -376,10 +376,10 @@ const updateSale = async (req, res) => {
       "isTransfer",
     ];
     const payload = {};
-    
+
     // Validate and normalize paymentMethod if provided
     const validPaymentMethods = ["cash", "card", "mobile", "wallet", "bank_transfer"];
-    
+
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         if (key === "paymentMethod" && req.body[key]) {
@@ -790,6 +790,14 @@ const createReturn = async (req, res) => {
       saleReturn.saleId,
       sale.companyId,
       sale.shopId,
+      items,
+      t
+    );
+
+    // Publish event for analytics (financial tracking)
+    await returnEvents.created(
+      saleReturn,
+      sale,
       items,
       t
     );

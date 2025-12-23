@@ -4,9 +4,7 @@ const { getPreferences } = require("../services/preferenceService");
 const { sendEmail } = require("../channels/email");
 const { sendSMS } = require("../channels/sms");
 const { sendPush } = require("../channels/push");
-const {
-  publishNotificationToWebSocket,
-} = require("../services/websocketPublisher");
+const websocketPublisher = require("../services/websocketPublisher");
 const { checkUserRateLimit } = require("../utils/rateLimiter");
 const logger = require("../utils/logger");
 
@@ -28,7 +26,15 @@ const deliverNotification = async ({ notificationId }) => {
     throw new Error("User rate limit exceeded");
   }
 
-  const prefs = await getPreferences(userId, companyId);
+  // Handle potential system/unknown companyId for preferences
+  const prefCompanyId = (companyId === 'system' || companyId === 'unknown') ? null : companyId;
+  let prefs = await getPreferences(userId, prefCompanyId); // Changed to let
+
+  // Force enable critical channels if prefs not found or empty
+  if (!prefs) {
+    logger.warn(`Preferences not found for user ${userId}, using defaults`);
+    prefs = { email: true, sms: true, push: true, inApp: true };
+  }
 
   let successes = 0;
   const results = [];
@@ -79,7 +85,8 @@ const deliverNotification = async ({ notificationId }) => {
 
   // In-App (via WebSocket service)
   if (notification.channels.inApp && prefs.inApp) {
-    const result = await publishNotificationToWebSocket(notification, userId);
+    const success = await websocketPublisher.publishNotification(notification);
+    const result = { success }; // normalize result structure
     results.push({ channel: "inApp", ...result });
     if (result.success) successes++;
   }

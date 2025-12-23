@@ -26,11 +26,12 @@ class WebSocketPublisher {
       const payload = {
         type: 'notification.new',
         source: 'notification-service',
+        userId: notification.userId?.toString(), // Add userId at top level for websocket-service
         data: {
           notificationId: notification._id.toString(),
-          userId: notification.userId,
-          companyId: notification.companyId,
-          shopId: notification.shopId,
+          userId: notification.userId?.toString(),
+          companyId: notification.companyId?.toString(),
+          shopId: notification.shopId?.toString(),
           title: notification.title,
           body: notification.body,
           priority: notification.priority,
@@ -46,11 +47,14 @@ class WebSocketPublisher {
         id: `ws-${notification._id}-${Date.now()}`
       };
 
-      // Publish to websocket exchange with user-specific routing
+      // Use correct exchange and routing key to match websocket-service consumer
+      // Consumer listens on: exchange=events_topic, pattern=notification.*
+      const routingKey = 'notification.created';
       await rabbitMQ.publish(
-        'websocket.notifications',
+        rabbitMQ.exchanges.topic,  // 'events_topic'
+        routingKey,
         payload,
-        { routingKey: `notification.user.${notification.userId}` }
+        {}
       );
 
       logger.info(`📡 Published notification ${notification._id} to WebSocket`);
@@ -74,9 +78,10 @@ class WebSocketPublisher {
       const payload = {
         type: 'notification.broadcast',
         source: 'notification-service',
+        rooms: [`company:${notification.companyId?.toString()}`], // Add rooms for websocket-service
         data: {
           notificationId: notification._id.toString(),
-          companyId: notification.companyId,
+          companyId: notification.companyId?.toString(),
           scope: notification.scope,
           title: notification.title,
           body: notification.body,
@@ -86,10 +91,13 @@ class WebSocketPublisher {
         id: `ws-broadcast-${notification._id}-${Date.now()}`
       };
 
+      // Use correct exchange and routing key
+      const routingKey = 'notification.broadcast';
       await rabbitMQ.publish(
-        'websocket.notifications.broadcast',
+        rabbitMQ.exchanges.topic,  // 'events_topic'
+        routingKey,
         payload,
-        { routingKey: `notification.company.${notification.companyId}` }
+        {}
       );
 
       logger.info(`📡 Broadcast notification ${notification._id} via WebSocket`);

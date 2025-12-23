@@ -106,42 +106,68 @@
         <!-- Trigger Notification -->
         <div class="bg-white rounded-lg shadow p-6 mb-8 hover:shadow-md transition-shadow">
             <h2 class="text-xl font-semibold mb-4 text-gray-700 flex items-center gap-2">
-                <span>🚀 Trigger Notification</span>
-                <span class="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Sends to other
-                    users</span>
+                <span>🚀 Trigger Event Simulation</span>
+                <span class="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Injects event into
+                    Notification Service</span>
             </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notification Service URL</label>
+                    <input type="text" id="apiBaseUrl" value="http://localhost:8008"
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Auth Token (Bearer)</label>
+                    <input type="text" id="apiToken" placeholder="Paste JWT from Login..."
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div class="md:col-span-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Target User ID</label>
-                    <input type="text" id="targetUserId" placeholder="Receiver ID"
-                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none">
-                </div>
-                <div class="md:col-span-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Type / Intent</label>
-                    <select id="msgType"
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Event Type</label>
+                    <select id="eventType" onchange="updatePayloadTemplate()"
                         class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none bg-white">
-                        <option value="info">Info (Generic)</option>
-                        <option value="operational">Operational</option>
-                        <option value="financial">Financial</option>
-                        <option value="risk_security">Risk / Security</option>
-                        <option value="accountability">Accountability</option>
+                        <option value="company.created">company.created</option>
+                        <option value="company.suspended">company.suspended</option>
+                        <option value="shop.created">shop.created</option>
+                        <option value="sale.created">sale.created</option>
+                        <option value="sale.return.created">sale.return.created</option>
+                        <option value="inventory.low_stock">inventory.low_stock</option>
+                        <option value="inventory.out_of_stock">inventory.out_of_stock</option>
+                        <option value="debt.overdue">debt.overdue</option>
+                        <option value="payment.success">payment.success</option>
+                        <option value="payment.failed">payment.failed</option>
+                        <option value="user.created">user.created</option>
                     </select>
                 </div>
-                <div class="md:col-span-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                    <input type="text" id="msgBody" placeholder="Hello World..."
-                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none">
+                <!-- Hidden inputs for legacy layout compatibility, we use JSON payload now -->
+
+                <div class="md:col-span-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Event Data (JSON)</label>
+                    <textarea id="eventData" rows="5"
+                        class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none font-mono text-xs">
+{
+  "companyId": "comp_123",
+  "shopId": "shop_456",
+  "customerId": "cust_789",
+  "totalAmount": 150.00,
+  "items": [{"name": "Item 1", "price": 50}, {"name": "Item 2", "price": 100}]
+}
+                    </textarea>
                 </div>
-                <div class="md:col-span-1">
-                    <button onclick="sendNotification()"
+
+                <div class="md:col-span-4">
+                    <button onclick="simulateEvent()"
                         class="w-full px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium transition flex justify-center items-center gap-2">
-                        <span>Send</span>
+                        <span>Simulate Event</span>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                             stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                     </button>
+                    <div id="simResponse" class="mt-2 text-xs text-center text-gray-500"></div>
                 </div>
             </div>
         </div>
@@ -176,7 +202,8 @@
         function connect() {
             const url = document.getElementById('wsUrl').value;
             const userId = document.getElementById('userId').value;
-            const token = document.getElementById('token').value;
+            // Token for websocket auth can be same as API token
+            const token = document.getElementById('token').value || document.getElementById('apiToken').value;
 
             if (!userId) {
                 alert('User ID is required to subscribe to user channels');
@@ -198,9 +225,6 @@
             socket.on('connect', () => {
                 console.log('Connected!');
                 updateStatus('Connected', true);
-
-                // Handshake auth happens automatically on connection.
-                // We don't need to emit 'authenticate' anymore if middleware works.
                 logSystem('✅ Connected (Handshake Auth Sent)');
             });
 
@@ -223,6 +247,11 @@
                 count++;
                 document.getElementById('msgCount').textContent = `${count} items`;
                 renderNotification(data);
+            });
+
+            // Should also listen for connection_error
+            socket.on('connect_error', (err) => {
+                logSystem(`❌ Connection Error: ${err.message}`, 'error');
             });
 
             // Listen for other potential events
@@ -288,54 +317,140 @@
             area.prepend(card);
         }
 
-        function sendNotification() {
-            const recipient = document.getElementById('targetUserId').value;
-            const message = document.getElementById('msgBody').value;
-            const type = document.getElementById('msgType').value;
+        function updatePayloadTemplate() {
+            const type = document.getElementById('eventType').value;
+            const area = document.getElementById('eventData');
 
-            if (!recipient) {
-                alert('Please enter a Target User ID');
-                return;
-            }
-            if (!message) {
-                alert('Please enter a message');
-                return;
-            }
-
-            if (!socket || !socket.connected) {
-                alert('Please connect first!');
-                return;
-            }
-
-            const payload = {
-                recipient: recipient,
-
-                // Matches Notification Schema for Frontend
-                title: `${type.toUpperCase()} Alert`,
-                body: message,
-                priority: 'normal',
-
-                // Nest semantic data
-                payload: {
-                    intent: type,
-                    role: 'manual_trigger',
-                    eventType: 'manual.test',
-                    source: 'dashboard-debugger'
+            const templates = {
+                'company.created': {
+                    id: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    name: "Acme Corp",
+                    adminId: "user_admin_123",
+                    email: "admin@acme.com",
+                    phone: "+1234567890"
                 },
-
-                // Fallback for raw websocket handlers
-                message: message,
-                type: type
+                'company.suspended': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    reason: "Policy violation"
+                },
+                'shop.created': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    shopId: "b4309875-c180-4b8b-bc4e-5009dec719c8",
+                    name: "Downtown Branch",
+                    managerId: "manager_123"
+                },
+                'sale.created': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    shopId: "b4309875-c180-4b8b-bc4e-5009dec719c8",
+                    customerId: "cust_789",
+                    totalAmount: 150.00,
+                    items: [{ name: "Item 1", price: 50 }, { name: "Item 2", price: 100 }]
+                },
+                'sale.return.created': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    shopId: "b4309875-c180-4b8b-bc4e-5009dec719c8",
+                    saleId: "sale_123",
+                    returnId: "ret_999",
+                    refundAmount: 50.00,
+                    reason: "Defective item",
+                    items: [{ productId: "prod_1", quantity: 1, refundAmount: 50 }]
+                },
+                'inventory.low_stock': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    shopId: "b4309875-c180-4b8b-bc4e-5009dec719c8",
+                    productId: "prod_123",
+                    productName: "Premium Steak",
+                    currentStock: 5,
+                    threshold: 10
+                },
+                'inventory.out_of_stock': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    shopId: "b4309875-c180-4b8b-bc4e-5009dec719c8",
+                    productId: "prod_999",
+                    productName: "Popular Item",
+                    currentStock: 0
+                },
+                'debt.overdue': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    shopId: "b4309875-c180-4b8b-bc4e-5009dec719c8",
+                    debtId: "debt_001",
+                    amount: 500.00,
+                    customerName: "John Doe",
+                    dueDate: "2024-01-01"
+                },
+                'payment.success': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    amount: 99.00,
+                    reference: "inv_001",
+                    method: "credit_card"
+                },
+                'payment.failed': {
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb",
+                    amount: 99.00,
+                    reason: "Insufficient funds"
+                },
+                'user.created': {
+                    id: "user_new_001",
+                    name: "New User",
+                    email: "newuser@example.com",
+                    role: "worker",
+                    companyId: "cc6b8939-03bd-49c5-a034-da8d734a6cdb"
+                }
             };
 
-            logSystem(`🚀 Sending ${type} message to ${recipient}...`);
-
-            // Emit directly to socket server which forwards to recipient
-            socket.emit('notification', payload);
-
-            // Clear input
-            document.getElementById('msgBody').value = '';
+            if (templates[type]) {
+                area.value = JSON.stringify(templates[type], null, 2);
+            }
         }
+
+        async function simulateEvent() {
+            const baseUrl = document.getElementById('apiBaseUrl').value;
+            const token = document.getElementById('apiToken').value; // from Trigger section
+            const type = document.getElementById('eventType').value;
+            const dataStr = document.getElementById('eventData').value;
+            const statusEl = document.getElementById('simResponse');
+
+            statusEl.textContent = 'Sending...';
+            statusEl.className = 'mt-2 text-xs text-center text-blue-500';
+
+            try {
+                const data = JSON.parse(dataStr);
+
+                const response = await fetch(`${baseUrl}/notification/simulate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        type: type,
+                        data: data,
+                        source: 'dashboard-simulation'
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusEl.textContent = `✅ Event sent! ID: ${result.eventId}`;
+                    statusEl.className = 'mt-2 text-xs text-center text-green-600';
+                    logSystem(`📤 Simulated ${type} (ID: ${result.eventId})`);
+                } else {
+                    statusEl.textContent = `❌ Error: ${result.message}`;
+                    statusEl.className = 'mt-2 text-xs text-center text-red-600';
+                }
+
+            } catch (err) {
+                statusEl.textContent = `❌ Failed: ${err.message}`;
+                statusEl.className = 'mt-2 text-xs text-center text-red-600';
+                if (err instanceof SyntaxError) {
+                    alert('Invalid JSON in event data');
+                }
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePayloadTemplate();
+        });
     </script>
 </body>
 

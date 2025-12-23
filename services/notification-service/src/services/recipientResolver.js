@@ -1,19 +1,35 @@
-/**
- * Recipient Resolver Service
- * 
- * Resolves notification recipients by querying auth-service
- * based on event type, company/shop context, and user roles
- */
-
 const axios = require('axios');
-const { AUTH_ROLES, ROLE_DISPLAY_NAMES } = require('../constants/roles');
+const jwt = require('jsonwebtoken'); // Added jsonwebtoken
+const { AUTH_ROLES, DEPARTMENTS, ROLE_DISPLAY_NAMES, DEPARTMENT_DISPLAY_NAMES } = require('../constants/roles');
 const logger = require('../utils/logger');
 
 class RecipientResolver {
     constructor() {
         this.authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
+        this.jwtSecret = process.env.JWT_ACCESS_SECRET; // Shared secret for internal JWT
         this.cache = new Map(); // Simple in-memory cache
         this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+    }
+
+    /**
+     * Generate a short-lived system token for service-to-service auth
+     */
+    getSystemToken() {
+        if (!this.jwtSecret) {
+            logger.warn('⚠️ JWT_ACCESS_SECRET not defined in Notification Service');
+            return null;
+        }
+
+        return jwt.sign(
+            {
+                sub: 'notification-service',
+                role: 'super_admin', // Elevate privileges for internal lookups
+                iss: 'invexis-auth',
+                aud: 'invexis-apps'
+            },
+            this.jwtSecret,
+            { expiresIn: '1m' }
+        );
     }
 
     /**
@@ -38,15 +54,31 @@ class RecipientResolver {
 
         const recipients = {};
 
-        for (const role of mapping.roles) {
+        for (const roleSpec of mapping.roles) {
             try {
-                const userIds = await this.getUsersByRole(role, data, eventType);
+                // Handle both string roles and department-based objects
+                const isObject = typeof roleSpec === 'object' && roleSpec.role;
+                const role = isObject ? roleSpec.role : roleSpec;
+                const department = isObject ? roleSpec.department : null;
+
+                // Add department to context if specified
+                const context = department ? { ...data, department } : data;
+
+                const userIds = await this.getUsersByRole(role, context, eventType);
                 if (userIds && userIds.length > 0) {
-                    recipients[role] = userIds;
-                    logger.debug(`✓ Found ${userIds.length} ${ROLE_DISPLAY_NAMES[role]}(s)`);
+                    // Use descriptive key for recipients
+                    const recipientKey = department
+                        ? `${role}_${department}`
+                        : role;
+                    recipients[recipientKey] = userIds;
+
+                    const displayName = department
+                        ? `${DEPARTMENT_DISPLAY_NAMES[department]} ${ROLE_DISPLAY_NAMES[role]}`
+                        : ROLE_DISPLAY_NAMES[role];
+                    logger.debug(`✓ Found ${userIds.length} ${displayName}(s)`);
                 }
             } catch (error) {
-                logger.error(`❌ Failed to resolve ${role} for ${eventType}:`, error.message);
+                logger.error(`❌ Failed to resolve ${roleSpec} for ${eventType}:`, error.message);
             }
         }
 
@@ -73,9 +105,6 @@ class RecipientResolver {
         if (role === AUTH_ROLES.COMPANY_ADMIN && adminId) {
             return [adminId];
         }
-        if (role === AUTH_ROLES.SHOP_MANAGER && managerId) {
-            return [managerId];
-        }
 
         // Query auth-service for users by role
         switch (role) {
@@ -89,19 +118,14 @@ class RecipientResolver {
                 }
                 return await this.getCompanyAdmins(companyId);
 
-            case AUTH_ROLES.SHOP_MANAGER:
-                if (!shopId) {
-                    logger.warn(`⚠️ No shopId provided for SHOP_MANAGER resolution`);
-                    return [];
-                }
-                return await this.getShopManagers(shopId);
-
             case AUTH_ROLES.WORKER:
                 if (!shopId && !companyId) {
                     logger.warn(`⚠️ No shopId/companyId for WORKER resolution`);
                     return [];
                 }
-                return await this.getWorkers(companyId, shopId);
+                // Support department filtering from context
+                const department = context.department;
+                return await this.getWorkers(companyId, shopId, department);
 
             default:
                 logger.warn(`⚠️ Unknown role: ${role}`);
@@ -119,12 +143,17 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
+            const token = this.getSystemToken();
             const response = await axios.get(`${this.authServiceUrl}/users`, {
                 params: { role: AUTH_ROLES.SUPER_ADMIN },
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 timeout: 5000
             });
 
-            const userIds = response.data.map(u => u._id);
+            // Handle { ok: true, users: [...] } format from production auth-service
+            const users = response.data.users || response.data || [];
+            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
@@ -144,15 +173,19 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
+            const token = this.getSystemToken();
             const response = await axios.get(`${this.authServiceUrl}/users`, {
                 params: {
                     role: AUTH_ROLES.COMPANY_ADMIN,
                     companies: companyId
                 },
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 timeout: 5000
             });
 
-            const userIds = response.data.map(u => u._id);
+            const users = response.data.users || response.data || [];
+            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
@@ -161,56 +194,36 @@ class RecipientResolver {
         }
     }
 
-    /**
-     * Get shop managers for a specific shop
-     * @param {string} shopId
-     * @returns {Promise<string[]>}
-     */
-    async getShopManagers(shopId) {
-        const cacheKey = `shop_managers:${shopId}`;
-        const cached = this.getFromCache(cacheKey);
-        if (cached) return cached;
 
-        try {
-            const response = await axios.get(`${this.authServiceUrl}/users`, {
-                params: {
-                    role: AUTH_ROLES.SHOP_MANAGER,
-                    shops: shopId
-                },
-                timeout: 5000
-            });
-
-            const userIds = response.data.map(u => u._id);
-            this.setCache(cacheKey, userIds);
-            return userIds;
-        } catch (error) {
-            logger.error(`Failed to fetch shop managers for ${shopId}:`, error.message);
-            return [];
-        }
-    }
 
     /**
-     * Get workers for a company or shop
+     * Get workers for a company or shop, optionally filtered by department
      * @param {string} companyId
      * @param {string} shopId
+     * @param {string} department - Optional: 'sales' or 'management'
      * @returns {Promise<string[]>}
      */
-    async getWorkers(companyId, shopId) {
-        const cacheKey = `workers:${companyId}:${shopId}`;
+    async getWorkers(companyId, shopId, department = null) {
+        const cacheKey = `workers:${companyId}:${shopId}:${department || 'all'}`;
         const cached = this.getFromCache(cacheKey);
         if (cached) return cached;
 
         try {
+            const token = this.getSystemToken();
             const params = { role: AUTH_ROLES.WORKER };
             if (shopId) params.shops = shopId;
             else if (companyId) params.companies = companyId;
+            if (department) params.department = department;
 
             const response = await axios.get(`${this.authServiceUrl}/users`, {
                 params,
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 timeout: 5000
             });
 
-            const userIds = response.data.map(u => u._id);
+            const users = response.data.users || response.data || [];
+            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
@@ -234,23 +247,72 @@ class RecipientResolver {
             'company.tierChanged': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
             'company.allSuspended': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
 
-            // Shop Events
-            'shop.created': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
-            'shop.updated': { roles: [AUTH_ROLES.SHOP_MANAGER] },
-            'shop.deleted': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
-            'shop.statusChanged': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            // Shop Events - Management department handles shop operations
+            'shop.created': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'shop.updated': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'shop.deleted': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'shop.statusChanged': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
 
-            // Inventory Events
-            'inventory.low_stock': { roles: [AUTH_ROLES.SHOP_MANAGER] },
-            'inventory.low.stock': { roles: [AUTH_ROLES.SHOP_MANAGER] },
-            'inventory.out_of_stock': { roles: [AUTH_ROLES.SHOP_MANAGER, AUTH_ROLES.COMPANY_ADMIN] },
-            'inventory.out.of.stock': { roles: [AUTH_ROLES.SHOP_MANAGER, AUTH_ROLES.COMPANY_ADMIN] },
+            // Inventory Events - Management department handles inventory
+            'inventory.low_stock': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.low.stock': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.out_of_stock': {
+                roles: [
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
+                    AUTH_ROLES.COMPANY_ADMIN
+                ]
+            },
+            'inventory.out.of.stock': {
+                roles: [
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
+                    AUTH_ROLES.COMPANY_ADMIN
+                ]
+            },
 
-            // Sales Events
-            'sale.created': { roles: [AUTH_ROLES.WORKER, AUTH_ROLES.SHOP_MANAGER] },
+            // Sales Events - Both departments get notified
+            'sale.created': {
+                roles: [
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.SALES },
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
             'sale.completed': { roles: [AUTH_ROLES.WORKER] },
-            'sale.cancelled': { roles: [AUTH_ROLES.SHOP_MANAGER, AUTH_ROLES.WORKER] },
-            'sale.refunded': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
+            'sale.cancelled': {
+                roles: [
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
+                    AUTH_ROLES.WORKER
+                ]
+            },
+            'sale.refunded': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'sale.return.created': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
 
             // Payment Events
             'payment.success': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
@@ -266,14 +328,32 @@ class RecipientResolver {
             'user.suspended': { roles: ['AFFECTED_USER', AUTH_ROLES.COMPANY_ADMIN] },
             'user.deleted': { roles: ['AFFECTED_USER'] },
 
-            // Debt Events
-            'debt.created': { roles: [AUTH_ROLES.SHOP_MANAGER] },
-            'debt.repayment.created': { roles: [AUTH_ROLES.SHOP_MANAGER] },
+            // Debt Events - Management department handles debt
+            'debt.created': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'debt.repayment.created': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
             'debt.fully_paid': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
-            'debt.status.updated': { roles: [AUTH_ROLES.SHOP_MANAGER] },
-            'debt.overdue': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
-            'debt.reminder.upcoming': { roles: [AUTH_ROLES.SHOP_MANAGER] },
-            'debt.reminder.overdue': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SHOP_MANAGER] },
+            'debt.status.updated': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'debt.overdue': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'debt.reminder.upcoming': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'debt.reminder.overdue': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
         };
 
         return mappings[eventType] || null;
@@ -292,7 +372,8 @@ class RecipientResolver {
             return null;
         }
 
-        logger.debug(`📦 Cache hit: ${key}`);
+        const count = Array.isArray(data) ? data.length : 1;
+        logger.debug(`📦 Cache hit: ${key} (${count} item(s))`);
         return data;
     }
 
