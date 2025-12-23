@@ -5,6 +5,8 @@
  */
 
 const Product = require('../../models/Product');
+const ProductStock = require('../../models/ProductStock');
+const StockChange = require('../../models/StockChange');
 const { logger } = require('../../utils/logger');
 const { publishProductEvent } = require('../productEvents');
 const { processEventOnce } = require('../../utils/eventDeduplication');
@@ -41,17 +43,31 @@ async function handleOrderCreated(data) {
                 continue;
             }
 
-            const oldQuantity = product.inventory.quantity;
-            const newQuantity = Math.max(0, oldQuantity - quantity);
-
-            product.inventory.quantity = newQuantity;
-
-            // Update availability if out of stock
-            if (newQuantity === 0 && oldQuantity > 0) {
-                product.availability = 'out_of_stock';
+            // Get stock record
+            const stockRecord = await ProductStock.findOne({ productId: productId });
+            if (!stockRecord) {
+                logger.warn(`⚠️ Stock record not found: ${productId}`);
+                results.push({ productId, status: 'stock_record_not_found' });
+                continue;
             }
 
-            await product.save();
+            const oldQuantity = stockRecord.stockQty || 0;
+            const newQuantity = Math.max(0, oldQuantity - quantity);
+
+            // Create StockChange - atomic update to ProductStock via pre-save hook
+            const stockChange = new StockChange({
+                companyId: companyId,
+                shopId: product.shopId,
+                productId: product._id,
+                type: 'sale',
+                qty: -quantity,
+                previous: oldQuantity,
+                reason: `Ecommerce Order ${orderId}`,
+                userId: 'ecommerce-service',
+                meta: { orderId }
+            });
+
+            await stockChange.save();
 
             logger.info(`➖ Decremented stock for product ${productId}: ${oldQuantity} → ${newQuantity}`, {
                 orderId,
@@ -145,17 +161,31 @@ async function handleOrderCancelled(data) {
                 continue;
             }
 
-            const oldQuantity = product.inventory.quantity;
-            const newQuantity = oldQuantity + quantity;
-
-            product.inventory.quantity = newQuantity;
-
-            // Update availability if back in stock
-            if (oldQuantity === 0 && newQuantity > 0) {
-                product.availability = 'in_stock';
+            // Get stock record
+            const stockRecord = await ProductStock.findOne({ productId: productId });
+            if (!stockRecord) {
+                logger.warn(`⚠️ Stock record not found: ${productId}`);
+                results.push({ productId, status: 'stock_record_not_found' });
+                continue;
             }
 
-            await product.save();
+            const oldQuantity = stockRecord.stockQty || 0;
+            const newQuantity = oldQuantity + quantity;
+
+            // Create StockChange - atomic update to ProductStock via pre-save hook
+            const stockChange = new StockChange({
+                companyId: companyId,
+                shopId: product.shopId,
+                productId: product._id,
+                type: 'return',
+                qty: quantity,
+                previous: oldQuantity,
+                reason: `Ecommerce Order ${orderId} Cancelled`,
+                userId: 'ecommerce-service',
+                meta: { orderId, reason }
+            });
+
+            await stockChange.save();
 
             logger.info(`➕ Restored stock for product ${productId}: ${oldQuantity} → ${newQuantity}`, {
                 orderId,
@@ -202,14 +232,10 @@ async function handleCartCheckedOut(data) {
         }
 
         try {
-            const product = await Product.findById(productId);
+            const stockRecord = await ProductStock.findOne({ productId: productId });
+            const currentStock = stockRecord?.stockQty || 0;
 
-            if (!product) {
-                logger.warn(`⚠️ Product not found: ${productId}`);
-                continue;
-            }
-
-            logger.info(`✅ Validated stock for product ${productId}: requested ${quantity}, available ${product.inventory.quantity}`);
+            logger.info(`✅ Validated stock for product ${productId}: requested ${quantity}, available ${currentStock}`);
 
             // Optionally emit inventory.product.updated event for catalog sync
             await publishProductEvent('inventory.product.updated', product.toObject());

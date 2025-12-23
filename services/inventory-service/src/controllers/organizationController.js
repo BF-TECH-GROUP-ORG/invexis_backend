@@ -12,6 +12,7 @@ const { validateMongoId } = require('../utils/validateMongoId');
 const logger = require('../utils/logger');
 const { getCache, setCache, scanDel, delCache } = require('../utils/redisHelper');
 const ProductVariation = require('../models/ProductVariation');
+const AnalyticsService = require('../services/analyticsService'); // Added AnalyticsService import
 const ProductStock = require('../models/ProductStock');
 const ProductPricing = require('../models/ProductPricing');
 const ProductTransfer = require('../models/ProductTransfer');
@@ -41,26 +42,26 @@ function sanitizeDestinationProductData(data, transferType = 'cross_company') {
         'barcodeCloudinaryId', // Cloudinary ID doesn't apply to new product
         'pricingId'        // New pricing will be created separately
     ];
-    
+
     fieldsToDelete.forEach((f) => { if (f in data) delete data[f]; });
-    
+
     // Reset soft-delete flags (destination product is active, not deleted)
     data.isDeleted = false;
     data.deletedAt = null;
     data.deletedBy = null;
-    
+
     // Reset sales metrics for destination product
     if (data.sales) {
         data.sales.totalSold = 0;
         data.sales.revenue = 0;
     }
-    
+
     // For cross-company transfers, do NOT share supplier name (it's company-specific)
     // For intra-company transfers, share the supplier name
     if (transferType === 'cross_company') {
         data.supplierName = null;
     }
-    
+
     return data;
 }
 
@@ -170,41 +171,14 @@ const getCompanyOverview = asyncHandler(async (req, res) => {
     const cached = await getCache(cacheKey);
     if (cached) return res.json({ success: true, data: cached });
 
-    // Total products
+    // 1. Get Inventory Snapshot from centralized service
+    // This utilizes ProductStock aggregation correctly (including lowStock, outOfStock)
+    const snapshot = await AnalyticsService.getInventorySnapshot(companyId);
+
+    // 2. Counts not in snapshot
+    // Total products (documents) - Snapshot returns totalSKUs from ProductStock, which might differ slightly if stocks missing
+    // But for overview, Product.countDocuments is fine.
     const totalProducts = await Product.countDocuments({ companyId });
-
-    // Total stock and value using ProductStock joined to Product and pricing
-    const stockAgg = await ProductStock.aggregate([
-        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
-        { $unwind: '$product' },
-        { $match: { 'product.companyId': companyId } },
-        { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
-        { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
-        { $group: { _id: null, totalStock: { $sum: '$stockQty' }, totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', { $ifNull: ['$pricing.cost', 0] }] }] } } } }
-    ]);
-
-    const { totalStock = 0, totalValue = 0 } = stockAgg[0] || {};
-
-    // Low stock and out-of-stock counts using ProductStock
-    const lowStockAgg = await ProductStock.aggregate([
-        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
-        { $unwind: '$product' },
-        { $match: { 'product.companyId': companyId } },
-        { $match: { isLowStock: true } },
-        { $count: 'lowCount' }
-    ]);
-
-    const lowStockCount = (lowStockAgg[0] && lowStockAgg[0].lowCount) || 0;
-
-    const outOfStockAgg = await ProductStock.aggregate([
-        { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
-        { $unwind: '$product' },
-        { $match: { 'product.companyId': companyId } },
-        { $match: { inStock: false } },
-        { $count: 'outCount' }
-    ]);
-
-    const outOfStockCount = (outOfStockAgg[0] && outOfStockAgg[0].outCount) || 0;
 
     // Active alerts
     const activeAlerts = await Alert.countDocuments({ companyId, isResolved: false });
@@ -215,10 +189,10 @@ const getCompanyOverview = asyncHandler(async (req, res) => {
     const response = {
         companyId,
         totalProducts,
-        totalStock,
-        totalValue: totalValue.toFixed(2),
-        lowStockCount,
-        outOfStockCount,
+        totalStock: snapshot.totalUnits,
+        totalValue: snapshot.totalCostValue.toFixed(2), // Use cost value as standard inventory value
+        lowStockCount: snapshot.lowStockUnits,
+        outOfStockCount: snapshot.outOfStockUnits,
         activeAlerts,
         pendingAdjustments,
         lastUpdated: new Date()
@@ -395,12 +369,12 @@ const getCompanyStockChanges = asyncHandler(async (req, res) => {
     if (shopId) query.shopId = shopId;
     if (changeType) query.type = changeType || changeType;
     if (startDate || endDate) {
-        query.changeDate = {};
-        if (startDate) query.changeDate.$gte = new Date(startDate);
+        query.createdAt = {};
+        if (startDate) query.createdAt.$gte = new Date(startDate);
         if (endDate) {
             const endDateObj = new Date(endDate);
             endDateObj.setHours(23, 59, 59, 999);
-            query.changeDate.$lte = endDateObj;
+            query.createdAt.$lte = endDateObj;
         }
     }
 
@@ -408,7 +382,7 @@ const getCompanyStockChanges = asyncHandler(async (req, res) => {
         // Paginated recent changes (readable list)
         const changesPromise = StockChange.find(query)
             .populate('productId', 'name sku brand categoryId')
-            .sort({ changeDate: -1 })
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(safeLimit)
             .lean();
@@ -450,7 +424,7 @@ const getCompanyStockChanges = asyncHandler(async (req, res) => {
                         { $sort: { actions: -1 } }
                     ],
                     timeSeries: [
-                        { $group: { _id: { $dateToString: { format: groupFormat, date: '$changeDate' } }, count: { $sum: 1 }, qty: { $sum: '$qtyNorm' } } },
+                        { $group: { _id: { $dateToString: { format: groupFormat, date: '$createdAt' } }, count: { $sum: 1 }, qty: { $sum: '$qtyNorm' } } },
                         { $sort: { _id: 1 } }
                     ]
                 }
@@ -688,14 +662,14 @@ const getCompanyReports = asyncHandler(async (req, res) => {
             {
                 $match: {
                     companyId,
-                    changeDate: { $gte: thirtyDaysAgo }
+                    createdAt: { $gte: thirtyDaysAgo }
                 }
             },
             {
                 $group: {
-                    _id: '$changeType',
+                    _id: '$type',
                     count: { $sum: 1 },
-                    totalQuantity: { $sum: '$quantity' }
+                    totalQuantity: { $sum: '$qty' }
                 }
             }
         ]);
@@ -789,7 +763,8 @@ const getShopProducts = asyncHandler(async (req, res) => {
         query.$text = { $search: search };
     }
     if (inStock === 'true') {
-        query['inventory.quantity'] = { $gt: 0 };
+        const inStockProducts = await ProductStock.find({ shopId, stockQty: { $gt: 0 } }).select('productId');
+        query._id = { $in: inStockProducts.map(s => s.productId) };
     }
 
     const products = await Product.find(query)
@@ -802,16 +777,17 @@ const getShopProducts = asyncHandler(async (req, res) => {
     const total = await Product.countDocuments(query);
 
     // Transform products to include shop-specific inventory
-    const shopProducts = products.map(product => {
+    const shopProducts = await Promise.all(products.map(async (product) => {
+        const stock = await ProductStock.findOne({ productId: product._id });
         return {
             ...product,
             shopInventory: {
-                quantity: product.inventory.quantity || 0,
-                lowStockThreshold: product.inventory.lowStockThreshold,
-                effectivePrice: product.pricing.salePrice || product.pricing.basePrice
+                quantity: stock?.stockQty || 0,
+                lowStockThreshold: stock?.lowStockThreshold || 10,
+                effectivePrice: product.pricing?.salePrice || product.pricing?.basePrice
             }
         };
-    });
+    }));
 
     res.json({
         success: true,
@@ -856,6 +832,8 @@ const getShopProductInventory = asyncHandler(async (req, res) => {
         });
     }
 
+    const stock = await ProductStock.findOne({ productId: product._id });
+
     res.json({
         success: true,
         data: {
@@ -864,9 +842,9 @@ const getShopProductInventory = asyncHandler(async (req, res) => {
             sku: product.sku,
             category: product.category,
             shopInventory: {
-                quantity: product.inventory.quantity || 0,
-                lowStockThreshold: product.inventory.lowStockThreshold,
-                effectivePrice: product.pricing.salePrice || product.pricing.basePrice
+                quantity: stock?.stockQty || 0,
+                lowStockThreshold: stock?.lowStockThreshold || 10,
+                effectivePrice: product.pricing?.salePrice || product.pricing?.basePrice
             }
         }
     });
@@ -908,25 +886,26 @@ const allocateInventoryToShop = asyncHandler(async (req, res) => {
             throw new Error('Product not found for this shop');
         }
 
-        // Update product-level inventory and create stock change
-        const previous = product.inventory.quantity || 0;
+        // Update ProductStock and create stock change
+        const productStock = await ProductStock.findOne({ productId: product._id });
+        if (!productStock) throw new Error('Product stock record not found');
+
+        const previous = productStock.stockQty || 0;
         const newStock = previous + quantity;
-        product.inventory.quantity = newStock;
 
-        await product.save();
+        productStock.stockQty = newStock;
+        await productStock.save();
 
-        // Create stock change record (no warehouse model; warehouseId left null)
+        // Create stock change record
         const stockChange = new StockChange({
             companyId,
-            productId: product._id,
-            warehouseId: null,
             shopId: shopId,
-            changeType: 'transfer',
-            quantity,
-            previousStock: previous,
-            newStock,
-            reason: reason || `Allocated to shop ${shopId}`,
-            changedBy: userId || 'system'
+            productId: product._id,
+            userId: userId || 'system',
+            type: 'transfer',
+            qty: quantity,
+            previous: previous,
+            reason: reason || `Allocated to shop ${shopId}`
         });
 
         await stockChange.save();
@@ -966,8 +945,8 @@ const getShopInventorySummary = asyncHandler(async (req, res) => {
         });
     }
 
-    // Aggregate shop inventory data - now using simple shopId field
-    const summary = await Product.aggregate([
+    // Aggregate shop inventory data using ProductStock
+    const summary = await ProductStock.aggregate([
         {
             $match: {
                 companyId,
@@ -975,20 +954,14 @@ const getShopInventorySummary = asyncHandler(async (req, res) => {
             }
         },
         {
-            $project: {
-                quantity: '$inventory.quantity',
-                lowStockThreshold: '$inventory.lowStockThreshold'
-            }
-        },
-        {
             $group: {
                 _id: null,
                 totalProducts: { $sum: 1 },
-                totalQuantity: { $sum: { $ifNull: ['$quantity', 0] } },
+                totalQuantity: { $sum: { $ifNull: ['$stockQty', 0] } },
                 lowStockCount: {
                     $sum: {
                         $cond: [
-                            { $lte: ['$quantity', '$lowStockThreshold'] },
+                            { $lte: ['$stockQty', '$lowStockThreshold'] },
                             1,
                             0
                         ]
@@ -997,7 +970,7 @@ const getShopInventorySummary = asyncHandler(async (req, res) => {
                 outOfStockCount: {
                     $sum: {
                         $cond: [
-                            { $lte: ['$quantity', 0] },
+                            { $lte: ['$stockQty', 0] },
                             1,
                             0
                         ]
@@ -1041,111 +1014,14 @@ const getShopTopSellers = asyncHandler(async (req, res) => {
         });
     }
 
-    const limitNum = Math.min(parseInt(limit), 50);
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - parseInt(period));
-
-    // Get top-selling products for this shop in the period
-    const topSellers = await StockChange.aggregate([
-        {
-            $match: {
-                companyId,
-                shopId,
-                changeType: 'sale',
-                changeDate: { $gte: fromDate }
-            }
-        },
-        {
-            $group: {
-                _id: '$productId',
-                unitsSold: { $sum: { $abs: '$quantity' } },
-                transactionCount: { $sum: 1 },
-                lastSaleDate: { $max: '$changeDate' }
-            }
-        },
-        { $sort: { unitsSold: -1 } },
-        { $limit: limitNum },
-        {
-            $lookup: {
-                from: 'products',
-                localField: '_id',
-                foreignField: '_id',
-                as: 'product'
-            }
-        },
-        { $unwind: '$product' },
-        {
-            $project: {
-                productId: '$_id',
-                name: '$product.name',
-                sku: '$product.sku',
-                brand: '$product.brand',
-                category: '$product.category',
-                unitsSold: 1,
-                transactionCount: 1,
-                lastSaleDate: 1,
-                currentStock: '$product.inventory.quantity',
-                basePrice: '$product.pricing.basePrice',
-                costPrice: '$product.pricing.cost',
-                revenue: { $multiply: ['$unitsSold', '$product.pricing.basePrice'] },
-                profitMargin: {
-                    $multiply: [
-                        {
-                            $divide: [
-                                { $subtract: ['$product.pricing.basePrice', '$product.pricing.cost'] },
-                                '$product.pricing.basePrice'
-                            ]
-                        },
-                        100
-                    ]
-                },
-                daysToStockOut: {
-                    $cond: [
-                        { $gt: ['$unitsSold', 0] },
-                        {
-                            $divide: [
-                                '$product.inventory.quantity',
-                                { $divide: ['$unitsSold', parseInt(period)] }
-                            ]
-                        },
-                        999
-                    ]
-                },
-                velocityPerDay: {
-                    $divide: ['$unitsSold', parseInt(period)]
-                }
-            }
-        }
-    ]);
+    const data = await AnalyticsService.getShopTopSellers(companyId, shopId, period, limit);
 
     res.json({
         success: true,
         shopId,
         period: `${period} days`,
-        count: topSellers.length,
-        data: topSellers.map(product => ({
-            productId: product.productId,
-            name: product.name,
-            sku: product.sku,
-            brand: product.brand,
-            sales: {
-                unitsSold: product.unitsSold,
-                transactionCount: product.transactionCount,
-                totalRevenue: parseFloat(product.revenue.toFixed(2)),
-                velocityPerDay: parseFloat(product.velocityPerDay.toFixed(2))
-            },
-            inventory: {
-                currentStock: product.currentStock,
-                daysToStockOut: product.daysToStockOut > 998 ? 'N/A' : Math.round(product.daysToStockOut),
-                lowStockAlert: product.currentStock < 10
-            },
-            pricing: {
-                basePrice: product.basePrice,
-                costPrice: product.costPrice,
-                profitMargin: parseFloat(product.profitMargin.toFixed(2))
-            },
-            lastSaleDate: product.lastSaleDate
-        }))
+        count: data.length,
+        data
     });
 });
 
@@ -1166,260 +1042,13 @@ const getShopAdvancedAnalytics = asyncHandler(async (req, res) => {
         });
     }
 
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - parseInt(period));
+    const analytics = await AnalyticsService.getShopAnalytics(companyId, shopId, period);
 
-    // 1. Sales Performance
-    const salesData = await StockChange.aggregate([
-        {
-            $match: {
-                companyId,
-                shopId,
-                changeType: 'sale',
-                changeDate: { $gte: fromDate }
-            }
-        },
-        {
-            $lookup: {
-                from: 'products',
-                localField: 'productId',
-                foreignField: '_id',
-                as: 'product'
-            }
-        },
-        { $unwind: '$product' },
-        {
-            $group: {
-                _id: null,
-                totalUnitsSold: { $sum: { $abs: '$quantity' } },
-                totalRevenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
-                totalCost: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.cost'] } },
-                transactionCount: { $sum: 1 }
-            }
-        }
-    ]);
-
-    // 2. Inventory Health
-    const inventoryHealth = await Product.aggregate([
-        { $match: { companyId, shopId } },
-        {
-            $facet: {
-                summary: [
-                    {
-                        $group: {
-                            _id: null,
-                            totalProducts: { $sum: 1 },
-                            totalStock: { $sum: '$inventory.quantity' },
-                            inventoryValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } },
-                            avgStockPerProduct: { $avg: '$inventory.quantity' }
-                        }
-                    }
-                ],
-                health: [
-                    {
-                        $project: {
-                            status: {
-                                $cond: [
-                                    { $eq: ['$inventory.quantity', 0] },
-                                    'outOfStock',
-                                    {
-                                        $cond: [
-                                            { $lte: ['$inventory.quantity', { $ifNull: ['$inventory.lowStockThreshold', 10] }] },
-                                            'lowStock',
-                                            'healthy'
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    },
-                    {
-                        $group: {
-                            _id: '$status',
-                            count: { $sum: 1 }
-                        }
-                    }
-                ]
-            }
-        }
-    ]);
-
-    // 3. Category Performance
-    const categoryPerformance = await StockChange.aggregate([
-        {
-            $match: {
-                companyId,
-                shopId,
-                changeType: 'sale',
-                changeDate: { $gte: fromDate }
-            }
-        },
-        {
-            $lookup: {
-                from: 'products',
-                localField: 'productId',
-                foreignField: '_id',
-                as: 'product'
-            }
-        },
-        { $unwind: '$product' },
-        {
-            $lookup: {
-                from: 'categories',
-                localField: 'product.category',
-                foreignField: '_id',
-                as: 'category'
-            }
-        },
-        {
-            $group: {
-                _id: '$category.name',
-                unitsSold: { $sum: { $abs: '$quantity' } },
-                revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
-                products: { $sum: 1 }
-            }
-        },
-        { $sort: { revenue: -1 } },
-        { $limit: 5 }
-    ]);
-
-    // 4. Stock Movement Patterns
-    const stockMovement = await StockChange.aggregate([
-        {
-            $match: {
-                companyId,
-                shopId,
-                changeDate: { $gte: fromDate }
-            }
-        },
-        {
-            $group: {
-                _id: '$changeType',
-                count: { $sum: 1 },
-                totalQuantity: { $sum: { $abs: '$quantity' } }
-            }
-        }
-    ]);
-
-    // 5. Active Alerts
-    const activeAlerts = await Alert.countDocuments({
-        companyId,
-        shopId,
-        isResolved: false
-    });
-
-    // 6. Recent Adjustments
-    const recentAdjustments = await InventoryAdjustment.find({
-        companyId,
-        shopId
-    }).sort({ createdAt: -1 }).limit(5).lean();
-
-    const sales = salesData[0] || {
-        totalUnitsSold: 0,
-        totalRevenue: 0,
-        totalCost: 0,
-        transactionCount: 0
-    };
-
-    const inventory = inventoryHealth[0]?.summary[0] || {
-        totalProducts: 0,
-        totalStock: 0,
-        inventoryValue: 0,
-        avgStockPerProduct: 0
-    };
-
-    const health = inventoryHealth[0]?.health || [];
-    const healthMap = {};
-    health.forEach(h => {
-        healthMap[h._id] = h.count;
-    });
-
-    const grossProfit = sales.totalRevenue - sales.totalCost;
-    const profitMargin = sales.totalRevenue > 0 ? ((grossProfit / sales.totalRevenue) * 100) : 0;
-
-    const analytics = {
+    // Add success flag as controller expects
+    res.json({
         success: true,
-        shopId,
-        period: `${period} days`,
-        timestamp: new Date(),
-
-        // Sales Performance
-        sales: {
-            totalUnits: sales.totalUnitsSold,
-            totalRevenue: parseFloat(sales.totalRevenue.toFixed(2)),
-            totalCost: parseFloat(sales.totalCost.toFixed(2)),
-            grossProfit: parseFloat(grossProfit.toFixed(2)),
-            profitMargin: parseFloat(profitMargin.toFixed(2)),
-            avgTransactionValue: sales.transactionCount > 0 ? parseFloat((sales.totalRevenue / sales.transactionCount).toFixed(2)) : 0,
-            avgUnitsPerTransaction: sales.transactionCount > 0 ? parseFloat((sales.totalUnitsSold / sales.transactionCount).toFixed(2)) : 0,
-            transactionCount: sales.transactionCount,
-            dailyAvgRevenue: parseFloat((sales.totalRevenue / parseInt(period)).toFixed(2))
-        },
-
-        // Inventory Health
-        inventory: {
-            totalProducts: inventory.totalProducts,
-            totalStock: inventory.totalStock,
-            inventoryValue: parseFloat(inventory.inventoryValue.toFixed(2)),
-            avgStockPerProduct: parseFloat(inventory.avgStockPerProduct.toFixed(2)),
-            status: {
-                healthy: healthMap.healthy || 0,
-                lowStock: healthMap.lowStock || 0,
-                outOfStock: healthMap.outOfStock || 0,
-                healthScore: inventory.totalProducts > 0
-                    ? parseFloat((((healthMap.healthy || 0) / inventory.totalProducts) * 100).toFixed(2))
-                    : 0
-            }
-        },
-
-        // Category Performance
-        categoryBreakdown: categoryPerformance.map(cat => ({
-            category: cat._id || 'Uncategorized',
-            unitsSold: cat.unitsSold,
-            revenue: parseFloat(cat.revenue.toFixed(2)),
-            productsInvolved: cat.products,
-            revenueShare: sales.totalRevenue > 0 ? parseFloat((cat.revenue / sales.totalRevenue * 100).toFixed(2)) : 0
-        })),
-
-        // Stock Movement
-        stockMovement: stockMovement.map(move => ({
-            type: move._id,
-            count: move.count,
-            totalQuantity: move.totalQuantity,
-            percentOfTotal: stockMovement.reduce((sum, m) => sum + m.count, 0) > 0
-                ? parseFloat((move.count / stockMovement.reduce((sum, m) => sum + m.count, 0) * 100).toFixed(2))
-                : 0
-        })),
-
-        // Operational Metrics
-        operations: {
-            activeAlerts,
-            recentAdjustments: recentAdjustments.map(adj => ({
-                id: adj._id,
-                type: adj.adjustmentType,
-                quantity: adj.quantity,
-                reason: adj.reason,
-                status: adj.status,
-                createdAt: adj.createdAt
-            }))
-        },
-
-        // KPI Summary
-        kpis: {
-            healthStatus: healthMap.healthy / inventory.totalProducts > 0.9 ? '✅ Excellent' :
-                healthMap.healthy / inventory.totalProducts > 0.7 ? '⚠️ Good' : '❌ Needs Attention',
-            profitabilityTrend: profitMargin >= 25 ? '📈 Healthy' : '📉 Below Target',
-            velocityStatus: sales.totalUnitsSold > 100 ? '🚀 High Velocity' : '🐌 Moderate Velocity',
-            recommendations: generateShopRecommendations(
-                healthMap.lowStock,
-                inventory.totalProducts,
-                profitMargin,
-                sales.totalUnitsSold
-            )
-        }
-    };
-
-    res.json(analytics);
+        ...analytics
+    });
 });
 
 /**
@@ -1460,8 +1089,8 @@ const getProductComparison = asyncHandler(async (req, res) => {
             $match: {
                 companyId,
                 shopId,
-                changeType: 'sale',
-                changeDate: { $gte: fromDate },
+                type: 'sale',
+                createdAt: { $gte: fromDate },
                 productId: { $in: ids.map(id => mongoose.Types.ObjectId(id)) }
             }
         },
@@ -1479,11 +1108,11 @@ const getProductComparison = asyncHandler(async (req, res) => {
                 _id: '$productId',
                 productName: { $first: '$product.name' },
                 sku: { $first: '$product.sku' },
-                unitsSold: { $sum: { $abs: '$quantity' } },
-                revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
-                costOfSales: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.cost'] } },
+                unitsSold: { $sum: { $abs: '$qty' } },
+                revenue: { $sum: { $multiply: [{ $abs: '$qty' }, '$product.pricing.basePrice'] } },
+                costOfSales: { $sum: { $multiply: [{ $abs: '$qty' }, '$product.pricing.cost'] } },
                 transactionCount: { $sum: 1 },
-                currentStock: { $first: '$product.inventory.quantity' }
+                currentStock: { $first: '$stockQty' }
             }
         }
     ]);
@@ -1540,96 +1169,24 @@ const getShopPerformanceMetrics = asyncHandler(async (req, res) => {
         });
     }
 
-    // Today vs Yesterday comparison
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const metrics = await AnalyticsService.getDailyPerformanceComparison(companyId, shopId);
 
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    const unitGrowth = metrics.growth.units;
+    const revenueGrowth = metrics.growth.revenue;
 
-    const todaySales = await StockChange.aggregate([
-        {
-            $match: {
-                companyId,
-                shopId,
-                changeType: 'sale',
-                changeDate: { $gte: today, $lt: tomorrow }
-            }
-        },
-        {
-            $lookup: {
-                from: 'products',
-                localField: 'productId',
-                foreignField: '_id',
-                as: 'product'
-            }
-        },
-        { $unwind: '$product' },
-        {
-            $group: {
-                _id: null,
-                units: { $sum: { $abs: '$quantity' } },
-                revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } }
-            }
-        }
-    ]);
-
-    const yesterdaySales = await StockChange.aggregate([
-        {
-            $match: {
-                companyId,
-                shopId,
-                changeType: 'sale',
-                changeDate: { $gte: yesterday, $lt: today }
-            }
-        },
-        {
-            $lookup: {
-                from: 'products',
-                localField: 'productId',
-                foreignField: '_id',
-                as: 'product'
-            }
-        },
-        { $unwind: '$product' },
-        {
-            $group: {
-                _id: null,
-                units: { $sum: { $abs: '$quantity' } },
-                revenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } }
-            }
-        }
-    ]);
-
-    const today_data = todaySales[0] || { units: 0, revenue: 0 };
-    const yesterday_data = yesterdaySales[0] || { units: 0, revenue: 0 };
-
-    const unitGrowth = yesterday_data.units > 0 ? ((today_data.units - yesterday_data.units) / yesterday_data.units * 100) : 0;
-    const revenueGrowth = yesterday_data.revenue > 0 ? ((today_data.revenue - yesterday_data.revenue) / yesterday_data.revenue * 100) : 0;
-
-    const metrics = {
+    res.json({
         success: true,
         shopId,
         timestamp: new Date(),
-        today: {
-            units: today_data.units,
-            revenue: parseFloat(today_data.revenue.toFixed(2))
-        },
-        yesterday: {
-            units: yesterday_data.units,
-            revenue: parseFloat(yesterday_data.revenue.toFixed(2))
-        },
+        today: metrics.today,
+        yesterday: metrics.yesterday,
         growth: {
             unitGrowth: parseFloat(unitGrowth.toFixed(2)),
             revenueGrowth: parseFloat(revenueGrowth.toFixed(2)),
             unitTrend: unitGrowth > 0 ? '📈 Up' : unitGrowth < 0 ? '📉 Down' : '➡️ Flat',
             revenueTrend: revenueGrowth > 0 ? '📈 Up' : revenueGrowth < 0 ? '📉 Down' : '➡️ Flat'
         }
-    };
-
-    res.json(metrics);
+    });
 });
 
 /**
@@ -1649,14 +1206,14 @@ const getShopOverview = asyncHandler(async (req, res) => {
     // Total products in shop
     const totalProducts = await Product.countDocuments({ companyId, shopId });
 
-    // Total stock & value
-    const stockData = await Product.aggregate([
+    // Total stock & value from ProductStock
+    const stockData = await ProductStock.aggregate([
         { $match: { companyId, shopId } },
         {
             $group: {
                 _id: null,
-                totalStock: { $sum: '$inventory.quantity' },
-                totalValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }
+                totalStock: { $sum: '$stockQty' },
+                totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', 0] }] } }
             }
         }
     ]);
@@ -1664,17 +1221,17 @@ const getShopOverview = asyncHandler(async (req, res) => {
     const { totalStock = 0, totalValue = 0 } = stockData[0] || {};
 
     // Low stock
-    const lowStockCount = await Product.countDocuments({
+    const lowStockCount = await ProductStock.countDocuments({
         companyId,
         shopId,
-        $expr: { $lte: ['$inventory.quantity', '$inventory.lowStockThreshold'] }
+        $expr: { $lte: ['$stockQty', '$lowStockThreshold'] }
     });
 
     // Out of stock
-    const outOfStockCount = await Product.countDocuments({
+    const outOfStockCount = await ProductStock.countDocuments({
         companyId,
         shopId,
-        'inventory.quantity': 0
+        stockQty: 0
     });
 
     // Active alerts
@@ -1721,19 +1278,19 @@ const getShopStockChanges = asyncHandler(async (req, res) => {
     const query = { companyId, shopId };
     if (changeType) query.type = changeType;
     if (startDate || endDate) {
-        query.changeDate = {};
-        if (startDate) query.changeDate.$gte = new Date(startDate);
+        query.createdAt = {};
+        if (startDate) query.createdAt.$gte = new Date(startDate);
         if (endDate) {
             const endDateObj = new Date(endDate);
             endDateObj.setHours(23, 59, 59, 999);
-            query.changeDate.$lte = endDateObj;
+            query.createdAt.$lte = endDateObj;
         }
     }
 
     try {
         const changesPromise = StockChange.find(query)
             .populate('productId', 'name sku brand categoryId')
-            .sort({ changeDate: -1 })
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(safeLimit)
             .lean();
@@ -1749,10 +1306,10 @@ const getShopStockChanges = asyncHandler(async (req, res) => {
                     summary: [
                         { $group: { _id: null, totalChanges: { $sum: 1 }, totalInbound: { $sum: { $cond: [{ $gt: ['$qtyNorm', 0] }, '$qtyNorm', 0] } }, totalOutbound: { $sum: { $cond: [{ $lt: ['$qtyNorm', 0] }, { $multiply: ['$qtyNorm', -1] }, 0] } }, netChange: { $sum: '$qtyNorm' } } }
                     ],
-                    byType: [ { $group: { _id: '$type', count: { $sum: 1 }, totalQty: { $sum: '$qtyNorm' } } }, { $sort: { count: -1 } } ],
-                    byUser: [ { $group: { _id: '$userId', userId: { $first: '$userId' }, actions: { $sum: 1 }, qtyChanged: { $sum: '$qtyNorm' } } }, { $sort: { actions: -1 } }, { $limit: 10 } ],
-                    topProducts: [ { $group: { _id: '$productId', actions: { $sum: 1 }, qtyChanged: { $sum: '$qtyNorm' } } }, { $sort: { actions: -1 } }, { $limit: 10 }, { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } }, { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } }, { $project: { productId: '$_id', productName: '$product.name', sku: '$product.sku', actions: 1, qtyChanged: 1 } } ],
-                    timeSeries: [ { $group: { _id: { $dateToString: { format: groupFormat, date: '$changeDate' } }, count: { $sum: 1 }, qty: { $sum: '$qtyNorm' } } }, { $sort: { _id: 1 } } ]
+                    byType: [{ $group: { _id: '$type', count: { $sum: 1 }, totalQty: { $sum: '$qtyNorm' } } }, { $sort: { count: -1 } }],
+                    byUser: [{ $group: { _id: '$userId', userId: { $first: '$userId' }, actions: { $sum: 1 }, qtyChanged: { $sum: '$qtyNorm' } } }, { $sort: { actions: -1 } }, { $limit: 10 }],
+                    topProducts: [{ $group: { _id: '$productId', actions: { $sum: 1 }, qtyChanged: { $sum: '$qtyNorm' } } }, { $sort: { actions: -1 } }, { $limit: 10 }, { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } }, { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } }, { $project: { productId: '$_id', productName: '$product.name', sku: '$product.sku', actions: 1, qtyChanged: 1 } }],
+                    timeSeries: [{ $group: { _id: { $dateToString: { format: groupFormat, date: '$createdAt' } }, count: { $sum: 1 }, qty: { $sum: '$qtyNorm' } } }, { $sort: { _id: 1 } }]
                 }
             }
         ]).allowDiskUse(true);
@@ -1891,17 +1448,23 @@ const getShopLowStockProducts = asyncHandler(async (req, res) => {
 
     const query = {
         companyId,
-        shopId,
-        $expr: { $lte: ['$inventory.quantity', '$inventory.lowStockThreshold'] }
+        shopId
     };
 
-    const products = await Product.find(query)
+    const lowStockProductIds = await ProductStock.find({
+        ...query,
+        $expr: { $lte: ['$stockQty', '$lowStockThreshold'] }
+    }).select('productId');
+
+    const products = await Product.find({
+        _id: { $in: lowStockProductIds.map(s => s.productId) }
+    })
         .populate('categoryId', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
 
-    const total = await Product.countDocuments(query);
+    const total = lowStockProductIds.length;
 
     res.json({
         success: true,
@@ -1929,15 +1492,15 @@ const getShopReport = asyncHandler(async (req, res) => {
         });
     }
 
-    // Overview
-    const overview = await Product.aggregate([
+    // Overview from ProductStock
+    const overview = await ProductStock.aggregate([
         { $match: { companyId, shopId } },
         {
             $group: {
                 _id: null,
                 totalProducts: { $sum: 1 },
-                totalStock: { $sum: '$inventory.quantity' },
-                totalValue: { $sum: { $multiply: ['$inventory.quantity', '$pricing.cost'] } }
+                totalStock: { $sum: '$stockQty' },
+                totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', 0] }] } }
             }
         }
     ]);
@@ -1949,14 +1512,14 @@ const getShopReport = asyncHandler(async (req, res) => {
             $match: {
                 companyId,
                 shopId,
-                changeDate: { $gte: sevenDaysAgo }
+                createdAt: { $gte: sevenDaysAgo }
             }
         },
         {
             $group: {
-                _id: '$changeType',
+                _id: '$type',
                 count: { $sum: 1 },
-                totalQuantity: { $sum: '$quantity' }
+                totalQuantity: { $sum: '$qty' }
             }
         }
     ]);
@@ -1995,12 +1558,9 @@ const getProductReport = asyncHandler(async (req, res) => {
 
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
-    // current stock from variations (source-of-truth)
-    const pvAgg = await ProductVariation.aggregate([
-        { $match: { productId: mongoose.Types.ObjectId(productId) } },
-        { $group: { _id: '$productId', currentStock: { $sum: '$stockQty' } } }
-    ]);
-    const currentStock = pvAgg[0]?.currentStock ?? (product.inventory?.quantity ?? 0);
+    // current stock from ProductStock (source-of-truth)
+    const stockRecord = await ProductStock.findOne({ productId: productId });
+    const currentStock = stockRecord?.stockQty || 0;
 
     // paginated stock change history
     const pg = Math.max(1, parseInt(page));
@@ -2009,7 +1569,7 @@ const getProductReport = asyncHandler(async (req, res) => {
 
     const [changes, totalChanges] = await Promise.all([
         StockChange.find({ productId })
-            .sort({ changeDate: -1 })
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(lim)
             .lean(),
@@ -2044,19 +1604,18 @@ const getCategoryReport = asyncHandler(async (req, res) => {
     // total products under category
     const totalProducts = await Product.countDocuments({ companyId, categoryId });
 
-    // aggregate stock & value using ProductVariation and pricing join
+    // aggregate stock & value using ProductStock and pricing join
     const agg = await Product.aggregate([
         { $match: { companyId, categoryId: mongoose.Types.ObjectId(categoryId) } },
-        { $lookup: { from: 'productvariations', localField: '_id', foreignField: 'productId', as: 'variations' } },
+        { $lookup: { from: 'productstocks', localField: '_id', foreignField: 'productId', as: 'stocks' } },
         { $lookup: { from: 'productpricings', localField: 'pricingId', foreignField: '_id', as: 'pricing' } },
         { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
         {
             $project: {
                 productId: '$_id',
-                totalStock: { $sum: { $map: { input: '$variations', as: 'v', in: { $ifNull: ['$$v.stockQty', 0] } } } },
+                totalStock: { $sum: '$stocks.stockQty' },
                 cost: { $ifNull: ['$pricing.cost', 0] },
-                lowStockThreshold: '$inventory.lowStockThreshold',
-                qty: '$inventory.quantity'
+                lowStockThreshold: { $arrayElemAt: ['$stocks.lowStockThreshold', 0] }
             }
         },
         {
@@ -2064,7 +1623,7 @@ const getCategoryReport = asyncHandler(async (req, res) => {
                 _id: null,
                 totalStock: { $sum: '$totalStock' },
                 totalValue: { $sum: { $multiply: ['$totalStock', '$cost'] } },
-                lowStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', '$lowStockThreshold'] }, 1, 0] } },
+                lowStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', { $ifNull: ['$lowStockThreshold', 10] }] }, 1, 0] } },
                 outOfStockCount: { $sum: { $cond: [{ $lte: ['$totalStock', 0] }, 1, 0] } }
             }
         }
@@ -2091,14 +1650,14 @@ const getDailyReport = asyncHandler(async (req, res) => {
 
     // StockChange aggregation by type
     const movement = await StockChange.aggregate([
-        { $match: { companyId, changeDate: { $gte: day, $lt: next } } },
-        { $group: { _id: '$changeType', count: { $sum: 1 }, totalQuantity: { $sum: '$quantity' } } }
+        { $match: { companyId, createdAt: { $gte: day, $lt: next } } },
+        { $group: { _id: '$type', count: { $sum: 1 }, totalQuantity: { $sum: '$qty' } } }
     ]).allowDiskUse(true);
 
     // Sales revenue and units
     const sales = await StockChange.aggregate([
-        { $match: { companyId, changeType: 'sale', changeDate: { $gte: day, $lt: next } } },
-        { $group: { _id: null, unitsSold: { $sum: { $abs: '$quantity' } } } }
+        { $match: { companyId, type: 'sale', createdAt: { $gte: day, $lt: next } } },
+        { $group: { _id: null, unitsSold: { $sum: { $abs: '$qty' } } } }
     ]);
 
     // Alerts created today
@@ -2122,8 +1681,8 @@ const createDailySummaryAlert = asyncHandler(async (req, res) => {
     next.setDate(next.getDate() + 1);
 
     const movement = await StockChange.aggregate([
-        { $match: { companyId, changeDate: { $gte: day, $lt: next } } },
-        { $group: { _id: '$changeType', count: { $sum: 1 }, totalQuantity: { $sum: '$quantity' } } }
+        { $match: { companyId, createdAt: { $gte: day, $lt: next } } },
+        { $group: { _id: '$type', count: { $sum: 1 }, totalQuantity: { $sum: '$qty' } } }
     ]).allowDiskUse(true);
 
     const totalAlerts = await Alert.countDocuments({ companyId, createdAt: { $gte: day, $lt: next } });
@@ -2254,13 +1813,13 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         // Product model will auto-generate new unique codes on save
         const destinationProduct = await Product.create([destinationProductData]);
         const destinationProductId = destinationProduct[0]._id;
-        
+
         // Verify the product was actually created in the database
         const verifyDest = await Product.findById(destinationProductId);
         if (!verifyDest) {
             throw new Error(`Destination product ${destinationProductId} failed to save to database`);
         }
-        
+
         logger.info(`✅ Destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Shop: ${destinationShopId}`);
 
         // ========== STEP 3.25: Replicate variations and variation stocks ==========
@@ -2470,7 +2029,7 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         await destStockChange.save();
 
         // ========== STEP 7: Create ProductTransfer record for complete audit trail ==========
-        const transferValue = quantity * (sourcePricing.price || 0);
+        const transferValue = quantity * (sourcePricing.basePrice || 0);
         const productTransfer = new ProductTransfer({
             transferId: `TRF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
             transferType: 'intra_company',
@@ -2501,8 +2060,8 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
             transferredProductData: {
                 pricing: {
                     cost: destinationPricing.cost,
-                    price: destinationPricing.price,
-                    compareAtPrice: destinationPricing.compareAtPrice,
+                    basePrice: destinationPricing.basePrice,
+                    salePrice: destinationPricing.salePrice,
                     currency: destinationPricing.currency
                 },
                 attributes: sourceProduct.metadata,
@@ -2578,7 +2137,7 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
                     stockChangeId: destStockChange._id,
                     pricing: {
                         cost: destinationPricing.cost,
-                        price: destinationPricing.price
+                        basePrice: destinationPricing.basePrice
                     }
                 },
                 quantityTransferred: quantity,
@@ -2708,13 +2267,13 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
 
         const destinationProduct = await Product.create([destinationProductData]); // Returns array
         const destinationProductId = destinationProduct[0]._id;
-        
+
         // Verify the product was actually created in the database
         const verifyDestProd = await Product.findById(destinationProductId);
         if (!verifyDestProd) {
             throw new Error(`Destination product ${destinationProductId} failed to save to database`);
         }
-        
+
         logger.info(`✅ Cross-company transfer destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Company: ${toCompanyId}`);
 
         // ========== STEP 3.25: Replicate variations and variation stocks ==========
@@ -2893,8 +2452,8 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             transferredProductData: {
                 pricing: {
                     cost: destinationPricing.cost,
-                    price: destinationPricing.price,
-                    compareAtPrice: destinationPricing.compareAtPrice,
+                    basePrice: destinationPricing.basePrice,
+                    salePrice: destinationPricing.salePrice,
                     currency: destinationPricing.currency
                 },
                 attributes: sourceProduct.metadata,
@@ -3437,13 +2996,13 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
 
                 const destinationProduct = await Product.create(destinationProductData);
                 const destinationProductId = destinationProduct._id;
-                
+
                 // Verify product was created
                 const verifyBulkIntra = await Product.findById(destinationProductId);
                 if (!verifyBulkIntra) {
                     throw new Error(`Bulk transfer destination product ${destinationProductId} failed to save`);
                 }
-                
+
                 logger.info(`✅ Bulk intra-company destination product created: ${destinationProductId}, SKU: ${destinationProduct.sku}`);
 
                 // Create destination pricing
@@ -3496,7 +3055,7 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
 
                 // Create transfer record
                 const transferIdIntra = `TRF-INTRA-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-                
+
                 await ProductTransfer.create({
                     transferId: transferIdIntra,
                     transferType: 'intra_company',
@@ -3540,12 +3099,12 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
 
         const successCount = results.successful.length;
         const failureCount = results.failed.length;
-        
+
         logger.info(`✅ Bulk intra-company transfer completed: ${successCount}/${results.totalRequested} successful, ${failureCount} failed`);
 
         // Return success even if some items failed (partial success)
         const statusCode = failureCount > 0 ? 207 : 200;
-        
+
         res.status(statusCode).json({
             success: successCount > 0,
             message: `Bulk transfer completed: ${successCount}/${results.totalRequested} successful${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
@@ -3723,13 +3282,13 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
                 const destinationProduct = await Product.create(destinationProductData);
                 const destinationProductId = destinationProduct._id;
-                
+
                 // Verify product was created
                 const verifyBulkCross = await Product.findById(destinationProductId);
                 if (!verifyBulkCross) {
                     throw new Error(`Bulk cross-company transfer destination product ${destinationProductId} failed to save`);
                 }
-                
+
                 logger.info(`✅ Bulk cross-company destination product created: ${destinationProductId}, SKU: ${destinationProduct.sku}`);
 
                 // Create destination pricing
@@ -3784,7 +3343,7 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
                 // Create transfer record
                 const transferIdCross = `TRF-CROSS-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-                
+
                 await ProductTransfer.create({
                     transferId: transferIdCross,
                     transferType: 'cross_company',
@@ -3829,13 +3388,13 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
         const successCount = results.successful.length;
         const failureCount = results.failed.length;
-        
+
         logger.info(`✅ Bulk cross-company transfer completed: ${successCount}/${results.totalRequested} successful, ${failureCount} failed`);
         logger.info(`✅ Categories created/mapped: ${results.categoriesCreated.length}`);
 
         // Return success even if some items failed (partial success)
         const statusCode = failureCount > 0 ? 207 : 200;
-        
+
         res.status(statusCode).json({
             success: successCount > 0,
             message: `Bulk cross-company transfer completed: ${successCount}/${results.totalRequested} successful${failureCount > 0 ? `, ${failureCount} failed` : ''}`,

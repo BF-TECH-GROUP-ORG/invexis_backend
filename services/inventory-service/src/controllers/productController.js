@@ -84,7 +84,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
   // Handle stock filter by querying ProductStock
   if (inStock === 'true') {
     const stocks = await ProductStock.aggregate([
-      { $group: { _id: '$productId', qty: { $sum: { $subtract: ['$quantity', '$reserved'] } } } },
+      { $group: { _id: '$productId', qty: { $sum: { $subtract: ['$stockQty', '$reservedQty'] } } } },
       { $match: { qty: { $gt: 0 } } },
       { $project: { productId: '$_id' } }
     ]).exec();

@@ -1,6 +1,7 @@
 // inventoryService.js (Improved)
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
+const ProductStock = require('../models/ProductStock');
 const StockChange = require('../models/StockChange');
 const Category = require('../models/Category');
 const { logger } = require('../utils/logger');
@@ -15,16 +16,24 @@ const addProduct = async (data) => {
     const product = new Product(data);
     await product.save({ session });
 
+    const productStock = new ProductStock({
+      productId: product._id,
+      stockQty: (data.inventory?.quantity || data.initialQuantity || 0),
+      lowStockThreshold: (data.inventory?.lowStockThreshold || data.lowStockThreshold || 10)
+    });
+    await productStock.save({ session });
+
     // Initial stock with warehouse/variation support if provided
-    if (data.inventory.quantity > 0) {
+    if (data.inventory?.quantity > 0) {
       const stockChange = new StockChange({
         companyId: data.companyId,
+        shopId: data.shopId, // Added shopId as it's required in StockChange
         productId: product._id,
         variationId: data.variationId || null,
-        warehouseId: null,
-        changeType: 'restock',
-        quantity: data.inventory.quantity,
-        previousStock: 0,
+        userId: data.userId || 'system', // Added userId as it's required
+        type: 'restock',
+        qty: data.inventory.quantity,
+        previous: 0,
         reason: 'Initial stock addition'
       });
       await stockChange.save({ session });
@@ -53,20 +62,33 @@ const updateProduct = async (asin, companyId, data) => {
     const product = await Product.findOne({ asin, companyId }).session(session);
     if (!product) throw new Error('Product not found or not owned');
 
+    const productStock = await ProductStock.findOne({ productId: product._id }).session(session);
+    if (!productStock) throw new Error('Product stock record not found');
+
     // Handle stock delta with variation/warehouse
-    const stockDelta = data.inventory?.quantity - product.inventory.quantity;
+    const currentStock = productStock.stockQty;
+    const requestedStock = data.inventory?.quantity !== undefined ? data.inventory.quantity : currentStock;
+    const stockDelta = requestedStock - currentStock;
+
     if (stockDelta !== 0) {
       const stockChange = new StockChange({
         companyId,
+        shopId: product.shopId,
         productId: product._id,
         variationId: data.variationId || null,
-        warehouseId: null,
-        changeType: stockDelta > 0 ? 'restock' : 'adjustment',
-        quantity: stockDelta,
-        previousStock: product.inventory.quantity,
+        userId: data.userId || 'system',
+        type: stockDelta > 0 ? 'restock' : 'adjustment',
+        qty: stockDelta,
+        previous: currentStock,
         reason: data.reason || (stockDelta > 0 ? 'Restock update' : 'Stock adjustment')
       });
       await stockChange.save({ session });
+    }
+
+    // Update low stock threshold if provided
+    if (data.inventory?.lowStockThreshold !== undefined) {
+      productStock.lowStockThreshold = data.inventory.lowStockThreshold;
+      await productStock.save({ session });
     }
 
     const updatedProduct = await Product.findOneAndUpdate(
@@ -93,17 +115,25 @@ const deleteProduct = async (asin, companyId) => {
     const product = await Product.findOne({ asin, companyId }).session(session);
     if (!product) throw new Error('Product not found or not owned');
 
+    const productStock = await ProductStock.findOne({ productId: product._id }).session(session);
+
     // Log final stock adjustment if any
-    if (product.inventory.quantity > 0) {
+    if (productStock && productStock.stockQty > 0) {
       const stockChange = new StockChange({
         companyId,
+        shopId: product.shopId,
         productId: product._id,
-        changeType: 'adjustment',
-        quantity: -product.inventory.quantity,
-        previousStock: product.inventory.quantity,
+        userId: 'system',
+        type: 'adjustment',
+        qty: -productStock.stockQty,
+        previous: productStock.stockQty,
         reason: 'Product deletion'
       });
       await stockChange.save({ session });
+    }
+
+    if (productStock) {
+      await ProductStock.deleteOne({ _id: productStock._id }, { session });
     }
 
     await Product.deleteOne({ asin, companyId }, { session });

@@ -75,15 +75,15 @@ if (mongoSanitize) {
       // Safe sanitization that doesn't modify read-only properties
       const sanitizeObj = (obj) => {
         if (!obj || typeof obj !== 'object') return obj;
-        
+
         const sanitized = {};
         for (const [key, value] of Object.entries(obj)) {
           if (typeof key === 'string' && (key.includes('$') || key.includes('.'))) {
             continue; // Skip potentially dangerous keys
           }
-          
+
           if (typeof value === 'object' && value !== null) {
-            sanitized[key] = Array.isArray(value) 
+            sanitized[key] = Array.isArray(value)
               ? value.map(item => sanitizeObj(item))
               : sanitizeObj(value);
           } else {
@@ -97,7 +97,7 @@ if (mongoSanitize) {
       if (req.body && typeof req.body === 'object') {
         req.body = sanitizeObj(req.body);
       }
-      
+
       // Skip query sanitization for HEAD/GET requests to avoid conflicts
       if (req.method !== 'HEAD' && req.method !== 'GET' && req.query && typeof req.query === 'object') {
         try {
@@ -106,7 +106,7 @@ if (mongoSanitize) {
           // Skip query sanitization if it causes errors
         }
       }
-      
+
       if (req.params && typeof req.params === 'object') {
         try {
           Object.assign(req.params, sanitizeObj(req.params));
@@ -114,7 +114,7 @@ if (mongoSanitize) {
           // Skip params sanitization if it causes errors
         }
       }
-      
+
       next();
     } catch (error) {
       next();
@@ -130,13 +130,13 @@ if (xss) {
       if (req.body && typeof req.body === 'object') {
         const cleanObj = (obj) => {
           if (!obj || typeof obj !== 'object') return obj;
-          
+
           const cleaned = {};
           for (const [key, value] of Object.entries(obj)) {
             if (typeof value === 'string') {
               cleaned[key] = value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
             } else if (typeof value === 'object' && value !== null) {
-              cleaned[key] = Array.isArray(value) 
+              cleaned[key] = Array.isArray(value)
                 ? value.map(item => cleanObj(item))
                 : cleanObj(value);
             } else {
@@ -145,7 +145,7 @@ if (xss) {
           }
           return cleaned;
         };
-        
+
         req.body = cleanObj(req.body);
       }
       next();
@@ -223,10 +223,9 @@ const initializeEventSystem = async () => {
 // Initialize Alert Cron Jobs
 const initializeAlertCronJobs = async () => {
   try {
-    // Temporarily disabled to prevent 'next is not a function' errors
-    // const cronWorker = AlertCronJobWorker.getInstance();
-    // await cronWorker.initializeAllJobs();
-    logger.info("Alert cron jobs temporarily disabled for production stability");
+    const cronWorker = AlertCronJobWorker.getInstance();
+    await cronWorker.initializeAllJobs();
+    logger.info("✅ Alert cron jobs initialized and running");
   } catch (error) {
     logger.error("❌ Failed to initialize alert cron jobs:", error);
     // Continue running even if cron jobs fail

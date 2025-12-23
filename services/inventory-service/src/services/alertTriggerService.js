@@ -8,6 +8,9 @@ const Alert = require('../models/Alert');
 const Product = require('../models/Product');
 const StockChange = require('../models/StockChange');
 const Category = require('../models/Category');
+const ProductStock = require('../models/ProductStock');
+const Outbox = require('../models/Outbox');
+const producer = require('../events/producer');
 const logger = require('../utils/logger');
 
 class AlertTriggerService {
@@ -49,8 +52,12 @@ class AlertTriggerService {
      */
     static async triggerLowStockAlert(productData, companyId, shopId = null) {
         try {
-            const { _id, name, inventory } = productData;
-            const lowStockThreshold = inventory.lowStockThreshold || 10;
+            const { _id, name } = productData;
+
+            // Get stock info from ProductStock
+            const stockRecord = await ProductStock.findOne({ productId: _id });
+            const lowStockThreshold = stockRecord?.lowStockThreshold || 10;
+            const currentStock = stockRecord?.stockQty || 0;
 
             const scope = shopId ? 'shop' : 'company';
 
@@ -63,11 +70,11 @@ class AlertTriggerService {
                 priority: 'high',
                 threshold: lowStockThreshold,
                 message: `⚠️ Low Stock Alert: ${name}`,
-                description: `Stock for ${name} is below threshold (${inventory.quantity}/${lowStockThreshold})`,
+                description: `Stock for ${name} is below threshold (${currentStock}/${lowStockThreshold})`,
                 data: {
                     productId: _id.toString(),
                     productName: name,
-                    currentStock: inventory.quantity,
+                    currentStock: currentStock,
                     threshold: lowStockThreshold,
                     status: 'critical'
                 }
@@ -157,7 +164,9 @@ class AlertTriggerService {
      */
     static async triggerInventoryAdjustmentAlert(productData, adjustment, reason, companyId, shopId = null) {
         try {
-            const { _id, name, inventory } = productData;
+            const { _id, name } = productData;
+
+            const stockRecord = await ProductStock.findOne({ productId: _id });
 
             const scope = shopId ? 'shop' : 'company';
             const adjustmentType = adjustment > 0 ? 'addition' : 'deduction';
@@ -177,7 +186,7 @@ class AlertTriggerService {
                     productName: name,
                     adjustment,
                     reason,
-                    newStock: inventory.quantity,
+                    newStock: stockRecord?.stockQty || 0,
                     timestamp: new Date()
                 }
             });
@@ -338,14 +347,14 @@ class AlertTriggerService {
             tomorrow.setDate(tomorrow.getDate() + 1);
 
             const scope = shopId ? 'shop' : 'company';
-            const matchQuery = { companyId, changeDate: { $gte: today, $lt: tomorrow } };
+            const matchQuery = { companyId, createdAt: { $gte: today, $lt: tomorrow } };
 
             if (shopId) {
                 matchQuery.shopId = shopId;
             }
 
             const sales = await StockChange.aggregate([
-                { $match: { ...matchQuery, changeType: 'sale' } },
+                { $match: { ...matchQuery, type: 'sale' } },
                 {
                     $lookup: {
                         from: 'products',
@@ -358,8 +367,8 @@ class AlertTriggerService {
                 {
                     $group: {
                         _id: null,
-                        totalUnits: { $sum: { $abs: '$quantity' } },
-                        totalRevenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+                        totalUnits: { $sum: { $abs: '$qty' } },
+                        totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, '$product.pricing.basePrice'] } },
                         transactionCount: { $sum: 1 }
                     }
                 }
@@ -399,14 +408,14 @@ class AlertTriggerService {
             lastWeek.setDate(lastWeek.getDate() - 7);
 
             const scope = shopId ? 'shop' : 'company';
-            const matchQuery = { companyId, changeDate: { $gte: lastWeek } };
+            const matchQuery = { companyId, createdAt: { $gte: lastWeek } };
 
             if (shopId) {
                 matchQuery.shopId = shopId;
             }
 
             const sales = await StockChange.aggregate([
-                { $match: { ...matchQuery, changeType: 'sale' } },
+                { $match: { ...matchQuery, type: 'sale' } },
                 {
                     $lookup: {
                         from: 'products',
@@ -419,8 +428,8 @@ class AlertTriggerService {
                 {
                     $group: {
                         _id: null,
-                        totalUnits: { $sum: { $abs: '$quantity' } },
-                        totalRevenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+                        totalUnits: { $sum: { $abs: '$qty' } },
+                        totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, '$product.pricing.basePrice'] } },
                         transactionCount: { $sum: 1 }
                     }
                 }
@@ -461,14 +470,14 @@ class AlertTriggerService {
             lastMonth.setMonth(lastMonth.getMonth() - 1);
 
             const scope = shopId ? 'shop' : 'company';
-            const matchQuery = { companyId, changeDate: { $gte: lastMonth } };
+            const matchQuery = { companyId, createdAt: { $gte: lastMonth } };
 
             if (shopId) {
                 matchQuery.shopId = shopId;
             }
 
             const sales = await StockChange.aggregate([
-                { $match: { ...matchQuery, changeType: 'sale' } },
+                { $match: { ...matchQuery, type: 'sale' } },
                 {
                     $lookup: {
                         from: 'products',
@@ -481,8 +490,8 @@ class AlertTriggerService {
                 {
                     $group: {
                         _id: null,
-                        totalUnits: { $sum: { $abs: '$quantity' } },
-                        totalRevenue: { $sum: { $multiply: [{ $abs: '$quantity' }, '$product.pricing.basePrice'] } },
+                        totalUnits: { $sum: { $abs: '$qty' } },
+                        totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, '$product.pricing.basePrice'] } },
                         transactionCount: { $sum: 1 }
                     }
                 }
@@ -523,7 +532,7 @@ class AlertTriggerService {
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
             const scope = shopId ? 'shop' : 'company';
-            const matchQuery = { companyId, changeType: 'sale', changeDate: { $gte: sevenDaysAgo } };
+            const matchQuery = { companyId, type: 'sale', createdAt: { $gte: sevenDaysAgo } };
 
             if (shopId) {
                 matchQuery.shopId = shopId;
@@ -535,7 +544,7 @@ class AlertTriggerService {
                 {
                     $group: {
                         _id: '$productId',
-                        unitsSold: { $sum: { $abs: '$quantity' } }
+                        unitsSold: { $sum: { $abs: '$qty' } }
                     }
                 },
                 { $match: { unitsSold: { $gt: 50 } } }
@@ -566,16 +575,21 @@ class AlertTriggerService {
 
             const products = await Product.find({
                 companyId,
-                'inventory.quantity': { $gt: 0 },
                 ...(shopId && { shopId })
             });
 
+            const ProductStock = require('../models/ProductStock');
+
             for (const product of products) {
+                // Get current stock from ProductStock model
+                const stockRecord = await ProductStock.findOne({ productId: product._id });
+                if (!stockRecord || stockRecord.stockQty === 0) continue;
+
                 const lastSale = await StockChange.findOne({
                     companyId,
                     productId: product._id,
-                    changeType: 'sale',
-                    changeDate: { $gte: thirtyDaysAgo },
+                    type: 'sale',
+                    createdAt: { $gte: thirtyDaysAgo },
                     ...(shopId && { shopId })
                 });
 
@@ -591,7 +605,7 @@ class AlertTriggerService {
                         description: `No sales in 30 days`,
                         data: {
                             lastSaleCheck: thirtyDaysAgo,
-                            currentStock: product.inventory.quantity
+                            currentStock: stockRecord.stockQty
                         }
                     });
 
@@ -600,32 +614,37 @@ class AlertTriggerService {
             }
 
             // 3. Stock Out Prediction
+            // const ProductStock = require('../models/ProductStock');
+
             for (const item of velocity) {
                 const dailyVelocity = item.unitsSold / 7;
                 const product = await Product.findById(item._id);
+                if (!product) continue;
 
-                if (product && product.inventory.quantity > 0) {
-                    const daysLeft = product.inventory.quantity / dailyVelocity;
+                // Get current stock from ProductStock model
+                const stockRecord = await ProductStock.findOne({ productId: product._id });
+                if (!stockRecord || stockRecord.stockQty === 0) continue;
 
-                    if (daysLeft < 7) {
-                        const alert = await Alert.createOrUpdate({
-                            scope,
-                            companyId,
-                            shopId,
-                            type: 'stock_out_prediction',
-                            productId: product._id,
-                            priority: 'high',
-                            message: `⏰ Stock Out in ${Math.ceil(daysLeft)} days: ${product.name}`,
-                            description: `Will run out of stock in ~${Math.ceil(daysLeft)} days`,
-                            data: {
-                                currentStock: product.inventory.quantity,
-                                dailyVelocity: dailyVelocity.toFixed(2),
-                                predictedDaysLeft: Math.ceil(daysLeft)
-                            }
-                        });
+                const daysLeft = stockRecord.stockQty / dailyVelocity;
 
-                        if (alert) alertsGenerated.push(alert);
-                    }
+                if (daysLeft < 7) {
+                    const alert = await Alert.createOrUpdate({
+                        scope,
+                        companyId,
+                        shopId,
+                        type: 'stock_out_prediction',
+                        productId: product._id,
+                        priority: 'high',
+                        message: `⏰ Stock Out in ${Math.ceil(daysLeft)} days: ${product.name}`,
+                        description: `Will run out of stock in ~${Math.ceil(daysLeft)} days`,
+                        data: {
+                            currentStock: stockRecord.stockQty,
+                            dailyVelocity: dailyVelocity.toFixed(2),
+                            predictedDaysLeft: Math.ceil(daysLeft)
+                        }
+                    });
+
+                    if (alert) alertsGenerated.push(alert);
                 }
             }
 

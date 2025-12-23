@@ -46,7 +46,7 @@ inventoryAdjustmentSchema.pre('save', async function (next) {
       });
 
       if (!stockRecord) return next(new Error('Stock record not found for adjustment'));
-      
+
       const oldQuantity = stockRecord.stockQty;
       const stockDelta = this.quantity * -1; // As per schema, negative for loss
       const newQuantity = Math.max(0, oldQuantity + stockDelta);
@@ -62,10 +62,10 @@ inventoryAdjustmentSchema.pre('save', async function (next) {
         shopId: this.shopId, // Include shopId for shop-level tracking
         productId: this.productId,
         variationId: this.variationId,
-        changeType: 'adjustment',
-        quantity: stockDelta,
-        previousStock: oldQuantity,
-        newStock: newQuantity, // Required field set
+        type: 'adjustment',
+        qty: stockDelta,
+        previous: oldQuantity,
+        new: newQuantity, // Required field set
         reason: this.reason,
         userId: this.userId
       });

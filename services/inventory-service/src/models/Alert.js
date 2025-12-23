@@ -119,11 +119,25 @@ alertSchema.pre('save', function (next) {
   next();
 });
 
+// Event emission hook
+alertSchema.post('save', async function (doc) {
+  try {
+    const Outbox = mongoose.model('Outbox');
+    await Outbox.create({
+      type: 'inventory.alert.triggered',
+      routingKey: `inventory.alert.${doc.type}`,
+      payload: doc.toObject()
+    });
+  } catch (err) {
+    console.error('Failed to create outbox entry for alert:', err.message);
+  }
+});
+
 // ========== DEDUPLICATION: CreateOrUpdate to prevent alert spam ==========
-alertSchema.statics.createOrUpdate = async function(alertData) {
+alertSchema.statics.createOrUpdate = async function (alertData) {
   try {
     const { companyId, type, productId, shopId } = alertData;
-    
+
     // For stock alerts: check if unresolved alert exists within 4 hours
     if (['low_stock', 'out_of_stock'].includes(type)) {
       const existingAlert = await this.findOne({
@@ -134,7 +148,7 @@ alertSchema.statics.createOrUpdate = async function(alertData) {
         isResolved: false,
         createdAt: { $gte: new Date(Date.now() - 4 * 60 * 60 * 1000) } // Last 4 hours
       });
-      
+
       if (existingAlert) {
         // Increment count and update data instead of creating new alert
         existingAlert.data = existingAlert.data || {};
@@ -144,7 +158,7 @@ alertSchema.statics.createOrUpdate = async function(alertData) {
         return await existingAlert.save();
       }
     }
-    
+
     // No duplicate found, create new alert
     return await this.create(alertData);
   } catch (err) {

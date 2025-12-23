@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  getOverview,
   getCompanyMetrics,
   getShopMetrics,
   getProductAnalytics,
@@ -20,34 +21,39 @@ const {
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
 
 /**
+ * Comprehensive Inventory Overview
+ */
+router.get('/overview', authenticateToken, requireRole(['super_admin', 'company_admin']), getOverview);
+
+/**
  * Company-level analytics
  */
-router.get('/company-metrics', authenticateToken, requireRole(['super_admin','company_admin']), getCompanyMetrics);
+router.get('/company-metrics', authenticateToken, requireRole(['super_admin', 'company_admin']), getCompanyMetrics);
 
 /**
  * Shop-level analytics
  */
-router.get('/shop-metrics/:shopId', authenticateToken, requireRole(['super_admin','company_admin']), getShopMetrics);
+router.get('/shop-metrics/:shopId', authenticateToken, requireRole(['super_admin', 'company_admin']), getShopMetrics);
 
 /**
  * Product-level analytics
  */
-router.get('/product/:productId', authenticateToken, requireRole(['super_admin','company_admin']), getProductAnalytics);
+router.get('/product/:productId', authenticateToken, requireRole(['super_admin', 'company_admin']), getProductAnalytics);
 
 /**
  * Top products by profit
  */
-router.get('/top-products', authenticateToken, requireRole(['super_admin','company_admin']), getTopProductsByProfit);
+router.get('/top-products', authenticateToken, requireRole(['super_admin', 'company_admin']), getTopProductsByProfit);
 
 /**
  * Low stock alerts
  */
-router.get('/low-stock', authenticateToken, requireRole(['super_admin','company_admin']), getLowStockProducts);
+router.get('/low-stock', authenticateToken, requireRole(['super_admin', 'company_admin']), getLowStockProducts);
 
 /**
  * Stockout risk predictions
  */
-router.get('/stockout-risk', authenticateToken, requireRole(['super_admin','company_admin']), getStockoutRiskProducts);
+router.get('/stockout-risk', authenticateToken, requireRole(['super_admin', 'company_admin']), getStockoutRiskProducts);
 
 /**
  * Graph data endpoints
@@ -56,16 +62,16 @@ router.get('/stockout-risk', authenticateToken, requireRole(['super_admin','comp
 /**
  * Inventory trends graph (time-series stock movements, velocity, revenue, cost)
  */
-router.get('/graphs/inventory-trends', authenticateToken, requireRole(['super_admin','company_admin']), getInventoryTrendsGraph);
+router.get('/graphs/inventory-trends', authenticateToken, requireRole(['super_admin', 'company_admin']), getInventoryTrendsGraph);
 
 /**
  * Profit comparison graph (today vs yesterday, week, month, year)
  */
-router.get('/graphs/profit-comparison', authenticateToken, requireRole(['super_admin','company_admin']), getProfitComparisonGraph);
+router.get('/graphs/profit-comparison', authenticateToken, requireRole(['super_admin', 'company_admin']), getProfitComparisonGraph);
 
 /**
  * Product profit trends (daily breakdown, top 10 products or specific product)
  */
-router.get('/graphs/product-profit-trends', authenticateToken, requireRole(['super_admin','company_admin']), getProductProfitTrendsGraph);
+router.get('/graphs/product-profit-trends', authenticateToken, requireRole(['super_admin', 'company_admin']), getProductProfitTrendsGraph);
 
 module.exports = router;

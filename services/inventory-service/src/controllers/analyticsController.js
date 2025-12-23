@@ -7,10 +7,36 @@
 const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
-const InventoryAnalyticsService = require('../services/inventoryAnalyticsService');
-const AnalyticsGraphService = require('../services/analyticsGraphService');
+const AnalyticsService = require('../services/analyticsService');
 const { getCache, setCache } = require('../utils/redisHelper');
 const logger = require('../utils/logger');
+
+/**
+ * GET /inventory/v1/analytics/overview
+ * Get comprehensive inventory overview (20+ datasets)
+ * Query params: companyId (required), shopId, startDate, endDate
+ */
+const getOverview = asyncHandler(async (req, res) => {
+  const { companyId, shopId, startDate, endDate, timezone } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  // Ensure dates are present
+  const end = endDate ? new Date(endDate) : new Date();
+  const start = startDate ? new Date(startDate) : new Date(new Date().setDate(end.getDate() - 30));
+
+  const overview = await AnalyticsService.getOverview({
+    companyId,
+    shopId: shopId || null,
+    startDate: start,
+    endDate: end,
+    timezone: timezone || 'UTC'
+  });
+
+  res.status(200).json({ success: true, data: overview });
+});
 
 /**
  * GET /inventory/v1/analytics/company-metrics
@@ -30,11 +56,32 @@ const getCompanyMetrics = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const metrics = await InventoryAnalyticsService.getCompanyMetrics(companyId, { startDate, endDate });
+  // Enriching company metrics using new service
+  const snapshot = await AnalyticsService.getInventorySnapshot(companyId);
+  const kpis = await AnalyticsService.getKPIs(companyId, null, startDate || new Date(Date.now() - 30 * 24 * 3600 * 1000), endDate || new Date());
 
-  // Cache result
-  setCache(cacheKey, metrics, 1800).catch(() => {}); // 30 min cache
+  // Combine for legacy compatibility but richer
+  const metrics = {
+    companyId,
+    period: { startDate, endDate },
+    sales: {
+      totalUnits: kpis.stockOutUnits, // Using stockOut as proxy for sales in KPI
+      // kpis.grossProfit / kpis.grossMargin can derive revenue
+      totalRevenue: kpis.grossMargin ? (kpis.grossProfit / (kpis.grossMargin / 100)) : 0
+    },
+    inventory: snapshot,
+    profitability: {
+      totalProfit: kpis.grossProfit,
+      profitMarginPercent: kpis.grossMargin,
+      costOfGoods: (kpis.grossMargin ? (kpis.grossProfit / (kpis.grossMargin / 100)) : 0) - kpis.grossProfit
+    },
+    metrics: {
+      turnoverRatio: kpis.inventoryTurnoverRatio,
+      holdingDays: kpis.inventoryHoldingDays
+    }
+  };
 
+  setCache(cacheKey, metrics, 300).catch(() => { });
   res.status(200).json({ success: true, data: metrics });
 });
 
@@ -56,10 +103,19 @@ const getShopMetrics = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const metrics = await InventoryAnalyticsService.getShopMetrics(companyId, shopId, { startDate, endDate });
+  const shopPerf = await AnalyticsService.getShopPerformance(companyId, startDate || new Date(Date.now() - 30 * 24 * 3600 * 1000), endDate || new Date());
+  const myShop = shopPerf.find(s => s.shopId === shopId) || {};
 
-  setCache(cacheKey, metrics, 1800).catch(() => {});
+  // Augment with snapshot specific to shop
+  const snapshot = await AnalyticsService.getInventorySnapshot(companyId, shopId);
 
+  const metrics = {
+    shopId,
+    performance: myShop,
+    inventory: snapshot
+  };
+
+  setCache(cacheKey, metrics, 300).catch(() => { });
   res.status(200).json({ success: true, data: metrics });
 });
 
@@ -80,10 +136,8 @@ const getProductAnalytics = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const analytics = await InventoryAnalyticsService.getProductAnalytics(productId);
-
-  setCache(cacheKey, analytics, 900).catch(() => {}); // 15 min cache
-
+  const analytics = await AnalyticsService.getProductAnalytics(productId);
+  setCache(cacheKey, analytics, 300).catch(() => { });
   res.status(200).json({ success: true, data: analytics });
 });
 
@@ -104,10 +158,8 @@ const getTopProductsByProfit = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const products = await InventoryAnalyticsService.getTopProductsByProfit(companyId, parseInt(limit));
-
-  setCache(cacheKey, products, 3600).catch(() => {}); // 1 hour cache
-
+  const products = await AnalyticsService.getTopProducts(companyId, null); // uses 30 day lookback internally
+  setCache(cacheKey, products, 300).catch(() => { });
   res.status(200).json({ success: true, data: products, count: products.length });
 });
 
@@ -128,10 +180,8 @@ const getLowStockProducts = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const products = await InventoryAnalyticsService.getLowStockProducts(companyId, shopId);
-
-  setCache(cacheKey, products, 600).catch(() => {}); // 10 min cache
-
+  const products = await AnalyticsService.getLowStockProducts(companyId, shopId);
+  setCache(cacheKey, products, 300).catch(() => { });
   res.status(200).json({ success: true, data: products, count: products.length });
 });
 
@@ -152,11 +202,9 @@ const getStockoutRiskProducts = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const products = await InventoryAnalyticsService.getStockoutRiskProducts(companyId);
-
-  setCache(cacheKey, products, 600).catch(() => {}); // 10 min cache
-
-  res.status(200).json({ success: true, data: products, count: products.length });
+  const riskData = await AnalyticsService.getRisksAndHealth(companyId);
+  setCache(cacheKey, riskData.stockoutRisks, 300).catch(() => { });
+  res.status(200).json({ success: true, data: riskData.stockoutRisks, count: riskData.stockoutRisks.length });
 });
 
 /**
@@ -177,15 +225,14 @@ const getInventoryTrendsGraph = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const trends = await AnalyticsGraphService.getInventoryTrends(
+  const trends = await AnalyticsService.getInventoryTrends(
     companyId,
     shopId || null,
     period,
     parseInt(rangeInDays)
   );
 
-  setCache(cacheKey, trends, 900).catch(() => {}); // 15 min cache for trends
-
+  setCache(cacheKey, trends, 300).catch(() => { });
   res.status(200).json({ success: true, ...trends });
 });
 
@@ -207,10 +254,8 @@ const getProfitComparisonGraph = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const comparison = await AnalyticsGraphService.getProfitComparison(companyId, shopId || null);
-
-  setCache(cacheKey, comparison, 600).catch(() => {}); // 10 min cache for comparisons
-
+  const comparison = await AnalyticsService.getProfitComparison(companyId, shopId || null);
+  setCache(cacheKey, comparison, 300).catch(() => { });
   res.status(200).json({ success: true, ...comparison });
 });
 
@@ -232,18 +277,17 @@ const getProductProfitTrendsGraph = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, data: cached, fromCache: true });
   }
 
-  const trends = await AnalyticsGraphService.getProductProfitTrends(
+  const trends = await AnalyticsService.getProductProfitTrends(
     companyId,
     productId || null,
     parseInt(rangeInDays)
   );
-
-  setCache(cacheKey, trends, 1800).catch(() => {}); // 30 min cache for product trends
-
+  setCache(cacheKey, trends, 300).catch(() => { });
   res.status(200).json({ success: true, ...trends });
 });
 
 module.exports = {
+  getOverview,
   getCompanyMetrics,
   getShopMetrics,
   getProductAnalytics,

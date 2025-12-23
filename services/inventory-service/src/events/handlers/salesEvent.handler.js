@@ -9,6 +9,7 @@ const Product = require('../../models/Product');
 const ProductStock = require('../../models/ProductStock');
 const StockChange = require('../../models/StockChange');
 const logger = require('../../utils/logger');
+const redisHelper = require('../../utils/redisHelper');
 const { publishProductEvent } = require('../productEvents');
 const { processEventOnce } = require('../../utils/eventDeduplication');
 
@@ -18,9 +19,9 @@ const { processEventOnce } = require('../../utils/eventDeduplication');
 async function handleSaleCreated(data) {
   const { saleId, items, traceId, companyId, shopId, soldBy } = data;
 
-  logger.info(`💰 [sale.created] Processing sale ${saleId}`, { 
-    traceId, 
-    companyId, 
+  logger.info(`💰 [sale.created] Processing sale ${saleId}`, {
+    traceId,
+    companyId,
     shopId,
     itemsCount: items?.length || 0,
     items: items?.map(i => ({ productId: i.productId, quantity: i.quantity }))
@@ -131,7 +132,7 @@ async function handleSaleCreated(data) {
       const stockChange = new StockChange({
         companyId,
         shopId: shopId || product.shopId,
-        productId: productIdObj, // Use ObjectId
+        productId: productId, // Already ObjectId or handled
         variationId: null, // Master product, no variation
         type: 'sale', // Use 'type' not 'changeType'
         qty: changeQty, // Use 'qty' not 'quantity', negative for outflow
@@ -141,8 +142,11 @@ async function handleSaleCreated(data) {
         meta: {
           saleId: saleId,
           unitPrice: unitPrice || 0,
+          unitCost: item.costPrice || 0, // ADDED: Capture cost for profit analytics
           customerName: data.customerName || null,
-          receiptNo: saleId.toString()
+          productName: product.name, // ADDED: Snapshot name
+          receiptNo: saleId.toString(),
+          isDebt: !!data.isDebt // Analytics: Debt tracking
         }
         // 'new' will be calculated by pre-save hook
       });
@@ -180,7 +184,13 @@ async function handleSaleCreated(data) {
       });
 
       // Emit inventory events
-      await publishProductEvent('inventory.product.updated', product);
+      await publishProductEvent('inventory.product.updated', {
+        _id: product._id,
+        companyId: product.companyId,
+        productId: product._id,
+        name: product.name,
+        sku: product.sku
+      });
       await publishProductEvent('inventory.stock.updated', {
         productId: product._id,
         companyId: product.companyId,
@@ -211,10 +221,22 @@ async function handleSaleCreated(data) {
       }
 
       results.push({ productId, status: 'success', oldQuantity: previousStock, newQuantity: newStock });
+
+      // Invalidate Product Analytics Cache
+      await redisHelper.delCache(`analytics:product:${productId}`);
+
     } catch (error) {
       logger.error(`❌ Error updating stock for product ${productId}:`, error);
       results.push({ productId, status: 'error', error: error.message });
     }
+  }
+
+  // Broader Analytics Cache Invalidation (If any item succeeded)
+  if (results.some(r => r.status === 'success')) {
+    await redisHelper.scanDel(`inventory:analytics:overview:${companyId}:*`);
+    await redisHelper.scanDel(`analytics:company:${companyId}:*`);
+    if (shopId) await redisHelper.scanDel(`analytics:shop:${shopId}:*`);
+    await redisHelper.scanDel(`analytics:graph:*:${companyId}:*`);
   }
 
   return results;
@@ -290,7 +312,7 @@ async function handleSaleCanceled(data) {
       const stockChange = new StockChange({
         companyId,
         shopId: shopId || product.shopId,
-        productId: productIdObj, // Use ObjectId
+        productId: productId, // Already ObjectId or handled
         variationId: null, // Master product, no variation
         type: 'return', // Use 'return' type for restoring stock from cancelled sales
         qty: changeQty, // Positive for inflow
@@ -308,7 +330,7 @@ async function handleSaleCanceled(data) {
 
       // Get updated stock after save
       const updatedStock = await ProductStock.findOne({
-        productId: productIdObj,
+        productId: productId,
         variationId: null
       });
 
@@ -322,7 +344,13 @@ async function handleSaleCanceled(data) {
       });
 
       // Emit inventory events
-      await publishProductEvent('inventory.product.updated', product);
+      await publishProductEvent('inventory.product.updated', {
+        _id: product._id,
+        companyId: product.companyId,
+        productId: product._id,
+        name: product.name,
+        sku: product.sku
+      });
       await publishProductEvent('inventory.stock.updated', {
         productId: product._id,
         companyId: product.companyId,
@@ -435,7 +463,7 @@ async function handleSaleReturnFullyReturned(data) {
       const stockChange = new StockChange({
         companyId,
         shopId: shopId || product.shopId,
-        productId: productIdObj, // Use ObjectId
+        productId: productId, // Already ObjectId or handled
         variationId: null, // Master product, no variation
         type: 'return', // Use 'return' type for restoring stock from returns
         qty: changeQty, // Positive for inflow
@@ -455,7 +483,7 @@ async function handleSaleReturnFullyReturned(data) {
 
       // Get updated stock after save
       const updatedStock = await ProductStock.findOne({
-        productId: productIdObj,
+        productId: productId,
         variationId: null
       });
 
@@ -472,7 +500,13 @@ async function handleSaleReturnFullyReturned(data) {
       });
 
       // Emit inventory events
-      await publishProductEvent('inventory.product.updated', product);
+      await publishProductEvent('inventory.product.updated', {
+        _id: product._id,
+        companyId: product.companyId,
+        productId: product._id,
+        name: product.name,
+        sku: product.sku
+      });
       await publishProductEvent('inventory.stock.updated', {
         productId: product._id,
         companyId: product.companyId,
@@ -727,7 +761,7 @@ module.exports = async function handleSalesEvent(event, routingKey) {
   try {
     // Extract type from routingKey (primary) or event.type (fallback)
     const type = routingKey || event?.type;
-    
+
     // Extract data from event - check multiple possible structures
     // Event might be: { type, data } or { type, payload } or just the data itself
     let eventData = event?.data || event?.payload || event;

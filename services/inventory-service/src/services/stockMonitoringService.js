@@ -40,18 +40,8 @@ class StockMonitoringService {
 
       for (const stockRecord of stockRecords) {
         try {
-          // Get current stock quantity
-          let currentStock = 0;
-          if (stockRecord.variation) {
-            currentStock = stockRecord.variation.stockQty || 0;
-          } else {
-            // Sum all variations for this product
-            const pvAgg = await ProductVariation.aggregate([
-              { $match: { productId: stockRecord.product._id } },
-              { $group: { _id: null, totalQty: { $sum: '$stockQty' } } }
-            ]);
-            currentStock = pvAgg[0]?.totalQty || 0;
-          }
+          // Get current stock quantity directly from ProductStock record
+          let currentStock = stockRecord.stockQty || 0;
 
           const { product, lowStockThreshold, allowBackorder } = stockRecord;
           const companyId = product.companyId;
@@ -123,7 +113,7 @@ class StockMonitoringService {
           productId: product._id,
           priority: allowBackorder ? 'high' : 'critical',
           message: `🔴 OUT OF STOCK: ${product.name}`,
-          description: allowBackorder 
+          description: allowBackorder
             ? `${product.name} is out of stock but backorders are allowed. Set up backorder queue.`
             : `${product.name} is out of stock. URGENT: Restock immediately or mark as unavailable.`,
           data: {
@@ -328,12 +318,12 @@ class StockMonitoringService {
           const productId = alert.data.productId;
           if (!productId) continue;
 
-          // Get current stock
-          const pvAgg = await ProductVariation.aggregate([
-            { $match: { productId: mongoose.Types.ObjectId(productId) } },
-            { $group: { _id: null, totalQty: { $sum: '$stockQty' } } }
-          ]);
-          const currentStock = pvAgg[0]?.totalQty || 0;
+          // Get current stock from ProductStock
+          const stockRecord = await ProductStock.findOne({
+            productId: mongoose.Types.ObjectId(productId),
+            variationId: null
+          });
+          const currentStock = stockRecord?.stockQty || 0;
 
           // If stock has been replenished, create backorder fulfillment alert
           if (currentStock > 0) {
@@ -420,8 +410,8 @@ class StockMonitoringService {
       try {
         await producer.emit(`inventory.stock.${changeType}`, {
           productId: productId.toString(),
-          changeType: changeType,
-          quantity: quantity,
+          type: changeType,
+          qty: changeType === 'sale' || changeType === 'adjustment' ? -quantity : quantity,
           reference: metadata.reference || null,
           reason: metadata.reason || null,
           performedBy: metadata.performedBy || 'system',
@@ -458,11 +448,7 @@ class StockMonitoringService {
       });
 
       // Get current stock quantity
-      const pvAgg = await ProductVariation.aggregate([
-        { $match: { productId: mongoose.Types.ObjectId(productId) } },
-        { $group: { _id: null, totalQty: { $sum: '$stockQty' } } }
-      ]);
-      const currentStock = pvAgg[0]?.totalQty || 0;
+      const currentStock = productStock?.stockQty || 0;
 
       // Get active alerts
       const alerts = await Alert.find({
@@ -476,7 +462,7 @@ class StockMonitoringService {
       // Determine status
       let status = 'HEALTHY';
       let statusCode = 'green';
-      
+
       if (currentStock === 0) {
         status = 'OUT_OF_STOCK';
         statusCode = 'red';

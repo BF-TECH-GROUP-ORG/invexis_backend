@@ -1,13 +1,13 @@
 // Manual async wrapper instead of express-async-handler
 const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
+    Promise.resolve(fn(req, res, next)).catch(next);
 };
 // Simple validation result helper
 const validationResult = (req) => {
-  return {
-    isEmpty: () => true,
-    array: () => []
-  };
+    return {
+        isEmpty: () => true,
+        array: () => []
+    };
 };
 const Product = require('../models/Product');
 const StockChange = require('../models/StockChange');
@@ -38,7 +38,7 @@ const getProductByScan = asyncHandler(async (req, res) => {
 
     // Get stock from ProductStock
     const stockRecord = await ProductStock.findOne({ productId: product._id }).lean();
-    
+
     const responseData = {
         id: product._id,
         name: product.name,
@@ -56,9 +56,9 @@ const getProductByScan = asyncHandler(async (req, res) => {
     const currentStock = responseData.currentStock;
     const lowThresh = responseData.lowStockThreshold;
     const allowBackorder = responseData.allowBackorder;
-    
-    responseData.stockStatus = currentStock <= 0 
-        ? (allowBackorder ? 'backorder' : 'out-of-stock') 
+
+    responseData.stockStatus = currentStock <= 0
+        ? (allowBackorder ? 'backorder' : 'out-of-stock')
         : (currentStock <= lowThresh ? 'low-stock' : 'in-stock');
 
     res.status(200).json({ success: true, product: responseData, stock: stockRecord });
@@ -90,7 +90,7 @@ const stockIn = asyncHandler(async (req, res) => {
     const product = await Product.findById(productId);
 
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-    
+
     // Validate company ownership
     if (product.companyId.toString() !== companyId.toString()) {
         return res.status(403).json({ success: false, message: 'Product does not belong to the specified company' });
@@ -98,7 +98,7 @@ const stockIn = asyncHandler(async (req, res) => {
 
     // Get current stock from ProductStock
     const stockRecord = await ProductStock.findOne({ productId: product._id });
-    
+
     if (!stockRecord) return res.status(404).json({ success: false, message: 'Stock record not found' });
     const previous = stockRecord.stockQty || 0;
 
@@ -157,8 +157,8 @@ const stockIn = asyncHandler(async (req, res) => {
         }).catch(err => logger.error('Failed to record stock change:', err));
 
         // Check if this replenishment can fulfill any backorders
-        await StockMonitoringService.monitorBackorders(product.companyId, shopId || product.shopId).catch(err => 
-          logger.error('Backorder monitoring failed:', err)
+        await StockMonitoringService.monitorBackorders(product.companyId, shopId || product.shopId).catch(err =>
+            logger.error('Backorder monitoring failed:', err)
         );
     } catch (error) {
         logger.error('Stock monitoring error:', error.message);
@@ -186,7 +186,7 @@ const stockOut = asyncHandler(async (req, res) => {
     const product = await Product.findById(productId);
 
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-    
+
     // Validate company ownership
     if (product.companyId.toString() !== companyId.toString()) {
         return res.status(403).json({ success: false, message: 'Product does not belong to the specified company' });
@@ -194,7 +194,7 @@ const stockOut = asyncHandler(async (req, res) => {
 
     // Get current stock from ProductStock
     const stockRecord = await ProductStock.findOne({ productId: product._id });
-    
+
     if (!stockRecord) return res.status(404).json({ success: false, message: 'Stock record not found' });
     const previous = stockRecord.stockQty || 0;
 
@@ -273,8 +273,8 @@ const stockOut = asyncHandler(async (req, res) => {
         }).catch(err => logger.error('Failed to record stock change:', err));
 
         // Trigger monitoring to check for low stock or out of stock alerts
-        await StockMonitoringService.monitorLowStock(product.companyId, shopId || product.shopId).catch(err => 
-          logger.error('Low stock monitoring failed:', err)
+        await StockMonitoringService.monitorLowStock(product.companyId, shopId || product.shopId).catch(err =>
+            logger.error('Low stock monitoring failed:', err)
         );
     } catch (error) {
         logger.error('Stock monitoring error:', error.message);
@@ -375,7 +375,7 @@ const bulkStockIn = asyncHandler(async (req, res) => {
                     oldValue: { quantity: previous },
                     newValue: { quantity: totalAfter, operation: 'bulk-stock-in' }
                 });
-            } catch (e) {}
+            } catch (e) { }
 
             // Invalidate cache
             await redis.del(`product:${product._id}`);
@@ -496,7 +496,7 @@ const bulkStockOut = asyncHandler(async (req, res) => {
                     const scope = product.shopId ? 'shop' : 'company';
                     await Alert.createOrUpdate({ companyId: product.companyId, scope, shopId: product.shopId || null, type: 'low_stock', productId: product._id, threshold: lowThresh, message: `Stock for product ${product.name} is low: ${totalAfter}`, data: { currentStock: totalAfter } });
                 }
-            } catch (e) {}
+            } catch (e) { }
 
             // Invalidate cache
             await redis.del(`product:${product._id}`);
@@ -535,11 +535,11 @@ const getAllStockChanges = asyncHandler(async (req, res) => {
     const query = { companyId };
     if (shopId) query.shopId = shopId;
     if (productId) query.productId = productId;
-    if (changeType) query.changeType = changeType;
+    if (changeType) query.type = changeType;
 
     const stockChanges = await StockChange.find(query)
         .populate('productId', 'name slug')
-        .sort({ changeDate: -1 })
+        .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
 
@@ -557,7 +557,7 @@ const getStockChangeById = asyncHandler(async (req, res) => {
     validateMongoId(id);
 
     const stockChange = await StockChange.findById(id)
-        .populate('productId', 'name slug inventory.quantity');
+        .populate('productId', 'name slug');
 
     if (!stockChange) {
         return res.status(404).json({ success: false, message: 'Stock change not found' });
@@ -839,8 +839,8 @@ const getStockChangesByUser = asyncHandler(async (req, res) => {
                                                             {
                                                                 $cond: [
                                                                     { $eq: ['$$this', 'adjustment'] },
-                                                                                                                                        { adjustment: { $add: [{ $ifNull: ['$$value.adjustment', 0] }, 1] } },
-                                                                                                                                        '$$value'
+                                                                    { adjustment: { $add: [{ $ifNull: ['$$value.adjustment', 0] }, 1] } },
+                                                                    '$$value'
                                                                 ]
                                                             }
                                                         ]
@@ -905,12 +905,12 @@ const getStockChangesByUser = asyncHandler(async (req, res) => {
  * Shows high-level stats about user activity in company/shop
  */
 const getStockChangesSummaryByUser = asyncHandler(async (req, res) => {
-    const { userId, companyId, shopId, startDate, endDate } = req.body|| req.body || req.params;;
+    const { userId, companyId, shopId, startDate, endDate } = req.body || req.body || req.params;;
 
     if (!userId || !companyId) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'User ID and Company ID are required' 
+        return res.status(400).json({
+            success: false,
+            message: 'User ID and Company ID are required'
         });
     }
 
@@ -1150,12 +1150,12 @@ const getCompanyStockChanges = asyncHandler(async (req, res) => {
  * with complete information for shop management and analysis
  */
 const getShopStockChanges = asyncHandler(async (req, res) => {
-    const { companyId, shopId, changeType, userId, startDate, endDate, page = 1, limit = 20 } = req.query|| req.body || req.params;
+    const { companyId, shopId, changeType, userId, startDate, endDate, page = 1, limit = 20 } = req.query || req.body || req.params;
 
     if (!companyId || !shopId) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'Company ID and Shop ID are required' 
+        return res.status(400).json({
+            success: false,
+            message: 'Company ID and Shop ID are required'
         });
     }
 
