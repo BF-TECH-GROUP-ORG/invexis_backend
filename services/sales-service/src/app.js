@@ -203,7 +203,7 @@ const initializeDatabase = async () => {
     console.log("✅ Database connection established");
     
     // Only create tables if they don't exist, don't alter them
-    await sequelize.sync({ force: false, alter: true });
+    await sequelize.sync({ force: false, alter: false });
     
     // Manually add the unique constraint if it doesn't exist
     try {

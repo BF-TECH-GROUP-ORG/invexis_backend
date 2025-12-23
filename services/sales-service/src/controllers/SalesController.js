@@ -1038,7 +1038,7 @@ const customerSalesReport = async (req, res) => {
 
 const salesReport = async (req, res) => {
   try {
-    const { startDate, endDate, companyId } = req.query;
+    const { startDate, endDate, companyId } = req.query || req.body || req.params;
 
     const cacheKey = `sales:report:${companyId}:${startDate}:${endDate}`;
     const cached = await getCache(cacheKey);

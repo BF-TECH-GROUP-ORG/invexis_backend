@@ -3,6 +3,7 @@
 const invoiceRoutes = require("./InvoiceRoutes");
 const salesRoutes = require("./SalesRoutes");
 const knownUserRoutes = require("./KnownUserRoutes");
+const reportsRoutes = require("./ReportsRoutes");
 
 const express = require("express");
 const router = express.Router();
@@ -10,6 +11,7 @@ const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth
 // then define all routes here as app.use
 
 router.use('/', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), salesRoutes);
+router.use('/reports', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), reportsRoutes);
 router.use('/', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), invoiceRoutes);
 router.use('/', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), knownUserRoutes);
 

@@ -12,7 +12,7 @@ const Invoice = sequelize.define(
     },
     saleId: { type: DataTypes.BIGINT, allowNull: false },
 
-    invoiceNumber: { type: DataTypes.STRING, allowNull: false, unique: true },
+    invoiceNumber: { type: DataTypes.STRING, allowNull: false },
     issueDate: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     dueDate: { type: DataTypes.DATE },
 
