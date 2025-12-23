@@ -56,9 +56,13 @@ exports.getLogs = async (req, res) => {
                     return res.json({ success: true, data: [], pagination: { total: 0, page: 1, pages: 0 } });
                 }
             }
+
+            // Non-super_admin can only see business logs (not system or critical security logs)
+            query.logType = 'business';
         } else {
             // Admin can query any company
             if (companyId) query.companyId = companyId;
+            // super_admin can see all logTypes (no filter applied)
         }
 
         if (userId) query.userId = userId;
@@ -117,6 +121,11 @@ exports.getLogDetails = async (req, res) => {
             if (log.companyId && !allowedCompanies.includes(log.companyId)) {
                 return res.status(403).json({ success: false, message: "Access denied" });
             }
+
+            // Non-super_admin cannot view system or security logs
+            if (log.logType === 'system' || log.logType === 'security') {
+                return res.status(403).json({ success: false, message: "Access denied to this log type" });
+            }
         }
 
         res.json({ success: true, data: log });
@@ -149,6 +158,9 @@ exports.exportLogs = async (req, res) => {
             } else {
                 return res.status(403).json({ success: false, message: 'No access to any company data' });
             }
+
+            // Non-super_admin can only export business logs
+            query.logType = 'business';
         } else if (filters.companyId) {
             query.companyId = filters.companyId;
         }

@@ -37,9 +37,11 @@ class NotificationEventProcessor {
             const { type, data, id: eventId, emittedAt, source } = event;
 
             if (!type) {
-                logger.warn('⚠️ Event missing type field', { routingKey, source });
+                logger.warn('⚠️ Event missing type field', { routingKey, source, eventId });
                 return;
             }
+
+            logger.debug(`📥 processEvent called for ${type}`, { source, eventId, routingKey });
 
             // Check if this event type should trigger notifications
             const shouldNotify = intentClassifier.shouldNotify(type);
@@ -62,7 +64,20 @@ class NotificationEventProcessor {
             }
 
             // Step 3: Resolve recipients by role
-            const recipientsByRole = await recipientResolver.resolveByRole(type, notificationData);
+            let recipientsByRole = await recipientResolver.resolveByRole(type, notificationData);
+
+            // Fallback: If no recipients found, try to notify company admins
+            if (!recipientsByRole || Object.keys(recipientsByRole).length === 0) {
+                logger.warn(`⚠️ No recipients found for ${type}. Attempting fallback to company admin.`);
+
+                if (notificationData.companyId) {
+                    const companyAdmins = await recipientResolver.getUsersByRole('company_admin', notificationData, type);
+                    if (companyAdmins && companyAdmins.length > 0) {
+                        recipientsByRole = { 'company_admin': companyAdmins };
+                        logger.info(`✅ Fallback successful: Found ${companyAdmins.length} company admin(s)`);
+                    }
+                }
+            }
 
             if (!recipientsByRole || Object.keys(recipientsByRole).length === 0) {
                 const error = new Error(`No recipients found for ${type}`);
@@ -70,7 +85,8 @@ class NotificationEventProcessor {
 
                 // Fail fast in development
                 if (process.env.NODE_ENV !== 'production') {
-                    throw error;
+                    // throw error; // Don't crash, just log error
+                    return;
                 }
                 return;
             }
@@ -146,6 +162,11 @@ class NotificationEventProcessor {
      * Extract relevant data from event payload for notification creation
      */
     async extractNotificationData(eventType, data) {
+        logger.debug(`🧪 extractNotificationData for ${eventType}`, {
+            dataKeys: Object.keys(data || {}),
+            hasShopId: !!(data.shopId || data.shop_id),
+            hasCompanyId: !!(data.companyId || data.company_id)
+        });
         // Derive companyId from data strategies
         let companyId = data.companyId || data.company_id;
 

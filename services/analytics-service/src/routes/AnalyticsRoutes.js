@@ -37,7 +37,7 @@ router.get("/stats", requireRole('super_admin'), AnalyticsController.getEventSta
 // The Controller supports filtering. For stricter tenancy, use requireCompanyAccess()
 // on specific routes if companyID is mandatory.
 
-const reportRoles = ['super_admin', 'company_admin'];
+const reportRoles = ['super_admin', 'company_admin', 'worker'];
 
 // Sales Reports
 router.get("/reports/sales/revenue", requireRole(reportRoles), ReportController.getRevenueReport);

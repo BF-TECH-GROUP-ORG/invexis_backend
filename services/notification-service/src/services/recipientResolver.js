@@ -22,7 +22,8 @@ class RecipientResolver {
 
         return jwt.sign(
             {
-                sub: 'notification-service',
+                sub: '660000000000000000000000', // Valid ObjectId format for 'notification-service'
+                displayName: 'Notification Service',
                 role: 'super_admin', // Elevate privileges for internal lookups
                 iss: 'invexis-auth',
                 aud: 'invexis-apps'
@@ -64,6 +65,12 @@ class RecipientResolver {
                 // Add department to context if specified
                 const context = department ? { ...data, department } : data;
 
+                logger.debug(`🧪 Resolving role: ${role}`, {
+                    department,
+                    companyId: context.companyId,
+                    shopId: context.shopId
+                });
+
                 const userIds = await this.getUsersByRole(role, context, eventType);
                 if (userIds && userIds.length > 0) {
                     // Use descriptive key for recipients
@@ -75,7 +82,9 @@ class RecipientResolver {
                     const displayName = department
                         ? `${DEPARTMENT_DISPLAY_NAMES[department]} ${ROLE_DISPLAY_NAMES[role]}`
                         : ROLE_DISPLAY_NAMES[role];
-                    logger.debug(`✓ Found ${userIds.length} ${displayName}(s)`);
+                    logger.info(`✅ Found ${userIds.length} ${displayName}(s) for ${eventType}`);
+                } else {
+                    logger.debug(`∅ No recipients found for role: ${role}`, { department });
                 }
             } catch (error) {
                 logger.error(`❌ Failed to resolve ${roleSpec} for ${eventType}:`, error.message);
@@ -107,6 +116,8 @@ class RecipientResolver {
         }
 
         // Query auth-service for users by role
+        logger.debug(`📡 Querying by role: ${role}`, { companyId, shopId });
+
         switch (role) {
             case AUTH_ROLES.SUPER_ADMIN:
                 return await this.getSuperAdmins();
@@ -213,7 +224,14 @@ class RecipientResolver {
             const params = { role: AUTH_ROLES.WORKER };
             if (shopId) params.shops = shopId;
             else if (companyId) params.companies = companyId;
-            if (department) params.department = department;
+            // Auth service uses 'assignedDepartments' field (array)
+            if (department) params.assignedDepartments = department;
+
+            logger.debug(`🔍 Querying auth-service for workers:`, {
+                url: `${this.authServiceUrl}/users`,
+                params,
+                department
+            });
 
             const response = await axios.get(`${this.authServiceUrl}/users`, {
                 params,
@@ -221,8 +239,21 @@ class RecipientResolver {
                 timeout: 5000
             });
 
+            logger.debug(`📦 Auth-service response:`, {
+                status: response.status,
+                dataKeys: Object.keys(response.data || {}),
+                userCount: Array.isArray(response.data?.users) ? response.data.users.length : 0,
+                firstUser: response.data?.users?.[0]?._id || 'none'
+            });
+
             const users = response.data.users || response.data || [];
             const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+
+            if (userIds.length === 0) {
+                logger.warn(`⚠️ No workers found for query`, { params, department });
+            } else {
+                logger.info(`✅ Found ${userIds.length} worker(s)`, { userIds });
+            }
 
             this.setCache(cacheKey, userIds);
             return userIds;
@@ -353,6 +384,17 @@ class RecipientResolver {
                     AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
+            },
+
+            // Audit/Security Events - critical logs notify super_admin
+            'audit.critical.log': {
+                roles: [AUTH_ROLES.SUPER_ADMIN]
+            },
+            'audit.security.alert': {
+                roles: [AUTH_ROLES.SUPER_ADMIN]
+            },
+            'audit.system.error': {
+                roles: [AUTH_ROLES.SUPER_ADMIN]
             },
         };
 
