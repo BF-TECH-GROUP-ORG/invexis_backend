@@ -459,7 +459,7 @@ async function register(data, options = {}) {
 
         // Fire-and-forget: Redis cache + event
         emailVerification.then(v => {
-            redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications).catch(() => {});
+            redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications).catch(() => { });
             publishEvent('verification.requested', {
                 userId: user._id,
                 type: 'email',
@@ -487,7 +487,7 @@ async function register(data, options = {}) {
 
         // Fire-and-forget: Redis cache + event
         phoneVerification.then(v => {
-            redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications).catch(() => {});
+            redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications).catch(() => { });
             publishEvent('verification.requested', {
                 userId: user._id,
                 type: 'phone',
@@ -861,10 +861,10 @@ async function updateProfile(userId, data, profileImage = null) {
             return !validDepartments.includes(normalized);
         });
         if (invalidDepartments.length > 0) {
-            return { 
-                ok: false, 
-                status: 400, 
-                message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}` 
+            return {
+                ok: false,
+                status: 400,
+                message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`
             };
         }
         // Normalize to lowercase
@@ -899,9 +899,9 @@ async function updateProfile(userId, data, profileImage = null) {
     await Promise.all(updatePromises);
 
     // ✅ Fire-and-forget: Cache invalidation + events
-    invalidateUserCache(userId).catch(() => {});
+    invalidateUserCache(userId).catch(() => { });
     publishUserEvent.updated({ _id: userId, ...value }).catch(e => console.warn('Event failed:', e.message));
-    publishEvent('user.profile.updated', { userId, role: user.role }).catch(() => {});
+    publishEvent('user.profile.updated', { userId, role: user.role }).catch(() => { });
 
     return { user: await getCachedUser(userId) };
 }
@@ -926,8 +926,8 @@ async function changePassword(userId, data) {
     await User.updateOne({ _id: userId }, { $set: { password: hashedPassword } });
 
     // ✅ Fire-and-forget: Cache + events
-    invalidateUserCache(userId).catch(() => {});
-    publishEvent('user.password.changed', { userId }).catch(() => {});
+    invalidateUserCache(userId).catch(() => { });
+    publishEvent('user.password.changed', { userId }).catch(() => { });
 
     return { message: 'password is successfully Changed', user: await getCachedUser(userId) };
 }
@@ -951,7 +951,7 @@ async function verify(userId, data) {
         if (!token) return { ok: false, status: 400, message: 'Invalid verification code' };
         code = token.code;
         // Fire-and-forget cache
-        redis.set(cacheKey, code, 'EX', CACHE_TTLS.verifications).catch(() => {});
+        redis.set(cacheKey, code, 'EX', CACHE_TTLS.verifications).catch(() => { });
     }
 
     if (code !== value.code) return { ok: false, status: 400, message: 'Invalid verification code' };
@@ -965,8 +965,8 @@ async function verify(userId, data) {
     ]);
 
     // ✅ Fire-and-forget: Cache + events
-    invalidateUserCache(userId).catch(() => {});
-    publishEvent(`user.verification.${value.type}_completed`, { userId, role: user?.role }).catch(() => {});
+    invalidateUserCache(userId).catch(() => { });
+    publishEvent(`user.verification.${value.type}_completed`, { userId, role: user?.role }).catch(() => { });
 
     return { verified: true };
 }
@@ -989,8 +989,8 @@ async function setup2FA(userId, data) {
     await User.updateOne({ _id: userId }, { $set: { twoFASecret: secret.base32 } });
 
     // ✅ Fire-and-forget: Cache + events
-    invalidateUserCache(userId).catch(() => {});
-    publishEvent('user.2fa.setup_requested', { userId }).catch(() => {});
+    invalidateUserCache(userId).catch(() => { });
+    publishEvent('user.2fa.setup_requested', { userId }).catch(() => { });
 
     return { secret: secret.ascii, qr: secret.otpauth_url };
 }
@@ -1015,8 +1015,8 @@ async function verify2FASetup(userId, data) {
     await User.updateOne({ _id: userId }, { $set: { twoFAEnabled: true } });
 
     // ✅ Fire-and-forget: Cache + events
-    invalidateUserCache(userId).catch(() => {});
-    publishEvent('user.2fa.enabled', { userId }).catch(() => {});
+    invalidateUserCache(userId).catch(() => { });
+    publishEvent('user.2fa.enabled', { userId }).catch(() => { });
 
     return { enabled: true };
 }
@@ -1051,8 +1051,8 @@ async function disable2FA(userId, data) {
     });
 
     // ✅ Fire-and-forget: Cache + events
-    invalidateUserCache(userId).catch(() => {});
-    publishEvent('user.2fa.disabled', { userId }).catch(() => {});
+    invalidateUserCache(userId).catch(() => { });
+    publishEvent('user.2fa.disabled', { userId }).catch(() => { });
 
     return { disabled: true };
 }
@@ -1115,7 +1115,7 @@ async function requestPasswordReset(identifier) {
         userId: user._id,
         type: 'password_reset',
         details: { identifier }
-    }).catch(() => {});
+    }).catch(() => { });
 
     return { message: 'request initialized and code is sent', code, user: await getCachedUser(user._id) };
 }
@@ -1157,12 +1157,12 @@ async function confirmPasswordReset(identifier, code, newPassword) {
     ]);
 
     // ✅ Fire-and-forget: Cache + events
-    invalidateUserCache(user._id).catch(() => {});
+    invalidateUserCache(user._id).catch(() => { });
     publishEvent('user.password.reset', {
         userId: user._id,
         email: user.email,
         phone: user.phone
-    }).catch(() => {});
+    }).catch(() => { });
 
     return { message: 'Password reset successfully' };
 }
@@ -1500,7 +1500,26 @@ async function getUsers(adminId, role, query) {
 
     // DB fallback with index usage
     const q = query || {};
+    console.log(`[DB QUERY] getUsers role=${role}, query:`, JSON.stringify(q));
+
     const users = await User.find({ ...q, role }).select('-password -twoFASecret').limit(50).lean();
+
+    console.log(`[DB RESULT] Found ${users.length} users for query`);
+    if (users.length === 0) {
+        // Log some context to help debug
+        const totalRoleCount = await User.countDocuments({ role });
+        console.log(`[DB DEBUG] Total users with role=${role}: ${totalRoleCount}`);
+
+        if (q.shops) {
+            const shopCount = await User.countDocuments({ role, shops: q.shops });
+            console.log(`[DB DEBUG] Users with role=${role} in shop ${q.shops}: ${shopCount}`);
+        }
+
+        if (q.assignedDepartments) {
+            const deptCount = await User.countDocuments({ role, assignedDepartments: q.assignedDepartments });
+            console.log(`[DB DEBUG] Users with role=${role} in department ${q.assignedDepartments}: ${deptCount}`);
+        }
+    }
 
     // Cache for 10 minutes
     redis.set(cacheKey, JSON.stringify(users), 'EX', 600).catch(() => { });
@@ -1543,10 +1562,10 @@ async function updateUser(adminId, userId, data) {
             return !validDepartments.includes(normalized);
         });
         if (invalidDepartments.length > 0) {
-            return { 
-                ok: false, 
-                status: 400, 
-                message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}` 
+            return {
+                ok: false,
+                status: 400,
+                message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`
             };
         }
         // Normalize to lowercase

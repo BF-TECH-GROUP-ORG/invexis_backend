@@ -59,6 +59,11 @@ exports.getEventDistribution = async (req, res) => {
         if (category) filters.category = category;
         if (severity) filters.severity = severity;
 
+        // Role-based logType filtering
+        if (req.user.role !== 'super_admin') {
+            filters.logType = 'business';
+        }
+
         if (startDate || endDate) {
             filters.occurred_at = {};
             if (startDate) filters.occurred_at.$gte = new Date(startDate);
@@ -84,6 +89,11 @@ exports.getSeverityTrends = async (req, res) => {
         const match = {};
         if (companyId) match.companyId = companyId;
         if (shopId) match.shopId = shopId;
+
+        // Role-based logType filtering
+        if (req.user.role !== 'super_admin') {
+            match.logType = 'business';
+        }
 
         if (startDate || endDate) {
             match.occurred_at = {};
@@ -174,6 +184,11 @@ exports.getStats = async (req, res) => {
         const match = {};
         if (companyId) match.companyId = companyId;
         if (shopId) match.shopId = shopId;
+
+        // Role-based logType filtering
+        if (req.user.role !== 'super_admin') {
+            match.logType = 'business';
+        }
 
         if (startDate || endDate) {
             match.occurred_at = {};
