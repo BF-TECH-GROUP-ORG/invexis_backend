@@ -43,6 +43,11 @@ class IntentClassifier {
             'debt.reminder.overdue': NOTIFICATION_INTENTS.RISK_SECURITY,
             'subscription.expired': NOTIFICATION_INTENTS.RISK_SECURITY,
 
+            // Audit/Security Events - critical system logs
+            'audit.critical.log': NOTIFICATION_INTENTS.RISK_SECURITY,
+            'audit.security.alert': NOTIFICATION_INTENTS.RISK_SECURITY,
+            'audit.system.error': NOTIFICATION_INTENTS.RISK_SECURITY,
+
             // Accountability - specific user must act
             'company.created': NOTIFICATION_INTENTS.ACCOUNTABILITY,
             'user.created': NOTIFICATION_INTENTS.ACCOUNTABILITY,

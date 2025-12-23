@@ -37,9 +37,11 @@ class NotificationEventProcessor {
             const { type, data, id: eventId, emittedAt, source } = event;
 
             if (!type) {
-                logger.warn('⚠️ Event missing type field', { routingKey, source });
+                logger.warn('⚠️ Event missing type field', { routingKey, source, eventId });
                 return;
             }
+
+            logger.debug(`📥 processEvent called for ${type}`, { source, eventId, routingKey });
 
             // Check if this event type should trigger notifications
             const shouldNotify = intentClassifier.shouldNotify(type);
@@ -146,6 +148,11 @@ class NotificationEventProcessor {
      * Extract relevant data from event payload for notification creation
      */
     async extractNotificationData(eventType, data) {
+        logger.debug(`🧪 extractNotificationData for ${eventType}`, {
+            dataKeys: Object.keys(data || {}),
+            hasShopId: !!(data.shopId || data.shop_id),
+            hasCompanyId: !!(data.companyId || data.company_id)
+        });
         // Derive companyId from data strategies
         let companyId = data.companyId || data.company_id;
 

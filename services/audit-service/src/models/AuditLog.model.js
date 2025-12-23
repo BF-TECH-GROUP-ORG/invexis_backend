@@ -34,6 +34,12 @@ const auditLogSchema = new mongoose.Schema({
         index: true
     },
     category: { type: String, index: true }, // 'data_access', 'data_modification', 'auth', 'config'
+    logType: {
+        type: String,
+        enum: ['system', 'security', 'business'],
+        default: 'business',
+        index: true
+    }, // For access control: system=super_admin only, security=super_admin+company_admin, business=all
     tags: [String],
 
     // Context
@@ -62,6 +68,7 @@ auditLogSchema.index({ workerId: 1, occurred_at: -1 });
 auditLogSchema.index({ companyId: 1, shopId: 1, occurred_at: -1 });
 auditLogSchema.index({ entityType: 1, entityId: 1, occurred_at: -1 });
 auditLogSchema.index({ category: 1, severity: 1, occurred_at: -1 });
+auditLogSchema.index({ logType: 1, severity: 1, occurred_at: -1 }); // For access control filtering
 
 // Static methods
 auditLogSchema.statics.getActivityByShop = async function (companyId, startDate, endDate) {
