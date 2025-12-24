@@ -133,7 +133,7 @@ const createAdjustment = asyncHandler(async (req, res) => {
     variationId: variationId || null,
     quantity: Math.floor(Math.abs(Number(quantity))),
     reason: reason.trim(),
-    adjustmentType,
+    adjustmentType: adjustmentType || 'loss', // Default to loss if not specified
     companyId,
     shopId: req.body.shopId || product.shopId,
     userId,
@@ -168,21 +168,61 @@ const approveAdjustment = asyncHandler(async (req, res) => {
   }
 
   // EDGE CASE: Idempotency check - only allow approval if status is 'pending'
-  if (adjustment.status !== 'pending') {
-    return res.status(409).json({
+  // Calculate stock delta based on adjustment type
+  // Gains/Restocks increase stock (+), Damage/Theft/Loss/Other decrease stock (-)
+  // 'count' is typically treated as a loss if positive quantity is provided as "missing"
+  const isGain = ['gain', 'restock'].includes(adjustment.adjustmentType);
+  const stockDelta = isGain ? Math.abs(adjustment.quantity) : -Math.abs(adjustment.quantity);
+
+  // Fetch current stock to perform safety checks
+  const ProductStock = mongoose.model('ProductStock');
+  const stockRecord = await ProductStock.findOne({
+    productId: adjustment.productId,
+    variationId: adjustment.variationId || null
+  });
+
+  if (!stockRecord) {
+    return res.status(404).json({ success: false, message: 'Current stock record not found for this product' });
+  }
+
+  // Safety check: Cannot result in negative stock unless backorders allowed
+  const newStock = stockRecord.stockQty + stockDelta;
+  if (newStock < 0 && !stockRecord.allowBackorder) {
+    return res.status(400).json({
       success: false,
-      message: `Cannot approve adjustment with status '${adjustment.status}'. Only 'pending' adjustments can be approved.`,
-      currentStatus: adjustment.status,
-      field: 'status'
+      message: `Adjustment rejected: Results in negative stock (${newStock}). Current available: ${stockRecord.stockQty}`,
+      currentStock: stockRecord.stockQty,
+      requestedAdjustment: stockDelta
     });
   }
 
-  adjustment.status = 'approved';
-  adjustment.approvedBy = req.user.id;
-  adjustment.approvedAt = new Date();
+  // Create StockChange - this will trigger the atomic update to ProductStock via its pre-save hook
+  const StockChange = mongoose.model('StockChange');
+  const stockChange = new StockChange({
+    companyId: adjustment.companyId,
+    shopId: adjustment.shopId,
+    productId: adjustment.productId,
+    variationId: adjustment.variationId,
+    type: 'adjustment',
+    qty: stockDelta,
+    previous: stockRecord.stockQty,
+    reason: `Approved Adjustment: ${adjustment.reason}`,
+    userId: req.user.id,
+    meta: {
+      adjustmentId: adjustment._id,
+      adjustmentType: adjustment.adjustmentType
+    }
+  });
 
   try {
+    await stockChange.save();
+    
+    // Update adjustment status
+    adjustment.status = 'approved';
+    adjustment.approvedBy = req.user.id;
+    adjustment.approvedAt = new Date();
     await adjustment.save();
+
   } catch (err) {
     return res.status(400).json({
       success: false,
@@ -193,10 +233,20 @@ const approveAdjustment = asyncHandler(async (req, res) => {
 
   await Promise.all([
     scanDel('adjustments:*'),
-    scanDel('products:*')
+    scanDel('products:*'),
+    scanDel(`product:${adjustment.productId}*`)
   ]).catch(() => {});
 
-  res.status(200).json({ success: true, message: 'Adjustment approved and applied successfully', data: adjustment });
+  res.status(200).json({ 
+    success: true, 
+    message: 'Adjustment approved and stock updated successfully', 
+    data: {
+      adjustment,
+      stockDelta,
+      previousStock: stockRecord.stockQty,
+      newStock: newStock
+    }
+  });
 });
 
 const rejectAdjustment = asyncHandler(async (req, res) => {

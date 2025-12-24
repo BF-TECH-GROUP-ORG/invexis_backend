@@ -66,7 +66,7 @@ const ProductTransferSchema = new mongoose.Schema({
     },
     productName: String,
     productSku: String,
-    
+
     // Transfer Details
     quantity: {
         type: Number,
@@ -77,7 +77,7 @@ const ProductTransferSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    
+
     // Stock Status
     sourceStockBefore: Number,
     sourceStockAfter: Number,
@@ -88,8 +88,8 @@ const ProductTransferSchema = new mongoose.Schema({
     transferredProductData: {
         pricing: {
             cost: Number,
-            price: Number,
-            compareAtPrice: Number,
+            basePrice: Number,
+            salePrice: Number,
             currency: String
         },
         attributes: mongoose.Schema.Types.Mixed,
@@ -148,7 +148,7 @@ const ProductTransferSchema = new mongoose.Schema({
     // Notes & Communication
     notes: String,
     internalNotes: String,
-    
+
     // Metadata
     metadata: {
         isAutomatic: Boolean, // Auto-triggered by low stock detection
@@ -184,12 +184,12 @@ ProductTransferSchema.index({ sourceCompanyId: 1, sourceShopId: 1, initiatedAt: 
 ProductTransferSchema.index({ destinationCompanyId: 1, destinationShopId: 1, initiatedAt: -1 });
 
 // Virtual for transfer direction
-ProductTransferSchema.virtual('isCrossCompany').get(function() {
+ProductTransferSchema.virtual('isCrossCompany').get(function () {
     return this.sourceCompanyId !== this.destinationCompanyId;
 });
 
 // Method to update status with history
-ProductTransferSchema.methods.updateStatus = function(newStatus, userId, note) {
+ProductTransferSchema.methods.updateStatus = function (newStatus, userId, note) {
     this.statusHistory.push({
         status: this.status,
         timestamp: new Date(),
@@ -197,47 +197,47 @@ ProductTransferSchema.methods.updateStatus = function(newStatus, userId, note) {
         note: note || `Status changed to ${newStatus}`
     });
     this.status = newStatus;
-    
+
     if (newStatus === 'completed') {
         this.completedAt = new Date();
     }
-    
+
     return this.save();
 };
 
 // Method to complete transfer
-ProductTransferSchema.methods.complete = function(stockData) {
+ProductTransferSchema.methods.complete = function (stockData) {
     this.status = 'completed';
     this.completedAt = new Date();
     this.sourceStockAfter = stockData.sourceStockAfter;
     this.destinationStockAfter = stockData.destinationStockAfter;
-    
+
     this.statusHistory.push({
         status: 'completed',
         timestamp: new Date(),
         updatedBy: 'system',
         note: 'Transfer completed successfully'
     });
-    
+
     return this.save();
 };
 
 // Static method to get transfer statistics
-ProductTransferSchema.statics.getTransferStats = async function(companyId, dateRange) {
+ProductTransferSchema.statics.getTransferStats = async function (companyId, dateRange) {
     const matchStage = {
         $or: [
             { sourceCompanyId: companyId },
             { destinationCompanyId: companyId }
         ]
     };
-    
+
     if (dateRange) {
         matchStage.initiatedAt = {
             $gte: dateRange.start,
             $lte: dateRange.end
         };
     }
-    
+
     return this.aggregate([
         { $match: matchStage },
         {
@@ -255,7 +255,7 @@ ProductTransferSchema.statics.getTransferStats = async function(companyId, dateR
 };
 
 // Static method to find pending transfers for a product
-ProductTransferSchema.statics.findPendingByProduct = function(productId) {
+ProductTransferSchema.statics.findPendingByProduct = function (productId) {
     return this.find({
         productId,
         status: { $in: ['pending', 'in_transit'] }

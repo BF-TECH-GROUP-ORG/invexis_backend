@@ -12,11 +12,94 @@ const ProductStock = require('../models/ProductStock');
 const Outbox = require('../models/Outbox');
 const producer = require('../events/producer');
 const logger = require('../utils/logger');
+const mongoose = require('mongoose');
 
 class AlertTriggerService {
     /**
+     * Helper to get common analytics stats
+     */
+    static async getAnalyticsStats(matchQuery) {
+        return await StockChange.aggregate([
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId: matchQuery.companyId,
+                    ...(matchQuery.shopId ? { shopId: matchQuery.shopId } : {}),
+                    createdAtNorm: matchQuery.createdAt,
+                    typeNorm: 'sale'
+                }
+            },
+            { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+            { $unwind: '$product' },
+            { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
+            { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
+            {
+                $facet: {
+                    stats: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalUnits: { $sum: { $abs: '$qtyNorm' } },
+                                totalRevenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
+                                totalCost: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$product.costPrice', 0] }] } },
+                                transactionCount: { $sum: 1 }
+                            }
+                        },
+                        {
+                            $addFields: {
+                                grossProfit: { $subtract: ['$totalRevenue', '$totalCost'] },
+                                profitMargin: {
+                                    $cond: [{ $gt: ['$totalRevenue', 0] }, { $multiply: [{ $divide: [{ $subtract: ['$totalRevenue', '$totalCost'] }, '$totalRevenue'] }, 100] }, 0]
+                                }
+                            }
+                        }
+                    ],
+                    topProducts: [
+                        {
+                            $group: {
+                                _id: '$productId',
+                                name: { $first: '$product.name' },
+                                units: { $sum: { $abs: '$qtyNorm' } },
+                                revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
+                                profit: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $subtract: [{ $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }, { $ifNull: ['$product.costPrice', 0] }] }] } }
+                            }
+                        },
+                        { $sort: { profit: -1 } },
+                        { $limit: 3 }
+                    ]
+                }
+            }
+        ]);
+    }
+
+    /**
+     * Helper to get inventory health
+     */
+    static async getInventoryHealth(companyId, shopId = null) {
+        const health = await ProductStock.aggregate([
+            { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
+            { $unwind: '$product' },
+            { $match: { 'product.companyId': companyId, ...(shopId ? { 'product.shopId': shopId } : {}) } },
+            {
+                $group: {
+                    _id: null,
+                    outOfStock: { $sum: { $cond: [{ $eq: ['$stockQty', 0] }, 1, 0] } },
+                    lowStock: { $sum: { $cond: [{ $and: [{ $gt: ['$stockQty', 0] }, { $lte: ['$stockQty', '$lowStockThreshold'] }] }, 1, 0] } },
+                    totalItems: { $sum: 1 }
+                }
+            }
+        ]);
+        return health[0] || { outOfStock: 0, lowStock: 0, totalItems: 0 };
+    }
+
+    /**
      * Trigger alert for new product arrival (Global)
-     * Visible to all users across all companies
      */
     static async triggerNewArrivalAlert(productData) {
         try {
@@ -34,7 +117,7 @@ class AlertTriggerService {
                 data: {
                     productId: _id.toString(),
                     productName: name,
-                    price: pricing.basePrice,
+                    price: pricing?.basePrice || 0,
                     categoryId: categoryId
                 }
             });
@@ -53,12 +136,9 @@ class AlertTriggerService {
     static async triggerLowStockAlert(productData, companyId, shopId = null) {
         try {
             const { _id, name } = productData;
-
-            // Get stock info from ProductStock
             const stockRecord = await ProductStock.findOne({ productId: _id });
             const lowStockThreshold = stockRecord?.lowStockThreshold || 10;
             const currentStock = stockRecord?.stockQty || 0;
-
             const scope = shopId ? 'shop' : 'company';
 
             const alert = await Alert.createOrUpdate({
@@ -74,7 +154,7 @@ class AlertTriggerService {
                 data: {
                     productId: _id.toString(),
                     productName: name,
-                    currentStock: currentStock,
+                    currentStock,
                     threshold: lowStockThreshold,
                     status: 'critical'
                 }
@@ -84,254 +164,6 @@ class AlertTriggerService {
             return alert;
         } catch (error) {
             logger.error(`Failed to trigger low stock alert: ${error.message}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Trigger alert for out of stock (Company/Shop level)
-     */
-    static async triggerOutOfStockAlert(productData, companyId, shopId = null) {
-        try {
-            const { _id, name } = productData;
-
-            const scope = shopId ? 'shop' : 'company';
-
-            const alert = await Alert.createOrUpdate({
-                scope,
-                companyId,
-                shopId,
-                type: 'out_of_stock',
-                productId: _id,
-                priority: 'critical',
-                message: `🚨 Out of Stock: ${name}`,
-                description: `${name} is currently out of stock`,
-                data: {
-                    productId: _id.toString(),
-                    productName: name,
-                    timestamp: new Date()
-                }
-            });
-
-            logger.warn(`Out of stock alert created/updated for product: ${name}`);
-            return alert;
-        } catch (error) {
-            logger.error(`Failed to trigger out of stock alert: ${error.message}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Trigger alert for price changes (Company/Shop level)
-     */
-    static async triggerPriceChangeAlert(productData, oldPrice, newPrice, companyId, shopId = null) {
-        try {
-            const { _id, name } = productData;
-
-            const scope = shopId ? 'shop' : 'company';
-            const priceChange = newPrice - oldPrice;
-            const priceChangePercent = ((priceChange / oldPrice) * 100).toFixed(2);
-
-            const alert = await Alert.createOrUpdate({
-                scope,
-                companyId,
-                shopId,
-                type: 'price_change',
-                productId: _id,
-                priority: priceChange > 0 ? 'medium' : 'low',
-                message: `💰 Price Change: ${name}`,
-                description: `Price updated from $${oldPrice} to $${newPrice} (${priceChangePercent}%)`,
-                data: {
-                    productId: _id.toString(),
-                    productName: name,
-                    oldPrice,
-                    newPrice,
-                    changeAmount: priceChange,
-                    changePercent: parseFloat(priceChangePercent)
-                }
-            });
-
-            logger.info(`Price change alert created/updated for product: ${name}`);
-            return alert;
-        } catch (error) {
-            logger.error(`Failed to trigger price change alert: ${error.message}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Trigger alert for inventory adjustments (Company/Shop level)
-     */
-    static async triggerInventoryAdjustmentAlert(productData, adjustment, reason, companyId, shopId = null) {
-        try {
-            const { _id, name } = productData;
-
-            const stockRecord = await ProductStock.findOne({ productId: _id });
-
-            const scope = shopId ? 'shop' : 'company';
-            const adjustmentType = adjustment > 0 ? 'addition' : 'deduction';
-            const priority = Math.abs(adjustment) > 50 ? 'high' : 'medium';
-
-            const alert = await Alert.createOrUpdate({
-                scope,
-                companyId,
-                shopId,
-                type: 'inventory_adjustment',
-                productId: _id,
-                priority,
-                message: `📦 Inventory Adjustment: ${name}`,
-                description: `${adjustmentType === 'addition' ? 'Added' : 'Removed'} ${Math.abs(adjustment)} units. Reason: ${reason}`,
-                data: {
-                    productId: _id.toString(),
-                    productName: name,
-                    adjustment,
-                    reason,
-                    newStock: stockRecord?.stockQty || 0,
-                    timestamp: new Date()
-                }
-            });
-
-            logger.info(`Inventory adjustment alert created/updated for product: ${name}`);
-            return alert;
-        } catch (error) {
-            logger.error(`Failed to trigger inventory adjustment alert: ${error.message}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Trigger alert for stock received (Company/Shop level)
-     */
-    static async triggerStockReceivedAlert(productData, quantityReceived, companyId, shopId = null) {
-        try {
-            const { _id, name } = productData;
-
-            const scope = shopId ? 'shop' : 'company';
-
-            const alert = await Alert.createOrUpdate({
-                scope,
-                companyId,
-                shopId,
-                type: 'stock_received',
-                productId: _id,
-                priority: 'medium',
-                message: `📥 Stock Received: ${name}`,
-                description: `${quantityReceived} units of ${name} have been received`,
-                data: {
-                    productId: _id.toString(),
-                    productName: name,
-                    quantityReceived,
-                    timestamp: new Date()
-                }
-            });
-
-            logger.info(`Stock received alert created/updated for product: ${name}`);
-            return alert;
-        } catch (error) {
-            logger.error(`Failed to trigger stock received alert: ${error.message}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Trigger alert for order creation (Company/Shop level)
-     */
-    static async triggerOrderCreatedAlert(orderData, companyId, shopId = null) {
-        try {
-            const { orderId, totalItems, totalAmount, customerInfo } = orderData;
-
-            const scope = shopId ? 'shop' : 'company';
-
-            const alert = await Alert.create({
-                scope,
-                companyId,
-                shopId,
-                type: 'order_created',
-                orderId: orderId?.toString(),
-                priority: 'medium',
-                message: `📋 New Order: #${orderId}`,
-                description: `Order placed with ${totalItems} items for ${customerInfo?.name || 'Unknown'} - $${totalAmount}`,
-                data: {
-                    orderId: orderId?.toString(),
-                    totalItems,
-                    totalAmount,
-                    customerInfo,
-                    timestamp: new Date()
-                }
-            });
-
-            logger.info(`Order creation alert created for order: ${orderId}`);
-            return alert;
-        } catch (error) {
-            logger.error(`Failed to trigger order created alert: ${error.message}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Trigger alert for order shipment (Company/Shop level)
-     */
-    static async triggerOrderShippedAlert(orderData, trackingInfo, companyId, shopId = null) {
-        try {
-            const { orderId, customerInfo } = orderData;
-
-            const scope = shopId ? 'shop' : 'company';
-
-            const alert = await Alert.create({
-                scope,
-                companyId,
-                shopId,
-                type: 'order_shipped',
-                orderId: orderId?.toString(),
-                priority: 'low',
-                message: `🚚 Order Shipped: #${orderId}`,
-                description: `Order shipped to ${customerInfo?.name || 'Customer'} with tracking #${trackingInfo?.trackingNumber || 'N/A'}`,
-                data: {
-                    orderId: orderId?.toString(),
-                    trackingInfo,
-                    customerInfo,
-                    timestamp: new Date()
-                }
-            });
-
-            logger.info(`Order shipped alert created for order: ${orderId}`);
-            return alert;
-        } catch (error) {
-            logger.error(`Failed to trigger order shipped alert: ${error.message}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Trigger alert for order delivery (Company/Shop level)
-     */
-    static async triggerOrderDeliveredAlert(orderData, companyId, shopId = null) {
-        try {
-            const { orderId, customerInfo, deliveryDate } = orderData;
-
-            const scope = shopId ? 'shop' : 'company';
-
-            const alert = await Alert.create({
-                scope,
-                companyId,
-                shopId,
-                type: 'order_delivered',
-                orderId: orderId?.toString(),
-                priority: 'low',
-                message: `✅ Order Delivered: #${orderId}`,
-                description: `Order delivered to ${customerInfo?.name || 'Customer'} on ${deliveryDate}`,
-                data: {
-                    orderId: orderId?.toString(),
-                    customerInfo,
-                    deliveryDate,
-                    timestamp: new Date()
-                }
-            });
-
-            logger.info(`Order delivered alert created for order: ${orderId}`);
-            return alert;
-        } catch (error) {
-            logger.error(`Failed to trigger order delivered alert: ${error.message}`);
             throw error;
         }
     }
@@ -349,32 +181,18 @@ class AlertTriggerService {
             const scope = shopId ? 'shop' : 'company';
             const matchQuery = { companyId, createdAt: { $gte: today, $lt: tomorrow } };
 
-            if (shopId) {
-                matchQuery.shopId = shopId;
-            }
+            if (shopId) matchQuery.shopId = shopId;
 
-            const sales = await StockChange.aggregate([
-                { $match: { ...matchQuery, type: 'sale' } },
-                {
-                    $lookup: {
-                        from: 'products',
-                        localField: 'productId',
-                        foreignField: '_id',
-                        as: 'product'
-                    }
-                },
-                { $unwind: '$product' },
-                {
-                    $group: {
-                        _id: null,
-                        totalUnits: { $sum: { $abs: '$qty' } },
-                        totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, '$product.pricing.basePrice'] } },
-                        transactionCount: { $sum: 1 }
-                    }
-                }
+            const [analytics, health] = await Promise.all([
+                this.getAnalyticsStats(matchQuery),
+                this.getInventoryHealth(companyId, shopId)
             ]);
 
-            const stats = sales[0] || { totalUnits: 0, totalRevenue: 0, transactionCount: 0 };
+            const analysis = analytics[0] || { stats: [{ totalUnits: 0, totalRevenue: 0, grossProfit: 0, profitMargin: 0 }], topProducts: [] };
+            const stats = analysis.stats[0] || { totalUnits: 0, totalRevenue: 0, grossProfit: 0, profitMargin: 0 };
+            const topProducts = analysis.topProducts;
+
+            const topPStr = topProducts.map(p => `${p.name} ($${p.profit.toFixed(2)} profit)`).join(', ');
 
             const alert = await Alert.create({
                 scope,
@@ -382,15 +200,17 @@ class AlertTriggerService {
                 shopId,
                 type: 'daily_summary',
                 priority: 'low',
-                message: `📊 Daily Summary`,
-                description: `${stats.totalUnits} units sold, $${stats.totalRevenue.toFixed(2)} revenue`,
+                message: `📊 Daily Business Summary`,
+                description: `💰 Profit: $${stats.grossProfit.toFixed(2)} (${stats.profitMargin.toFixed(1)}% Margin) | 📦 Sales: ${stats.totalUnits} units | ⚠️ Health: ${health.lowStock} low / ${health.outOfStock} out`,
                 data: {
                     date: today,
-                    ...stats
+                    ...stats,
+                    ...health,
+                    topProducts: topProducts.map(p => ({ productId: p._id, name: p.name, profit: p.profit }))
                 }
             });
 
-            logger.info(`Daily summary alert generated for ${scope} ${shopId || companyId}`);
+            logger.info(`Daily summary generated for ${scope} ${shopId || companyId}`);
             return alert;
         } catch (error) {
             logger.error(`Failed to generate daily summary: ${error.message}`);
@@ -410,32 +230,16 @@ class AlertTriggerService {
             const scope = shopId ? 'shop' : 'company';
             const matchQuery = { companyId, createdAt: { $gte: lastWeek } };
 
-            if (shopId) {
-                matchQuery.shopId = shopId;
-            }
+            if (shopId) matchQuery.shopId = shopId;
 
-            const sales = await StockChange.aggregate([
-                { $match: { ...matchQuery, type: 'sale' } },
-                {
-                    $lookup: {
-                        from: 'products',
-                        localField: 'productId',
-                        foreignField: '_id',
-                        as: 'product'
-                    }
-                },
-                { $unwind: '$product' },
-                {
-                    $group: {
-                        _id: null,
-                        totalUnits: { $sum: { $abs: '$qty' } },
-                        totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, '$product.pricing.basePrice'] } },
-                        transactionCount: { $sum: 1 }
-                    }
-                }
+            const [analytics, health] = await Promise.all([
+                this.getAnalyticsStats(matchQuery),
+                this.getInventoryHealth(companyId, shopId)
             ]);
 
-            const stats = sales[0] || { totalUnits: 0, totalRevenue: 0, transactionCount: 0 };
+            const analysis = analytics[0] || { stats: [{ totalUnits: 0, totalRevenue: 0, grossProfit: 0, profitMargin: 0 }], topProducts: [] };
+            const stats = analysis.stats[0] || { totalUnits: 0, totalRevenue: 0, grossProfit: 0, profitMargin: 0 };
+            const topProducts = analysis.topProducts;
 
             const alert = await Alert.create({
                 scope,
@@ -443,16 +247,18 @@ class AlertTriggerService {
                 shopId,
                 type: 'weekly_summary',
                 priority: 'medium',
-                message: `📈 Weekly Summary`,
-                description: `${stats.totalUnits} units sold, $${stats.totalRevenue.toFixed(2)} revenue`,
+                message: `📈 Weekly Performance Review`,
+                description: `💎 Total Profit: $${stats.grossProfit.toFixed(2)} | 🛒 Units Sold: ${stats.totalUnits} | ⭐ Top: ${topProducts[0]?.name || 'N/A'}`,
                 data: {
                     startDate: lastWeek,
                     endDate: today,
-                    ...stats
+                    ...stats,
+                    ...health,
+                    topProducts: topProducts.map(p => ({ productId: p._id, name: p.name, profit: p.profit }))
                 }
             });
 
-            logger.info(`Weekly summary alert generated for ${scope} ${shopId || companyId}`);
+            logger.info(`Weekly summary generated for ${scope} ${shopId || companyId}`);
             return alert;
         } catch (error) {
             logger.error(`Failed to generate weekly summary: ${error.message}`);
@@ -472,32 +278,16 @@ class AlertTriggerService {
             const scope = shopId ? 'shop' : 'company';
             const matchQuery = { companyId, createdAt: { $gte: lastMonth } };
 
-            if (shopId) {
-                matchQuery.shopId = shopId;
-            }
+            if (shopId) matchQuery.shopId = shopId;
 
-            const sales = await StockChange.aggregate([
-                { $match: { ...matchQuery, type: 'sale' } },
-                {
-                    $lookup: {
-                        from: 'products',
-                        localField: 'productId',
-                        foreignField: '_id',
-                        as: 'product'
-                    }
-                },
-                { $unwind: '$product' },
-                {
-                    $group: {
-                        _id: null,
-                        totalUnits: { $sum: { $abs: '$qty' } },
-                        totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, '$product.pricing.basePrice'] } },
-                        transactionCount: { $sum: 1 }
-                    }
-                }
+            const [analytics, health] = await Promise.all([
+                this.getAnalyticsStats(matchQuery),
+                this.getInventoryHealth(companyId, shopId)
             ]);
 
-            const stats = sales[0] || { totalUnits: 0, totalRevenue: 0, transactionCount: 0 };
+            const analysis = analytics[0] || { stats: [{ totalUnits: 0, totalRevenue: 0, grossProfit: 0, profitMargin: 0 }], topProducts: [] };
+            const stats = analysis.stats[0] || { totalUnits: 0, totalRevenue: 0, grossProfit: 0, profitMargin: 0 };
+            const topProducts = analysis.topProducts;
 
             const alert = await Alert.create({
                 scope,
@@ -505,19 +295,69 @@ class AlertTriggerService {
                 shopId,
                 type: 'monthly_summary',
                 priority: 'high',
-                message: `📅 Monthly Summary`,
-                description: `${stats.totalUnits} units sold, $${stats.totalRevenue.toFixed(2)} revenue`,
+                message: `📅 Monthly Business Snapshot`,
+                description: `🚀 Monthly Revenue: $${stats.totalRevenue.toFixed(2)} | 💸 Net Margin: $${stats.grossProfit.toFixed(2)} | 📦 Total Units: ${stats.totalUnits}`,
                 data: {
                     startDate: lastMonth,
                     endDate: today,
-                    ...stats
+                    ...stats,
+                    ...health,
+                    topProducts: topProducts.map(p => ({ productId: p._id, name: p.name, profit: p.profit }))
                 }
             });
 
-            logger.info(`Monthly summary alert generated for ${scope} ${shopId || companyId}`);
+            logger.info(`Monthly summary generated for ${scope} ${shopId || companyId}`);
             return alert;
         } catch (error) {
             logger.error(`Failed to generate monthly summary: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Generate Yearly summary alert (Company level)
+     */
+    static async generateYearlySummary(companyId, shopId = null) {
+        try {
+            const today = new Date();
+            const lastYear = new Date(today);
+            lastYear.setFullYear(lastYear.getFullYear() - 1);
+
+            const scope = shopId ? 'shop' : 'company';
+            const matchQuery = { companyId, createdAt: { $gte: lastYear } };
+
+            if (shopId) matchQuery.shopId = shopId;
+
+            const [analytics, health] = await Promise.all([
+                this.getAnalyticsStats(matchQuery),
+                this.getInventoryHealth(companyId, shopId)
+            ]);
+
+            const analysis = analytics[0] || { stats: [{ totalUnits: 0, totalRevenue: 0, grossProfit: 0, profitMargin: 0 }], topProducts: [] };
+            const stats = analysis.stats[0] || { totalUnits: 0, totalRevenue: 0, grossProfit: 0, profitMargin: 0 };
+            const topProducts = analysis.topProducts;
+
+            const alert = await Alert.create({
+                scope,
+                companyId,
+                shopId,
+                type: 'yearly_summary',
+                priority: 'high',
+                message: `🎆 Annual Business Review`,
+                description: `🏆 A Heroic Year: $${stats.totalRevenue.toFixed(2)} Revenue and $${stats.grossProfit.toFixed(2)} Profit! Outstanding growth!`,
+                data: {
+                    startDate: lastYear,
+                    endDate: today,
+                    ...stats,
+                    ...health,
+                    topProducts: topProducts.map(p => ({ productId: p._id, name: p.name, profit: p.profit }))
+                }
+            });
+
+            logger.info(`Yearly summary generated for ${scope} ${shopId || companyId}`);
+            return alert;
+        } catch (error) {
+            logger.error(`Failed to generate yearly summary: ${error.message}`);
             throw error;
         }
     }
@@ -533,20 +373,25 @@ class AlertTriggerService {
 
             const scope = shopId ? 'shop' : 'company';
             const matchQuery = { companyId, type: 'sale', createdAt: { $gte: sevenDaysAgo } };
+            if (shopId) matchQuery.shopId = shopId;
 
-            if (shopId) {
-                matchQuery.shopId = shopId;
-            }
-
-            // 1. High Velocity Check
             const velocity = await StockChange.aggregate([
-                { $match: matchQuery },
                 {
-                    $group: {
-                        _id: '$productId',
-                        unitsSold: { $sum: { $abs: '$qty' } }
+                    $addFields: {
+                        qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                        typeNorm: { $ifNull: ['$type', '$changeType'] },
+                        createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
                     }
                 },
+                {
+                    $match: {
+                        companyId,
+                        ...(shopId ? { shopId } : {}),
+                        typeNorm: 'sale',
+                        createdAtNorm: { $gte: sevenDaysAgo }
+                    }
+                },
+                { $group: { _id: '$productId', unitsSold: { $sum: { $abs: '$qtyNorm' } } } },
                 { $match: { unitsSold: { $gt: 50 } } }
             ]);
 
@@ -565,90 +410,63 @@ class AlertTriggerService {
                     description: `${item.unitsSold} units sold in 7 days`,
                     data: { unitsSold: item.unitsSold, period: '7 days' }
                 });
-
                 if (alert) alertsGenerated.push(alert);
             }
 
-            // 2. Dead Stock Check
+            // Dead stock
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-            const products = await Product.find({
-                companyId,
-                ...(shopId && { shopId })
-            });
-
-            const ProductStock = require('../models/ProductStock');
+            const products = await Product.find({ companyId, ...(shopId && { shopId }), isDeleted: false });
 
             for (const product of products) {
-                // Get current stock from ProductStock model
                 const stockRecord = await ProductStock.findOne({ productId: product._id });
                 if (!stockRecord || stockRecord.stockQty === 0) continue;
 
                 const lastSale = await StockChange.findOne({
                     companyId,
                     productId: product._id,
-                    type: 'sale',
-                    createdAt: { $gte: thirtyDaysAgo },
+                    $or: [{ type: 'sale' }, { changeType: 'sale' }],
+                    $or: [
+                        { createdAt: { $gte: thirtyDaysAgo } },
+                        { changeDate: { $gte: thirtyDaysAgo } }
+                    ],
                     ...(shopId && { shopId })
                 });
 
                 if (!lastSale) {
                     const alert = await Alert.createOrUpdate({
-                        scope,
-                        companyId,
-                        shopId,
-                        type: 'dead_stock',
-                        productId: product._id,
-                        priority: 'low',
-                        message: `💤 Dead Stock: ${product.name}`,
+                        scope, companyId, shopId,
+                        type: 'dead_stock', productId: product._id,
+                        priority: 'low', message: `💤 Dead Stock: ${product.name}`,
                         description: `No sales in 30 days`,
-                        data: {
-                            lastSaleCheck: thirtyDaysAgo,
-                            currentStock: stockRecord.stockQty
-                        }
+                        data: { lastSaleCheck: thirtyDaysAgo, currentStock: stockRecord.stockQty }
                     });
-
                     if (alert) alertsGenerated.push(alert);
                 }
             }
 
-            // 3. Stock Out Prediction
-            // const ProductStock = require('../models/ProductStock');
-
+            // Predicting Stock out
             for (const item of velocity) {
                 const dailyVelocity = item.unitsSold / 7;
                 const product = await Product.findById(item._id);
                 if (!product) continue;
-
-                // Get current stock from ProductStock model
                 const stockRecord = await ProductStock.findOne({ productId: product._id });
                 if (!stockRecord || stockRecord.stockQty === 0) continue;
 
                 const daysLeft = stockRecord.stockQty / dailyVelocity;
-
                 if (daysLeft < 7) {
                     const alert = await Alert.createOrUpdate({
-                        scope,
-                        companyId,
-                        shopId,
-                        type: 'stock_out_prediction',
-                        productId: product._id,
+                        scope, companyId, shopId,
+                        type: 'stock_out_prediction', productId: product._id,
                         priority: 'high',
                         message: `⏰ Stock Out in ${Math.ceil(daysLeft)} days: ${product.name}`,
                         description: `Will run out of stock in ~${Math.ceil(daysLeft)} days`,
-                        data: {
-                            currentStock: stockRecord.stockQty,
-                            dailyVelocity: dailyVelocity.toFixed(2),
-                            predictedDaysLeft: Math.ceil(daysLeft)
-                        }
+                        data: { currentStock: stockRecord.stockQty, dailyVelocity: dailyVelocity.toFixed(2), predictedDaysLeft: Math.ceil(daysLeft) }
                     });
-
                     if (alert) alertsGenerated.push(alert);
                 }
             }
 
-            logger.info(`Smart checks completed. Generated ${alertsGenerated.length} alerts for ${scope} ${shopId || companyId}`);
             return alertsGenerated;
         } catch (error) {
             logger.error(`Failed to run smart checks: ${error.message}`);
@@ -657,4 +475,4 @@ class AlertTriggerService {
     }
 }
 
-module.exports = AlertTriggerService;
+module.exports = AlertTriggerService

@@ -8,7 +8,7 @@ const schedule = require('node-schedule');
 const AlertTriggerService = require('../services/alertTriggerService');
 const StockMonitoringService = require('../services/stockMonitoringService');
 const logger = require('../utils/logger');
-const mongoose = require('mongoose'); 
+const mongoose = require('mongoose');
 
 class AlertCronJobWorker {
     static instance = null;
@@ -49,6 +49,9 @@ class AlertCronJobWorker {
 
             // Monthly summary - runs on the 1st of every month at 9 AM
             this.scheduleMonthlySummary();
+
+            // Yearly summary anniversary check - runs every day at 10 AM
+            this.scheduleYearlySummary();
 
             // Cleanup old alerts - runs every day at 3 AM
             this.scheduleCleanupOldAlerts();
@@ -346,6 +349,53 @@ class AlertCronJobWorker {
     }
 
     /**
+     * Run yearly summary on the anniversary of the company registration
+     * Runs every day at 10:00 AM to check for anniversaries
+     */
+    scheduleYearlySummary() {
+        const jobName = 'yearlySummary';
+
+        if (this.jobs[jobName]) {
+            this.jobs[jobName].cancel();
+        }
+
+        this.jobs[jobName] = schedule.scheduleJob('0 10 * * *', async () => {
+            try {
+                logger.info('🎆 Checking for yearly anniversaries...');
+
+                const companies = await this.getAllCompanies();
+                const today = new Date();
+                let anniversariesFound = 0;
+
+                for (const company of companies) {
+                    try {
+                        // Assumption: Company has createdAt. If not, anniversary check is skipped.
+                        if (!company.createdAt) continue;
+
+                        const createdAt = new Date(company.createdAt);
+                        const isAnniversary = today.getMonth() === createdAt.getMonth() &&
+                            today.getDate() === createdAt.getDate() &&
+                            today.getFullYear() > createdAt.getFullYear();
+
+                        if (isAnniversary) {
+                            await AlertTriggerService.generateYearlySummary(company._id.toString());
+                            anniversariesFound++;
+                        }
+                    } catch (error) {
+                        logger.error(`Error checking yearly anniversary for company ${company._id}: ${error.message}`);
+                    }
+                }
+
+                logger.info(`✅ Yearly anniversary check completed. Found ${anniversariesFound} anniversaries.`);
+            } catch (error) {
+                logger.error(`Failed to run yearly summary check: ${error.message}`);
+            }
+        });
+
+        logger.info('✓ Yearly summary anniversary check scheduled daily at 10:00 AM');
+    }
+
+    /**
      * Cleanup old, resolved alerts every day at 3:00 AM
      * Keeps the system clean and removes alerts older than 90 days
      */
@@ -408,20 +458,26 @@ class AlertCronJobWorker {
     }
 
     /**
-     * Get all companies (assumes Company model exists)
-     * If Company model doesn't exist, retrieve from cache or database
+     * Get all companies and shops that have products in the system
+     * Uses Product.distinct to efficiently find active entities
      */
     async getAllCompanies() {
         try {
-            // Try to get from Company model
-            const Company = mongoose.model('Company');
-            return await Company.find({ isActive: true }).lean();
-        } catch (error) {
-            // Fallback: get unique companies from products
-            logger.warn('Company model not found, falling back to products collection');
             const Product = require('../models/Product');
-            const companies = await Product.distinct('companyId');
-            return companies.map(id => ({ _id: id, shops: [] }));
+            const companyIds = await Product.distinct('companyId', { isDeleted: false });
+
+            const companies = [];
+            for (const companyId of companyIds) {
+                const shopIds = await Product.distinct('shopId', { companyId, isDeleted: false });
+                companies.push({
+                    _id: companyId,
+                    shops: shopIds.map(id => ({ _id: id }))
+                });
+            }
+            return companies;
+        } catch (error) {
+            logger.error(`Failed to retrieve companies from products: ${error.message}`);
+            return [];
         }
     }
 

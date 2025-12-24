@@ -15,7 +15,8 @@ const {
   getStockoutRiskProducts,
   getInventoryTrendsGraph,
   getProfitComparisonGraph,
-  getProductProfitTrendsGraph
+  getProductProfitTrendsGraph,
+  getStockChangeHistory
 } = require('../controllers/analyticsController');
 
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
@@ -24,6 +25,11 @@ const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth
  * Comprehensive Inventory Overview
  */
 router.get('/overview', authenticateToken, requireRole(['super_admin', 'company_admin']), getOverview);
+
+/**
+ * Stock Change History (with multi-level filtering and stats)
+ */
+router.get('/stock-change-history', authenticateToken, requireRole(['super_admin', 'company_admin']), getStockChangeHistory);
 
 /**
  * Company-level analytics

@@ -104,14 +104,8 @@ async function replicateVariationsAndStocks(sourceProductId, destinationProductI
                 continue;
             }
 
-            // Prepare stock for this variation
+            // Prepare stock for this variation from source
             const sourceStock = stockByVariation[String(originalVarId)];
-            const trackQuantity = sourceStock ? sourceStock.trackQuantity : true;
-            const lowStockThreshold = sourceStock ? sourceStock.lowStockThreshold || 10 : 10;
-            const allowBackorder = sourceStock ? sourceStock.allowBackorder || false : false;
-            const minReorderQty = sourceStock ? sourceStock.minReorderQty || 20 : 20;
-            const safetyStock = sourceStock ? sourceStock.safetyStock || 0 : 0;
-            const supplierLeadDays = sourceStock ? sourceStock.supplierLeadDays || 7 : 7;
 
             // Determine received quantity for this variation
             let receivedQty = 0;
@@ -130,17 +124,17 @@ async function replicateVariationsAndStocks(sourceProductId, destinationProductI
                     companyId: destCompanyId,
                     stockQty,
                     reservedQty: 0,
-                    trackQuantity,
-                    lowStockThreshold,
-                    allowBackorder,
-                    minReorderQty,
-                    safetyStock,
+                    trackQuantity: sourceStock ? (sourceStock.trackQuantity !== undefined ? sourceStock.trackQuantity : true) : true,
+                    lowStockThreshold: sourceStock ? sourceStock.lowStockThreshold || 10 : 10,
+                    allowBackorder: sourceStock ? sourceStock.allowBackorder || false : false,
+                    minReorderQty: sourceStock ? sourceStock.minReorderQty || 20 : 20,
+                    safetyStock: sourceStock ? sourceStock.safetyStock || 0 : 0,
+                    supplierLeadDays: sourceStock ? sourceStock.supplierLeadDays || 7 : 7,
                     // Forecasting fields - reset for new variation
                     avgDailySales: 0,
                     stockoutRiskDays: 0,
-                    suggestedReorderQty: minReorderQty,
+                    suggestedReorderQty: sourceStock ? sourceStock.minReorderQty || 20 : 20,
                     lastRestockDate: new Date(),
-                    supplierLeadDays,
                     lastForecastUpdate: new Date(),
                     // Analytics reset for new variation
                     totalUnitsSold: 0,
@@ -154,6 +148,32 @@ async function replicateVariationsAndStocks(sourceProductId, destinationProductI
         }
     } catch (err) {
         logger.error('Error replicating variations and stocks:', err);
+    }
+}
+
+/**
+ * Replicate product specifications for destination product
+ * @param {ObjectId} sourceProductId 
+ * @param {ObjectId} destinationProductId 
+ */
+async function replicateProductSpecs(sourceProductId, destinationProductId) {
+    try {
+        const sourceSpecs = await ProductSpecs.findOne({ productId: sourceProductId }).lean();
+        if (!sourceSpecs) {
+            logger.info(`ℹ️ No specifications found for source product ${sourceProductId}`);
+            return;
+        }
+
+        const specsObj = { ...sourceSpecs };
+        delete specsObj._id;
+        delete specsObj.createdAt;
+        delete specsObj.updatedAt;
+        specsObj.productId = destinationProductId;
+
+        await ProductSpecs.create(specsObj);
+        logger.info(`✓ Replicated specifications for destination product ${destinationProductId}`);
+    } catch (err) {
+        logger.error(`❌ Failed to replicate specs from ${sourceProductId} to ${destinationProductId}:`, err.message);
     }
 }
 // ==================== COMPANY LEVEL OPERATIONS ====================
@@ -655,13 +675,20 @@ const getCompanyReports = asyncHandler(async (req, res) => {
             }
         });
     } else if (reportType === 'stock-movement') {
-        // Stock movement report (last 30 days)
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        // Stock movement (last 30 days for better insights)
+        if (!shopId) {
+            return res.status(400).json({
+                success: false,
+                message: 'shopId is required for stock-movement report'
+            });
+        }
 
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const movement = await StockChange.aggregate([
             {
                 $match: {
                     companyId,
+                    shopId,
                     createdAt: { $gte: thirtyDaysAgo }
                 }
             },
@@ -674,12 +701,95 @@ const getCompanyReports = asyncHandler(async (req, res) => {
             }
         ]);
 
+        // DEAD STOCK: Products with stock > 0 but NO sales in 30 days
+        // 1. Get all products with stock > 5 (ignore tiny scraps)
+        const stockedProducts = await ProductStock.find({ companyId, shopId, stockQty: { $gt: 5 } }).select('productId stockQty').lean();
+        const stockedProductIds = stockedProducts.map(sp => sp.productId);
+
+        // 2. Find which of these had sales
+        const soldProductIdsRaw = await StockChange.distinct('productId', {
+            companyId,
+            shopId,
+            type: 'sale',
+            createdAt: { $gte: thirtyDaysAgo },
+            productId: { $in: stockedProductIds }
+        });
+        const soldProductIds = new Set(soldProductIdsRaw.map(id => String(id)));
+
+        // 3. Filter for dead stock
+        const deadStockItems = stockedProducts.filter(sp => !soldProductIds.has(String(sp.productId))).slice(0, 5); // Limit to top 5
+
+        // Enrich Dead Stock with Names
+        const deadStockEnriched = await Product.find({ _id: { $in: deadStockItems.map(d => d.productId) } })
+            .select('name sku')
+            .lean()
+            .then(products => products.map(p => {
+                const stock = deadStockItems.find(d => String(d.productId) === String(p._id));
+                return { id: p._id, name: p.name, sku: p.sku, dormantStock: stock?.stockQty || 0 };
+            }));
+
+        // TOP MOVERS: High velocity items
+        const topMovers = await StockChange.aggregate([
+            { $match: { companyId, shopId, type: 'sale', createdAt: { $gte: thirtyDaysAgo } } },
+            { $group: { _id: '$productId', totalSold: { $sum: { $abs: '$qty' } } } },
+            { $sort: { totalSold: -1 } },
+            { $limit: 5 },
+            { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
+            { $unwind: '$product' },
+            { $project: { name: '$product.name', sku: '$product.sku', totalSold: 1 } }
+        ]);
+
+        // Get shop-specific overview for health score
+        const overview = await ProductStock.aggregate([
+            {
+                $match: {
+                    companyId,
+                    shopId: shopId
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalProducts: { $sum: 1 },
+                    totalStock: { $sum: { $ifNull: ['$stockQty', 0] } },
+                    totalValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$avgCost', 0] }] } },
+                    lowStockCount: {
+                        $sum: {
+                            $cond: [
+                                { $lte: ['$stockQty', '$lowStockThreshold'] },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    outOfStockCount: {
+                        $sum: {
+                            $cond: [
+                                { $lte: ['$stockQty', 0] },
+                                1,
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
         res.json({
             success: true,
-            reportType: 'stock-movement',
             data: {
-                period: '30 days',
-                movement,
+                companyId,
+                shopId,
+                overview: overview[0] || { totalProducts: 0, totalStock: 0, totalValue: 0, lowStockCount: 0, outOfStockCount: 0 },
+                stockMovement: {
+                    period: '30 days',
+                    data: movement
+                },
+                insights: {
+                    topMovers,
+                    deadStock: deadStockEnriched,
+                    healthScore: overview[0] ? Math.min(100, Math.max(0, 100 - (overview[0].outOfStockCount || 0) * 5)) : 100 // Simple heuristic
+                },
                 generatedAt: new Date()
             }
         });
@@ -776,18 +886,61 @@ const getShopProducts = asyncHandler(async (req, res) => {
 
     const total = await Product.countDocuments(query);
 
-    // Transform products to include shop-specific inventory
-    const shopProducts = await Promise.all(products.map(async (product) => {
-        const stock = await ProductStock.findOne({ productId: product._id });
+    // 1. Bulk fetch ProductStock for all products in this page
+    const productIds = products.map(p => p._id);
+    const stockMap = {};
+    const stockList = await ProductStock.find({ productId: { $in: productIds }, shopId: shopId }).lean();
+    stockList.forEach(s => { stockMap[String(s.productId)] = s; });
+
+    // 2. Bulk fetch Sales Velocity (last 30 days) for these products
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const salesStats = await StockChange.aggregate([
+        {
+            $match: {
+                companyId,
+                shopId,
+                productId: { $in: productIds },
+                type: 'sale',
+                createdAt: { $gte: thirtyDaysAgo }
+            }
+        },
+        {
+            $group: {
+                _id: '$productId',
+                totalSold: { $sum: { $abs: '$qty' } }
+            }
+        }
+    ]);
+    const salesMap = {};
+    salesStats.forEach(s => { salesMap[String(s._id)] = s.totalSold; });
+
+    // 3. Transform products with embedded stats
+    const shopProducts = products.map((product) => {
+        const stock = stockMap[String(product._id)];
+        const velocity = salesMap[String(product._id)] || 0;
+        const currentQty = stock?.stockQty || 0;
+        const lowThreshold = stock?.lowStockThreshold || 10;
+
+        // Determine dynamic stock status
+        let stockStatus = 'In Stock';
+        if (currentQty <= 0) stockStatus = 'Out of Stock';
+        else if (currentQty <= lowThreshold) stockStatus = 'Low Stock';
+
         return {
             ...product,
             shopInventory: {
-                quantity: stock?.stockQty || 0,
-                lowStockThreshold: stock?.lowStockThreshold || 10,
-                effectivePrice: product.pricing?.salePrice || product.pricing?.basePrice
+                quantity: currentQty,
+                lowStockThreshold: lowThreshold,
+                effectivePrice: product.pricing?.salePrice || product.pricing?.basePrice,
+                status: stockStatus
+            },
+            statistics: {
+                salesVelocity: velocity, // Units sold last 30 days
+                turnoverRate: currentQty > 0 ? parseFloat((velocity / currentQty).toFixed(2)) : 0,
+                daysOfInventory: velocity > 0 ? parseFloat((currentQty / (velocity / 30)).toFixed(1)) : 999
             }
         };
-    }));
+    });
 
     res.json({
         success: true,
@@ -1505,14 +1658,14 @@ const getShopReport = asyncHandler(async (req, res) => {
         }
     ]);
 
-    // Stock movement (last 7 days)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // Stock movement (last 30 days for better insights)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const movement = await StockChange.aggregate([
         {
             $match: {
                 companyId,
                 shopId,
-                createdAt: { $gte: sevenDaysAgo }
+                createdAt: { $gte: thirtyDaysAgo }
             }
         },
         {
@@ -1524,6 +1677,44 @@ const getShopReport = asyncHandler(async (req, res) => {
         }
     ]);
 
+    // DEAD STOCK: Products with stock > 0 but NO sales in 30 days
+    // 1. Get all products with stock > 5 (ignore tiny scraps)
+    const stockedProducts = await ProductStock.find({ companyId, shopId, stockQty: { $gt: 5 } }).select('productId stockQty').lean();
+    const stockedProductIds = stockedProducts.map(sp => sp.productId);
+
+    // 2. Find which of these had sales
+    const soldProductIdsRaw = await StockChange.distinct('productId', {
+        companyId,
+        shopId,
+        type: 'sale',
+        createdAt: { $gte: thirtyDaysAgo },
+        productId: { $in: stockedProductIds }
+    });
+    const soldProductIds = new Set(soldProductIdsRaw.map(id => String(id)));
+
+    // 3. Filter for dead stock
+    const deadStockItems = stockedProducts.filter(sp => !soldProductIds.has(String(sp.productId))).slice(0, 5); // Limit to top 5
+
+    // Enrich Dead Stock with Names
+    const deadStockEnriched = await Product.find({ _id: { $in: deadStockItems.map(d => d.productId) } })
+        .select('name sku')
+        .lean()
+        .then(products => products.map(p => {
+            const stock = deadStockItems.find(d => String(d.productId) === String(p._id));
+            return { id: p._id, name: p.name, sku: p.sku, dormantStock: stock?.stockQty || 0 };
+        }));
+
+    // TOP MOVERS: High velocity items
+    const topMovers = await StockChange.aggregate([
+        { $match: { companyId, shopId, type: 'sale', createdAt: { $gte: thirtyDaysAgo } } },
+        { $group: { _id: '$productId', totalSold: { $sum: { $abs: '$qty' } } } },
+        { $sort: { totalSold: -1 } },
+        { $limit: 5 },
+        { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
+        { $unwind: '$product' },
+        { $project: { name: '$product.name', sku: '$product.sku', totalSold: 1 } }
+    ]);
+
     res.json({
         success: true,
         data: {
@@ -1531,8 +1722,13 @@ const getShopReport = asyncHandler(async (req, res) => {
             shopId,
             overview: overview[0] || { totalProducts: 0, totalStock: 0, totalValue: 0 },
             stockMovement: {
-                period: '7 days',
+                period: '30 days',
                 data: movement
+            },
+            insights: {
+                topMovers,
+                deadStock: deadStockEnriched,
+                healthScore: overview[0] ? Math.min(100, Math.max(0, 100 - (overview[0].outOfStockCount || 0) * 5)) : 100 // Simple heuristic
             },
             generatedAt: new Date()
         }
@@ -1822,9 +2018,10 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
 
         logger.info(`✅ Destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Shop: ${destinationShopId}`);
 
-        // ========== STEP 3.25: Replicate variations and variation stocks ==========
+        // ========== STEP 3.25: Replicate variations, stocks and specifications ==========
         await replicateVariationsAndStocks(productId, destinationProductId, companyId, destinationShopId, quantity, null);
-        logger.info(`✓ Replicated variations and stocks for destination product ${destinationProductId}`);
+        await replicateProductSpecs(productId, destinationProductId);
+        logger.info(`✓ Replicated variations, stocks and specs for destination product ${destinationProductId}`);
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
         setImmediate(async () => {
@@ -1906,6 +2103,8 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
             cost: sourcePricing.cost,
             currency: sourcePricing.currency || 'USD',
             priceTiers: sourcePricing.priceTiers || [],
+            taxInclusive: sourcePricing.taxInclusive,
+            taxRate: sourcePricing.taxRate,
             effectiveFrom: sourcePricing.effectiveFrom,
             effectiveTo: sourcePricing.effectiveTo,
             // Margins will be auto-calculated in pre-save hook
@@ -1949,33 +2148,29 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
             logger.error('Failed to copy ProductSpecs for destination product:', err);
         }
 
+
         // ========== STEP 5: Create destination stock ==========
         // Transfer ALL stock information except the source stock quantity
-        // Destination gets only the transferred quantity, not the source's remaining stock
         const destinationStock = new ProductStock({
             productId: destinationProductId,
             variationId: null,
-            // Stock quantity is what was transferred, NOT source remaining stock
             stockQty: quantity,
-            reservedQty: 0, // Fresh transfer has no reservations
-            // Copy tracking settings from source
-            trackQuantity: sourceStock.trackQuantity || true,
+            reservedQty: 0,
+            trackQuantity: sourceStock.trackQuantity !== undefined ? sourceStock.trackQuantity : true,
             allowBackorder: sourceStock.allowBackorder || false,
             lowStockThreshold: sourceStock.lowStockThreshold || 10,
             minReorderQty: sourceStock.minReorderQty || 20,
             safetyStock: sourceStock.safetyStock || 0,
-            // Copy forecasting fields (reset analytics to baseline)
-            avgDailySales: 0, // Reset - new product starts fresh
+            avgDailySales: 0,
             stockoutRiskDays: 0,
             suggestedReorderQty: sourceStock.minReorderQty || 20,
             lastRestockDate: new Date(),
             supplierLeadDays: sourceStock.supplierLeadDays || 7,
             lastForecastUpdate: new Date(),
-            // Analytics reset for new product
             totalUnitsSold: 0,
             totalRevenue: 0,
-            avgCost: sourcePricing.cost || 0,
-            profitMarginPercent: (sourcePricing.marginPercent || 0)
+            avgCost: destinationPricing.cost || 0,
+            profitMarginPercent: (destinationPricing.marginPercent || 0)
         });
         await destinationStock.save();
 
@@ -2276,9 +2471,10 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
 
         logger.info(`✅ Cross-company transfer destination product created: ${destinationProductId}, SKU: ${destinationProduct[0].sku}, Company: ${toCompanyId}`);
 
-        // ========== STEP 3.25: Replicate variations and variation stocks ==========
+        // ========== STEP 3.25: Replicate variations, stocks and specifications ==========
         await replicateVariationsAndStocks(productId, destinationProductId, toCompanyId, toShopId, transferQuantity, null);
-        logger.info(`✓ Replicated variations and stocks for destination product ${destinationProductId}`);
+        await replicateProductSpecs(productId, destinationProductId);
+        logger.info(`✓ Replicated variations, stocks and specs for destination product ${destinationProductId}`);
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
         setImmediate(async () => {
@@ -2333,22 +2529,20 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             cost: pricingOverride?.cost || sourcePricing.cost,
             currency: sourcePricing.currency || 'USD',
             priceTiers: sourcePricing.priceTiers || [],
+            taxInclusive: sourcePricing.taxInclusive,
+            taxRate: sourcePricing.taxRate,
             effectiveFrom: sourcePricing.effectiveFrom,
             effectiveTo: sourcePricing.effectiveTo,
             // Margins will be auto-calculated in pre-save hook
             profitRank: sourcePricing.profitRank || 'medium',
-            unitsSoldLastMonth: 0, // Reset for new product
-            revenue: 0, // Reset for new product
-            profit: 0 // Reset for new product
+            unitsSoldLastMonth: 0,
+            revenue: 0,
+            profit: 0
         });
         await destinationPricing.save();
 
         // Link pricing to destination product
-        try {
-            await Product.updateOne({ _id: destinationProductId }, { pricingId: destinationPricing._id });
-        } catch (err) {
-            logger.error('Failed to link destination pricing to product:', err);
-        }
+        await Product.updateOne({ _id: destinationProductId }, { pricingId: destinationPricing._id });
 
         // ========== STEP 4.5: Copy Product Specs (if any) ==========
         try {
@@ -2421,7 +2615,7 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         ]);
 
         // ========== STEP 8: Create ProductTransfer record for complete audit ==========
-        const transferValue = transferQuantity * (sourcePricing.price || 0);
+        const transferValue = transferQuantity * (sourcePricing.basePrice || 0);
         const productTransfer = new ProductTransfer({
             transferId: `TRF-CROSS-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
             transferType: 'cross_company',
@@ -3005,22 +3199,42 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
 
                 logger.info(`✅ Bulk intra-company destination product created: ${destinationProductId}, SKU: ${destinationProduct.sku}`);
 
-                // Create destination pricing
-                await ProductPricing.create({
+                // Create destination pricing with full metadata
+                const destinationPricing = await ProductPricing.create({
                     productId: destinationProductId,
-                    cost: sourcePricing.cost,
-                    price: sourcePricing.price,
                     basePrice: sourcePricing.basePrice,
-                    currency: sourcePricing.currency || 'USD'
+                    salePrice: sourcePricing.salePrice,
+                    listPrice: sourcePricing.listPrice,
+                    cost: sourcePricing.cost,
+                    currency: sourcePricing.currency || 'USD',
+                    priceTiers: sourcePricing.priceTiers || [],
+                    taxInclusive: sourcePricing.taxInclusive,
+                    taxRate: sourcePricing.taxRate,
+                    effectiveFrom: sourcePricing.effectiveFrom,
+                    effectiveTo: sourcePricing.effectiveTo,
+                    profitRank: sourcePricing.profitRank || 'medium'
                 });
 
-                // Create destination stock
+                // Link pricing to destination product
+                await Product.updateOne({ _id: destinationProductId }, { pricingId: destinationPricing._id });
+
+                // Create destination stock with full metadata
                 await ProductStock.create({
                     productId: destinationProductId,
                     variationId: null,
                     stockQty: quantity,
-                    trackQuantity: sourceStock.trackQuantity
+                    reservedQty: 0,
+                    trackQuantity: sourceStock.trackQuantity !== undefined ? sourceStock.trackQuantity : true,
+                    allowBackorder: sourceStock.allowBackorder || false,
+                    lowStockThreshold: sourceStock.lowStockThreshold || 10,
+                    minReorderQty: sourceStock.minReorderQty || 20,
+                    safetyStock: sourceStock.safetyStock || 0,
+                    supplierLeadDays: sourceStock.supplierLeadDays || 7,
+                    suggestedReorderQty: sourceStock.minReorderQty || 20
                 });
+
+                // Replicate product specifications
+                await replicateProductSpecs(productId, destinationProductId);
 
                 // Update source stock
                 const sourceStockBefore = sourceStock.stockQty;
@@ -3291,22 +3505,42 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
 
                 logger.info(`✅ Bulk cross-company destination product created: ${destinationProductId}, SKU: ${destinationProduct.sku}`);
 
-                // Create destination pricing
-                await ProductPricing.create({
+                // Create destination pricing with full metadata
+                const destinationPricing = await ProductPricing.create({
                     productId: destinationProductId,
-                    cost: pricingOverride?.cost || sourcePricing.cost,
-                    price: pricingOverride?.price || sourcePricing.price,
                     basePrice: pricingOverride?.basePrice || sourcePricing.basePrice,
-                    currency: sourcePricing.currency || 'USD'
+                    salePrice: pricingOverride?.salePrice || sourcePricing.salePrice,
+                    listPrice: pricingOverride?.listPrice || sourcePricing.listPrice,
+                    cost: pricingOverride?.cost || sourcePricing.cost,
+                    currency: sourcePricing.currency || 'USD',
+                    priceTiers: sourcePricing.priceTiers || [],
+                    taxInclusive: sourcePricing.taxInclusive,
+                    taxRate: sourcePricing.taxRate,
+                    effectiveFrom: sourcePricing.effectiveFrom,
+                    effectiveTo: sourcePricing.effectiveTo,
+                    profitRank: sourcePricing.profitRank || 'medium'
                 });
 
-                // Create destination stock (ProductStock only uses productId + variationId)
+                // Link pricing to destination product
+                await Product.updateOne({ _id: destinationProductId }, { pricingId: destinationPricing._id });
+
+                // Create destination stock with full metadata
                 await ProductStock.create({
                     productId: destinationProductId,
                     variationId: null,
                     stockQty: quantity,
-                    trackQuantity: sourceStock.trackQuantity
+                    reservedQty: 0,
+                    trackQuantity: sourceStock.trackQuantity !== undefined ? sourceStock.trackQuantity : true,
+                    allowBackorder: sourceStock.allowBackorder || false,
+                    lowStockThreshold: sourceStock.lowStockThreshold || 10,
+                    minReorderQty: sourceStock.minReorderQty || 20,
+                    safetyStock: sourceStock.safetyStock || 0,
+                    supplierLeadDays: sourceStock.supplierLeadDays || 7,
+                    suggestedReorderQty: sourceStock.minReorderQty || 20
                 });
+
+                // Replicate product specifications
+                await replicateProductSpecs(productId, destinationProductId);
 
                 // Update source stock
                 const sourceStockBefore = sourceStock.stockQty;

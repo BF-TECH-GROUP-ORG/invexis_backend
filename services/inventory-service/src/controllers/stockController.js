@@ -521,36 +521,6 @@ const bulkStockOut = asyncHandler(async (req, res) => {
 
 // ==================== STOCK CHANGE HISTORY & CRUD ====================
 
-const getAllStockChanges = asyncHandler(async (req, res) => {
-    const { companyId, shopId, productId, changeType, page = 1, limit = 20 } = req.query;
-
-    if (!companyId) {
-        return res.status(400).json({ success: false, message: 'Company ID is required' });
-    }
-    // validateMongoId(companyId);
-    if (productId) validateMongoId(productId);
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    const query = { companyId };
-    if (shopId) query.shopId = shopId;
-    if (productId) query.productId = productId;
-    if (changeType) query.type = changeType;
-
-    const stockChanges = await StockChange.find(query)
-        .populate('productId', 'name slug')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit));
-
-    const total = await StockChange.countDocuments(query);
-
-    res.status(200).json({
-        success: true,
-        data: stockChanges,
-        pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) }
-    });
-});
 
 const getStockChangeById = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -1288,18 +1258,126 @@ const getShopStockChanges = asyncHandler(async (req, res) => {
     }
 });
 
+/**
+ * Get Stock Daily Summary - Summary of today's stock movements, revenue, and health
+ * GET /v1/stock/daily-summary
+ */
+const getStockDailySummary = asyncHandler(async (req, res) => {
+    const { companyId, shopId } = req.query;
+
+    if (!companyId) {
+        return res.status(400).json({ success: false, message: 'Company ID is required' });
+    }
+
+    // Set "today" range
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const query = {
+        companyId,
+        ...(shopId ? { shopId } : {}),
+        createdAt: { $gte: startOfToday, $lte: endOfToday }
+    };
+
+    // 1. Stock Transitions (Ins and Outs)
+    const movements = await StockChange.aggregate([
+        { $match: query },
+        {
+            $facet: {
+                stockIn: [
+                    { $match: { type: { $in: ['restock', 'return', 'stockin'] } } },
+                    { $group: { _id: null, count: { $sum: { $abs: '$qty' } }, list: { $push: '$$ROOT' } } }
+                ],
+                stockOut: [
+                    { $match: { type: { $in: ['sale', 'damage', 'adjustment'] } } },
+                    {
+                        $group: {
+                            _id: null,
+                            count: { $sum: { $abs: '$qty' } },
+                            revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
+                            list: { $push: '$$ROOT' }
+                        }
+                    }
+                ]
+            }
+        }
+    ]);
+
+    const stockInData = movements[0]?.stockIn[0] || { count: 0, list: [] };
+    const stockOutData = movements[0]?.stockOut[0] || { count: 0, revenue: 0, list: [] };
+
+    // 2. Inventory Health (Low Stock & Totals)
+    const stockStatus = await ProductStock.aggregate([
+        {
+            $lookup: {
+                from: 'products',
+                localField: 'productId',
+                foreignField: '_id',
+                as: 'product'
+            }
+        },
+        { $unwind: '$product' },
+        {
+            $match: {
+                'product.companyId': companyId,
+                'product.isDeleted': false,
+                ...(shopId ? { 'product.shopId': shopId } : {})
+            }
+        },
+        {
+            $facet: {
+                totalProducts: [{ $count: 'count' }],
+                lowStock: [
+                    { $match: { isLowStock: true } },
+                    { $project: { productId: 1, productName: '$product.name', stockQty: 1, lowStockThreshold: 1, sku: '$product.sku' } }
+                ]
+            }
+        }
+    ]);
+
+    const totalProducts = stockStatus[0]?.totalProducts[0]?.count || 0;
+    const lowStockItems = stockStatus[0]?.lowStock || [];
+
+    res.status(200).json({
+        success: true,
+        data: {
+            today: {
+                date: startOfToday.toISOString().split('T')[0],
+                stockIn: {
+                    totalItems: stockInData.count,
+                    activities: stockInData.list
+                },
+                stockOut: {
+                    totalItems: stockOutData.count,
+                    revenue: stockOutData.revenue.toFixed(2),
+                    activities: stockOutData.list
+                }
+            },
+            inventory: {
+                totalUniqueProducts: totalProducts,
+                lowStock: {
+                    count: lowStockItems.length,
+                    items: lowStockItems
+                }
+            }
+        }
+    });
+});
+
 module.exports = {
     getProductByScan,
     stockIn,
     stockOut,
     bulkStockIn,
     bulkStockOut,
-    getAllStockChanges,
     getStockChangeById,
     createStockChange,
     getStockHistory,
     getStockChangesByUser,
     getStockChangesSummaryByUser,
     getCompanyStockChanges,
-    getShopStockChanges
+    getShopStockChanges,
+    getStockDailySummary
 };

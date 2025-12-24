@@ -33,7 +33,8 @@ class AnalyticsService {
                 topProducts,
                 risks,
                 shopPerf,
-                recentActivity
+                recentActivity,
+                forecastData
             ] = await Promise.all([
                 this.getInventorySnapshot(companyId, shopId),
                 this.getKPIs(companyId, shopId, startDate, endDate),
@@ -46,7 +47,8 @@ class AnalyticsService {
                 this.getTopProducts(companyId, shopId),
                 this.getRisksAndHealth(companyId, shopId),
                 this.getShopPerformance(companyId, startDate, endDate),
-                this.getRecentActivity(companyId, shopId)
+                this.getRecentActivity(companyId, shopId),
+                this.getForecast(companyId, shopId, 7)
             ]);
 
             // 3. Construct Context
@@ -78,9 +80,13 @@ class AnalyticsService {
                 risks,
                 shopPerformance: shopPerf,
                 recentActivity,
-                // Optional placeholders for now
-                alerts: [],
-                forecasting: {}
+                // Forecasting with AI branding
+                forecasting: {
+                    ...forecastData,
+                    isAI: true,
+                    disclaimer: 'Predictions are generated using AI-powered linear regression and should be used for informational purposes only. Actual results may vary based on market conditions.'
+                },
+                alerts: []
             };
 
             // 5. Cache result (short TTL for real-time feel, e.g., 5 mins)
@@ -152,8 +158,8 @@ class AnalyticsService {
                     outOfStockCount: { $sum: { $cond: [{ $lte: ['$availableQty', 0] }, 1, 0] } },
                     overstockedCount: { $sum: { $cond: [{ $gt: ['$stockQty', 100] }, 1, 0] } }, // Todo: refined logic
 
-                    totalCostValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$product.costPrice', 0] }] } },
-                    totalRetailValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.price', 0] }] } }
+                    totalCostValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.cost', '$product.costPrice', 0] }] } },
+                    totalRetailValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.basePrice', 0] }] } }
                 }
             }
         ];
@@ -191,22 +197,34 @@ class AnalyticsService {
 
         // 1. Stock Movement KPIs from StockChanges
         const movementStats = await StockChange.aggregate([
-            { $match: match },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    createdAtNorm: { $gte: start, $lte: end }
+                }
+            },
             {
                 $group: {
                     _id: null,
                     stockInUnits: {
                         $sum: {
-                            $cond: [{ $in: ['$type', ['restock', 'return', 'stockin']] }, '$qty', 0]
+                            $cond: [{ $in: ['$typeNorm', ['restock', 'return', 'stockin']] }, '$qtyNorm', 0]
                         }
                     },
                     stockOutUnits: {
                         $sum: {
-                            $cond: [{ $in: ['$type', ['sale', 'damage', 'adjustment']] }, { $abs: '$qty' }, 0]
+                            $cond: [{ $in: ['$typeNorm', ['sale', 'damage', 'adjustment']] }, { $abs: '$qtyNorm' }, 0]
                         }
                     },
-                    netMovement: { $sum: '$qty' }
-                    // TODO: revenue from meta if available
+                    netMovement: { $sum: '$qtyNorm' }
                 }
             }
         ]);
@@ -219,9 +237,18 @@ class AnalyticsService {
 
         const salesStats = await StockChange.aggregate([
             {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
                 $match: {
-                    ...match,
-                    type: 'sale'
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    createdAtNorm: { $gte: start, $lte: end },
+                    typeNorm: 'sale'
                 }
             },
             {
@@ -233,12 +260,20 @@ class AnalyticsService {
                 }
             },
             { $unwind: '$product' },
-            // Note: Using CURRENT cost. For strict accounting, we need cost at time of sale.
+            {
+                $lookup: {
+                    from: 'productpricings',
+                    localField: 'product.pricingId',
+                    foreignField: '_id',
+                    as: 'pricing'
+                }
+            },
+            { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
             {
                 $group: {
                     _id: null,
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] } }, // relying on meta.unitPrice
-                    cogs: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$product.costPrice', 0] }] }] } }
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
+                    cogs: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$pricing.cost', { $ifNull: ['$product.costPrice', 0] }] }] }] } }
                 }
             }
         ]);
@@ -441,22 +476,34 @@ class AnalyticsService {
         if (shopId) match.shopId = shopId;
 
         const data = await StockChange.aggregate([
-            { $match: match },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    createdAtNorm: { $gte: start, $lte: end }
+                }
+            },
             {
                 $group: {
-                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAtNorm" } },
                     stockIn: {
                         $sum: {
-                            $cond: [{ $in: ['$type', ['restock', 'return', 'stockin']] }, '$qty', 0]
+                            $cond: [{ $in: ['$typeNorm', ['restock', 'return', 'stockin']] }, '$qtyNorm', 0]
                         }
                     },
                     stockOut: {
                         $sum: {
-                            $cond: [{ $in: ['$type', ['sale', 'damage', 'adjustment']] }, { $abs: '$qty' }, 0]
+                            $cond: [{ $in: ['$typeNorm', ['sale', 'damage', 'adjustment']] }, { $abs: '$qtyNorm' }, 0]
                         }
                     },
-                    netMovement: { $sum: '$qty' }
-                    // movementValue logic requires price lookup, skipping for perf unless critical
+                    netMovement: { $sum: '$qtyNorm' }
                 }
             },
             { $sort: { _id: 1 } }
@@ -484,22 +531,34 @@ class AnalyticsService {
         if (shopId) match.shopId = shopId;
 
         const data = await StockChange.aggregate([
-            { $match: match },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    createdAtNorm: { $gte: start }
+                }
+            },
             {
                 $project: {
-                    dayOfWeek: { $dayOfWeek: '$createdAt' }, // 1=Sun, 7=Sat
-                    hour: { $hour: '$createdAt' },
-                    type: 1,
-                    qty: 1
+                    dayOfWeek: { $dayOfWeek: '$createdAtNorm' }, // 1=Sun, 7=Sat
+                    hour: { $hour: '$createdAtNorm' },
+                    typeNorm: 1,
+                    qtyNorm: 1
                 }
             },
             {
                 $group: {
                     _id: { day: '$dayOfWeek', hour: '$hour' },
-                    quantityMoved: { $sum: { $abs: '$qty' } },
-                    // Maybe separate In/Out?
-                    inQty: { $sum: { $cond: [{ $gt: ['$qty', 0] }, '$qty', 0] } },
-                    outQty: { $sum: { $cond: [{ $lt: ['$qty', 0] }, { $abs: '$qty' }, 0] } }
+                    quantityMoved: { $sum: { $abs: '$qtyNorm' } },
+                    inQty: { $sum: { $cond: [{ $gt: ['$qtyNorm', 0] }, '$qtyNorm', 0] } },
+                    outQty: { $sum: { $cond: [{ $lt: ['$qtyNorm', 0] }, { $abs: '$qtyNorm' }, 0] } }
                 }
             }
         ]);
@@ -527,7 +586,21 @@ class AnalyticsService {
         if (shopId) match.shopId = shopId;
 
         const pipeline = [
-            { $match: match },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: start, $lte: end }
+                }
+            },
             {
                 $lookup: {
                     from: 'products',
@@ -539,9 +612,9 @@ class AnalyticsService {
             { $unwind: '$product' },
             {
                 $group: {
-                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
-                    cogs: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$product.costPrice', 0] }] }] } }
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAtNorm" } },
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
+                    cogs: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$product.costPrice', 0] }] }] } }
                 }
             },
             { $sort: { _id: 1 } },
@@ -592,15 +665,22 @@ class AnalyticsService {
 
         const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-        const match = {
-            companyId,
-            type: 'sale',
-            createdAt: { $gte: start }
-        };
-        if (shopId) match.shopId = shopId;
-
         const data = await StockChange.aggregate([
-            { $match: match },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: start }
+                }
+            },
             {
                 $lookup: {
                     from: 'products',
@@ -614,9 +694,9 @@ class AnalyticsService {
                 $group: {
                     _id: '$productId',
                     productName: { $first: '$product.name' },
-                    unitsSold: { $sum: { $abs: '$qty' } },
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
-                    cogs: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$product.costPrice', 0] }] }] } }
+                    unitsSold: { $sum: { $abs: '$qtyNorm' } },
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
+                    cogs: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$product.costPrice', 0] }] }] } }
                 }
             },
             {
@@ -703,7 +783,9 @@ class AnalyticsService {
 
         return {
             stockoutRisks: riskProducts,
-            healthScores: [] // TODO: health score per product logic
+            healthScores: [], // TODO: health score per product logic
+            isAI: true,
+            disclaimer: 'Risk assessments are predictive and based on historical sales trends.'
         };
     }
 
@@ -776,10 +858,17 @@ class AnalyticsService {
         // 2. Sales Performance per Shop (from StockChange)
         const salesStats = await StockChange.aggregate([
             {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
                 $match: {
                     companyId,
-                    type: 'sale',
-                    createdAt: { $gte: start, $lte: end }
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: start, $lte: end }
                 }
             },
             {
@@ -794,8 +883,8 @@ class AnalyticsService {
             {
                 $group: {
                     _id: '$shopId',
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
-                    cogs: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$product.costPrice', 0] }] } }
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
+                    cogs: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$product.costPrice', 0] }] } }
                 }
             }
         ]);
@@ -821,12 +910,21 @@ class AnalyticsService {
      * Dataset 16: Recent Inventory Activities (Audit Log)
      */
     async getRecentActivity(companyId, shopId) {
-        const match = { companyId };
-        if (shopId) match.shopId = shopId;
-
         const logs = await StockChange.aggregate([
-            { $match: match },
-            { $sort: { createdAt: -1 } },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {})
+                }
+            },
+            { $sort: { createdAtNorm: -1 } },
             { $limit: 20 },
             {
                 $lookup: {
@@ -839,11 +937,11 @@ class AnalyticsService {
             { $unwind: '$product' },
             {
                 $project: {
-                    timestamp: '$createdAt',
+                    timestamp: '$createdAtNorm',
                     productId: '$productId',
                     productName: '$product.name',
-                    type: '$type',
-                    qty: '$qty',
+                    type: '$typeNorm',
+                    qty: '$qtyNorm',
                     reason: '$reason',
                     user: '$userId',
                     shop: '$shopId'
@@ -889,18 +987,25 @@ class AnalyticsService {
             const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
             const salesHistory = await StockChange.aggregate([
                 {
+                    $addFields: {
+                        qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                        typeNorm: { $ifNull: ['$type', '$changeType'] },
+                        createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                    }
+                },
+                {
                     $match: {
                         productId: new mongoose.Types.ObjectId(productId),
-                        type: 'sale',
-                        createdAt: { $gte: ninetyDaysAgo }
+                        typeNorm: 'sale',
+                        createdAtNorm: { $gte: ninetyDaysAgo }
                     }
                 },
                 {
                     $group: {
                         _id: null,
-                        totalUnits: { $sum: { $abs: '$qty' } },
+                        totalUnits: { $sum: { $abs: '$qtyNorm' } },
                         totalRevenue: {
-                            $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', pricing.basePrice || 0] }] }
+                            $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', pricing.basePrice || 0] }] }
                         },
                         transactions: { $sum: 1 }
                     }
@@ -960,33 +1065,40 @@ class AnalyticsService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - rangeInDays);
 
-        const matchStage = {
-            companyId,
-            createdAt: { $gte: startDate, $lte: endDate }
-        };
-        if (shopId) matchStage.shopId = shopId;
-
         const groupStage = this._getGroupStagePeriod(period);
 
         const trends = await StockChange.aggregate([
-            { $match: matchStage },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    createdAtNorm: { $gte: startDate, $lte: endDate }
+                }
+            },
             {
                 $group: {
                     _id: groupStage,
                     inboundQty: {
-                        $sum: { $cond: [{ $in: ['$type', ['restock', 'return', 'stockin']] }, '$qty', 0] }
+                        $sum: { $cond: [{ $in: ['$typeNorm', ['restock', 'return', 'stockin']] }, '$qtyNorm', 0] }
                     },
                     outboundQty: {
-                        $sum: { $cond: [{ $in: ['$type', ['sale', 'damage', 'adjustment']] }, { $abs: '$qty' }, 0] }
+                        $sum: { $cond: [{ $in: ['$typeNorm', ['sale', 'damage', 'adjustment']] }, { $abs: '$qtyNorm' }, 0] }
                     },
                     totalTransactions: { $sum: 1 },
                     revenue: {
-                        $sum: { $cond: [{ $eq: ['$type', 'sale'] }, { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] }, 0] }
+                        $sum: { $cond: [{ $eq: ['$typeNorm', 'sale'] }, { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] }, 0] }
                     },
                     cost: {
                         // Approximation: Cost is tricky without storing it on StockChange. Assuming unitCost in meta or 0.
                         // A standardized system would snapshot cost at sale time.
-                        $sum: { $cond: [{ $eq: ['$type', 'sale'] }, { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', 0] }] }, 0] }
+                        $sum: { $cond: [{ $eq: ['$typeNorm', 'sale'] }, { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', 0] }] }, 0] }
                     }
                 }
             },
@@ -1024,21 +1136,28 @@ class AnalyticsService {
         const periodResults = {};
 
         for (const [key, { startDate, endDate, label }] of Object.entries(periods)) {
-            const match = {
-                companyId,
-                type: 'sale',
-                createdAt: { $gte: startDate, $lte: endDate }
-            };
-            if (shopId) match.shopId = shopId;
-
             const agg = await StockChange.aggregate([
-                { $match: match },
+                {
+                    $addFields: {
+                        qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                        typeNorm: { $ifNull: ['$type', '$changeType'] },
+                        createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                    }
+                },
+                {
+                    $match: {
+                        companyId,
+                        ...(shopId ? { shopId } : {}),
+                        typeNorm: 'sale',
+                        createdAtNorm: { $gte: startDate, $lte: endDate }
+                    }
+                },
                 {
                     $group: {
                         _id: null,
-                        revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
+                        revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
                         // Cost requires lookup ideally, but let's assume worst case 0 or meta
-                        cost: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', 0] }] } }
+                        cost: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', 0] }] } }
                     }
                 }
             ]);
@@ -1077,16 +1196,30 @@ class AnalyticsService {
         if (productId) matchStage.productId = new mongoose.Types.ObjectId(productId);
 
         const trends = await StockChange.aggregate([
-            { $match: matchStage },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: startDate, $lte: endDate },
+                    ...(productId ? { productId: new mongoose.Types.ObjectId(productId) } : {})
+                }
+            },
             {
                 $group: {
                     _id: {
                         productId: '$productId',
-                        date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }
+                        date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAtNorm' } }
                     },
-                    quantity: { $sum: '$qty' },
-                    revenue: { $sum: { $multiply: ['$qty', { $ifNull: ['$meta.unitPrice', 0] }] } },
-                    cost: { $sum: { $multiply: ['$qty', { $ifNull: ['$meta.unitCost', 0] }] } }
+                    quantity: { $sum: '$qtyNorm' },
+                    revenue: { $sum: { $multiply: ['$qtyNorm', { $ifNull: ['$meta.unitPrice', 0] }] } },
+                    cost: { $sum: { $multiply: ['$qtyNorm', { $ifNull: ['$meta.unitCost', 0] }] } }
                 }
             },
             { $sort: { '_id.date': 1 } },
@@ -1140,11 +1273,11 @@ class AnalyticsService {
     }
 
     _getGroupStagePeriod(period) {
-        const createdAt = '$createdAt';
+        const createdAt = '$createdAtNorm';
         switch (period) {
-            case 'weekly': return { year: { $year: '$createdAt' }, week: { $week: '$createdAt' } };
-            case 'monthly': return { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } };
-            default: return { year: { $year: '$createdAt' }, month: { $month: '$createdAt' }, day: { $dayOfMonth: '$createdAt' } };
+            case 'weekly': return { year: { $year: createdAt }, week: { $week: createdAt } };
+            case 'monthly': return { year: { $year: createdAt }, month: { $month: createdAt } };
+            default: return { year: { $year: createdAt }, month: { $month: createdAt }, day: { $dayOfMonth: createdAt } };
         }
     }
 
@@ -1186,7 +1319,21 @@ class AnalyticsService {
 
         // 1. Revenue Metrics
         const revenueData = await StockChange.aggregate([
-            { $match: { ...match, type: 'sale', createdAt: { $gte: fromDate } } },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: fromDate }
+                }
+            },
             { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
             { $unwind: '$product' },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
@@ -1194,11 +1341,11 @@ class AnalyticsService {
             {
                 $group: {
                     _id: null,
-                    totalUnitsSold: { $sum: { $abs: '$qty' } },
+                    totalUnitsSold: { $sum: { $abs: '$qtyNorm' } },
                     // Use meta.unitPrice / unitCost for accuracy
-                    totalRevenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
-                    avgOrderValue: { $avg: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
-                    totalCost: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$pricing.cost', 0] }] }] } }
+                    totalRevenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
+                    avgOrderValue: { $avg: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
+                    totalCost: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$pricing.cost', 0] }] }] } }
                 }
             }
         ]);
@@ -1247,14 +1394,41 @@ class AnalyticsService {
 
         // 5. Stock Movement
         const stockMovement = await StockChange.aggregate([
-            { $match: { ...match, createdAt: { $gte: fromDate } } },
-            { $group: { _id: '$type', count: { $sum: 1 }, totalQuantity: { $sum: { $abs: '$qty' } } } }
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    createdAtNorm: { $gte: fromDate }
+                }
+            },
+            { $group: { _id: '$typeNorm', count: { $sum: 1 }, totalQuantity: { $sum: { $abs: '$qtyNorm' } } } }
         ]);
 
         // 6. Top Products
         const topProducts = await StockChange.aggregate([
-            { $match: { ...match, type: 'sale', createdAt: { $gte: fromDate } } },
-            { $group: { _id: '$productId', unitsSold: { $sum: { $abs: '$qty' } } } },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: fromDate }
+                }
+            },
+            { $group: { _id: '$productId', unitsSold: { $sum: { $abs: '$qtyNorm' } } } },
             { $sort: { unitsSold: -1 } },
             { $limit: 5 },
             { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
@@ -1337,7 +1511,21 @@ class AnalyticsService {
         tomorrow.setDate(tomorrow.getDate() + 1);
 
         const todaySales = await StockChange.aggregate([
-            { $match: { ...match, type: 'sale', createdAt: { $gte: today, $lt: tomorrow } } },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: today, $lt: tomorrow }
+                }
+            },
             { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
             { $unwind: '$product' },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
@@ -1345,13 +1533,28 @@ class AnalyticsService {
             {
                 $group: {
                     _id: null,
-                    units: { $sum: { $abs: '$qty' } },
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } }
+                    units: { $sum: { $abs: '$qtyNorm' } },
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } }
                 }
             }
         ]);
 
-        const todayChanges = await StockChange.countDocuments({ ...match, createdAt: { $gte: today, $lt: tomorrow } });
+        const todayChangesAgg = await StockChange.aggregate([
+            {
+                $addFields: {
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    createdAtNorm: { $gte: today, $lt: tomorrow }
+                }
+            },
+            { $count: 'total' }
+        ]);
+        const todayChanges = todayChangesAgg[0]?.total || 0;
 
         const healthAgg = await ProductVariation.aggregate([
             { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
@@ -1399,17 +1602,31 @@ class AnalyticsService {
 
         // Daily sales trend
         const dailySalesTrend = await StockChange.aggregate([
-            { $match: { ...match, type: 'sale', createdAt: { $gte: fromDate } } },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: fromDate }
+                }
+            },
             { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
             { $unwind: '$product' },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
             { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
             {
                 $group: {
-                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-                    units: { $sum: { $abs: '$qty' } },
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
-                    cost: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$pricing.cost', 0] }] }] } }
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: { $ifNull: ['$createdAt', '$changeDate'] } } },
+                    units: { $sum: { $abs: '$qtyNorm' } },
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
+                    cost: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$pricing.cost', 0] }] }] } }
                 }
             },
             { $sort: { _id: 1 } }
@@ -1417,7 +1634,21 @@ class AnalyticsService {
 
         // Sales by category
         const salesByCategory = await StockChange.aggregate([
-            { $match: { ...match, type: 'sale', createdAt: { $gte: fromDate } } },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: fromDate }
+                }
+            },
             { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
             { $unwind: '$product' },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
@@ -1427,15 +1658,32 @@ class AnalyticsService {
             {
                 $group: {
                     _id: '$category.name',
-                    units: { $sum: { $abs: '$qty' } },
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
+                    units: { $sum: { $abs: '$qtyNorm' } },
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
                     products: { $sum: 1 }
                 }
             },
             { $sort: { revenue: -1 } }
         ]);
 
-        const transactions = await StockChange.countDocuments({ ...match, type: 'sale', createdAt: { $gte: fromDate } });
+        const transactionsAgg = await StockChange.aggregate([
+            {
+                $addFields: {
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: fromDate }
+                }
+            },
+            { $count: 'total' }
+        ]);
+        const transactions = transactionsAgg[0]?.total || 0;
 
         const totalSalesUnits = dailySalesTrend.reduce((sum, d) => sum + d.units, 0);
         const totalRevenue = dailySalesTrend.reduce((sum, d) => sum + d.revenue, 0);
@@ -1449,7 +1697,7 @@ class AnalyticsService {
                 totalRevenue: this._round(totalRevenue),
                 totalCost: this._round(totalCost),
                 grossProfit: this._round(totalRevenue - totalCost),
-                profitMargin: this._round(((totalRevenue - totalCost) / totalRevenue * 100)),
+                profitMargin: totalRevenue > 0 ? this._round(((totalRevenue - totalCost) / totalRevenue * 100)) : 0,
                 avgTransactionValue: transactions > 0 ? this._round(totalRevenue / transactions) : 0,
                 avgUnitsPerTransaction: transactions > 0 ? this._round(totalSalesUnits / transactions) : 0
             },
@@ -1458,14 +1706,14 @@ class AnalyticsService {
                 units: d.units,
                 revenue: this._round(d.revenue),
                 cost: this._round(d.cost),
-                margin: this._round((d.revenue - d.cost) / d.revenue * 100)
+                margin: d.revenue > 0 ? this._round((d.revenue - d.cost) / d.revenue * 100) : 0
             })),
             byCategory: salesByCategory.map(c => ({
                 category: c._id || 'Uncategorized',
                 units: c.units,
                 revenue: this._round(c.revenue),
                 productsInvolved: c.products,
-                revenueShare: this._round(c.revenue / totalRevenue * 100)
+                revenueShare: totalRevenue > 0 ? this._round(c.revenue / totalRevenue * 100) : 0
             }))
         };
     }
@@ -1478,15 +1726,29 @@ class AnalyticsService {
         if (shopId) match.shopId = shopId;
 
         const historicalData = await StockChange.aggregate([
-            { $match: { ...match, type: 'sale', createdAt: { $gte: fromDate } } },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: fromDate }
+                }
+            },
             { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
             { $unwind: '$product' },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
             { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
             {
                 $group: {
-                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } }
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAtNorm' } },
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } }
                 }
             },
             { $sort: { _id: 1 } }
@@ -1498,7 +1760,9 @@ class AnalyticsService {
             forecastPeriod: `Next ${days} days`,
             forecast,
             confidence: this._calculateForecastConfidence(historicalData),
-            methodology: 'Linear regression with trend analysis'
+            methodology: 'AI-Powered Linear Regression with Trend Analysis',
+            isAI: true,
+            disclaimer: 'Forecasts are generated using mathematical models based on historical patterns and are not guarantees of future performance.'
         };
     }
 
@@ -1527,11 +1791,21 @@ class AnalyticsService {
         });
 
         const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-        const stockChangeMatch = { companyId, type: 'sale', createdAt: { $gte: since } };
-        if (shopId) stockChangeMatch.shopId = shopId;
-
         const slowMoversAgg = await StockChange.aggregate([
-            { $match: stockChangeMatch },
+            {
+                $addFields: {
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: since }
+                }
+            },
             { $group: { _id: '$productId', movements: { $sum: 1 } } },
             { $match: { movements: { $lt: 5 } } },
             { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } },
@@ -1548,12 +1822,34 @@ class AnalyticsService {
         }));
 
         const deadCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+        // Product usually has createdAt, no legacy issues expected there, but let's be safe if needed.
+        // However, the task focus is StockChange.
         const deadMatch = { companyId, createdAt: { $lt: deadCutoff } };
-        if (shopId) deadMatch.shopId = shopId; // Product schema has shopId usually? Or need lookup. Assuming Product has shopId.
+        if (shopId) deadMatch.shopId = shopId;
 
         const deadStock = await Product.aggregate([
             { $match: deadMatch },
-            { $lookup: { from: 'stockchanges', localField: '_id', foreignField: 'productId', as: 'changes' } },
+            {
+                $lookup: {
+                    from: 'stockchanges',
+                    let: { pid: '$_id' },
+                    pipeline: [
+                        {
+                            $addFields: {
+                                pid: '$productId',
+                                createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                            }
+                        },
+                        {
+                            $match: {
+                                $expr: { $eq: ['$pid', '$$pid'] },
+                                createdAtNorm: { $gt: deadCutoff } // Any change since cutoff
+                            }
+                        }
+                    ],
+                    as: 'changes'
+                }
+            },
             { $match: { 'changes.0': { $exists: false } } },
             { $lookup: { from: 'productvariations', localField: '_id', foreignField: 'productId', as: 'variations' } },
             { $unwind: { path: '$variations', preserveNullAndEmptyArrays: true } },
@@ -1578,11 +1874,23 @@ class AnalyticsService {
     async getBenchmarks(companyId, shopId, period = 30) {
         const fromDate = new Date();
         fromDate.setDate(fromDate.getDate() - parseInt(period));
-        const match = { companyId };
-        if (shopId) match.shopId = shopId;
 
         const salesData = await StockChange.aggregate([
-            { $match: { ...match, type: 'sale', createdAt: { $gte: fromDate } } },
+            {
+                $addFields: {
+                    qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+                    typeNorm: { $ifNull: ['$type', '$changeType'] },
+                    createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+                }
+            },
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    typeNorm: 'sale',
+                    createdAtNorm: { $gte: fromDate }
+                }
+            },
             { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
             { $unwind: '$product' },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
@@ -1590,13 +1898,23 @@ class AnalyticsService {
             {
                 $group: {
                     _id: null,
-                    revenue: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
-                    cost: { $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$pricing.cost', 0] }] }] } }
+                    revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', { $ifNull: ['$pricing.basePrice', 0] }] }] } },
+                    cost: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', { $ifNull: ['$pricing.cost', 0] }] }] } }
                 }
             }
         ]);
 
-        const inventory = await Product.countDocuments(match);
+        const inventoryCountAgg = await Product.aggregate([
+            {
+                $match: {
+                    companyId,
+                    ...(shopId ? { shopId } : {}),
+                    isDeleted: false
+                }
+            },
+            { $count: 'total' }
+        ]);
+        const inventory = inventoryCountAgg[0]?.total || 0;
         const avgInventoryAgg = await ProductVariation.aggregate([
             { $lookup: { from: 'products', localField: 'productId', foreignField: '_id', as: 'product' } },
             { $unwind: '$product' },
@@ -1964,6 +2282,131 @@ class AnalyticsService {
             growth: {
                 revenue: yesterdayStats.revenue > 0 ? this._round(((todayStats.revenue - yesterdayStats.revenue) / yesterdayStats.revenue) * 100) : 100,
                 units: yesterdayStats.units > 0 ? this._round(((todayStats.units - yesterdayStats.units) / yesterdayStats.units) * 100) : 100
+            }
+        };
+    }
+
+    /**
+     * Get comprehensive stock change history with statistics
+     * Supports company-level, shop-level, and user-level filtering
+     */
+    async getStockChangeHistory({
+        companyId,
+        shopId,
+        userId,
+        productId,
+        type,
+        startDate,
+        endDate,
+        page = 1,
+        limit = 50
+    }) {
+        const match = { companyId };
+
+        if (shopId) match.shopId = shopId;
+        if (userId) match.userId = userId;
+        if (productId) match.productId = new mongoose.Types.ObjectId(productId);
+        if (type) match.type = type;
+
+        if (startDate || endDate) {
+            match.createdAt = {};
+            if (startDate) match.createdAt.$gte = new Date(startDate);
+            if (endDate) match.createdAt.$lte = new Date(endDate);
+        }
+
+        const skip = (page - 1) * limit;
+
+        // 1. Get Paginated History
+        const history = await StockChange.aggregate([
+            { $match: match },
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'productId',
+                    foreignField: '_id',
+                    as: 'product'
+                }
+            },
+            { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    _id: 1,
+                    type: 1,
+                    qty: 1,
+                    previous: 1,
+                    new: 1,
+                    reason: 1,
+                    userId: 1,
+                    shopId: 1,
+                    companyId: 1,
+                    createdAt: 1,
+                    meta: 1,
+                    productName: '$product.name',
+                    productSku: '$product.sku'
+                }
+            }
+        ]);
+
+        // 2. Get Total Count for Pagination
+        const total = await StockChange.countDocuments(match);
+
+        // 3. Get Statistics (Optimized)
+        const stats = await StockChange.aggregate([
+            { $match: match },
+            {
+                $facet: {
+                    summary: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalChanges: { $sum: 1 },
+                                totalInflow: {
+                                    $sum: { $cond: [{ $gt: ['$qty', 0] }, '$qty', 0] }
+                                },
+                                totalOutflow: {
+                                    $sum: { $cond: [{ $lt: ['$qty', 0] }, { $abs: '$qty' }, 0] }
+                                }
+                            }
+                        }
+                    ],
+                    typeDistribution: [
+                        { $group: { _id: '$type', count: { $sum: 1 } } },
+                        { $project: { type: '$_id', count: 1, _id: 0 } }
+                    ],
+                    topUsers: [
+                        { $group: { _id: '$userId', count: { $sum: 1 } } },
+                        { $sort: { count: -1 } },
+                        { $limit: 10 },
+                        { $project: { userId: '$_id', count: 1, _id: 0 } }
+                    ]
+                }
+            }
+        ]);
+
+        const summary = stats[0].summary[0] || { totalChanges: 0, totalInflow: 0, totalOutflow: 0 };
+        const typeDist = stats[0].typeDistribution.reduce((acc, curr) => {
+            acc[curr.type] = curr.count;
+            return acc;
+        }, {});
+
+        return {
+            history,
+            pagination: {
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(total / parseInt(limit))
+            },
+            stats: {
+                totalChanges: summary.totalChanges,
+                totalInflow: summary.totalInflow,
+                totalOutflow: summary.totalOutflow,
+                netChange: summary.totalInflow - summary.totalOutflow,
+                typeDistribution: typeDist,
+                topUsers: stats[0].topUsers
             }
         };
     }

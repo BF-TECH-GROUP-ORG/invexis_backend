@@ -3,26 +3,26 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const StockChangeSchema = new Schema({
-  companyId:   { type: String, required: true, index: true },
-  shopId:      { type: String, required: true, index: true },
+  companyId: { type: String, required: true, index: true },
+  shopId: { type: String, required: true, index: true },
 
-  productId:   { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
- 
+  productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true, index: true },
+
   type: {
     type: String,
-    enum: ['sale', 'restock', 'return', 'adjustment', 'damage', 'transfer' , 'stockin'],
+    enum: ['sale', 'restock', 'return', 'adjustment', 'damage', 'transfer', 'stockin'],
     required: true
   },
 
-  qty:         { type: Number, required: true }, // negative = out, positive = in
-  previous:    { type: Number, required: true },
-  new:         { type: Number }, // Set by pre-save hook
+  qty: { type: Number, required: true }, // negative = out, positive = in
+  previous: { type: Number, required: true },
+  new: { type: Number }, // Set by pre-save hook
 
-  reason:      { type: String, trim: true },
-  orderId:     { type: Schema.Types.ObjectId, sparse: true, index: true }, // Order-related stock changes
-  userId:      { type: String, required: true, index: true },        // WHO did it
-  terminalId:  { type: String, index: true },                        // POS terminal / device
-  sessionId:   { type: String },                                     // Cashier session
+  reason: { type: String, trim: true },
+  orderId: { type: Schema.Types.ObjectId, sparse: true, index: true }, // Order-related stock changes
+  userId: { type: String, required: true, index: true },        // WHO did it
+  terminalId: { type: String, index: true },                        // POS terminal / device
+  sessionId: { type: String },                                     // Cashier session
 
   meta: { type: Schema.Types.Mixed } // { customerName, receiptNo, note, etc }
 }, {
@@ -52,7 +52,7 @@ StockChangeSchema.index({ companyId: 1, userId: 1, type: 1 });   // User activit
 /* -------------------------------------------------------------------------- */
 /*                          PRE-SAVE: ATOMIC + AUDIT + ALERT                  */
 /* -------------------------------------------------------------------------- */
-StockChangeSchema.pre('save', async function() {
+StockChangeSchema.pre('save', async function () {
   // For transfers, skip stock update logic since transfers handle stock updates manually
   // This is because transfers involve two separate products/shops and complex logic
   if (this.type === 'transfer' && this.new !== undefined) {
@@ -63,9 +63,9 @@ StockChangeSchema.pre('save', async function() {
   // 1. Validate qty sign
   if (this.qty === 0) throw new Error('Quantity cannot be zero');
   const outflow = ['sale', 'adjustment', 'damage'].includes(this.type);
-  const inflow  = ['restock', 'return'].includes(this.type);
+  const inflow = ['restock', 'return'].includes(this.type);
   if (outflow && this.qty > 0) throw new Error('Outflow must be negative');
-  if (inflow  && this.qty < 0) throw new Error('Inflow must be positive');
+  if (inflow && this.qty < 0) throw new Error('Inflow must be positive');
 
   // 2. Validate ownership
   const product = await mongoose.model('Product').findOne({
@@ -80,7 +80,7 @@ StockChangeSchema.pre('save', async function() {
     productId: this.productId,
     variationId: this.variationId || null
   }).lean();
-  
+
   if (!stockRecord) throw new Error('Stock record not found');
   currentStock = stockRecord.stockQty || 0;
 
@@ -95,7 +95,7 @@ StockChangeSchema.pre('save', async function() {
 
   // 6. Apply atomic update to ProductStock
   await mongoose.model('ProductStock').updateOne(
-    { 
+    {
       productId: this.productId,
       variationId: this.variationId || null
     },
@@ -112,7 +112,7 @@ StockChangeSchema.pre('save', async function() {
       newValue: { stock: this.new, type: this.type, qty: this.qty },
       meta: { shopId: this.shopId, terminalId: this.terminalId }
     });
-  } catch (e) {}
+  } catch (e) { }
 
   // 8. Low stock alert
   if (this.new <= 5 && outflow) {
@@ -122,20 +122,20 @@ StockChangeSchema.pre('save', async function() {
         { $set: { currentStock: this.new, notified: false } },
         { upsert: true }
       );
-    } catch (e) {}
+    } catch (e) { }
   }
 });
 
 /* -------------------------------------------------------------------------- */
 /*                         STATIC: WORKER PERFORMANCE REPORTS                 */
 /* -------------------------------------------------------------------------- */
-StockChangeSchema.statics.getWorkerSales = async function({ shopId, userId, startDate, endDate }) {
+StockChangeSchema.statics.getWorkerSales = async function ({ shopId, userId, startDate, endDate }) {
   const match = { shopId, type: 'sale' };
   if (userId) match.userId = userId;
   if (startDate || endDate) {
     match.createdAt = {};
     if (startDate) match.createdAt.$gte = new Date(startDate);
-    if (endDate)   match.createdAt.$lte = new Date(endDate);
+    if (endDate) match.createdAt.$lte = new Date(endDate);
   }
 
   return this.aggregate([
@@ -169,20 +169,46 @@ StockChangeSchema.statics.getWorkerSales = async function({ shopId, userId, star
   ]);
 };
 
-// ========== POST-SAVE: AUTO-CALCULATE VELOCITY & FORECAST ==========
-StockChangeSchema.post('save', async function(doc) {
+// ========== POST-SAVE: EVENT EMISSION & VELOCITY CALC ==========
+StockChangeSchema.post('save', async function (doc) {
+  try {
+    const Outbox = mongoose.model('Outbox');
+    await Outbox.create({
+      type: `inventory.stock.${doc.type}`,
+      routingKey: `inventory.stock.${doc.type}`,
+      payload: {
+        productId: doc.productId.toString(),
+        variationId: doc.variationId || null,
+        type: doc.type,
+        qty: doc.qty,
+        previous: doc.previous,
+        new: doc.new,
+        reason: doc.reason,
+        userId: doc.userId,
+        companyId: doc.companyId,
+        shopId: doc.shopId,
+        meta: doc.meta,
+        timestamp: doc.createdAt
+      }
+    });
+  } catch (err) {
+    console.error('Failed to create outbox entry for stock change:', err.message);
+  }
+});
+
+StockChangeSchema.post('save', async function (doc) {
   try {
     // Only calculate for sales/returns (outflow movements)
     if (!['sale', 'return', 'adjustment', 'damage'].includes(doc.type)) return;
 
     const ProductStock = mongoose.model('ProductStock');
-    
+
     // Get stock record
     const stockRecord = await ProductStock.findOne({
       productId: doc.productId,
       variationId: doc.variationId || null
     });
-    
+
     if (!stockRecord) return;
 
     // Calculate average daily sales (last 30 days)
@@ -208,7 +234,7 @@ StockChangeSchema.post('save', async function(doc) {
     if (salesLast30Days[0]) {
       const totalQty = Math.abs(salesLast30Days[0].totalQty || 0);
       const avgDaily = totalQty > 0 ? (totalQty / 30).toFixed(2) : 0;
-      
+
       // Get current stock from ProductStock model
       const currentQty = stockRecord?.stockQty || 0;
 

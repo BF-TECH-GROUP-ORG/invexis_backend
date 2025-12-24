@@ -286,6 +286,42 @@ const getProductProfitTrendsGraph = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, ...trends });
 });
 
+/**
+ * GET /inventory/v1/analytics/stock-change-history
+ * Get comprehensive stock change history with statistics
+ */
+const getStockChangeHistory = asyncHandler(async (req, res) => {
+  const {
+    companyId,
+    shopId,
+    userId,
+    productId,
+    type,
+    startDate,
+    endDate,
+    page,
+    limit
+  } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const result = await AnalyticsService.getStockChangeHistory({
+    companyId,
+    shopId,
+    userId,
+    productId,
+    type,
+    startDate,
+    endDate,
+    page: parseInt(page) || 1,
+    limit: parseInt(limit) || 50
+  });
+
+  res.status(200).json({ success: true, ...result });
+});
+
 module.exports = {
   getOverview,
   getCompanyMetrics,
@@ -296,5 +332,6 @@ module.exports = {
   getStockoutRiskProducts,
   getInventoryTrendsGraph,
   getProfitComparisonGraph,
-  getProductProfitTrendsGraph
+  getProductProfitTrendsGraph,
+  getStockChangeHistory
 };

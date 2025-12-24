@@ -23,6 +23,7 @@ const { formatEnrichedProduct } = require('../utils/productFormatter');
 const { publishProductEvent } = require('../events/productEvents');
 const { productEvents } = require('../events/eventHelpers');
 const { scanDel, setCache, getCache, delCache } = require('../utils/redisHelper');
+const { deleteFile } = require('../utils/uploadUtil');
 const logger = require('../utils/logger');
 
 const getAllProducts = asyncHandler(async (req, res) => {
@@ -398,14 +399,14 @@ const createProduct = asyncHandler(async (req, res) => {
 
   const product = new Product(productData);
 
-  // Process images
+  // Process images - use results from handleUploads middleware
   product.images = newImages.map((img, index) => ({
     url: img.url,
     cloudinary_id: img.cloudinary_id,
     type: img.type || 'image',
     format: img.format,
     size: img.size,
-    altText: img.altText || img.alt,
+    altText: img.altText || img.alt || product.name,
     isPrimary: img.isPrimary || (index === 0),
     sortOrder: img.sortOrder !== undefined ? img.sortOrder : index
   }));
@@ -891,28 +892,65 @@ const updateProduct = asyncHandler(async (req, res) => {
   }
 
   // Handle images and videos
-  let updatedImages = oldProduct.images || [];
-  if (newImages.length > 0) {
-    // Add new images to existing ones
-    const additionalImages = newImages.map((img, index) => ({
-      url: img.url,
-      cloudinary_id: img.cloudinary_id,
-      type: img.type || 'image',
-      altText: img.altText || img.alt,
-      isPrimary: img.isPrimary || (updatedImages.length === 0 && index === 0),
-      sortOrder: updatedImages.length + index
-    }));
-    updatedImages = [...updatedImages, ...additionalImages];
+  // DEFAULT: Append newly uploaded images to existing list.
+  // REPLACE: Use 'x-replace-images: true' header to replace the entire array and delete orphans.
+
+  let finalImages = oldProduct.images || [];
+  const incomingImages = Array.isArray(req.body.images) ? req.body.images : [];
+
+  if (req.headers['x-replace-images'] === 'true') {
+    // REPLACEMENT LOGIC
+    logger.info(`🔄 Replacing image array for product ${id}`);
+
+    // Identify images to delete from Cloudinary
+    const incomingIds = new Set(incomingImages.map(img => img.cloudinary_id).filter(Boolean));
+    const toDelete = (oldProduct.images || []).filter(img =>
+      img.cloudinary_id &&
+      !incomingIds.has(img.cloudinary_id) &&
+      !img.cloudinary_id.startsWith('placeholder_')
+    );
+
+    if (toDelete.length > 0) {
+      logger.info(`🗑️ Deleting ${toDelete.length} removed images from Cloudinary`);
+      toDelete.forEach(img => {
+        deleteFile(img.cloudinary_id).catch(err => logger.error(`Failed to delete image ${img.cloudinary_id}:`, err));
+      });
+    }
+
+    finalImages = incomingImages;
+  } else if (incomingImages.length > 0) {
+    // APPEND LOGIC (Default)
+    logger.info(`➕ Appending ${incomingImages.length} new images to product ${id}`);
+
+    // filter out any duplicates just in case
+    const existingIds = new Set(finalImages.map(img => img.cloudinary_id).filter(Boolean));
+    const newItems = incomingImages.filter(img => !existingIds.has(img.cloudinary_id));
+
+    finalImages = [...finalImages, ...newItems];
   }
 
-  let updatedVideoUrls = oldProduct.videoUrls || [];
+  // EDGE CASE: Enforce limit (10 images max)
+  if (finalImages.length > 10) {
+    return res.status(400).json({
+      success: false,
+      message: 'Product cannot have more than 10 images total',
+      currentCount: finalImages.length,
+      maxLimit: 10
+    });
+  }
+
+  // Ensure primary and sort order are sane
+  finalImages = finalImages.map((img, idx) => ({
+    ...img,
+    isPrimary: img.isPrimary || (idx === 0),
+    sortOrder: img.sortOrder !== undefined ? img.sortOrder : idx
+  }));
+
+  req.body.images = finalImages;
+
   if (newVideos.length > 0) {
-    updatedVideoUrls = [...updatedVideoUrls, ...newVideos.map(v => v.url || v)];
+    req.body.videoUrls = [...(oldProduct.videoUrls || []), ...newVideos.map(v => v.url || v)];
   }
-
-  // Update the payload
-  if (updatedImages.length > 0) req.body.images = updatedImages;
-  if (updatedVideoUrls.length > 0) req.body.videoUrls = updatedVideoUrls;
 
   // Perform the update
   const product = await Product.findByIdAndUpdate(

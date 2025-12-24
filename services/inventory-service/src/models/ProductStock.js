@@ -81,10 +81,6 @@ ProductStockSchema.index(
   { unique: true }
 );
 
-// POS CRITICAL: Fast product lookup with stock (sub-50ms requirement)
-ProductStockSchema.index({ productId: 1, shopId: 1 });
-ProductStockSchema.index({ productId: 1 });
-
 // PERFORMANCE INDEXES
 ProductStockSchema.index({ stockQty: 1, lowStockThreshold: 1 }); // Low stock alerts
 ProductStockSchema.index({ inStock: 1, isLowStock: 1 });         // Stock status queries

@@ -28,18 +28,25 @@ class InventoryAnalyticsService {
       // Total revenue from sales
       const salesAgg = await StockChange.aggregate([
         {
+          $addFields: {
+            qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+            typeNorm: { $ifNull: ['$type', '$changeType'] },
+            createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+          }
+        },
+        {
           $match: {
             companyId,
-            type: 'sale',
-            ...(Object.keys(dateFilter).length && { createdAt: dateFilter })
+            typeNorm: 'sale',
+            ...(startDate || endDate ? { createdAtNorm: dateFilter } : {})
           }
         },
         {
           $group: {
             _id: null,
-            totalUnits: { $sum: { $abs: '$qty' } },
+            totalUnits: { $sum: { $abs: '$qtyNorm' } },
             totalRevenue: {
-              $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] }
+              $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] }
             },
             totalTransactions: { $sum: 1 }
           }
@@ -149,19 +156,26 @@ class InventoryAnalyticsService {
       // Revenue from this shop
       const salesAgg = await StockChange.aggregate([
         {
+          $addFields: {
+            qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+            typeNorm: { $ifNull: ['$type', '$changeType'] },
+            createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+          }
+        },
+        {
           $match: {
             companyId,
             shopId,
-            type: 'sale',
-            ...(Object.keys(dateFilter).length && { createdAt: dateFilter })
+            typeNorm: 'sale',
+            ...(startDate || endDate ? { createdAtNorm: dateFilter } : {})
           }
         },
         {
           $group: {
             _id: null,
-            totalUnits: { $sum: { $abs: '$qty' } },
+            totalUnits: { $sum: { $abs: '$qtyNorm' } },
             totalRevenue: {
-              $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', 0] }] }
+              $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] }
             },
             transactions: { $sum: 1 }
           }
@@ -275,18 +289,25 @@ class InventoryAnalyticsService {
       const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
       const salesHistory = await StockChange.aggregate([
         {
+          $addFields: {
+            qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+            typeNorm: { $ifNull: ['$type', '$changeType'] },
+            createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+          }
+        },
+        {
           $match: {
             productId: new (require('mongoose')).Types.ObjectId(productId),
-            type: 'sale',
-            createdAt: { $gte: ninetyDaysAgo }
+            typeNorm: 'sale',
+            createdAtNorm: { $gte: ninetyDaysAgo }
           }
         },
         {
           $group: {
             _id: null,
-            totalUnits: { $sum: { $abs: '$qty' } },
+            totalUnits: { $sum: { $abs: '$qtyNorm' } },
             totalRevenue: {
-              $sum: { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitPrice', pricing.basePrice || 0] }] }
+              $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', pricing.basePrice || 0] }] }
             },
             transactions: { $sum: 1 }
           }
@@ -333,7 +354,10 @@ class InventoryAnalyticsService {
         forecast: {
           stockoutRiskDays: Math.max(0, daysUntilStockout),
           suggestedReorderQty: stock?.suggestedReorderQty || (stock?.minReorderQty || 20) * 3,
-          supplierLeadDays: stock?.supplierLeadDays || 7
+          supplierLeadDays: stock?.supplierLeadDays || 7,
+          isAI: true,
+          methodology: 'AI-Powered Trend Analysis',
+          disclaimer: 'Predictions are based on historical data patterns and should be used as a guide only.'
         }
       };
     } catch (err) {

@@ -5,7 +5,7 @@ let streamifier = null;
 try {
   cloudinaryModule = require('/app/shared/cloudinary');
   streamifier = require('streamifier');
-  
+
   // Only show success if cloudinary is actually configured
   if (cloudinaryModule && cloudinaryModule.cloudinary && cloudinaryModule.validateConfig()) {
     console.log('✅ Cloudinary module loaded and configured');
@@ -21,7 +21,8 @@ try {
  * Creates a custom upload middleware that sanitizes filenames at the stream level
  * This intercepts multipart data BEFORE Cloudinary processes it
  */
-const createSanitizingUploadMiddleware = () => {  0<<0
+const createSanitizingUploadMiddleware = () => {
+  0 << 0
   // If cloudinary isn't configured, use the fallback placeholder middleware
   if (!cloudinaryModule || !cloudinaryModule.cloudinary) {
     return createFallbackUpload().fields([
@@ -60,19 +61,19 @@ const createSanitizingUploadMiddleware = () => {  0<<0
 const createFallbackUpload = () => ({
   fields: (fieldConfig) => (req, res, next) => {
     console.log('📁 Using fallback upload handler - files will not be stored');
-    
+
     // Ensure req.body exists
     req.body = req.body || {};
-    
+
     // Simulate successful upload with placeholder data
     req.files = {};
     req.body.images = req.body.images || [];
     req.body.videos = req.body.videos || [];
-    
+
     // If there were actual files uploaded, create placeholder entries
     if (req.file || (req.files && Object.keys(req.files).length > 0)) {
       console.log('⚠️  Files uploaded but Cloudinary not configured - using placeholders');
-      
+
       // Create placeholder for images
       if (req.files && req.files.images) {
         req.body.images = req.files.images.map((file, index) => ({
@@ -84,7 +85,7 @@ const createFallbackUpload = () => ({
           altText: file.originalname || `Placeholder Image ${index + 1}`
         }));
       }
-      
+
       // Create placeholder for videos  
       if (req.files && req.files.videos) {
         req.body.videos = req.files.videos.map((file, index) => ({
@@ -98,7 +99,7 @@ const createFallbackUpload = () => ({
         }));
       }
     }
-    
+
     next();
   }
 });
@@ -130,7 +131,7 @@ async function moveToRetryStorage(tmpPath, originalName) {
       await fs.promises.rename(tmpPath, dest);
     } catch (renameErr) {
       await fs.promises.copyFile(tmpPath, dest);
-      try { await fs.promises.unlink(tmpPath); } catch (_) {}
+      try { await fs.promises.unlink(tmpPath); } catch (_) { }
     }
     return dest;
   } catch (e) {
@@ -153,12 +154,12 @@ const sanitizeFilenamesPreprocessor = (req, res, next) => {
 
 // Upload handler function
 const handleUploads = (req, res, next) => {
-  upload(req, res, function(err) {
+  upload(req, res, function (err) {
     // If upload fails with invalid public_id error, try again with sanitized filenames
     if (err && err.message && err.message.includes('public_id')) {
       console.warn('⚠️ Upload failed with invalid public_id, retrying with sanitized filenames...');
       console.warn('Error:', err.message);
-      
+
       // Sanitize file originalnames
       if (req.files) {
         Object.keys(req.files).forEach(fieldName => {
@@ -174,11 +175,11 @@ const handleUploads = (req, res, next) => {
           }
         });
       }
-      
+
       // Retry upload with sanitized filenames
       return upload(req, res, handleUploadCallback);
     }
-    
+
     return handleUploadCallback(err);
   });
 
@@ -204,18 +205,18 @@ const handleUploads = (req, res, next) => {
         // Build images placeholders
         if (!req.body.images || req.body.images.length === 0) {
           req.body.images = [];
-            if (req.files && Array.isArray(req.files.images) && req.files.images.length > 0) {
+          if (req.files && Array.isArray(req.files.images) && req.files.images.length > 0) {
             for (let idx = 0; idx < req.files.images.length; idx++) {
               const file = req.files.images[idx];
               const placeholderId = `placeholder_image_${Date.now()}_${idx}`;
-              const placeholderUrl = `https://via.placeholder.com/400x300?text=Image+${idx+1}`;
+              const placeholderUrl = `https://via.placeholder.com/400x300?text=Image+${idx + 1}`;
               req.body.images.push({
                 url: placeholderUrl,
                 cloudinary_id: placeholderId,
                 type: 'image',
                 format: file.mimetype ? file.mimetype.split('/')[1] : 'jpg',
                 size: file.size || 0,
-                altText: file.originalname || `Placeholder Image ${idx+1}`
+                altText: file.originalname || `Placeholder Image ${idx + 1}`
               });
               // enqueue retry task (best-effort) and move file to durable storage
               try {
@@ -232,7 +233,7 @@ const handleUploads = (req, res, next) => {
                   publicIdHint: sanitizePublicId(file.originalname),
                   filePath: storedPath || null,
                   fileBase64: file.buffer ? file.buffer.toString('base64') : null
-                }).catch(() => {});
+                }).catch(() => { });
               } catch (e) { }
             }
           }
@@ -241,11 +242,11 @@ const handleUploads = (req, res, next) => {
         // Build videos placeholders
         if (!req.body.videos || req.body.videos.length === 0) {
           req.body.videos = [];
-            if (req.files && Array.isArray(req.files.videos) && req.files.videos.length > 0) {
+          if (req.files && Array.isArray(req.files.videos) && req.files.videos.length > 0) {
             for (let idx = 0; idx < req.files.videos.length; idx++) {
               const file = req.files.videos[idx];
               const placeholderId = `placeholder_video_${Date.now()}_${idx}`;
-              const placeholderUrl = `https://via.placeholder.com/400x300?text=Video+${idx+1}`;
+              const placeholderUrl = `https://via.placeholder.com/400x300?text=Video+${idx + 1}`;
               req.body.videos.push({
                 url: placeholderUrl,
                 cloudinary_id: placeholderId,
@@ -253,7 +254,7 @@ const handleUploads = (req, res, next) => {
                 format: file.mimetype ? file.mimetype.split('/')[1] : 'mp4',
                 size: file.size || 0,
                 duration: null,
-                thumbnail: `https://via.placeholder.com/400x300?text=Video+${idx+1}`
+                thumbnail: `https://via.placeholder.com/400x300?text=Video+${idx + 1}`
               });
               try {
                 const storedPath = await moveToRetryStorage(file.path, file._originalname || file.originalname);
@@ -269,7 +270,7 @@ const handleUploads = (req, res, next) => {
                   publicIdHint: sanitizePublicId(file.originalname),
                   filePath: storedPath || null,
                   fileBase64: file.buffer ? file.buffer.toString('base64') : null
-                }).catch(() => {});
+                }).catch(() => { });
               } catch (e) { }
             }
           }
@@ -290,57 +291,69 @@ const handleUploads = (req, res, next) => {
       req.body.images = req.body.images || [];
       req.body.videos = req.body.videos || [];
 
-      // Helper to either perform a synchronous upload (for debugging) or enqueue a background upload task.
-      // Default behaviour is background enqueuing to keep request latency low.
+      // Helper to perform a synchronous upload (default) or fallback to background on failure
       const doUpload = async (file, field) => {
-        const placeholderId = `placeholder_${Date.now()}_${Math.floor(Math.random()*10000)}`;
-        const placeholderUrl = `https://via.placeholder.com/400x300?text=${encodeURIComponent(file._originalname || 'file')}`;
+        try {
+          const buffer = await require('fs').promises.readFile(file.path);
+          const folder = 'products';
 
-        // If client explicitly requests synchronous uploads (header: x-sync-uploads: true), perform immediate upload
-        const syncUploads = req.headers && String(req.headers['x-sync-uploads']) === 'true';
-        if (syncUploads && cloudinaryModule && cloudinaryModule.cloudinary) {
-          try {
-            const buffer = await require('fs').promises.readFile(file.path);
-            const folder = 'products';
-            const res = await uploadBuffer(buffer, folder);
-            try { if (file && file.path) await fs.promises.unlink(file.path); } catch (e) { /* ignore */ }
-            if (field === 'images') {
-              return { url: res.secure_url, cloudinary_id: res.public_id, type: 'image', format: file.mimetype ? file.mimetype.split('/')[1] : 'jpg', size: file.size || 0, altText: file._originalname || file.originalname };
-            }
-            return { url: res.secure_url, cloudinary_id: res.public_id, type: 'video', format: file.mimetype ? file.mimetype.split('/')[1] : 'mp4', size: file.size || 0, duration: null, thumbnail: '' };
-          } catch (err) {
-            // If sync upload fails, fall through to enqueue background retry
-            console.warn('Sync upload failed, enqueueing for retry:', err && err.message ? err.message : err);
+          // Perform synchronous upload to Cloudinary
+          const res = await uploadBuffer(buffer, folder);
+
+          // Cleanup temp file
+          try { if (file && file.path) await fs.promises.unlink(file.path); } catch (e) { /* ignore */ }
+
+          if (field === 'images') {
+            return {
+              url: res.secure_url,
+              cloudinary_id: res.public_id,
+              type: 'image',
+              format: res.format || (file.mimetype ? file.mimetype.split('/')[1] : 'jpg'),
+              size: file.size || res.bytes || 0,
+              altText: file._originalname || file.originalname
+            };
           }
+          return {
+            url: res.secure_url,
+            cloudinary_id: res.public_id,
+            type: 'video',
+            format: res.format || (file.mimetype ? file.mimetype.split('/')[1] : 'mp4'),
+            size: file.size || res.bytes || 0,
+            duration: res.duration || null,
+            thumbnail: res.thumbnail_url || ''
+          };
+        } catch (err) {
+          console.warn(`Sync upload failed for ${file.originalname}, falling back to background retry...`, err.message);
+
+          const placeholderId = `placeholder_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+          const placeholderUrl = `https://via.placeholder.com/400x300?text=${encodeURIComponent(file._originalname || 'file_failed')}`;
+
+          // Background path: enqueue for async processing
+          setImmediate(async () => {
+            try {
+              const storedPath = await moveToRetryStorage(file.path, file._originalname || file.originalname);
+              await uploadTaskRepo.createTask({
+                companyId: req.body.companyId || req.query.companyId,
+                shopId: req.body.shopId || req.query.shopId,
+                productId: req.body.productId || null,
+                field: field,
+                placeholderId,
+                placeholderUrl,
+                originalName: file._originalname || file.originalname,
+                folder: 'products',
+                publicIdHint: sanitizePublicId(file._originalname || file.originalname || file.filename || 'file'),
+                filePath: storedPath || null,
+                fileBase64: null
+              }).catch(() => { });
+            } catch (e) { /* ignore */ }
+          });
+
+          if (field === 'images') return { url: placeholderUrl, cloudinary_id: placeholderId, type: 'image', format: 'jpg', size: file.size || 0, altText: file._originalname || file.originalname };
+          return { url: placeholderUrl, cloudinary_id: placeholderId, type: 'video', format: 'mp4', size: file.size || 0, duration: null, thumbnail: placeholderUrl };
         }
-
-        // Background path: enqueue for async processing (fire-and-forget to avoid blocking response)
-        // Move to durable storage and create UploadTask WITHOUT awaiting to keep response fast
-        setImmediate(async () => {
-          try {
-            const storedPath = await moveToRetryStorage(file.path, file._originalname || file.originalname);
-            await uploadTaskRepo.createTask({
-              companyId: req.body.companyId || req.query.companyId,
-              shopId: req.body.shopId || req.query.shopId,
-              productId: req.body.productId || null,
-              field: field,
-              placeholderId,
-              placeholderUrl,
-              originalName: file._originalname || file.originalname,
-              folder: 'products',
-              publicIdHint: sanitizePublicId(file._originalname || file.originalname || file.filename || 'file'),
-              filePath: storedPath || null,
-              fileBase64: file.buffer ? file.buffer.toString('base64') : null
-            }).catch(() => {});
-          } catch (e) { /* ignore */ }
-        });
-
-        // Return immediately with placeholder (don't wait for background operations)
-        if (field === 'images') return { url: placeholderUrl, cloudinary_id: placeholderId, type: 'image', format: file.mimetype ? file.mimetype.split('/')[1] : 'jpg', size: file.size || 0, altText: file._originalname || file.originalname };
-        return { url: placeholderUrl, cloudinary_id: placeholderId, type: 'video', format: file.mimetype ? file.mimetype.split('/')[1] : 'mp4', size: file.size || 0, duration: null, thumbnail: placeholderUrl };
       };
 
-      // Upload images in parallel (all are queued for background processing, not blocking)
+      // Upload images in parallel synchronously
       const imageResults = await Promise.allSettled(images.map(file => doUpload(file, 'images')));
       imageResults.forEach((result, idx) => {
         if (result.status === 'fulfilled' && result.value) {
@@ -350,7 +363,7 @@ const handleUploads = (req, res, next) => {
         }
       });
 
-      // Upload videos in parallel (all are queued for background processing, not blocking)
+      // Upload videos in parallel synchronously
       const videoResults = await Promise.allSettled(videos.map(file => doUpload(file, 'videos')));
       videoResults.forEach((result, idx) => {
         if (result.status === 'fulfilled' && result.value) {
@@ -456,10 +469,11 @@ const uploadBuffer = (buffer, folder, publicId) => {
 };
 
 // Export with conditional cloudinary
-const moduleExports = { 
+const moduleExports = {
   handleUploads,
   sanitizeFilenamesPreprocessor,
-  uploadBuffer 
+  uploadBuffer,
+  deleteFile: (cloudinaryModule && cloudinaryModule.deleteFile) || (() => Promise.resolve())
 };
 
 // Only export cloudinary if available

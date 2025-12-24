@@ -35,16 +35,28 @@ class AnalyticsGraphService {
       const groupStage = this._getGroupStagePeriod(period);
 
       const trends = await StockChange.aggregate([
-        { $match: matchStage },
+        {
+          $addFields: {
+            qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+            typeNorm: { $ifNull: ['$type', '$changeType'] },
+            createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+          }
+        },
+        {
+          $match: {
+            companyId,
+            ...(shopId ? { shopId } : {}),
+            createdAtNorm: { $gte: startDate, $lte: endDate }
+          }
+        },
         {
           $group: {
             _id: groupStage,
-            // Stock movement metrics
             inboundQty: {
               $sum: {
                 $cond: [
-                  { $in: ['$type', ['purchase', 'transfer_in', 'adjustment_in']] },
-                  '$qty',
+                  { $in: ['$typeNorm', ['purchase', 'restock', 'transfer_in', 'adjustment_in', 'stockin']] },
+                  '$qtyNorm',
                   0
                 ]
               }
@@ -52,8 +64,8 @@ class AnalyticsGraphService {
             outboundQty: {
               $sum: {
                 $cond: [
-                  { $in: ['$type', ['sale', 'transfer_out', 'adjustment_out']] },
-                  { $abs: '$qty' },
+                  { $in: ['$typeNorm', ['sale', 'transfer_out', 'adjustment_out', 'damage', 'adjustment']] },
+                  { $abs: '$qtyNorm' },
                   0
                 ]
               }
@@ -64,8 +76,8 @@ class AnalyticsGraphService {
             revenue: {
               $sum: {
                 $cond: [
-                  { $eq: ['$type', 'sale'] },
-                  { $multiply: ['$qty', { $ifNull: ['$meta.unitPrice', 0] }] },
+                  { $eq: ['$typeNorm', 'sale'] },
+                  { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] },
                   0
                 ]
               }
@@ -74,8 +86,8 @@ class AnalyticsGraphService {
             cost: {
               $sum: {
                 $cond: [
-                  { $in: ['$type', ['sale', 'adjustment_out']] },
-                  { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', 0] }] },
+                  { $in: ['$typeNorm', ['sale', 'adjustment_out', 'damage', 'adjustment']] },
+                  { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', 0] }] },
                   0
                 ]
               }
@@ -155,9 +167,17 @@ class AnalyticsGraphService {
       for (const [periodKey, { startDate, endDate, label }] of Object.entries(periods)) {
         const data = await StockChange.aggregate([
           {
+            $addFields: {
+              qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+              typeNorm: { $ifNull: ['$type', '$changeType'] },
+              createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+            }
+          },
+          {
             $match: {
-              ...matchStage,
-              createdAt: { $gte: startDate, $lte: endDate }
+              companyId,
+              ...(shopId ? { shopId } : {}),
+              createdAtNorm: { $gte: startDate, $lte: endDate }
             }
           },
           {
@@ -166,8 +186,8 @@ class AnalyticsGraphService {
               totalRevenue: {
                 $sum: {
                   $cond: [
-                    { $eq: ['$type', 'sale'] },
-                    { $multiply: ['$qty', { $ifNull: ['$meta.unitPrice', 0] }] },
+                    { $eq: ['$typeNorm', 'sale'] },
+                    { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] },
                     0
                   ]
                 }
@@ -175,15 +195,15 @@ class AnalyticsGraphService {
               totalCost: {
                 $sum: {
                   $cond: [
-                    { $in: ['$type', ['sale', 'adjustment_out']] },
-                    { $multiply: [{ $abs: '$qty' }, { $ifNull: ['$meta.unitCost', 0] }] },
+                    { $in: ['$typeNorm', ['sale', 'adjustment_out', 'damage', 'adjustment']] },
+                    { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', 0] }] },
                     0
                   ]
                 }
               },
               totalUnits: {
                 $sum: {
-                  $cond: [{ $eq: ['$type', 'sale'] }, { $abs: '$qty' }, 0]
+                  $cond: [{ $eq: ['$typeNorm', 'sale'] }, { $abs: '$qtyNorm' }, 0]
                 }
               },
               transactionCount: { $sum: 1 }
@@ -280,18 +300,32 @@ class AnalyticsGraphService {
       if (productId) matchStage.productId = productId;
 
       const trends = await StockChange.aggregate([
-        { $match: matchStage },
+        {
+          $addFields: {
+            qtyNorm: { $ifNull: ['$qty', '$quantity'] },
+            typeNorm: { $ifNull: ['$type', '$changeType'] },
+            createdAtNorm: { $ifNull: ['$createdAt', '$changeDate'] }
+          }
+        },
+        {
+          $match: {
+            companyId,
+            ...(productId ? { productId: new (require('mongoose')).Types.ObjectId(productId) } : {}),
+            typeNorm: 'sale',
+            createdAtNorm: { $gte: startDate, $lte: endDate }
+          }
+        },
         {
           $group: {
             _id: {
               productId: '$productId',
               date: {
-                $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+                $dateToString: { format: '%Y-%m-%d', date: '$createdAtNorm' }
               }
             },
-            quantity: { $sum: '$qty' },
-            revenue: { $sum: { $multiply: ['$qty', { $ifNull: ['$meta.unitPrice', 0] }] } },
-            cost: { $sum: { $multiply: ['$qty', { $ifNull: ['$meta.unitCost', 0] }] } }
+            quantity: { $sum: { $abs: '$qtyNorm' } },
+            revenue: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitPrice', 0] }] } },
+            cost: { $sum: { $multiply: [{ $abs: '$qtyNorm' }, { $ifNull: ['$meta.unitCost', 0] }] } }
           }
         },
         {
@@ -339,7 +373,7 @@ class AnalyticsGraphService {
             totalRevenue: parseFloat(item.totalRevenue.toFixed(2)),
             totalCost: parseFloat(item.totalCost.toFixed(2)),
             totalProfit: parseFloat(totalProfit.toFixed(2)),
-            profitMargin: item.totalRevenue > 0 
+            profitMargin: item.totalRevenue > 0
               ? parseFloat(((totalProfit / item.totalRevenue) * 100).toFixed(2))
               : 0,
             unitsSold: item.totalUnits
@@ -373,24 +407,24 @@ class AnalyticsGraphService {
   // ============ HELPER METHODS ============
 
   static _getGroupStagePeriod(period) {
-    const createdAt = '$createdAt';
+    const createdAt = '$createdAtNorm';
     switch (period) {
       case 'weekly':
         return {
-          year: { $year: new Date(createdAt) },
-          week: { $week: new Date(createdAt) }
+          year: { $year: createdAt },
+          week: { $week: createdAt }
         };
       case 'monthly':
         return {
-          year: { $year: new Date(createdAt) },
-          month: { $month: new Date(createdAt) }
+          year: { $year: createdAt },
+          month: { $month: createdAt }
         };
       case 'daily':
       default:
         return {
-          year: { $year: new Date(createdAt) },
-          month: { $month: new Date(createdAt) },
-          day: { $dayOfMonth: new Date(createdAt) }
+          year: { $year: createdAt },
+          month: { $month: createdAt },
+          day: { $dayOfMonth: createdAt }
         };
     }
   }

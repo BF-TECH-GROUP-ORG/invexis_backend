@@ -388,48 +388,38 @@ class StockMonitoringService {
    */
   static async recordStockChange(productId, changeType, quantity, metadata = {}) {
     try {
-      const change = await StockChange.create({
-        productId,
-        type: changeType, // 'sale', 'adjustment', 'received', 'returned', etc.
-        qty: changeType === 'sale' || changeType === 'adjustment' ? -quantity : quantity,
-        companyId: metadata.companyId,
-        shopId: metadata.shopId,
-        reference: metadata.reference || null,
-        reason: metadata.reason || null,
-        notes: metadata.notes || null,
-        meta: {
-          unitPrice: metadata.unitPrice || 0,
-          totalValue: (metadata.unitPrice || 0) * quantity,
-          performedBy: metadata.performedBy || null,
-          ...metadata.meta
-        },
-        createdAt: new Date()
+      // Get current stock for the 'previous' field (required by StockChange pre-save hook)
+      const stockRecord = await ProductStock.findOne({
+        productId: mongoose.Types.ObjectId(productId),
+        variationId: metadata.variationId || null
       });
 
-      // Emit RabbitMQ event for other services
-      try {
-        await producer.emit(`inventory.stock.${changeType}`, {
-          productId: productId.toString(),
-          type: changeType,
-          qty: changeType === 'sale' || changeType === 'adjustment' ? -quantity : quantity,
-          reference: metadata.reference || null,
-          reason: metadata.reason || null,
-          performedBy: metadata.performedBy || 'system',
-          companyId: metadata.companyId,
-          shopId: metadata.shopId,
-          unitPrice: metadata.unitPrice || 0,
-          totalValue: (metadata.unitPrice || 0) * quantity,
-          timestamp: new Date().toISOString()
-        }, {
-          companyId: metadata.companyId,
-          shopId: metadata.shopId,
-          traceId: `stock-change-${Date.now()}`
-        });
-      } catch (error) {
-        logger.error(`Failed to emit stock change event: ${error.message}`);
+      if (!stockRecord) {
+        throw new Error(`No stock record found for product ${productId}`);
       }
 
-      logger.info(`📝 Stock change recorded: ${changeType} of ${quantity} units for product ${productId}`);
+      const previousStock = stockRecord.stockQty || 0;
+      const qty = (['sale', 'adjustment', 'damage'].includes(changeType)) ? -Math.abs(quantity) : Math.abs(quantity);
+
+      const change = await StockChange.create({
+        productId,
+        variationId: metadata.variationId || null,
+        type: changeType, // 'sale', 'restock', 'return', 'adjustment', 'damage', 'transfer', etc.
+        qty,
+        previous: previousStock,
+        companyId: metadata.companyId,
+        shopId: metadata.shopId,
+        userId: metadata.userId || metadata.performedBy || 'system',
+        reason: metadata.reason || null,
+        meta: {
+          unitPrice: metadata.unitPrice || 0,
+          totalValue: (metadata.unitPrice || 0) * Math.abs(quantity),
+          performedBy: metadata.performedBy || 'system',
+          ...metadata.meta
+        }
+      });
+
+      logger.info(`📝 Stock change recorded: ${changeType} of ${qty} units for product ${productId}`);
       return change;
     } catch (error) {
       logger.error(`Failed to record stock change: ${error.message}`);
