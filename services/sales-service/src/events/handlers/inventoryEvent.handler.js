@@ -52,7 +52,8 @@ module.exports = async function handleInventoryEvent(event) {
  * Handle product update - log for audit trail
  */
 async function handleProductUpdated(data) {
-  const { productId, productName, price, description } = data;
+  const { productId, name, price, description } = data;
+  const productName = name || data.productName; // Handle both cases
 
   if (!productId) {
     console.warn("⚠️ Product updated event missing productId");
@@ -77,7 +78,9 @@ async function handleProductUpdated(data) {
  * Handle stock changes - alert if low stock
  */
 async function handleStockChanged(data) {
-  const { productId, newStock, oldStock, threshold = 10 } = data;
+  const { productId, newQuantity, oldQuantity, threshold = 10 } = data;
+  const newStock = newQuantity !== undefined ? newQuantity : data.newStock;
+  const oldStock = oldQuantity !== undefined ? oldQuantity : data.oldStock;
 
   if (!productId) {
     console.warn("⚠️ Stock changed event missing productId");

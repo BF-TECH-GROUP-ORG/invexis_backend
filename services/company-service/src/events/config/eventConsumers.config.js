@@ -5,18 +5,10 @@
  */
 
 const { exchanges } = require("/app/shared/rabbitmq");
-const handleAuthEvent = require("../handlers/authEvent.handler");
 const handlePaymentEvent = require("../handlers/paymentEvent.handler");
+const handleDocumentEvent = require("../handlers/documentEvent.handler");
 
 module.exports = [
-  {
-    name: "authEvents",
-    queue: "auth_events_queue",
-    exchange: exchanges.topic,
-    pattern: "auth.#",
-    handler: handleAuthEvent,
-    description: "Handles user account lifecycle events from auth-service",
-  },
   {
     name: "paymentEvents",
     queue: "payment_events_queue",
@@ -25,4 +17,13 @@ module.exports = [
     handler: handlePaymentEvent,
     description: "Handles billing and subscription events from payment-service",
   },
+  {
+    name: "documentEvents",
+    queue: "company_document_events",
+    exchange: exchanges.topic,
+    pattern: "document.company.verification.*",
+    handler: handleDocumentEvent,
+    description: "Handles verification document completion events from document-service",
+  },
 ];
+

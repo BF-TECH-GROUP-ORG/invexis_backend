@@ -9,6 +9,7 @@ const { startOutboxDispatcher } = require("./workers/outboxDispatcher");
 const db = require("./config/db");
 const PORT = process.env.PORT || 9001;
 const app = express();
+app.set('trust proxy', true);
 
 // Middleware
 app.use(express.json());

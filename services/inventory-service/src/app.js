@@ -57,6 +57,26 @@ app.use(helmet({
   },
 }));
 
+
+const { parseTierHeaders } = require('/app/shared/middlewares');
+
+// 🔒 SECURITY: Rate Limiting (DDoS Prevention)
+const rateLimit = require("express-rate-limit");
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3000, // Limit each IP to 300 requests per window
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: {
+    status: 429,
+    error: "TOO_MANY_REQUESTS",
+    message: "Too many requests from this IP, please try again after 15 minutes"
+  }
+});
+
+// Apply rate limiter to all requests
+app.use(apiLimiter);
+
 // Trust API Gateway - validate requests come from gateway
 app.use((req, res, next) => {
   const gatewayHeader = req.headers['x-gateway-request'];
@@ -65,6 +85,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Parse tier headers from gateway
+app.use(parseTierHeaders);
 
 app.use(compression());
 
@@ -190,7 +213,14 @@ app.get("/", (req, res) => {
 });
 
 // API Routes
-app.use("/inventory", router);
+const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+
+// 🔒 GLOBAL PROTECTION: Use Auth + Subscription Check for detailed inventory operations
+// This ensures only Active Companies can access their data.
+// "Except Ecommerce" implies storefront browsing might need a different path (e.g. via specific public endpoints), 
+// but the core /inventory API is now secured.
+app.use("/inventory", authenticateToken, checkSubscriptionStatus(), router);
 
 // Error handling middleware
 app.use(errorHandler.notFoundHandler());

@@ -1,5 +1,5 @@
 const { Op, DataTypes } = require("sequelize");
-const InvoicePdfService = require("../services/invoicePdf.service.js");
+
 const knownUserService = require("../services/knownUser.service");
 const { getCache, setCache, delCache, scanDel } = require('../utils/redisHelper');
 const {
@@ -207,25 +207,96 @@ const createSale = async (req, res) => {
       }
     });
 
-    // Generate PDF asynchronously (don't block response)
+    // Trigger PDF Generation via Event
     try {
-      console.log("🎯 Attempting to generate PDF for invoice:", invoice.invoiceId);
-      const pdfData = await InvoicePdfService.generateInvoicePdf(
-        invoice.toJSON(),
-        sale.toJSON(),
-        saleItems.map((item) => item.toJSON()),
-        { name: "INVEXIS", email: "info@invexis.com" }
-      );
-      console.log("✅ PDF generated successfully:", pdfData);
-      // Update invoice with PDF URL
-      await invoice.update({ pdfUrl: pdfData.pdfUrl });
-      await invoice.reload(); // Reload to get the updated pdfUrl
-      console.log("✅ Invoice updated with pdfUrl:", invoice.pdfUrl);
-    } catch (pdfError) {
-      console.error("⚠️ Warning: PDF generation failed:");
-      console.error("Error message:", pdfError.message);
-      console.error("Error stack:", pdfError.stack);
-      // Don't fail the sale creation if PDF generation fails
+      console.log("📤 Triggering PDF generation event for invoice:", invoice.invoiceId);
+      const { emit } = require("../events/producer");
+      const currency = "RWF"; // Can be dynamic from company settings later
+
+      await emit('document.invoice.requested', {
+        type: 'document.invoice.requested',
+        payload: {
+          invoiceData: invoice.toJSON(),
+          saleData: sale.toJSON(),
+          items: saleItems.map((item) => item.toJSON()),
+          currency: currency,
+          companyData: { name: "INVEXIS", email: "info@invexis.com", companyId: companyId } // Pass companyId for resolution
+        },
+        owner: {
+          level: 'company',
+          companyId: companyId,
+          shopId: shopId
+        },
+        eventId: `evt_inv_${invoice.invoiceId}_${Date.now()}`
+      });
+
+      console.log("✅ PDF generation event emitted");
+
+      // Trigger Payment Event (MTN/Airtel/MPesa/Bank Transfer/Cash)
+      if (['mobile', 'card', 'cash', 'mtn', 'airtel', 'mpesa', 'bank_transfer'].includes(normalizedPaymentMethod) && !isDebt) {
+        console.log(`📤 Triggering Payment Request for method: ${normalizedPaymentMethod}`);
+
+        // Determine Gateway based on Sales Model payment methods
+        let gateway = 'mtn_momo'; // Default
+        let schemaPaymentMethod = 'mobile_money'; // Default
+
+        if (normalizedPaymentMethod === 'cash') {
+          gateway = 'cash';
+          schemaPaymentMethod = 'cash';
+        } else if (normalizedPaymentMethod === 'bank_transfer' || normalizedPaymentMethod === 'card') {
+          gateway = 'manual';
+          schemaPaymentMethod = normalizedPaymentMethod;
+        } else if (normalizedPaymentMethod === 'mtn' || normalizedPaymentMethod === 'mobile') {
+          gateway = 'mtn_momo';
+          schemaPaymentMethod = 'mobile_money';
+        } else if (normalizedPaymentMethod === 'airtel') {
+          gateway = 'airtel_money';
+          schemaPaymentMethod = 'mobile_money';
+        } else {
+          gateway = 'manual'; // Fallback for others (mpesa, etc)
+          schemaPaymentMethod = 'manual';
+        }
+
+        const paymentPayload = {
+          event: 'PAYMENT_REQUESTED',
+          source: 'sales-service',
+          paymentType: 'SALE',
+          referenceId: `SALE-${sale.saleId}`,
+          companyId: companyId,
+          shopId: shopId,
+          sellerId: soldBy,
+          amount: totalAmount,
+          currency: 'RWF',
+          description: `Payment for Sale ${sale.saleId}`,
+          paymentMethod: schemaPaymentMethod,
+          gateway: gateway,
+          phoneNumber: customerPhone,
+          customer: {
+            name: customerName || 'Guest User',
+            email: customerEmail || 'no-email@provided.com',
+            phone: customerPhone
+          },
+          lineItems: saleItems.map(item => ({
+            id: item.productId, // meaningful ID for payment Invoice
+            name: item.productName,
+            qty: item.quantity,
+            price: item.unitPrice
+          })),
+          idempotencyKey: `pay_sale_${sale.saleId}`,
+          metadata: {
+            saleId: sale.saleId,
+            initiatedBy: soldBy
+          }
+        };
+
+        await emit('sales.payment.requested', paymentPayload);
+
+        console.log("✅ Payment request event emitted");
+      }
+
+    } catch (evtError) {
+      console.error("⚠️ Warning: Failed to emit background events:", evtError);
+      // Don't fail the sale creation
     }
 
     const responseData = {
@@ -233,7 +304,8 @@ const createSale = async (req, res) => {
       items: saleItems.map((item) => (item.toJSON ? item.toJSON() : item)),
       invoice: {
         ...(invoice.toJSON ? invoice.toJSON() : invoice),
-        pdfUrl: invoice.pdfUrl || `/invoices/pdf/${invoice.invoiceId}`,
+        pdfUrl: null, // Will be updated asynchronously
+        message: "PDF generation started"
       },
     };
 

@@ -37,6 +37,8 @@ const productEvents = {
           variations: product.variations || [],
           // Supplier information
           supplierName: product.supplierName || null,
+          // Supply chain
+          costPrice: product.costPrice || 0,
           // Additional useful fields
           description: product.description || null,
           brand: product.brand || null,
@@ -152,6 +154,7 @@ const stockEvents = {
           oldQuantity,
           newQuantity,
           change: newQuantity - oldQuantity,
+          unitCost: product.costPrice || 0,
           updatedAt: new Date().toISOString(),
           traceId: uuidv4()
         }
@@ -209,6 +212,7 @@ const stockEvents = {
           companyId,
           productName: product.name,
           quantity,
+          unitCost: product.costPrice || 0,
           restokedAt: new Date().toISOString(),
           traceId: uuidv4()
         }

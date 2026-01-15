@@ -14,7 +14,7 @@
  */
 
 const asyncHandler = require("express-async-handler");
-const { getRedisClient } = require("../utils/redis");
+const { getRedisClient } = require("/app/shared/middlewares/utils/redis");
 
 const SUBSCRIPTION_CACHE_TTL = parseInt(process.env.SUBSCRIPTION_CACHE_TTL || "300", 10); // 5 minutes
 
@@ -29,119 +29,104 @@ const checkSubscriptionStatus = (options = {}) => {
     try {
       // Get company from request (set by auth middleware)
       const company = req.company;
-      if (!company || !company.id) {
+      const user = req.user;
+
+      // ✅ BYPASS: Super Admin is exempt from all subscription checks
+      if (user && user.role === "super_admin") {
+        req.subscription = {
+          id: "super-admin-virtual-sub",
+          tier: "pro",
+          isActive: true,
+          isExpired: false,
+          startDate: new Date(),
+          endDate: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000), // 100 years
+          daysRemaining: 36500,
+          isVirtual: true
+        };
+        return next();
+      }
+
+      // Resolve Company ID from various sources
+      let companyId = null;
+
+      if (req.company && req.company.id) {
+        companyId = req.company.id;
+      } else if (req.companyId) {
+        companyId = req.companyId;
+      } else if (req.body && req.body.companyId) {
+        companyId = req.body.companyId;
+      } else if (req.query && req.query.companyId) {
+        companyId = req.query.companyId;
+      } else if (req.params && req.params.companyId) {
+        companyId = req.params.companyId;
+      } else if (user && user.companies && user.companies.length === 1) {
+        // Default to the single company if user only has one
+        companyId = user.companies[0];
+      }
+
+      if (!companyId) {
+        // If we still can't find it, we can't purge/verify subscription
         return res.status(400).json({
           success: false,
-          error: "COMPANY_NOT_FOUND",
-          code: "MISSING_COMPANY",
-          message: "Company information not found in request",
+          error: "COMPANY_ID_MISSING",
+          code: "MISSING_COMPANY_ID",
+          message: "Could not determine Company ID for subscription check",
         });
       }
 
-      const companyId = company.id;
+      // Ensure req.company is set for downstream (normalization)
+      if (!req.company) {
+        req.company = { id: companyId };
+      }
       let subscription;
 
-      // Try to get subscription from cache first
-      try {
-        const redis = getRedisClient();
-        const cacheKey = `company:subscription:${companyId}`;
-        const cached = await redis.get(cacheKey);
-        if (cached) {
-          subscription = JSON.parse(cached);
-        }
-      } catch (err) {
-        console.warn("Redis cache read failed, proceeding with DB query:", err.message);
+      // Fetch Subscription Status
+      const SubscriptionUtil = require('../../utils/SubscriptionUtil');
+      subscription = await SubscriptionUtil.getSubscriptionStatus(companyId);
+
+      if (!subscription) {
+        // If null, it means company not found or DB error. 
+        // However, SubscriptionUtil returns object even if expired, unless company strictly creates no record.
+        // Let's assume strict fail if nothing returned.
+        return res.status(404).json({
+          success: false,
+          code: "SUBSCRIPTION_CHECK_FAILED",
+          message: "Could not verify subscription status"
+        });
       }
 
-      // Fetch from database if not cached
-      if (!subscription) {
-        const db = require("../../../services/company-service/src/config");
-        
-        // Verify company exists and is active
-        const companyRecord = await db("companies")
-          .where({ id: companyId })
-          .first();
+      // Check Active/Expired Status (Logic preserved)
+      if (!subscription.isActive && subscription.tier !== 'none') { // 'none' handled below
+        return res.status(403).json({
+          success: false,
+          error: "SUBSCRIPTION_INACTIVE",
+          code: "SUBSCRIPTION_INACTIVE",
+          message: "Subscription is not active",
+        });
+      }
 
-        if (!companyRecord) {
-          return res.status(404).json({
-            success: false,
-            error: "COMPANY_NOT_FOUND",
-            code: "COMPANY_INACTIVE",
-            message: "Company not found",
-          });
-        }
+      if (subscription.tier === 'none') {
+        return res.status(402).json({
+          success: false,
+          error: "NO_SUBSCRIPTION",
+          code: "NO_SUBSCRIPTION",
+          message: "No active subscription found.",
+        });
+      }
 
-        if (companyRecord.status !== "active") {
-          return res.status(403).json({
-            success: false,
-            error: "COMPANY_INACTIVE",
-            code: "COMPANY_INACTIVE",
-            message: `Company is ${companyRecord.status}`,
-          });
-        }
-
-        // Get subscription
-        const subscriptionRecord = await db("subscriptions")
-          .where({ company_id: companyId })
-          .first();
-
-        if (!subscriptionRecord) {
-          return res.status(402).json({
-            success: false,
-            error: "NO_SUBSCRIPTION",
-            code: "NO_SUBSCRIPTION",
-            message: "No active subscription found. Please subscribe to use this service.",
-          });
-        }
-
-        if (!subscriptionRecord.is_active) {
-          return res.status(403).json({
-            success: false,
-            error: "SUBSCRIPTION_INACTIVE",
-            code: "SUBSCRIPTION_INACTIVE",
-            message: "Subscription is not active",
-          });
-        }
-
-        // Check expiration
-        const now = new Date();
-        const endDate = new Date(subscriptionRecord.end_date);
-        const isExpired = now > endDate;
-
-        if (isExpired && !options.allowExpired) {
-          return res.status(402).json({
-            success: false,
-            error: "SUBSCRIPTION_EXPIRED",
-            code: "SUBSCRIPTION_EXPIRED",
-            message: "Your subscription has expired. Please renew to continue.",
-            expiryDate: subscriptionRecord.end_date,
-          });
-        }
-
-        // Build subscription object
-        subscription = {
-          id: subscriptionRecord.id,
-          tier: subscriptionRecord.tier,
-          isActive: subscriptionRecord.is_active,
-          isExpired,
-          startDate: subscriptionRecord.start_date,
-          endDate: subscriptionRecord.end_date,
-          daysRemaining: Math.max(0, Math.ceil((endDate - now) / (1000 * 60 * 60 * 24))),
-        };
-
-        // Cache subscription
-        try {
-          const redis = getRedisClient();
-          const cacheKey = `company:subscription:${companyId}`;
-          await redis.setex(cacheKey, SUBSCRIPTION_CACHE_TTL, JSON.stringify(subscription));
-        } catch (err) {
-          console.warn("Redis cache write failed:", err.message);
-        }
+      if (subscription.isExpired && !options.allowExpired) {
+        return res.status(402).json({
+          success: false,
+          error: "SUBSCRIPTION_EXPIRED",
+          code: "SUBSCRIPTION_EXPIRED",
+          message: "Your subscription has expired. Please renew to continue.",
+          expiryDate: subscription.endDate,
+        });
       }
 
       // Check tier requirement if specified
       if (options.tier) {
-        const tierHierarchy = { basic: 0, mid: 1, pro: 2 };
+        const tierHierarchy = { Basic: 0, Mid: 1, Pro: 2 };
         const currentLevel = tierHierarchy[subscription.tier] || 0;
         const requiredLevel = tierHierarchy[options.tier] || 0;
 

@@ -84,6 +84,59 @@ async function invalidateCompanyCaches(companyId) {
 }
 
 /**
+ * Update the subscription cache for a company directly (from events)
+ */
+async function updateSubscriptionCache(companyId, subscriptionData) {
+  const client = getRedisClient();
+  if (!client) return false;
+
+  try {
+    const key = `company:subscription:${companyId}`;
+
+    // Merge with existing data if possible, or create fresh
+    const existing = await client.get(key);
+    let mergedData = subscriptionData;
+
+    if (existing) {
+      const parsed = JSON.parse(existing);
+      mergedData = { ...parsed, ...subscriptionData };
+    }
+
+    await client.set(key, JSON.stringify(mergedData), 'EX', 86400 * 7); // Cache for 7 days
+    console.log(`✅ Updated subscription cache for company ${companyId}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error updating subscription cache:`, error.message);
+    return false;
+  }
+}
+
+/**
+ * Update only the company status in the cache (from events)
+ */
+async function updateCompanyStatus(companyId, status) {
+  const client = getRedisClient();
+  if (!client) return false;
+
+  try {
+    const key = `company:subscription:${companyId}`;
+    const existing = await client.get(key);
+
+    let data = { company_status: status };
+    if (existing) {
+      data = { ...JSON.parse(existing), company_status: status };
+    }
+
+    await client.set(key, JSON.stringify(data), 'EX', 86400 * 7);
+    console.log(`✅ Updated company status to ${status} for company ${companyId} in cache`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error updating company status cache:`, error.message);
+    return false;
+  }
+}
+
+/**
  * Clear all gateway caches (for deployment/testing)
  */
 async function clearAllCaches() {

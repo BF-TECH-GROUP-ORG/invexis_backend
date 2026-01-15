@@ -1,0 +1,6 @@
+{
+    "mtn":"https://api.yourdomain.com/payment/webhooks/mtn",
+    "airtel":"https://api.yourdomain.com/payment/webhooks/airtel",
+    "mpesa":"https://api.yourdomain.com/payment/webhooks/mpesa",
+    "stripe":"https://api.yourdomain.com/payment/webhooks/stripe"
+}

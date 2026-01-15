@@ -123,6 +123,57 @@ class SubscriptionService {
       return deactivated;
     });
   }
+
+  /**
+   * Process all subscriptions due for auto-renewal (Pivoted to Suspend & Notify for MVP)
+   */
+  static async processDueRenewals() {
+    try {
+      const due = await Subscription.getDueRenewals();
+      console.log(`🔄 [SubscriptionService] Found ${due.length} subscriptions due for manual renewal check`);
+
+      for (const sub of due) {
+        console.log(`⚠️ [SubscriptionService] Subscription expired for company: ${sub.company_id}. Suspending...`);
+
+        // Transactional write: Deactivate Subscription + Suspend Company + Notify
+        await db.transaction(async (trx) => {
+          // 1. Deactivate subscription
+          await Subscription.update(sub.company_id, {
+            is_active: false,
+            last_billing_status: 'expired',
+            last_billing_attempt: new Date(),
+            updatedAt: new Date()
+          }, trx);
+
+          // 2. Suspend company
+          await Company.changeCompanyStatus(sub.company_id, 'suspended', 'system', trx);
+
+          // 3. Emit subscription.expired event for notifications (Email + SMS)
+          const company = await Company.findCompanyById(sub.company_id);
+          
+          await Outbox.create({
+            type: "subscription.expired",
+            exchange: "events_topic",
+            routingKey: "subscription.expired",
+            payload: {
+              companyId: sub.company_id,
+              companyName: company?.name || 'Your Company',
+              tier: sub.tier,
+              endDate: sub.end_date,
+              adminId: company?.company_admin_id,
+              adminEmail: company?.email,
+              adminPhone: company?.phone,
+              traceId: uuidv4(),
+            },
+          }, trx);
+        });
+
+        console.log(`✅ [SubscriptionService] Company ${sub.company_id} suspended and expiration event emitted.`);
+      }
+    } catch (error) {
+      console.error("❌ [SubscriptionService] Error processing expiries:", error.message);
+    }
+  }
 }
 
 module.exports = SubscriptionService;

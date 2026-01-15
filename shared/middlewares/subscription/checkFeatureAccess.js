@@ -12,9 +12,8 @@
  *  - Thread-safe cache invalidation from company-service events
  */
 
-const asyncHandler = require("express-async-handler");
-const { isFeatureEnabled } = require("../../tierFeatures.config");
-const { getRedisClient } = require("../utils/redis");
+const { isFeatureEnabled } = require("/app/shared/config/tierFeatures.config");
+const { getRedisClient } = require("/app/shared/middlewares/utils/redis");
 
 // Configuration
 const FEATURE_CACHE_TTL_SECONDS = parseInt(process.env.FEATURE_CACHE_TTL_SECONDS || "300", 10);
@@ -32,8 +31,13 @@ const checkFeatureAccess = (featureCategory, featureName, options = {}) => {
     throw new Error("checkFeatureAccess requires featureCategory and featureName");
   }
 
-  return asyncHandler(async (req, res, next) => {
+  return async (req, res, next) => {
     try {
+      // ✅ BYPASS: Super Admin always has feature access
+      if (req.user && req.user.role === "super_admin") {
+        return next();
+      }
+
       // Require subscription to be checked first
       if (!req.subscription || !req.subscription.tier) {
         return res.status(403).json({
@@ -46,14 +50,14 @@ const checkFeatureAccess = (featureCategory, featureName, options = {}) => {
 
       const { tier } = req.subscription;
       const companyId = req.company?.id;
-
+      ``
       // Check feature availability
       const isEnabled = isFeatureEnabled(tier, featureCategory, featureName);
 
       if (!isEnabled) {
         // Find minimum tier for this feature
         let minimumTier = null;
-        for (const checkTier of ["basic", "mid", "pro"]) {
+        for (const checkTier of ["Basic", "Mid", "Pro"]) {
           if (isFeatureEnabled(checkTier, featureCategory, featureName)) {
             minimumTier = checkTier;
             break;
@@ -90,7 +94,7 @@ const checkFeatureAccess = (featureCategory, featureName, options = {}) => {
         message: "Error checking feature access",
       });
     }
-  });
+  };
 };
 
 /**

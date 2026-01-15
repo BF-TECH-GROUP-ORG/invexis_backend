@@ -14,6 +14,9 @@ module.exports = async function handlePlatformEvent(event, routingKey) {
     try {
         const { type, source } = event;
 
+        // DEBUG LOGGING
+        console.log(`📥 [DEBUG-NOTIF] Received RAW event:`, JSON.stringify({ type, routingKey, source }, null, 2));
+
         logger.info(`📥 [${source || 'unknown'}] Received event: ${type || routingKey}`);
 
         // Process event through enterprise notification processor

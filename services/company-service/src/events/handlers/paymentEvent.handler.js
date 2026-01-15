@@ -1,7 +1,7 @@
 "use strict";
 
-const { Subscription } = require("../../models/subscription.model");
-const { Company } = require("../../models/company.model");
+const Subscription = require("../../models/subscription.model");
+const Company = require("../../models/company.model");
 const { processEventOnce } = require("../../utils/eventDeduplication");
 
 /**
@@ -17,7 +17,7 @@ module.exports = async function handlePaymentEvent(event) {
 
     // Generate event ID for deduplication
     const traceId = data.traceId || data.trace_id;
-    const fallbackId = data.paymentId || data.subscriptionId || '';
+    const fallbackId = data.paymentId || data.subscriptionId || data.payment_id || '';
     const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
 
     // Process event with automatic deduplication
@@ -26,13 +26,15 @@ module.exports = async function handlePaymentEvent(event) {
       type,
       async () => {
         switch (type) {
-          case "payment.subscription.success":
+          case "payment.processed":
+          case "payment.succeeded":
           case "payment.completed":
+          case "subscription.payment.succeeded":
             await handlePaymentSuccess(data);
             break;
 
-          case "payment.subscription.failed":
           case "payment.failed":
+          case "subscription.payment.failed":
             await handlePaymentFailed(data);
             break;
 
@@ -40,15 +42,11 @@ module.exports = async function handlePaymentEvent(event) {
             await handleSubscriptionExpired(data);
             break;
 
-          case "subscription.renewed":
-            await handleSubscriptionRenewed(data);
-            break;
-
           default:
             console.log(`⚠️ Unhandled payment event type: ${type}`);
         }
       },
-      { eventType: type, timestamp: new Date(), subscriptionId: data.subscriptionId }
+      { eventType: type, timestamp: new Date(), companyId: data.companyId || data.company_id }
     );
 
     if (result.duplicate) {
@@ -65,12 +63,11 @@ module.exports = async function handlePaymentEvent(event) {
  * Activate or extend company subscription
  */
 async function handlePaymentSuccess(data) {
-  const { companyId, subscriptionId, paymentId } = data;
+  // Extract companyId from root or metadata
+  const companyId = data.companyId || data.company_id || data.metadata?.companyId;
 
-  if (!companyId || !subscriptionId) {
-    console.warn(
-      "⚠️ Payment success event missing companyId or subscriptionId"
-    );
+  if (!companyId) {
+    console.warn("⚠️ Payment success event missing companyId");
     return;
   }
 
@@ -78,174 +75,88 @@ async function handlePaymentSuccess(data) {
     console.log(`💰 Payment success for company ${companyId}`);
 
     // Update subscription status to active
-    const [updated] = await Subscription.update(
-      {
-        status: "active",
-        paymentStatus: "paid",
-        paymentId,
-        lastPaymentAt: new Date(),
-      },
-      { where: { subscriptionId, companyId } }
-    );
+    const subscription = await Subscription.findByCompany(companyId);
+    if (subscription) {
+      await Subscription.update(companyId, {
+        is_active: true,
+        last_billing_status: "succeeded",
+        last_billing_attempt: new Date(),
+        updatedAt: new Date()
+      });
+      console.log(`✅ Subscription activated for company ${companyId}`);
+    }
 
-    if (updated) {
-      console.log(
-        `✅ Subscription ${subscriptionId} activated for company ${companyId}`
-      );
-
-      // Update company status if needed
-      const company = await Company.findByPk(companyId);
-      if (company && company.status !== "active") {
-        await company.update({ status: "active" });
-        console.log(`✅ Company ${companyId} status updated to active`);
-      }
+    // Update company status to active if needed
+    const company = await Company.findCompanyById(companyId);
+    if (company && company.status !== "active") {
+      await Company.changeCompanyStatus(companyId, "active", "system");
+      console.log(`✅ Company ${companyId} status updated to active`);
     }
   } catch (error) {
-    console.error(
-      `❌ Error handling payment success for company ${companyId}:`,
-      error.message
-    );
+    console.error(`❌ Error handling payment success for company ${companyId}:`, error.message);
     throw error;
   }
 }
 
 /**
  * Handle failed payment
- * Send alert to company admin and mark subscription as failed
  */
 async function handlePaymentFailed(data) {
-  const { companyId, subscriptionId, reason, paymentId } = data;
+  // Extract companyId from root or metadata
+  const companyId = data.companyId || data.company_id || data.metadata?.companyId;
+  const reason = data.reason || data.failure_reason || data.failureReason;
 
-  if (!companyId || !subscriptionId) {
-    console.warn("⚠️ Payment failed event missing companyId or subscriptionId");
+  if (!companyId) {
+    console.warn("⚠️ Payment failed event missing companyId");
     return;
   }
 
   try {
     console.log(`❌ Payment failed for company ${companyId}: ${reason}`);
 
-    // Update subscription status to failed
-    const [updated] = await Subscription.update(
-      {
-        paymentStatus: "failed",
-        paymentId,
-        lastPaymentFailedAt: new Date(),
-        failureReason: reason,
-      },
-      { where: { subscriptionId, companyId } }
-    );
-
-    if (updated) {
-      console.log(`⚠️ Subscription ${subscriptionId} payment marked as failed`);
-
-      // TODO: Send notification to company admin
-      // This would integrate with notification-service
-      console.log(`📧 Alert: Payment failed for company ${companyId}`);
+    // Update subscription billing status
+    const subscription = await Subscription.findByCompany(companyId);
+    if (subscription) {
+      await Subscription.update(companyId, {
+        last_billing_status: "failed",
+        last_billing_attempt: new Date(),
+        metadata: { ...subscription.metadata, last_failure_reason: reason },
+        updatedAt: new Date()
+      });
     }
+
+    console.log(`📧 Alert: Payment failed for company ${companyId}`);
   } catch (error) {
-    console.error(
-      `❌ Error handling payment failure for company ${companyId}:`,
-      error.message
-    );
+    console.error(`❌ Error handling payment failure for company ${companyId}:`, error.message);
     throw error;
   }
 }
 
 /**
  * Handle subscription expiration
- * Downgrade service tier or deactivate company
  */
 async function handleSubscriptionExpired(data) {
-  const { companyId, subscriptionId } = data;
+  const companyId = data.companyId || data.company_id;
 
-  if (!companyId || !subscriptionId) {
-    console.warn(
-      "⚠️ Subscription expired event missing companyId or subscriptionId"
-    );
+  if (!companyId) {
+    console.warn("⚠️ Subscription expired event missing companyId");
     return;
   }
 
   try {
     console.log(`⌛ Subscription expired for company ${companyId}`);
 
-    // Update subscription status to expired
-    const [updated] = await Subscription.update(
-      {
-        status: "expired",
-        expiredAt: new Date(),
-      },
-      { where: { subscriptionId, companyId } }
-    );
+    // Update subscription status
+    await Subscription.update(companyId, {
+      is_active: false,
+      updatedAt: new Date()
+    });
 
-    if (updated) {
-      console.log(`✅ Subscription ${subscriptionId} marked as expired`);
-
-      // Downgrade company to free tier or suspend
-      const company = await Company.findByPk(companyId);
-      if (company) {
-        await company.update({
-          tier: "free",
-          status: "suspended",
-        });
-        console.log(
-          `⚠️ Company ${companyId} downgraded to free tier and suspended`
-        );
-      }
-    }
+    // Downgrade company status
+    await Company.changeCompanyStatus(companyId, "suspended", "system");
+    console.log(`⚠️ Company ${companyId} suspended due to expired subscription`);
   } catch (error) {
-    console.error(
-      `❌ Error handling subscription expiration for company ${companyId}:`,
-      error.message
-    );
-    throw error;
-  }
-}
-
-/**
- * Handle subscription renewal
- * Extend subscription period
- */
-async function handleSubscriptionRenewed(data) {
-  const { companyId, subscriptionId, nextBillingDate } = data;
-
-  if (!companyId || !subscriptionId) {
-    console.warn(
-      "⚠️ Subscription renewed event missing companyId or subscriptionId"
-    );
-    return;
-  }
-
-  try {
-    console.log(`🔄 Subscription renewed for company ${companyId}`);
-
-    // Update subscription with new dates
-    const [updated] = await Subscription.update(
-      {
-        status: "active",
-        renewedAt: new Date(),
-        nextBillingDate:
-          nextBillingDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-      { where: { subscriptionId, companyId } }
-    );
-
-    if (updated) {
-      console.log(
-        `✅ Subscription ${subscriptionId} renewed for company ${companyId}`
-      );
-
-      // Ensure company is active
-      const company = await Company.findByPk(companyId);
-      if (company && company.status !== "active") {
-        await company.update({ status: "active" });
-        console.log(`✅ Company ${companyId} reactivated`);
-      }
-    }
-  } catch (error) {
-    console.error(
-      `❌ Error handling subscription renewal for company ${companyId}:`,
-      error.message
-    );
+    console.error(`❌ Error handling subscription expiration for company ${companyId}:`, error.message);
     throw error;
   }
 }

@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const salesController = require("../controllers/SalesController");
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+const { checkFeatureAccess } = require('/app/shared/middlewares/subscription/checkFeatureAccess');
 // cmd
 // Apply rate limiting to all sales routes
 // router.use(
@@ -30,7 +32,7 @@ const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth
 router.post(
   "/",
   authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
-  // checkFeatureAccess("sales", "internalStaffSales"),
+  checkSubscriptionStatus(),
   salesController.createSale
 );
 
@@ -60,17 +62,19 @@ router.get(
 
 router.get(
   "/trends/revenue",
- authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
+  authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
   // checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
   // checkSubscriptionTier("pro"),
   salesController.revenueTrend
 );
 
 // Track purchases by customer (specific route)
+// Track purchases by customer (specific route)
 router.get(
   "/customer/:knownUserId",
   authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
-  // checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
+  checkSubscriptionStatus(),
+  checkFeatureAccess("customer", "purchaseHistory"),
   salesController.getCustomerPurchases
 );
 
@@ -93,7 +97,7 @@ router.get(
 // Single sale operations - place last to avoid shadowing more specific routes
 router.get(
   "/:id",
-authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
+  authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']),
   // checkSubscriptionActive({ companyIdSource: "query", companyIdField: "company_id" }),
   salesController.getSale
 );

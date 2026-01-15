@@ -8,9 +8,28 @@ const { v4: uuidv4 } = require('uuid'); // npm i uuid
 
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
-const ACCESS_TTL = process.env.ACCESS_TTL || 'm';
+const ACCESS_TTL = process.env.ACCESS_TTL || '2h';
 const REFRESH_TTL = process.env.REFRESH_TTL || '30d';
 const CACHE_TTLS = { session: 9000 }; // 2.5h
+
+/**
+ * Convert TTL string (e.g. '2h', '15m') to seconds
+ */
+function ttlToSeconds(ttl) {
+    const match = ttl.match(/^(\d+)([smhd])$/);
+    if (!match) return 3600; // Default 1h if parse fails
+    const [_, value, unit] = match;
+    const val = parseInt(value);
+    switch (unit) {
+        case 's': return val;
+        case 'm': return val * 60;
+        case 'h': return val * 3600;
+        case 'd': return val * 86400;
+        default: return val;
+    }
+}
+
+const expiresIn = ttlToSeconds(ACCESS_TTL);
 
 // Sign/Verify (unchanged, but add issuer/audience)
 function signAccess(payload) {
@@ -164,5 +183,6 @@ module.exports = {
     verifyRefresh,
     createSession,
     refreshTokens,
-    revokeSessionByRefresh
+    revokeSessionByRefresh,
+    expiresIn
 };

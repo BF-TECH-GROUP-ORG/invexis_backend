@@ -12,19 +12,41 @@ class StripeGateway {
      * @returns {Promise<Object>} Stripe payment intent
      */
     async createPaymentIntent(paymentData) {
-        const { amount, currency, description, metadata, customer_email } = paymentData;
+        const { amount, currency, description, metadata, customer_email, payee, idempotency_key } = paymentData;
 
         try {
-            const paymentIntent = await stripe.paymentIntents.create({
-                amount: Math.round(amount), // Stripe expects amount in smallest currency unit
+            const options = {
+                amount: Math.round(amount), // Stripe expects amount in smallest currency unit (e.g., cents)
                 currency: (currency || 'xaf').toLowerCase(),
                 description,
-                metadata: metadata || {},
+                metadata: {
+                    ...metadata,
+                    company_id: payee?.name !== 'Invexis' ? paymentData.company_id : undefined,
+                    transaction_id: paymentData.reference_id,
+                    payment_type: paymentData.type
+                },
                 receipt_email: customer_email,
                 automatic_payment_methods: {
                     enabled: true,
                 },
-            });
+            };
+
+            // ⚡ ROUTING: Stripe Connect (Destination Charges)
+            // If a specific Stripe account is provided (and it's not the platform itself), route funds there
+            if (payee && payee.stripe_account_id && payee.name !== 'Invexis') {
+                options.transfer_data = {
+                    destination: payee.stripe_account_id,
+                };
+                console.log(`[StripeGateway] Routing payment to connected account: ${payee.stripe_account_id}`);
+            }
+
+            // ⚡ SAFETY: Native Idempotency
+            const stripeOptions = {};
+            if (idempotency_key) {
+                stripeOptions.idempotencyKey = idempotency_key;
+            }
+
+            const paymentIntent = await stripe.paymentIntents.create(options, stripeOptions);
 
             return {
                 success: true,
@@ -32,7 +54,11 @@ class StripeGateway {
                 client_secret: paymentIntent.client_secret,
                 status: paymentIntent.status,
                 amount: paymentIntent.amount,
-                currency: paymentIntent.currency
+                currency: paymentIntent.currency,
+                gateway_response: {
+                    id: paymentIntent.id,
+                    status: paymentIntent.status
+                }
             };
         } catch (error) {
             console.error('Stripe Payment Intent Error:', error.message);

@@ -34,6 +34,10 @@ module.exports = [
         key: "sale.payment.refunded",
         description: "Sale payment was refunded",
       },
+      {
+        key: "sales.payment.requested",
+        description: "Request payment initiation (Mobile/Card) for a sale",
+      },
     ],
   },
   {
@@ -70,6 +74,13 @@ module.exports = [
       { key: "sale.item.added", description: "Item added to sale" },
       { key: "sale.item.updated", description: "Sale item updated" },
       { key: "sale.item.removed", description: "Item removed from sale" },
+    ],
+  },
+  {
+    name: "Document Request Events",
+    exchange: exchanges.topic,
+    events: [
+      { key: "document.invoice.requested", description: "Request invoice PDF generation" },
     ],
   },
 ];

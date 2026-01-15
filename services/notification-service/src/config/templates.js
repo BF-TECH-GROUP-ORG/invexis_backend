@@ -37,7 +37,7 @@ const templates = {
             }
         },
         sms: {
-            content: 'Welcome to {{companyName}}, {{userName}}! Verify your account: {{actionUrl}}',
+            content: 'Welcome to {{companyName}}, {{userName}}! Your temporary password is: {{password}}',
             metadata: {
                 maxLength: 160
             }
@@ -58,6 +58,53 @@ const templates = {
         inApp: {
             subject: 'Welcome to {{companyName}}!',
             content: 'Hi {{userName}}, welcome to {{companyName}}! Click here to complete your setup.'
+        }
+    },
+
+    welcome_manual: {
+        email: {
+            subject: 'Welcome to {{companyName}}!',
+            content: loadTemplate('welcome.html'), // Reuse HTML, but ensure it handles empty password gracefully (Logic added to HTML)
+            metadata: {
+                priority: 'normal'
+            }
+        },
+        sms: {
+            content: 'Welcome to {{companyName}}, {{userName}}! We are excited to have you on board.',
+            metadata: {
+                maxLength: 160
+            }
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Welcome to {{companyName}}!',
+                body: 'Hi {{userName}}, welcome aboard!',
+                data: {
+                    action: 'open_welcome',
+                    url: '{{actionUrl}}'
+                }
+            }),
+            metadata: {
+                sound: 'default'
+            }
+        },
+        inApp: {
+            subject: 'Welcome to {{companyName}}!',
+            content: 'Hi {{userName}}, welcome to {{companyName}}!'
+        }
+    },
+
+    stripe_onboarding: {
+        email: {
+            subject: 'Action Required: Complete your Payment Setup for {{companyName}}',
+            content: loadTemplate('stripe_onboarding.html'),
+            metadata: {
+                priority: 'high'
+            }
+        },
+        inApp: {
+            subject: 'Setup Required',
+            content: 'Please check your email to complete your payment account setup.'
         }
     },
 
@@ -191,6 +238,259 @@ const templates = {
         inApp: {
             subject: 'Return Initiated',
             content: 'Return for sale #{{saleId}} initiated for {{formatCurrency refundAmount}}'
+        }
+    },
+
+    // --- PRODUCT & INVENTORY ---
+    product_created: {
+        inApp: {
+            subject: 'New Product Added',
+            content: 'New product **{{productName}}** added by {{userName}}.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'New Product',
+                body: '{{productName}} was added to inventory.',
+                data: { action: 'open_product', productId: '{{productId}}' }
+            })
+        }
+    },
+
+    // Low Stock Alert Template
+    low_stock_alert: {
+        email: {
+            subject: '⚠️ Low Stock Alert: {{productName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 20px 0;">
+                        <h2 style="color: #856404; margin: 0 0 15px 0;">⚠️ Low Stock Alert</h2>
+                        <p style="font-size: 16px; color: #333; margin: 10px 0;">
+                            <strong>Product:</strong> {{productName}}
+                        </p>
+                        {{#if sku}}
+                        <p style="font-size: 14px; color: #666; margin: 5px 0;">
+                            <strong>SKU:</strong> {{sku}}
+                        </p>
+                        {{/if}}
+                        <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                            <p style="margin: 5px 0;"><strong>Current Stock:</strong> <span style="color: #dc3545; font-size: 18px;">{{currentStock}}</span> units</p>
+                            <p style="margin: 5px 0;"><strong>Threshold:</strong> {{threshold}} units</p>
+                            {{#if percentageOfThreshold}}
+                            <p style="margin: 5px 0;"><strong>Stock Level:</strong> {{percentageOfThreshold}}% of threshold</p>
+                            {{/if}}
+                            {{#if suggestedReorderQty}}
+                            <p style="margin: 5px 0;"><strong>Suggested Reorder:</strong> {{suggestedReorderQty}} units</p>
+                            {{/if}}
+                        </div>
+                        <p style="color: #856404; font-weight: bold; margin: 15px 0 0 0;">
+                            ⚡ Action Required: Please restock soon to avoid stockouts.
+                        </p>
+                    </div>
+                </div>
+            `,
+            metadata: { priority: 'high' }
+        },
+        sms: {
+            content: '⚠️ LOW STOCK: {{productName}}{{#if sku}} ({{sku}}){{/if}} - Only {{currentStock}} left (threshold: {{threshold}}). Restock needed!',
+            metadata: { maxLength: 160 }
+        },
+        push: {
+            content: JSON.stringify({
+                title: '⚠️ Low Stock: {{productName}}',
+                body: 'Only {{currentStock}} units left (threshold: {{threshold}}). Restock needed!',
+                data: {
+                    action: 'open_inventory',
+                    productId: '{{productId}}',
+                    productName: '{{productName}}',
+                    currentStock: '{{currentStock}}'
+                }
+            }),
+            metadata: { priority: 'high', sound: 'default' }
+        },
+        inApp: {
+            subject: '⚠️ Low Stock: {{productName}}',
+            content: '**{{productName}}**{{#if sku}} (SKU: {{sku}}){{/if}} is running low. Current stock: **{{currentStock}}** units (threshold: {{threshold}}). {{#if suggestedReorderQty}}Suggested reorder: {{suggestedReorderQty}} units.{{/if}}'
+        }
+    },
+
+    // Out of Stock Alert Template
+    out_of_stock_alert: {
+        email: {
+            subject: '🚨 URGENT: {{productName}} is Out of Stock',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 20px 0;">
+                        <h2 style="color: #721c24; margin: 0 0 15px 0;">🚨 URGENT: Out of Stock Alert</h2>
+                        <p style="font-size: 18px; color: #333; margin: 10px 0; font-weight: bold;">
+                            Product: {{productName}}
+                        </p>
+                        {{#if sku}}
+                        <p style="font-size: 14px; color: #666; margin: 5px 0;">
+                            <strong>SKU:</strong> {{sku}}
+                        </p>
+                        {{/if}}
+                        <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                            <p style="margin: 5px 0; color: #dc3545; font-size: 20px; font-weight: bold;">
+                                Current Stock: 0 units
+                            </p>
+                            <p style="margin: 5px 0;"><strong>Threshold:</strong> {{threshold}} units</p>
+                        </div>
+                        <p style="color: #721c24; font-weight: bold; margin: 15px 0 0 0; font-size: 16px;">
+                            🚨 IMMEDIATE ACTION REQUIRED: This product is completely out of stock!
+                        </p>
+                    </div>
+                </div>
+            `,
+            metadata: { priority: 'urgent' }
+        },
+        sms: {
+            content: '🚨 URGENT: {{productName}}{{#if sku}} ({{sku}}){{/if}} is OUT OF STOCK! Immediate restocking required.',
+            metadata: { maxLength: 160 }
+        },
+        push: {
+            content: JSON.stringify({
+                title: '🚨 OUT OF STOCK: {{productName}}',
+                body: 'URGENT: {{productName}} is completely out of stock!',
+                data: {
+                    action: 'open_inventory',
+                    productId: '{{productId}}',
+                    productName: '{{productName}}',
+                    priority: 'urgent'
+                }
+            }),
+            metadata: { priority: 'urgent', sound: 'alert' }
+        },
+        inApp: {
+            subject: '🚨 OUT OF STOCK: {{productName}}',
+            content: '**URGENT:** {{productName}}{{#if sku}} (SKU: {{sku}}){{/if}} is completely out of stock! Immediate restocking required.'
+        }
+    },
+
+    // Legacy templates (kept for backward compatibility)
+    inventory_low: {
+        email: {
+            subject: 'Low Stock Alert: {{productName}}',
+            content: `<p>⚠️ <strong>Low Stock Alert</strong></p><p>Product <strong>{{productName}}</strong> is running low. Current quantity: <strong>{{quantity}}</strong>.</p><p>Please restock soon to avoid stockouts.</p>`,
+            metadata: { priority: 'high' }
+        },
+        inApp: {
+            subject: 'Low Stock Alert',
+            content: '⚠️ Low stock: **{{productName}}** is down to {{quantity}} units.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Low Stock Alert',
+                body: '{{productName}} is low ({{quantity}} left).',
+                data: { action: 'open_inventory', productId: '{{productId}}' }
+            }),
+            metadata: { priority: 'high' }
+        }
+    },
+    stock_out: {
+        email: {
+            subject: 'STOCK OUT: {{productName}}',
+            content: `<p>🚨 <strong>STOCK OUT ALERT</strong></p><p>Product <strong>{{productName}}</strong> is now out of stock!</p>`,
+            metadata: { priority: 'high' }
+        },
+        inApp: {
+            subject: 'Stock Out Alert',
+            content: '🚨 Stock out: **{{productName}}** is now out of stock!'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Stock Out',
+                body: '🚨 {{productName}} is out of stock!',
+                data: { action: 'open_inventory', productId: '{{productId}}' }
+            }),
+            metadata: { priority: 'high' }
+        }
+    },
+
+    // --- DEBTS ---
+    debt_created: {
+        sms: {
+            content: 'Hello {{customerName}}, you have a new debt of {{formatCurrency amount}} at {{companyName}} for {{items}}. Total due: {{formatCurrency totalDebt}}. Please pay soon.',
+            metadata: { maxLength: 160 }
+        },
+        inApp: {
+            subject: 'New Debt Recorded',
+            content: 'New debt of **{{formatCurrency amount}}** recorded for customer **{{customerName}}** by {{staffName}}.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'New Debt Recorded',
+                body: 'Debt of {{formatCurrency amount}} for {{customerName}}.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            })
+        }
+    },
+    debt_paid: {
+        sms: {
+            content: 'Thank you {{customerName}}! We received {{formatCurrency amount}}. Remaining balance: {{formatCurrency remainingBalance}}.',
+            metadata: { maxLength: 160 }
+        },
+        inApp: {
+            subject: 'Debt Payment Received',
+            content: 'Debt payment of **{{formatCurrency amount}}** received from **{{customerName}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Debt Payment',
+                body: 'Received {{formatCurrency amount}} from {{customerName}}.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            })
+        }
+    },
+
+    // --- PAYMENTS ---
+    payment_received: {
+        inApp: {
+            subject: 'Payment Received',
+            content: 'Payment of **{{formatCurrency amount}}** received from **{{customerName}}** ({{paymentMethod}}).'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Payment Received',
+                body: 'Received {{formatCurrency amount}} via {{paymentMethod}}',
+                data: { action: 'open_payment', paymentId: '{{paymentId}}' }
+            })
+        }
+    },
+
+    // --- SUBSCRIPTIONS ---
+    subscription_expiring: {
+        email: {
+            subject: 'Action Required: Your Subscription is Expiring Soon',
+            content: `<p>Hello,</p><p>Your subscription for {{companyName}} will expire on {{formatDate expiryDate 'long'}}.</p><p>Please renew now to avoid service interruption.</p>`,
+            metadata: { priority: 'high' }
+        },
+        inApp: {
+            subject: 'Subscription Expiring',
+            content: 'Your subscription expires on {{formatDate expiryDate "short"}}. Renew now to maintain access.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Subscription Expiring',
+                body: 'Renew by {{formatDate expiryDate "short"}} to keep using Invexis.',
+            }),
+            metadata: { priority: 'high' }
+        }
+    },
+    subscription_expired: {
+        email: {
+            subject: 'Service Suspended: Subscription Expired',
+            content: `<p>Hello,</p><p>Your subscription has expired. Access to premium features has been suspended.</p><p>Please renew immediately to restore access.</p>`,
+            metadata: { priority: 'high' }
+        },
+        sms: {
+            content: '🚨 ALERT: Your Invexis subscription for {{companyName}} has expired and service is suspended. Please renew now to restore access.',
+            metadata: {
+                smsConfig: { maxLength: 160 }
+            }
+        },
+        inApp: {
+            subject: 'Subscription Expired',
+            content: '🚨 Your subscription has expired. Please renew to restore services.'
         }
     }
 };

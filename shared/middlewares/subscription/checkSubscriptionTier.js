@@ -13,7 +13,7 @@
 const asyncHandler = require("express-async-handler");
 
 // Tier hierarchy
-const TIER_HIERARCHY = { basic: 0, mid: 1, pro: 2 };
+const TIER_HIERARCHY = { Basic: 0, Mid: 1, Pro: 2 };
 
 /**
  * Check if company tier meets requirement
@@ -34,6 +34,11 @@ const checkSubscriptionTier = (allowedTiers, options = {}) => {
 
   return asyncHandler(async (req, res, next) => {
     try {
+      // ✅ BYPASS: Super Admin always passes tier checks
+      if (req.user && req.user.role === "super_admin") {
+        return next();
+      }
+
       // Require subscription to be checked first
       if (!req.subscription || !req.subscription.tier) {
         return res.status(403).json({
@@ -59,9 +64,8 @@ const checkSubscriptionTier = (allowedTiers, options = {}) => {
           success: false,
           error: "INSUFFICIENT_TIER",
           code: "INSUFFICIENT_TIER",
-          message: `This feature requires ${
-            tiers.length > 1 ? "one of: " + tiers.join(", ") : tiers[0]
-          } tier or higher`,
+          message: `This feature requires ${tiers.length > 1 ? "one of: " + tiers.join(", ") : tiers[0]
+            } tier or higher`,
           currentTier,
           requiredTiers: tiers,
           minimumTierRequired: minimumTierName,

@@ -6,15 +6,18 @@ const { publish } = require('/app/shared/rabbitmq');
 
 // Configuration
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:8001/auth';
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3002';
-const IP_WHITELIST = process.env.IP_WHITELIST ? process.env.IP_WHITELIST.split(',') : [];
 
 // Helper Functions
 function verifyToken(token) {
     try {
-        console.log("token", JWT_SECRET);
-        return jwt.verify(token, JWT_SECRET);
+        return jwt.verify(token, JWT_ACCESS_SECRET, {
+            algorithms: ['HS256'],
+            issuer: 'invexis-auth',
+            audience: 'invexis-apps',
+        });
     } catch {
         return null;
     }
@@ -122,7 +125,11 @@ const validateRefreshToken = (req, res, next) => {
     if (!refreshToken) return res.status(400).json({ ok: false, message: 'Refresh token required' });
 
     try {
-        req.decodedRefreshToken = jwt.verify(refreshToken, JWT_SECRET);
+        req.decodedRefreshToken = jwt.verify(refreshToken, JWT_REFRESH_SECRET, {
+            algorithms: ['HS256'],
+            issuer: 'invexis-auth',
+            audience: 'invexis-apps',
+        });
         next();
     } catch {
         return res.status(401).json({ ok: false, message: 'Invalid refresh token' });

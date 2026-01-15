@@ -100,6 +100,8 @@ const debtEvents = {
                 routingKey: 'debt.payment.received',
                 payload: {
                     debtId,
+                    companyId: payment.companyId,
+                    shopId: payment.shopId,
                     paymentId: payment._id || payment.id,
                     amount: payment.amount,
                     paymentMethod: payment.paymentMethod,
@@ -123,6 +125,8 @@ const debtEvents = {
                 routingKey: 'debt.settled',
                 payload: {
                     debtId,
+                    companyId: debt.companyId,
+                    shopId: debt.shopId,
                     settledAt: new Date().toISOString(),
                     traceId: require('uuid').v4()
                 }
@@ -142,6 +146,8 @@ const debtEvents = {
                 routingKey: 'debt.overdue',
                 payload: {
                     debtId,
+                    companyId: debt.companyId,
+                    shopId: debt.shopId,
                     daysOverdue,
                     triggeredAt: new Date().toISOString(),
                     traceId: require('uuid').v4()

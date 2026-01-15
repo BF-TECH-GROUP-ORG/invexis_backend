@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const { getLogger } = require('/app/shared/logger');
 const HealthChecker = require('/app/shared/health');
 const { SecurityManager } = require('/app/shared/security');
@@ -20,18 +19,18 @@ const SERVICE_NAME = 'analytics-service';
 // Initialize production modules
 const logger = getLogger(SERVICE_NAME);
 const healthChecker = new HealthChecker(SERVICE_NAME, {
-  postgresql: true,
-  redis: true,
-  rabbitmq: true,
-  timeout: 5000
+    postgresql: true,
+    redis: true,
+    rabbitmq: true,
+    timeout: 5000
 });
 const security = new SecurityManager(SERVICE_NAME);
 const errorHandler = new ErrorHandler(SERVICE_NAME);
 
 // Request parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(cors());
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
 
 // Setup security middleware
 security.setupSecurity(app);
@@ -47,12 +46,12 @@ app.use("/analytics", require("./routes/AnalyticsRoutes"));
 
 // Root endpoint
 app.get('/', (req, res) => {
-  res.json({
-    service: SERVICE_NAME,
-    status: 'running',
-    version: '1.0.0',
-    timestamp: new Date().toISOString()
-  });
+    res.json({
+        service: SERVICE_NAME,
+        status: 'running',
+        version: '1.0.0',
+        timestamp: new Date().toISOString()
+    });
 });
 
 // Initialize Database (Postgres/Sequelize)
@@ -135,7 +134,7 @@ const startServer = async () => {
     try {
         await initializeDatabase();
         await initializeEventSystem();
-        
+
         const server = app.listen(PORT, () => {
             logger.info('Analytics Service started successfully', {
                 port: PORT,
@@ -149,17 +148,17 @@ const startServer = async () => {
         // Graceful shutdown
         const shutdown = async (signal) => {
             logger.info(`Received ${signal}, starting graceful shutdown`);
-            
+
             server.close(async (err) => {
                 if (err) {
                     logger.error('Error closing server', { error: err.message });
                     process.exit(1);
                 }
-                
+
                 logger.info('Analytics Service shutdown completed');
                 process.exit(0);
             });
-            
+
             // Force close after 30 seconds
             setTimeout(() => {
                 logger.error('Forced shutdown after timeout');

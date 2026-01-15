@@ -1,0 +1,25 @@
+{
+    "companyId": "4d9a3e7f-5856-4621-bb02-f304a24bafcb",
+    "paymentType": "DEBT",
+    "amount": 2500,
+    "currency": "KES",
+    "sellerId": "660e8400-e29b-41d4-a716-446655440000",
+    "description": "Debt Payment via M-Pesa",
+    "paymentMethod": "mpesa",
+    "gateway": "mpesa",
+    "phoneNumber": "254700000000",
+    "customer": {
+        "name": "M-Pesa Debtor",
+        "email": "debtor.mpesa@example.com"
+    },
+    "lineItems": [
+        {
+            "name": "Invoice #882",
+            "qty": 1,
+            "price": 2500
+        }
+    ],
+    "metadata": {
+        "country": "KE"
+    }
+}

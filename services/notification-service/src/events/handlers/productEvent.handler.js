@@ -48,8 +48,11 @@ module.exports = async function handleProductEvent(event, routingKey) {
 /**
  * Handle product creation
  */
+/**
+ * Handle product creation
+ */
 async function handleProductCreated(data) {
-  const { productId, productName, companyId, createdBy } = data;
+  const { productId, productName, companyId, createdBy, createdByName } = data;
 
   if (!productId || !companyId) {
     logger.warn("⚠️ Product created event missing required fields");
@@ -59,19 +62,25 @@ async function handleProductCreated(data) {
   try {
     logger.info(`📦 New product created: ${productName} (${productId})`);
 
-    const notification = await Notification.create({
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    // Broadcast to company admins/managers
+    await dispatchBroadcastEvent({
+      event: "product.created",
+      data: {
+        productName,
+        userName: createdByName || "Staff",
+        productId,
+        ...data
+      },
       companyId,
-      userId: createdBy,
-      type: "product_added",
-      title: "New Product Added",
-      body: `Product "${productName}" has been added to inventory.`,
+      templateName: "product_created",
+      channels: ["inApp", "push"],
       scope: "company",
-      channels: { inApp: true },
-      payload: data,
+      roles: ["admin", "manager"]
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Product creation notification queued for product ${productId}`);
+    logger.info(`✅ Product creation notification broadcasted for product ${productId}`);
   } catch (error) {
     logger.error(`❌ Error creating product notification:`, error.message);
     throw error;
@@ -83,9 +92,7 @@ async function handleProductCreated(data) {
  */
 async function handleProductUpdated(data) {
   const { productId, productName } = data;
-
   logger.info(`📝 Product updated: ${productName} (${productId})`);
-  // Could send notification about product update
 }
 
 /**
@@ -93,16 +100,14 @@ async function handleProductUpdated(data) {
  */
 async function handleProductDeleted(data) {
   const { productId, productName } = data;
-
   logger.info(`🗑️ Product deleted: ${productName} (${productId})`);
-  // Could send notification about product deletion
 }
 
 /**
  * Handle low stock alert
  */
 async function handleLowStock(data) {
-  const { productId, productName, companyId, currentStock, threshold } = data;
+  const { productId, productName, companyId, currentStock } = data;
 
   if (!productId || !companyId) {
     logger.warn("⚠️ Low stock event missing required fields");
@@ -112,18 +117,25 @@ async function handleLowStock(data) {
   try {
     logger.warn(`⚠️ Low stock alert: ${productName} (${currentStock} units)`);
 
-    const notification = await Notification.create({
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "inventory.low_stock",
+      data: {
+        productName,
+        quantity: currentStock,
+        productId,
+        ...data
+      },
       companyId,
-      type: "low_stock_alert",
-      title: "Low Stock Alert",
-      body: `Product "${productName}" is running low on stock (${currentStock} units remaining).`,
+      templateName: "inventory_low",
+      channels: ["email", "push", "inApp"],
       scope: "company",
-      channels: { email: true, push: true, inApp: true },
-      payload: data,
+      roles: ["admin", "manager"],
+      priority: "high"
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Low stock notification queued for product ${productId}`);
+    logger.info(`✅ Low stock notification broadcasted for product ${productId}`);
   } catch (error) {
     logger.error(`❌ Error creating low stock notification:`, error.message);
     throw error;
@@ -144,18 +156,24 @@ async function handleOutOfStock(data) {
   try {
     logger.error(`❌ Out of stock: ${productName}`);
 
-    const notification = await Notification.create({
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "inventory.out_of_stock",
+      data: {
+        productName,
+        productId,
+        ...data
+      },
       companyId,
-      type: "out_of_stock_alert",
-      title: "Out of Stock Alert",
-      body: `Product "${productName}" is out of stock!`,
+      templateName: "stock_out",
+      channels: ["email", "push", "inApp"],
       scope: "company",
-      channels: { email: true, sms: true, push: true, inApp: true },
-      payload: data,
+      roles: ["admin", "manager"],
+      priority: "high"
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Out of stock notification queued for product ${productId}`);
+    logger.info(`✅ Out of stock notification broadcasted for product ${productId}`);
   } catch (error) {
     logger.error(`❌ Error creating out of stock notification:`, error.message);
     throw error;

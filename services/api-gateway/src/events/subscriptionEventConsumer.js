@@ -11,79 +11,90 @@
  * Automatically invalidates Redis caches to ensure fresh data
  */
 
-const { getRedisClient, invalidateCompanyCaches } = require("../utils/redis");
+const { invalidateCompanyCaches, updateSubscriptionCache, updateCompanyStatus } = require("../utils/redis");
+const rabbitmq = require("/app/shared/rabbitmq");
 
 /**
  * Initialize event consumer for subscription changes
  */
 async function initSubscriptionEventConsumer() {
   try {
-    const amqp = require("amqplib");
-    const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://guest:guest@rabbitmq:5672";
-    const EXCHANGE_NAME = "invexis.events";
+    const EXCHANGE_NAME = rabbitmq.exchanges.topic;
     const QUEUE_NAME = "api-gateway.subscription-events";
 
-    // Connect to RabbitMQ
-    const connection = await amqp.connect(RABBITMQ_URL);
-    const channel = await connection.createChannel();
-
-    // Declare exchange and queue
-    await channel.assertExchange(EXCHANGE_NAME, "topic", { durable: true });
-    await channel.assertQueue(QUEUE_NAME, { durable: true });
-
-    // Bind events
+    // Subscription events to track
     const subscriptionEvents = [
+      "subscription.created",
       "subscription.activated",
       "subscription.renewed",
+      "subscription.deactivated",
       "subscription.expired",
       "subscription.upgraded",
       "subscription.downgraded",
+      "company.created",
+      "company.updated",
+      "company.deleted",
       "company.status.changed",
     ];
 
+    // ✅ Use shared RabbitMQ library for standardized connection/resilience
+    await rabbitmq.connect();
+
     for (const event of subscriptionEvents) {
-      await channel.bindQueue(QUEUE_NAME, EXCHANGE_NAME, event);
-    }
-
-    console.log(`✅ Gateway subscription event consumer ready on ${QUEUE_NAME}`);
-
-    // Consume messages
-    channel.consume(QUEUE_NAME, async (msg) => {
-      if (msg) {
-        try {
-          const content = JSON.parse(msg.content.toString());
-          const routingKey = msg.fields.routingKey;
-
-          console.log(`📨 Received event: ${routingKey}`, content);
+      await rabbitmq.subscribe(
+        { queue: QUEUE_NAME, exchange: EXCHANGE_NAME, pattern: event },
+        async (content, routingKey) => {
+          console.log(`📨 [RabbitMQ] Received event: ${routingKey}`, content);
 
           // Extract company ID
-          const companyId = content.payload?.company_id || content.companyId || content.company?.id;
+          const companyId = content.payload?.company_id || content.payload?.companyId || content.companyId || content.company?.id;
 
           if (!companyId) {
             console.warn("⚠️ Event missing company_id, skipping cache invalidation");
-            channel.ack(msg);
             return;
           }
 
-          // Invalidate caches based on event type
-          if (routingKey.startsWith("subscription.")) {
-            console.log(`🔄 Invalidating subscription cache for company ${companyId}`);
-            await invalidateCompanyCaches(companyId);
+          // Update or Invalidate caches based on event type
+          if (routingKey.startsWith("subscription.") || routingKey === "company.created" || routingKey === "company.updated") {
+            const subData = {
+              is_active: content.payload?.is_active,
+              tier: content.payload?.tier,
+              end_date: content.payload?.end_date,
+              last_updated: new Date().toISOString()
+            };
+
+            // company.created/updated might have tier but not is_active explicitly in eventHelpers
+            if (routingKey === "company.created" || routingKey === "company.updated") {
+              subData.is_active = true;
+              subData.company_status = 'active';
+            }
+
+            // Only update if we have meaningful data
+            if (subData.is_active !== undefined || subData.tier) {
+              console.log(`🔄 Updating subscription cache for company ${companyId}`);
+              await updateSubscriptionCache(companyId, subData);
+            } else {
+              console.log(`🔄 Event missing detail, invalidating cache for company ${companyId}`);
+              await invalidateCompanyCaches(companyId);
+            }
           } else if (routingKey === "company.status.changed") {
-            console.log(`🔄 Company status changed, invalidating caches for ${companyId}`);
+            const status = content.payload?.status;
+            if (status) {
+              console.log(`🔄 Company status changed to ${status}, updating cache for ${companyId}`);
+              await updateCompanyStatus(companyId, status);
+            } else {
+              await invalidateCompanyCaches(companyId);
+            }
+          } else {
+            // Default to invalidation for other events
             await invalidateCompanyCaches(companyId);
           }
-
-          // Acknowledge message
-          channel.ack(msg);
-        } catch (error) {
-          console.error("❌ Error processing subscription event:", error.message);
-          channel.nack(msg, false, true); // Retry
         }
-      }
-    });
+      );
+    }
 
-    return { connection, channel };
+    console.log(`✅ Gateway subscription event consumer ready on ${QUEUE_NAME} via shared RabbitMQ`);
+
   } catch (error) {
     console.error("❌ Failed to initialize subscription event consumer:", error.message);
     console.log("⚠️ Gateway will proceed without event consumer - cache will invalidate based on TTL");
@@ -97,7 +108,7 @@ async function initSubscriptionEventConsumer() {
 function createCacheInvalidationEndpoint(app) {
   // Import shared authentication middleware
   const { authenticateToken, requireRole } = require("/app/shared/middlewares/auth/production-auth");
-  
+
   app.post("/api/gateway/cache/invalidate", authenticateToken, async (req, res) => {
     try {
       const { companyId } = req.body;
@@ -127,7 +138,7 @@ function createCacheInvalidationEndpoint(app) {
   });
 
   // Invalidate all caches endpoint (admin only)
-  app.post("/api/gateway/cache/clear-all", authenticateToken, requireRole('admin'), async (req, res) => {
+  app.post("/api/gateway/cache/clear-all", authenticateToken, requireRole('super_admin'), async (req, res) => {
     try {
       const redis = getRedisClient();
       if (!redis) {

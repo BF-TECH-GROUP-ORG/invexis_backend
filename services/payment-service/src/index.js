@@ -7,6 +7,7 @@ const { SecurityManager } = require('/app/shared/security');
 const { ErrorHandler } = require('/app/shared/errorHandler');
 
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 8009;
 const SERVICE_NAME = 'payment-service';
 
@@ -37,7 +38,8 @@ healthChecker.setupRoutes(app);
 // Routes
 try {
   const paymentRoutes = require('./routes/paymentRoutes');
-  app.use('/', paymentRoutes);
+  app.use('/payment', paymentRoutes);
+  console.log('Payment routes loaded successfully');
 } catch (err) {
   logger.warn('Payment routes not found, using basic route', { error: err.message });
   app.get('/', (req, res) => {
@@ -54,31 +56,48 @@ try {
 errorHandler.setupErrorHandlers(app);
 
 // Start server
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   logger.info('Payment Service started successfully', {
     port: PORT,
     environment: process.env.NODE_ENV || 'development',
     nodeVersion: process.version,
     pid: process.pid
   });
-  
+
+  // Start RabbitMQ Consumers
+  try {
+    const { startConsumers } = require('./events/consumer');
+    await startConsumers();
+
+    // Start Subscription & Retry Engine
+    const subscriptionEngine = require('./services/subscriptionEngine');
+    subscriptionEngine.start();
+
+    // Start Daily Revenue Reporting Cron
+    const { startRevenueCron } = require('./cron/revenueReport.cron');
+    startRevenueCron();
+
+  } catch (err) {
+    logger.error('Failed to start listeners/workers', { error: err.message });
+  }
+
   console.log(`💳 Payment Service running on port ${PORT}`);
 });
 
 // Graceful shutdown
 const shutdown = async (signal) => {
   logger.info(`Received ${signal}, starting graceful shutdown`);
-  
+
   server.close(async (err) => {
     if (err) {
       logger.error('Error closing server', { error: err.message });
       process.exit(1);
     }
-    
+
     logger.info('Payment Service shutdown completed');
     process.exit(0);
   });
-  
+
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');
     process.exit(1);
@@ -90,18 +109,18 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Error handling
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Promise Rejection', {
-        reason: reason?.message || reason,
-        stack: reason?.stack
-    });
-    process.exit(1);
+  logger.error('Unhandled Promise Rejection', {
+    reason: reason?.message || reason,
+    stack: reason?.stack
+  });
+  process.exit(1);
 });
 
 process.on('uncaughtException', (error) => {
-    logger.error('Uncaught Exception', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-    });
-    process.exit(1);
+  logger.error('Uncaught Exception', {
+    message: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  process.exit(1);
 });

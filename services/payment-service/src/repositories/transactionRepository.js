@@ -13,9 +13,9 @@ class TransactionRepository {
     async createTransaction(transactionData) {
         const {
             payment_id,
-            user_id,
             seller_id,
             company_id,
+            shop_id,
             type,
             amount,
             currency,
@@ -30,9 +30,9 @@ class TransactionRepository {
             .insert({
                 transaction_id,
                 payment_id,
-                user_id,
                 seller_id,
                 company_id,
+                shop_id,
                 type,
                 amount,
                 currency: currency || 'XAF',
@@ -106,27 +106,6 @@ class TransactionRepository {
     }
 
     /**
-     * Get transactions by user
-     * @param {string} user_id - User UUID
-     * @param {Object} options - Query options
-     * @returns {Promise<Array>} List of transactions
-     */
-    async getTransactionsByUser(user_id, options = {}) {
-        const { limit = 50, offset = 0, type, status } = options;
-
-        let query = db('transactions')
-            .where({ user_id })
-            .orderBy('created_at', 'desc')
-            .limit(limit)
-            .offset(offset);
-
-        if (type) query = query.where({ type });
-        if (status) query = query.where({ status });
-
-        return await query;
-    }
-
-    /**
      * Get transactions by seller
      * @param {string} seller_id - Seller UUID
      * @param {Object} options - Query options
@@ -145,6 +124,77 @@ class TransactionRepository {
         if (status) query = query.where({ status });
 
         return await query;
+    }
+
+    /**
+     * Get transactions by company
+     */
+    async getTransactionsByCompany(company_id, options = {}) {
+        const { limit = 50, offset = 0, type, status } = options;
+
+        let query = db('transactions')
+            .where({ company_id })
+            .orderBy('created_at', 'desc')
+            .limit(limit)
+            .offset(offset);
+
+        if (type) query = query.where({ type });
+        if (status) query = query.where({ status });
+
+        return await query;
+    }
+
+    /**
+     * Get transactions by shop
+     */
+    async getTransactionsByShop(shop_id, options = {}) {
+        const { limit = 50, offset = 0, type, status } = options;
+
+        let query = db('transactions')
+            .where({ shop_id })
+            .orderBy('created_at', 'desc')
+            .limit(limit)
+            .offset(offset);
+
+        if (type) query = query.where({ type });
+        if (status) query = query.where({ status });
+
+        return await query;
+    }
+
+    /**
+     * Get revenue statistics
+     * @param {string} period - 'day', 'week', 'month'
+     * @param {string} groupBy - 'company_id' or 'shop_id'
+     * @returns {Promise<Array>} Aggregated revenue
+     */
+    async getRevenueStats(period = 'day', groupBy = 'company_id') {
+        const validPeriods = ['day', 'week', 'month'];
+        if (!validPeriods.includes(period)) throw new Error('Invalid period');
+
+        let interval;
+        if (period === 'day') interval = '1 day';
+        else if (period === 'week') interval = '1 week';
+        else if (period === 'month') interval = '1 month';
+
+        // PostgreSQL syntax for grouping by truncated date could be used,
+        // but for "yesterday's revenue" (ran at 00:00), we just filter by range.
+
+        const now = new Date();
+        // Set end to current time (which should be 00:00 of today if cron runs then)
+        // Set start to now - interval
+
+        // Actually, cron usually runs for "yesterday".
+        // Let's assume the cron passes explicit date ranges, OR we handle "last full period".
+        // Simplest: "Revenue created > NOW - interval"
+
+        return await db('transactions')
+            .select(groupBy)
+            .select(db.raw('SUM(amount) as total_revenue'))
+            .select(db.raw('COUNT(*) as transaction_count'))
+            .where('status', 'succeeded')
+            .whereRaw(`created_at >= NOW() - INTERVAL '${interval}'`)
+            .groupBy(groupBy);
     }
 }
 

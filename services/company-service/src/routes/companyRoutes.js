@@ -1,5 +1,5 @@
 const express = require('express');
-const upload = require('../middleware/upload');
+const multer = require('multer');
 const {
   createCompany,
   getAllCompanies,
@@ -17,6 +17,8 @@ const {
   setCompanyCategories,
   uploadCompanyVerificationDocs,
   reviewCompanyVerification,
+  completeOnboarding,
+  getOnboardingLink,
 } = require('../controllers/companyController');
 
 const {
@@ -29,22 +31,44 @@ const {
 
 const router = express.Router();
 
+// Memory storage for files to be forwarded to document-service
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+
+const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
+
 // Public routes
 router.get('/domain/:domain', getCompanyByDomain);
 
-// Protected routes (add auth middleware as needed)
+// Internal request bypass (for subscription cache population from api-gateway)
+router.use((req, res, next) => {
+  if (req.header('X-Internal-Request') === 'true') {
+    // Skip authentication for internal requests
+    return next();
+  }
+  // Continue to authentication for external requests
+  authenticateToken(req, res, next);
+});
+
+// Protected routes (authenticated or internal)
 router.post('/', createCompany);
 router.get('/', getAllCompanies);
 router.get('/active', getActiveCompanies);
 router.get('/categories', getCompaniesByCategories);
+router.get('/:id/onboarding/complete', completeOnboarding);
+router.get('/:id/onboarding/link', getOnboardingLink);
 router.get('/:id', getCompanyById);
 router.put('/:id', updateCompany);
 router.delete('/:id', deleteCompany);
 router.patch('/:id/status', changeCompanyStatus);
 router.patch('/:id/tier', changeCompanyTier);
 
-// Verification routes - use multer for file uploads
-router.post('/:id/verification-docs', upload.array('documents', 10), uploadCompanyVerificationDocs);
+// Verification routes - multer parses files in memory, then forwarded to document-service
+router.post('/:id/verification-docs', upload.array('files'), uploadCompanyVerificationDocs);
 router.patch('/:id/verification', reviewCompanyVerification);
 
 router.patch('/:id/reactivate', reactivateCompany);

@@ -1,0 +1,27 @@
+{
+    "companyId": "4d9a3e7f-5856-4621-bb02-f304a24bafcb",
+    "shopId": "11111111-1111-1111-1111-111111111111",
+    "sellerId": "660e8400-e29b-41d4-a716-446655440000",
+    "paymentType": "SALE",
+    "amount": 5000,
+    "currency": "UGX",
+    "description": "Payment for Sale ORD-Airtel-001",
+    "paymentMethod": "airtel_money",
+    "gateway": "airtel_money",
+    "phoneNumber": "256701123456",
+    "customer": {
+        "name": "Airtel Customer",
+        "email": "airtel.cust@example.com"
+    },
+    "lineItems": [
+        {
+            "id": "prod_002",
+            "name": "Item B",
+            "qty": 1,
+            "price": 5000
+        }
+    ],
+    "metadata": {
+        "country": "UG"
+    }
+}

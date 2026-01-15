@@ -70,14 +70,14 @@ module.exports = {
     routingKey: 'inventory.stock.updated',
     description: 'Published when stock quantity is updated'
   },
-  'inventory.low.stock': {
+  'inventory.product.low_stock': {
     exchange: 'events_topic',
-    routingKey: 'inventory.low.stock',
+    routingKey: 'inventory.product.low_stock',
     description: 'Published when stock falls below threshold'
   },
-  'inventory.out.of.stock': {
+  'inventory.product.out_of_stock': {
     exchange: 'events_topic',
-    routingKey: 'inventory.out.of.stock',
+    routingKey: 'inventory.product.out_of_stock',
     description: 'Published when stock reaches zero'
   },
   'inventory.restocked': {
@@ -91,5 +91,10 @@ module.exports = {
     exchange: 'events_topic',
     routingKey: 'inventory.alert.triggered',
     description: 'Published when an inventory alert is triggered'
+  },
+  'inventory.backorder.fulfilled': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.backorder.fulfilled',
+    description: 'Published when backorder stock is available'
   }
 };

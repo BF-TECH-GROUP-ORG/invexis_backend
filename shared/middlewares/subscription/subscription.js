@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const {
   isFeatureEnabled,
-} = require("/app/shared/tierFeatures.config");
+} = require("/app/shared/config/tierFeatures.config");
 // const { ForbiddenError } = require("../../utils/error.utils");
 
 /**

@@ -9,10 +9,10 @@ const publishToRabbitMQ = async (eventType, payload) => {
         if (global && typeof global.rabbitmqPublish === 'function') {
             // Use standard event exchange and routing key format
             const routingKey = eventType.toLowerCase().replace(/_/g, '.');
-            const exchange = 'debt.events'; // Use shared exchange
-            
+            const exchange = 'events_topic'; // Use standard hub
+
             console.log(`[DebtEventHandler] 📤 Publishing ${eventType} to exchange="${exchange}", routingKey="${routingKey}"`);
-            
+
             // Publish to RabbitMQ
             await global.rabbitmqPublish(exchange, routingKey, payload);
             console.log(`[DebtEventHandler] ✅ Successfully published ${eventType}`);
@@ -142,7 +142,7 @@ const handleDebtRepaid = async (payload) => {
         };
 
         const published = await publishToRabbitMQ('DEBT_REPAID', enrichedEvent);
-        
+
         if (published) {
             console.log(`[DebtEventHandler] 🎯 Successfully handled DEBT_REPAID event for repayment ${repaymentId}`);
         }
@@ -181,7 +181,7 @@ const handleDebtFullyPaid = async (payload) => {
         };
 
         const published = await publishToRabbitMQ('DEBT_FULLY_PAID', enrichedEvent);
-        
+
         if (published) {
             console.log(`[DebtEventHandler] 🎯 Successfully handled DEBT_FULLY_PAID event for debt ${debtId}`);
         }

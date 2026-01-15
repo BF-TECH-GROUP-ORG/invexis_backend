@@ -1,14 +1,11 @@
 // shared/middlewares/subscription/production-subscription.js
 // Production-ready subscription and feature access middleware
 
-const axios = require('axios');
-const { getLogger } = require('../../logger');
+const { getLogger } = require('/app/shared/logger');
 const redis = require('/app/shared/redis');
-const tiers = require('./tiers');
+const tiers = require('/app/shared/config/tierFeatures.config');
 
 const logger = getLogger('subscription-middleware');
-const COMPANY_SERVICE_URL = process.env.COMPANY_SERVICE_URL || 'http://company-service:8003';
-const SUBSCRIPTION_CACHE_TTL = 300; // 5 minutes
 
 class SubscriptionError extends Error {
   constructor(message, code = 'SUBSCRIPTION_ERROR') {
@@ -19,43 +16,8 @@ class SubscriptionError extends Error {
   }
 }
 
-/**
- * Fetch company subscription from company service
- */
-async function fetchSubscriptionData(companyId) {
-  const cacheKey = `subscription:${companyId}`;
-  
-  try {
-    // Try cache first
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      logger.debug('Subscription data retrieved from cache', { companyId });
-      return JSON.parse(cached);
-    }
-
-    // Fetch from company service
-    const response = await axios.get(`${COMPANY_SERVICE_URL}/company/${companyId}/subscription`, {
-      headers: { 'X-Gateway-Request': 'true' },
-      timeout: 5000
-    });
-
-    const subscriptionData = response.data;
-    
-    // Cache for 5 minutes
-    await redis.set(cacheKey, JSON.stringify(subscriptionData), 'EX', SUBSCRIPTION_CACHE_TTL);
-    
-    logger.debug('Subscription data fetched from company service', { companyId });
-    return subscriptionData;
-    
-  } catch (error) {
-    logger.error('Failed to fetch subscription data', { 
-      companyId, 
-      error: error.message,
-      status: error.response?.status
-    });
-    return null;
-  }
-}
+// Subscription state is pushed to Redis via events from company-service.
+// The Gateway maintains a real-time cache to avoid axios calls.
 
 /**
  * Check if subscription is active
@@ -63,53 +25,140 @@ async function fetchSubscriptionData(companyId) {
 const checkSubscriptionStatus = () => {
   return async (req, res, next) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required',
-          code: 'AUTH_REQUIRED'
-        });
+      // Bypass for super_admin
+      if (req.user && req.user.role === 'super_admin') {
+        req.subscription = { tier: 'pro', is_active: true, source: 'super-admin-bypass' };
+        return next();
       }
 
-      const companyId = req.companyId || req.params.companyId || req.user.companyId;
-      
+      // 1. Try to extract companyId from JWT (populated by authenticateToken)
+      let companyId = req.companyId;
+
+      if (!companyId && req.user) {
+        // Match production-auth.js logic: extract from user object or token claims
+        companyId = (req.user.companies && req.user.companies[0]) ||
+          (req.decodedToken && (req.decodedToken.companyId || (req.decodedToken.companies && req.decodedToken.companies[0])));
+      }
+
+      // Fallback to headers or params
       if (!companyId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Company ID required for subscription check',
-          code: 'MISSING_COMPANY_ID'
-        });
+        companyId = req.params.companyId || req.body.companyId || req.query.companyId || req.header('X-Company-Id');
       }
 
-      const subscriptionData = await fetchSubscriptionData(companyId);
-      
-      if (!subscriptionData) {
-        throw new SubscriptionError('Unable to verify subscription status', 'SUBSCRIPTION_CHECK_FAILED');
+      if (!companyId) {
+        throw new SubscriptionError('Company identification required for subscription verification', 'MISSING_COMPANY_ID');
       }
 
-      const { subscription } = subscriptionData;
-      
-      if (!subscription || !subscription.isActive) {
+      // 2. Pure Redis Verification (Real-time cache populated by events)
+      const cacheKey = `company:subscription:${companyId}`;
+      const cached = await redis.get(cacheKey);
+
+      if (!cached) {
+        // Log warning for missing cache
+        logger.warn('Subscription cache miss - fetching from company-service', { companyId });
+
+        // Super admins can bypass if cache is missing (fallback safety)
+        if (req.user && req.user.role === 'super_admin') {
+          req.subscription = { tier: 'pro', is_active: true, source: 'super-admin-bypass' };
+          return next();
+        }
+
+        // Fallback: Fetch from company-service and populate cache
+        try {
+          const axios = require('axios');
+          const COMPANY_SERVICE_URL = process.env.COMPANY_SERVICE_URL || 'http://company-service:8004';
+
+          const response = await axios.get(`${COMPANY_SERVICE_URL}/company/companies/${companyId}`, {
+            timeout: 5000,
+            headers: {
+              'X-Internal-Request': 'true' // Mark as internal to bypass some middlewares
+            }
+          });
+
+          const company = response.data.data;
+          if (!company) {
+            throw new SubscriptionError('Company not found', 'COMPANY_NOT_FOUND');
+          }
+
+          const subscription = company.subscription;
+          if (!subscription) {
+            throw new SubscriptionError('No subscription found for company', 'SUBSCRIPTION_NOT_FOUND');
+          }
+
+          // Populate cache for future requests (7 days TTL)
+          const cacheData = {
+            is_active: subscription.is_active,
+            tier: subscription.tier || company.tier,
+            end_date: subscription.end_date,
+            company_status: company.status,
+            last_updated: new Date().toISOString()
+          };
+
+          await redis.set(cacheKey, JSON.stringify(cacheData), 'EX', 604800);
+          logger.info('Populated subscription cache from database', { companyId });
+
+          // Continue with the fetched data
+          const { is_active, tier, end_date, company_status } = cacheData;
+
+          // Check Company Status
+          if (company_status === 'suspended' || company_status === 'inactive') {
+            throw new SubscriptionError(`Company access is ${company_status}. Please contact support.`, 'COMPANY_SUSPENDED');
+          }
+
+          // Check Subscription Activity
+          if (is_active === false) {
+            throw new SubscriptionError('Active subscription required', 'SUBSCRIPTION_INACTIVE');
+          }
+
+          // Check Expiry
+          if (end_date && new Date(end_date) < new Date()) {
+            throw new SubscriptionError('Subscription has expired', 'SUBSCRIPTION_EXPIRED');
+          }
+
+          req.subscription = { tier, is_active, end_date, company_status };
+          req.companyId = companyId;
+          return next();
+
+        } catch (fetchError) {
+          if (fetchError instanceof SubscriptionError) {
+            throw fetchError;
+          }
+
+          logger.error('Failed to fetch company data for cache population', {
+            companyId,
+            error: fetchError.message
+          });
+
+          throw new SubscriptionError(
+            'Subscription status unverified. Please log in again or contact support.',
+            'SUBSCRIPTION_UNVERIFIED'
+          );
+        }
+      }
+
+      const subscriptionData = JSON.parse(cached);
+      const { is_active, company_status, tier, end_date } = subscriptionData;
+
+      // Check Company Status (Suspension/Inactivity)
+      if (company_status === 'suspended' || company_status === 'inactive') {
+        throw new SubscriptionError(`Company access is ${company_status}. Please contact support.`, 'COMPANY_SUSPENDED');
+      }
+
+      // Check Subscription Activity
+      if (is_active === false) {
         throw new SubscriptionError('Active subscription required', 'SUBSCRIPTION_INACTIVE');
       }
 
-      // Check if subscription is expired
-      if (subscription.expiresAt && new Date(subscription.expiresAt) < new Date()) {
+      // Check Expiry (if end_date exists)
+      if (end_date && new Date(end_date) < new Date()) {
         throw new SubscriptionError('Subscription has expired', 'SUBSCRIPTION_EXPIRED');
       }
 
-      // Attach subscription info to request
-      req.subscription = subscription;
+      // Attach verified info to request for downstream handlers
+      req.subscription = { tier, is_active, end_date, company_status };
       req.companyId = companyId;
-      
-      logger.debug('Subscription verified', { 
-        companyId, 
-        tier: subscription.tier,
-        status: subscription.status
-      });
-      
+
       next();
-      
     } catch (error) {
       if (error instanceof SubscriptionError) {
         return res.status(error.statusCode).json({
@@ -118,15 +167,36 @@ const checkSubscriptionStatus = () => {
           code: error.code
         });
       }
-      
-      logger.error('Subscription check error', { error: error.message });
+
+      logger.error('Subscription verification error', { error: error.message });
       res.status(500).json({
         success: false,
-        error: 'Subscription service error',
-        code: 'SUBSCRIPTION_SERVICE_ERROR'
+        error: 'Subscription verification failed',
+        code: 'SUBSCRIPTION_ERROR'
       });
     }
   };
+};
+
+/**
+ * Middleware for backend services to parse tier headers forwarded by API Gateway
+ */
+const parseTierHeaders = (req, res, next) => {
+  const tier = req.header('X-Subscription-Tier');
+  const isActive = req.header('X-Subscription-Active') === 'true';
+  const companyId = req.header('X-Company-Id');
+
+  if (tier) {
+    req.subscription = {
+      tier,
+      is_active: isActive,
+      source: 'gateway-headers'
+    };
+    if (companyId) req.companyId = companyId;
+    logger.debug('Tier headers parsed', { tier, isActive, companyId });
+  }
+
+  next();
 };
 
 /**
@@ -134,17 +204,25 @@ const checkSubscriptionStatus = () => {
  */
 const requireTier = (minTier) => {
   return (req, res, next) => {
+    // Bypass for super_admin
+    if (req.user && req.user.role === 'super_admin') {
+      return next();
+    }
+
+    // 1. Check if we have subscription info (from checkSubscriptionStatus OR parseTierHeaders)
     if (!req.subscription) {
+      // If we are in a service and headers are missing, it might be an internal request
+      // without tier info, or direct access (which should be blocked anyway)
       return res.status(403).json({
         success: false,
-        error: 'Subscription check required before tier validation',
-        code: 'SUBSCRIPTION_CHECK_MISSING'
+        error: 'Subscription information missing',
+        code: 'SUBSCRIPTION_INFO_MISSING'
       });
     }
 
     const userTier = req.subscription.tier;
-    const tierHierarchy = { 'basic': 0, 'mid': 1, 'pro': 2 };
-    
+    const tierHierarchy = { 'Basic': 0, 'Mid': 1, 'Pro': 2 };
+
     const userLevel = tierHierarchy[userTier] || 0;
     const requiredLevel = tierHierarchy[minTier] || 0;
 
@@ -152,9 +230,10 @@ const requireTier = (minTier) => {
       logger.warn('Insufficient subscription tier', {
         companyId: req.companyId,
         userTier,
-        requiredTier: minTier
+        requiredTier: minTier,
+        source: req.subscription.source || 'cache'
       });
-      
+
       return res.status(403).json({
         success: false,
         error: `${minTier} subscription tier or higher required. Current tier: ${userTier}`,
@@ -175,17 +254,22 @@ const requireTier = (minTier) => {
  */
 const requireFeatureAccess = (...features) => {
   return (req, res, next) => {
+    // Bypass for super_admin
+    if (req.user && req.user.role === 'super_admin') {
+      return next();
+    }
+
     if (!req.subscription) {
       return res.status(403).json({
         success: false,
-        error: 'Subscription check required before feature validation',
-        code: 'SUBSCRIPTION_CHECK_MISSING'
+        error: 'Subscription information missing',
+        code: 'SUBSCRIPTION_INFO_MISSING'
       });
     }
 
     const userTier = req.subscription.tier;
     const tierConfig = tiers.getTierConfig(userTier);
-    
+
     if (!tierConfig) {
       return res.status(500).json({
         success: false,
@@ -197,7 +281,25 @@ const requireFeatureAccess = (...features) => {
     // Check each required feature
     const missingFeatures = [];
     for (const feature of features) {
-      if (!tierConfig.features || !tierConfig.features[feature]) {
+      // Handle nested feature checks (e.g. 'inventory.stockInOut')
+      const parts = feature.split('.');
+      let current = tierConfig.features;
+      let access = true;
+
+      for (const part of parts) {
+        if (current && current[part] !== undefined) {
+          if (typeof current[part] === 'boolean') {
+            access = current[part];
+            break;
+          }
+          current = current[part];
+        } else {
+          access = false;
+          break;
+        }
+      }
+
+      if (access === false || (current && current.enabled === false)) {
         missingFeatures.push(feature);
       }
     }
@@ -209,15 +311,14 @@ const requireFeatureAccess = (...features) => {
         missingFeatures,
         requestedFeatures: features
       });
-      
+
       return res.status(403).json({
         success: false,
         error: `Features not available in ${userTier} tier: ${missingFeatures.join(', ')}`,
         code: 'FEATURE_ACCESS_DENIED',
         meta: {
           missingFeatures,
-          currentTier: userTier,
-          availableFeatures: Object.keys(tierConfig.features || {})
+          currentTier: userTier
         }
       });
     }
@@ -232,6 +333,11 @@ const requireFeatureAccess = (...features) => {
 const checkUsageLimits = (resource) => {
   return async (req, res, next) => {
     try {
+      // Bypass for super_admin
+      if (req.user && req.user.role === 'super_admin') {
+        return next();
+      }
+
       if (!req.subscription) {
         return res.status(403).json({
           success: false,
@@ -267,7 +373,7 @@ const checkUsageLimits = (resource) => {
           limit: resourceLimit,
           tier: userTier
         });
-        
+
         return res.status(429).json({
           success: false,
           error: `Monthly ${resource} limit exceeded (${resourceLimit})`,
@@ -286,7 +392,7 @@ const checkUsageLimits = (resource) => {
       await redis.expire(usageKey, 2592000); // 30 days
 
       next();
-      
+
     } catch (error) {
       logger.error('Usage check error', { error: error.message });
       res.status(500).json({
@@ -298,11 +404,8 @@ const checkUsageLimits = (resource) => {
   };
 };
 
-/**
- * Invalidate subscription cache
- */
 async function invalidateSubscriptionCache(companyId) {
-  const cacheKey = `subscription:${companyId}`;
+  const cacheKey = `company:subscription:${companyId}`;
   await redis.del(cacheKey);
   logger.info('Subscription cache invalidated', { companyId });
 }
@@ -319,6 +422,7 @@ module.exports = {
   requireTier,
   requireFeatureAccess,
   checkUsageLimits,
+  parseTierHeaders,
   invalidateSubscriptionCache,
   requireActiveSubscription,
   requireProTier,

@@ -37,7 +37,7 @@ const Sale = sequelize.define(
       defaultValue: "pending",
     },
     paymentMethod: {
-      type: DataTypes.ENUM("cash", "card", "mobile", "wallet", "bank_transfer"),
+      type: DataTypes.ENUM("cash", "mtn", "airtel", "mpesa", "bank_transfer"),
     },
     paymentId: { type: DataTypes.BIGINT, defaultValue: 1 },
     // Hashed customer identifier copied from KnownUser for quick access / joins

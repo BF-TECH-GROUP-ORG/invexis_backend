@@ -29,6 +29,18 @@ const dispatchEvent = async (eventPayload) => {
         channels = ['in-app']; // Default fallback
     }
 
+    // --- TIER ENFORCEMENT START ---
+    // Remove channels not allowed by the company's subscription tier
+    const { filterAllowedChannels } = require('../utils/subscriptionHelper');
+    const originalChannels = [...channels];
+    channels = await filterAllowedChannels(companyId, channels);
+
+    if (channels.length < originalChannels.length) {
+        const removed = originalChannels.filter(c => !channels.includes(c));
+        logger.warn(`Channels ${removed.join(', ')} restricted for company ${companyId} due to tier limits.`);
+    }
+    // --- TIER ENFORCEMENT END ---
+
     // Template validation skipped (using local registry)
     // const templateValidation = await Template.validateTemplatesExist(templateName, channels);
 

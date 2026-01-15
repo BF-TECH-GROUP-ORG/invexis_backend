@@ -2,10 +2,12 @@
 // Centralized constants for payment service
 
 const GATEWAY_TYPES = {
-    STRIPE: 'stripe',
+    // STRIPE: 'stripe',
     MTN_MOMO: 'mtn_momo',
     AIRTEL_MONEY: 'airtel_money',
-    MPESA: 'mpesa'
+    // MPESA: 'mpesa',
+    CASH: 'cash',
+    MANUAL: 'manual' // For bank transfers
 };
 
 const PAYMENT_STATUS = {
@@ -48,7 +50,15 @@ const CURRENCY = {
     EUR: 'EUR',
     UGX: 'UGX',  // Ugandan Shilling
     KES: 'KES', // Kenyan Shilling
-    RWF:'RWF'// Rwandan Franc
+    RWF: 'RWF'// Rwandan Franc
+};
+
+const PAYMENT_TYPE = {
+    SALE: 'SALE',
+    DEBT: 'DEBT',
+    TIER: 'TIER',
+    SUBSCRIPTION: 'SUBSCRIPTION',
+    ECOMM: 'ECOMM'
 };
 
 module.exports = {
@@ -57,6 +67,7 @@ module.exports = {
     TRANSACTION_TYPE,
     TRANSACTION_STATUS,
     PAYMENT_METHOD,
+    PAYMENT_TYPE,
     INVOICE_STATUS,
     CURRENCY
 };

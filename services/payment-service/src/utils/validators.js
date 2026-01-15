@@ -4,87 +4,67 @@
 const Joi = require('joi');
 
 const paymentInitiationSchema = Joi.object({
-    user_id: Joi.string().uuid().required(),
-    seller_id: Joi.string().uuid().required(),
-    payout_recipient_id: Joi.string().uuid().optional(),
+    // Identifiers (Support both snake_case and camelCase)
+    seller_id: Joi.string().uuid().optional(),
+    sellerId: Joi.string().uuid().optional(),
     company_id: Joi.string().uuid().allow(null).optional(),
+    companyId: Joi.string().uuid().allow(null).optional(),
     shop_id: Joi.string().uuid().allow(null).optional(),
-    order_id: Joi.string().uuid().allow(null).optional(),
-    type: Joi.string().valid('ecom', 'tier_upgrade', 'instant_buy', 'invoice').optional(),
+    shopId: Joi.string().uuid().allow(null).optional(),
+    order_id: Joi.string().allow(null).optional(),
+    orderId: Joi.string().allow(null).optional(),
+    saleId: Joi.string().allow(null).optional(),
+
+    // External Routing / Context
+    source: Joi.string().max(50).optional(),
+    paymentType: Joi.string().valid('SALE', 'DEBT', 'TIER', 'SUBSCRIPTION', 'ECOMM').optional(),
+    type: Joi.string().valid('ECOMM', 'tier_upgrade', 'instant_buy', 'invoice', 'SALE', 'DEBT', 'TIER').optional(),
+    referenceId: Joi.string().max(100).optional(),
+    reference_id: Joi.string().max(100).optional(),
+    idempotencyKey: Joi.string().max(100).optional(),
+    idempotency_key: Joi.string().max(100).optional(),
+
+    // Payment Details
     amount: Joi.number().integer().min(1).required(),
     currency: Joi.string().length(3).uppercase().required(),
     description: Joi.string().max(500).required(),
-    paymentMethod: Joi.string().valid('card', 'mobile_money', 'bank_transfer').required(),
-    gateway: Joi.string().valid('stripe', 'mtn_momo', 'airtel_money', 'mpesa').required(),
-    phoneNumber: Joi.string().when('paymentMethod', {
-        is: 'mobile_money',
-        then: Joi.required(),
-        otherwise: Joi.optional()
-    }),
-    customerEmail: Joi.string().email().optional(),
-    lineItems: Joi.array().items(
-        Joi.object({
-            product_id: Joi.string().uuid().optional(),
-            name: Joi.string().required(),
-            description: Joi.string().optional(),
-            quantity: Joi.number().integer().min(1).required(),
-            unit_price: Joi.number().integer().min(0).optional(),
-            unitPrice: Joi.number().integer().min(0).optional(),
-            total: Joi.number().integer().min(0).required()
-        })
-    ).optional(),
+    paymentMethod: Joi.string().valid('card', 'mobile_money', 'bank_transfer', 'cash').required(),
+    gateway: Joi.string().valid('mtn_momo', 'airtel_money', 'cash', 'manual').required(),
+    phoneNumber: Joi.string().allow('', null).optional(),
+    customer: Joi.object({
+        name: Joi.string().allow('', null).optional(),
+        email: Joi.string().email().allow('', null).optional(),
+        phone: Joi.string().allow('', null).optional()
+    }).optional(),
+
+    // Optional metadata and items
+    lineItems: Joi.array().items(Joi.object().unknown(true)).optional(),
+    line_items: Joi.array().items(Joi.object().unknown(true)).optional(),
+    metadata: Joi.object().unknown(true).optional(),
+    location: Joi.object().optional(),
+
+    // Payout details (for instant buy/split)
+    payout_recipient_id: Joi.string().uuid().optional(),
     payout_details: Joi.object({
         method: Joi.string().valid('mobile_money', 'bank_transfer', 'stripe_connect').required(),
-        phone_number: Joi.string().when('method', {
-            is: 'mobile_money',
-            then: Joi.required(),
-            otherwise: Joi.optional()
-        }),
-        bank_account: Joi.object({
-            account_number: Joi.string().required(),
-            account_name: Joi.string().required(),
-            bank_name: Joi.string().required(),
-            bank_code: Joi.string().optional()
-        }).when('method', {
-            is: 'bank_transfer',
-            then: Joi.required(),
-            otherwise: Joi.optional()
-        }),
-        stripe_account_id: Joi.string().when('method', {
-            is: 'stripe_connect',
-            then: Joi.required(),
-            otherwise: Joi.optional()
-        }),
-        gateway: Joi.string().valid('mtn_momo', 'airtel_money', 'mpesa', 'stripe').optional()
+        phone_number: Joi.string().optional(),
+        bank_account: Joi.object().optional(),
+        stripe_account_id: Joi.string().optional(),
+        gateway: Joi.string().optional()
     }).optional(),
-    metadata: Joi.object().optional()
 }).custom((value, helpers) => {
-    // For tier upgrades: require company_id, payout goes to platform
-    if (value.type === 'tier_upgrade') {
-        if (!value.company_id) {
-            return helpers.error('any.custom', {
-                message: 'company_id is required for tier_upgrade payments'
-            });
-        }
-    } else if (value.type === 'ecom' || value.type === 'instant_buy') {
-        // For ecom and instant_buy: require both company_id and shop_id
-        if (!value.company_id) {
-            return helpers.error('any.custom', {
-                message: 'company_id is required for e-commerce and instant buy payments'
-            });
-        }
-        if (!value.shop_id) {
-            return helpers.error('any.custom', {
-                message: 'shop_id is required for e-commerce and instant buy payments'
-            });
-        }
-        // For instant payouts, require payout details
-        if (value.payout_recipient_id && !value.payout_details) {
-            return helpers.error('any.custom', {
-                message: 'payout_details is required when payout_recipient_id is provided'
-            });
-        }
+    // Normalization logic can also be placed here, 
+    // but we'll do the core cross-field validation.
+
+    const type = value.type || value.paymentType;
+    const company_id = value.company_id || value.companyId;
+
+    if ((type === 'tier_upgrade' || type === 'TIER') && !company_id) {
+        return helpers.error('any.custom', {
+            message: 'company_id is required for tier payments'
+        });
     }
+
     return value;
 });
 

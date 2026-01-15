@@ -19,8 +19,8 @@ async function processOutboxBatch() {
   for (const event of pendingEvents) {
     try {
       // Parse payload and publish via producer.emit()
-      // const payload = JSON.parse(event.payload);
-      await emit(event.routing_key, event.payload);
+      const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+      await emit(event.routing_key, payload);
 
       // Mark as sent in outbox
       await Outbox.markAsSent(event.id);

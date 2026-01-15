@@ -17,9 +17,10 @@ try {
 }
 
 // Import shared production middlewares
-const { 
+const {
   authenticateToken,
   requireRole,
+  requireOperatingHours
 } = require("/app/shared/middlewares/auth/production-auth");
 const {
   checkSubscriptionStatus,
@@ -41,6 +42,8 @@ const {
   analyticsProxy,
   auditProxy,
   debtProxy,
+  documentProxy,
+  reportProxy,
   websocketProxy,
 } = require("./routes/proxy");
 const { limiter, authLimiter } = require("./utils/rateLimiter");
@@ -66,7 +69,7 @@ if (mongoSanitize) {
             continue;
           }
           if (typeof value === 'object' && value !== null) {
-            sanitized[key] = Array.isArray(value) 
+            sanitized[key] = Array.isArray(value)
               ? value.map(item => sanitizeObj(item))
               : sanitizeObj(value);
           } else {
@@ -97,7 +100,7 @@ if (xss) {
             if (typeof value === 'string') {
               cleaned[key] = value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
             } else if (typeof value === 'object' && value !== null) {
-              cleaned[key] = Array.isArray(value) 
+              cleaned[key] = Array.isArray(value)
                 ? value.map(item => cleanObj(item))
                 : cleanObj(value);
             } else {
@@ -137,7 +140,7 @@ app.use(
       return callback(new Error('CORS policy: Origin not allowed'));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "ngrok-skip-browser-warning", "X-CSRF-Token"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "ngrok-skip-browser-warning", "X-CSRF-Token"],
     credentials: true,
     preflightContinue: false,
     optionsSuccessStatus: 204,
@@ -189,25 +192,7 @@ app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);
   next();
 });
-const allowedOrigins = ["http://localhost:3000", "https://yourdomain.com"];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
 
 // Health check and custom routes (no auth required)
 app.use("/", routes);
@@ -229,30 +214,38 @@ app.use("/api", limiter);
  */
 app.use("/api/auth", authLimiter, authProxy);
 
-// Protected services (require authentication - enforced by services themselves)
-app.use("/api/company",authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']), companyProxy);
-app.use("/api/shop", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),shopProxy);
-app.use("/api/inventory", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),inventoryProxy);
-app.use("/api/sales", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),salesProxy);
-app.use("/api/payment", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),paymentProxy);
-app.use("/api/ecommerce",authenticateToken, ecommerceProxy);
-app.use("/api/notification", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']), notificationProxy);
-app.use("/api/analytics",authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']), analyticsProxy);
-app.use("/api/audit", authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']),auditProxy);
-app.use("/api/debt",authenticateToken,requireRole(['company_admin' , 'super_admin' , 'worker']), debtProxy);
+// Protected services (require authentication + active subscription + operating hours)
+const protectedService = [authenticateToken, checkSubscriptionStatus(), requireOperatingHours];
 
-// Socket.IO specific routes (add these before other websocket routes)
+/**
+ * Tier-Based Service Access Control
+ * Basic: inventory, notification, document, report, company, shop, sales, audit, payment
+ * Mid: All Basic + debt
+ * Pro: All Mid + analytics, ecommerce
+ */
+
+// Basic Tier Services
+app.use("/api/company", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), companyProxy);
+app.use("/api/shop", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), shopProxy);
+app.use("/api/inventory", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), inventoryProxy);
+app.use("/api/sales", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), salesProxy);
+app.use("/api/payment", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), paymentProxy);
+app.use("/api/notification", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), notificationProxy);
+app.use("/api/audit", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), auditProxy);
+app.use("/api/document", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), documentProxy);
+app.use("/api/report", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), reportProxy);
+
+// Mid Tier Services
+app.use("/api/debt", ...protectedService, requireTier('mid'), requireRole(['company_admin', 'super_admin', 'worker']), debtProxy);
+
+// Pro Tier Services
+app.use("/api/analytics", ...protectedService, requireTier('pro'), requireRole(['company_admin', 'super_admin', 'worker']), analyticsProxy);
+app.use("/api/ecommerce", ...protectedService, requireTier('pro'), ecommerceProxy);
+
+// WebSocket routes
 app.use("/socket.io", websocketProxy);
-
-// General websocket routes
 app.use("/api/websocket", websocketProxy);
-app.use("/api/auth", authLimiter, authProxy);
 
-// Socket.IO specific routes (add these before other websocket routes)
-app.use("/socket.io", websocketProxy);
-
-// General websocket routes
-app.use("/api/websocket", websocketProxy);
 
 // Root endpoint
 app.get("/", (req, res) => {
@@ -275,6 +268,8 @@ app.get("/", (req, res) => {
       analytics: "/api/analytics",
       audit: "/api/audit",
       debt: "/api/debt",
+      document: "/api/document",
+      report: "/api/report",
       websocket: "/api/websocket",
     },
   });
@@ -309,4 +304,4 @@ setImmediate(async () => {
   }
 });
 
-module.exports = app;
+module.exports = app

@@ -100,12 +100,6 @@ class RabbitMQ {
             await this.channel.bindQueue(this.queues.deadLetter, this.exchanges.dlx, '#');
 
             // Retry Queue (durable, DLX, TTL for retry delay)
-            // Fix: Delete and recreate to avoid arg mismatch
-            try {
-                await this.channel.deleteQueue(this.queues.retry);
-            } catch (err) {
-                // Ignore if not exists
-            }
             await this.channel.assertQueue(this.queues.retry, {
                 durable: true,
                 deadLetterExchange: this.exchanges.dlx,
@@ -143,12 +137,6 @@ class RabbitMQ {
                 'x-dead-letter-routing-key': queueName
             }
         };
-        // Delete if exists to avoid arg mismatch
-        try {
-            await this.channel.deleteQueue(queueName);
-        } catch (err) {
-            // Ignore
-        }
         return this.channel.assertQueue(queueName, { ...defaultOptions, ...options });
     }
 

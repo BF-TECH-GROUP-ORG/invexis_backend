@@ -4,8 +4,11 @@ const AnalyticsController = require("../controllers/AnalyticsController");
 const ReportController = require("../controllers/ReportController");
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
 
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+
 // Middleware to protect all analytics routes
 router.use(authenticateToken);
+router.use(checkSubscriptionStatus());
 
 // ==========================================
 // 1. Platform Analytics (Super Admin Only)
@@ -22,7 +25,7 @@ router.get("/sales/top-companies", requireRole('super_admin'), AnalyticsControll
 
 // Company Analytics
 router.get("/companies/status", requireRole('super_admin'), AnalyticsController.getCompanyStatusStats);
-router.get("/companies/recent", requireRole('super_admin'), AnalyticsController.getRecentCompanies);
+router.get("/companies/recent", requireRole('supber_admin'), AnalyticsController.getRecentCompanies);
 router.get("/companies/tiers", requireRole('super_admin'), AnalyticsController.getTierDistribution);
 
 // Legacy/Raw

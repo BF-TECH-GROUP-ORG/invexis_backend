@@ -3,12 +3,25 @@ const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/debtController');
 const summaryCtrl = require('../controllers/analyticsController');
+// Connection to shared middlewares
+const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+const { checkFeatureAccess } = require('/app/shared/middlewares/subscription/checkFeatureAccess');
+
 // --- Seeding endpoint ---
 const seedCtrl = require('../controllers/seedController');
 
 router.get('/', (req, res) => {
     res.json({ message: 'Debt service is running' });
 });
+
+// 🔒 SECURE ALL ROUTES BELOW THIS LINE
+// 1. Must be logged in
+// 2. Must have active subscription
+// 3. Must have 'debt' feature enabled (Basic tier will be blocked here)
+router.use(authenticateToken);
+router.use(checkSubscriptionStatus());
+// router.use(checkFeatureAccess('debt', 'enabled'));
 
 // GET /debt/all -> list all debts across companies (no company/shop filter)
 router.get('/all', ctrl.listAllDebts);

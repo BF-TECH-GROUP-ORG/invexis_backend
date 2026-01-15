@@ -31,6 +31,9 @@ const saleEvents = {
           hashedCustomerId: sale.hashedCustomerId || null,
           // Debt flag from sale model
           isDebt: !!sale.isDebt,
+          subTotal: sale.subTotal,
+          discountTotal: sale.discountTotal || 0,
+          taxTotal: sale.taxTotal || 0,
           totalAmount: sale.totalAmount,
           status: sale.status,
           paymentStatus: sale.paymentStatus,
@@ -42,6 +45,7 @@ const saleEvents = {
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             costPrice: item.costPrice,
+            discount: item.discount || 0,
             total: item.total
           })),
           createdAt: new Date().toISOString(),

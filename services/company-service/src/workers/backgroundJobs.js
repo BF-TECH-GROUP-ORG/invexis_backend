@@ -8,6 +8,7 @@
  */
 
 const logger = require('../utils/logger');
+const SubscriptionService = require('../services/subscription.service');
 let rabbitmq;
 
 // Initialize RabbitMQ connection
@@ -15,6 +16,21 @@ async function initWorkerQueue() {
   try {
     rabbitmq = require('/app/shared/rabbitmq.js');
     logger.info('✓ Worker queue initialized');
+
+    // Run subscription renewal processor every 6 hours
+    setInterval(() => {
+      logger.info('Running automated subscription renewal check...');
+      SubscriptionService.processDueRenewals().catch(err => {
+        logger.error('Subscription renewal processor failed:', err);
+      });
+    }, 6 * 60 * 60 * 1000);
+
+    // Run initial check after 1 minute
+    setTimeout(() => {
+      SubscriptionService.processDueRenewals().catch(err => {
+        logger.error('Initial subscription renewal check failed:', err);
+      });
+    }, 60 * 1000);
   } catch (err) {
     logger.error('Failed to initialize worker queue:', err);
   }
@@ -25,7 +41,7 @@ async function initWorkerQueue() {
  */
 async function queueVerificationDocProcessing(companyId, fileData) {
   if (!rabbitmq) return;
-  
+
   try {
     await rabbitmq.publish({
       exchange: 'jobs_topic',
@@ -50,7 +66,7 @@ async function queueVerificationDocProcessing(companyId, fileData) {
  */
 async function queueNotification(type, data) {
   if (!rabbitmq) return;
-  
+
   try {
     await rabbitmq.publish({
       exchange: 'notifications_topic',
@@ -72,7 +88,7 @@ async function queueNotification(type, data) {
  */
 async function queueAuditLog(action, entityType, entityId, userId, changes) {
   if (!rabbitmq) return;
-  
+
   try {
     await rabbitmq.publish({
       exchange: 'audit_topic',

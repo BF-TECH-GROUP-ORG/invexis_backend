@@ -20,27 +20,15 @@ app.use((req, res, next) => {
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);
   next();
 });
-const allowedOrigins = ["http://localhost:3000", "https://yourdomain.com"];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
 // Middleware
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    if (req.originalUrl.startsWith('/company/webhooks')) {
+      req.rawBody = buf.toString();
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // ✅ Performance monitoring middleware
@@ -52,13 +40,13 @@ app.use((req, res, next) => {
   res.send = function (data) {
     const duration = Date.now() - startTime;
     const isSlow = duration > 50; // SLA: 50ms
-    
+
     if (isSlow) {
       logger.warn(`SLOW_ENDPOINT: ${req.method} ${req.path} took ${duration}ms (SLA: 50ms)`);
     } else {
       logger.debug(`${req.method} ${req.path} completed in ${duration}ms`);
     }
-    
+
     // Add timing header
     res.set('X-Response-Time', `${duration}ms`);
     return originalSend.call(this, data);
@@ -89,12 +77,11 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     endpoints: {
       companies: "/api/companies",
-      roles: "/api/roles",
-      companyUsers: "/api/company-users",
       subscriptions: "/api/subscriptions",
     },
   });
 });
+
 
 // API Routes
 app.use("/company", router);

@@ -1,0 +1,24 @@
+{
+    "companyId": "4d9a3e7f-5856-4621-bb02-f304a24bafcb",
+    "paymentType": "SUBSCRIPTION",
+    "amount": 10000,
+    "currency": "EUR",
+    "sellerId": "660e8400-e29b-41d4-a716-446655440000",
+    "description": "Monthly Platform Pro Tier (Card)",
+    "paymentMethod": "card",
+    "gateway": "stripe",
+    "customer": {
+        "name": "Company Owner",
+        "email": "owner@ltc.com"
+    },
+    "lineItems": [
+        {
+            "name": "Pro Tier Monthly",
+            "qty": 1,
+            "price": 10000
+        }
+    ],
+    "metadata": {
+        "tier": "pro"
+    }
+}

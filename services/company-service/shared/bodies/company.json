@@ -1,0 +1,28 @@
+{
+    "name": "Invexis Logistics Ltd",
+    "domain": "invexislogistics.com",
+    "email": "info@invexislogistics.com",
+    "country": "RW",
+    "city": "Kigali",
+    "tier": "Mid",
+    "is_bank": false,
+    "category_ids": [
+        "logistics",
+        "transport"
+    ],
+    "company_admin_id": "user_uuid_placeholder",
+    "payment_phones": [
+        {
+            "provider": "MTN",
+            "phoneNumber": "+250788123456",
+            "currency": "RWF",
+            "enabled": true
+        },
+        {
+            "provider": "Airtel",
+            "phoneNumber": "+250733654321",
+            "currency": "RWF",
+            "enabled": true
+        }
+    ]
+}

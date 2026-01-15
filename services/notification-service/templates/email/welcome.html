@@ -1,12 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>Welcome to {{companyName}}</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       line-height: 1.6;
@@ -14,6 +20,7 @@
       background-color: #f3f4f6;
       padding: 20px 0;
     }
+
     .email-wrapper {
       max-width: 600px;
       margin: 0 auto;
@@ -22,48 +29,58 @@
       overflow: hidden;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
     }
+
     .header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       padding: 40px 30px;
       text-align: center;
     }
+
     .header h1 {
       color: #ffffff;
       font-size: 28px;
       font-weight: 600;
       margin: 0;
     }
+
     .content {
       padding: 40px 30px;
     }
+
     .content p {
       margin: 0 0 16px;
       color: #4b5563;
       font-size: 16px;
     }
+
     .content p:last-child {
       margin-bottom: 0;
     }
+
     .greeting {
       color: #1f2937;
       font-size: 18px;
       font-weight: 500;
     }
+
     .footer {
       padding: 30px;
       background: #f9fafb;
       border-top: 1px solid #e5e7eb;
       text-align: center;
     }
+
     .footer p {
       margin: 8px 0;
       font-size: 14px;
       color: #6b7280;
     }
+
     .footer a {
       color: #667eea;
       text-decoration: none;
     }
+
     .divider {
       height: 1px;
       background: #e5e7eb;
@@ -71,6 +88,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="email-wrapper">
     <div class="header">
@@ -78,15 +96,28 @@
     </div>
 
     <div class="content">
-      <p class="greeting">Hi {{userName}},</p>
+      <p class="greeting">Hi {{#if title}}{{title}} {{/if}}{{userName}},</p>
 
       <p>
         We're thrilled to have you join <strong>{{companyName}}</strong>!
         Your account has been created successfully.
       </p>
 
+      You can now start exploring all the features and tools we offer.
+      </p>
+
+      {{#if password}}
+      <div style="background: #eef2ff; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0;">
+        <p style="margin: 0; font-size: 14px; color: #4b5563;">Your temporary password:</p>
+        <p style="margin: 5px 0 0; font-size: 24px; font-weight: 700; color: #1f2937; letter-spacing: 2px;">{{password}}
+        </p>
+      </div>
       <p>
-        You can now start exploring all the features and tools we offer.
+        Please log in and change your password immediately.
+      </p>
+      {{/if}}
+
+      <p>
         If you need any assistance getting started, our team is here to help.
       </p>
 
@@ -104,4 +135,5 @@
     </div>
   </div>
 </body>
+
 </html>

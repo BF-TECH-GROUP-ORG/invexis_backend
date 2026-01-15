@@ -1,0 +1,27 @@
+{
+    "companyId": "4d9a3e7f-5856-4621-bb02-f304a24bafcb",
+    "shopId": "11111111-1111-1111-1111-111111111111",
+    "sellerId": "660e8400-e29b-41d4-a716-446655440000",
+    "paymentType": "SALE",
+    "amount": 1000,
+    "currency": "KES",
+    "description": "Payment for Sale ORD-MPESA-001",
+    "paymentMethod": "mpesa",
+    "gateway": "mpesa",
+    "phoneNumber": "254700000000",
+    "customer": {
+        "name": "M-Pesa Customer",
+        "email": "mpesa.cust@example.com"
+    },
+    "lineItems": [
+        {
+            "id": "prod_003",
+            "name": "Item C",
+            "qty": 1,
+            "price": 1000
+        }
+    ],
+    "metadata": {
+        "country": "KE"
+    }
+}

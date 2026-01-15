@@ -26,7 +26,4 @@ const CompanySummarySchema = new mongoose.Schema({
 });
 
 
-CompanySummarySchema.index({ companyId: 1 });
-
-
 module.exports = mongoose.model('CompanyDebtSummary', CompanySummarySchema);

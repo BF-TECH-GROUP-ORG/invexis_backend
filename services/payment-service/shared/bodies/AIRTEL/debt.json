@@ -1,0 +1,25 @@
+{
+    "companyId": "4d9a3e7f-5856-4621-bb02-f304a24bafcb",
+    "paymentType": "DEBT",
+    "amount": 7500,
+    "currency": "UGX",
+    "sellerId": "660e8400-e29b-41d4-a716-446655440000",
+    "description": "Debt Payment via Airtel",
+    "paymentMethod": "airtel_money",
+    "gateway": "airtel_money",
+    "phoneNumber": "256701123456",
+    "customer": {
+        "name": "Airtel Debtor",
+        "email": "debtor.airtel@example.com"
+    },
+    "lineItems": [
+        {
+            "name": "Past Due Invoice #445",
+            "qty": 1,
+            "price": 7500
+        }
+    ],
+    "metadata": {
+        "country": "UG"
+    }
+}

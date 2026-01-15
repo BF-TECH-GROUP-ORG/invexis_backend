@@ -9,6 +9,7 @@ const { SecurityManager } = require('/app/shared/security');
 const { ErrorHandler } = require('/app/shared/errorHandler');
 
 const app = express();
+app.set('trust proxy', true);
 const server = http.createServer(app);
 const PORT = process.env.PORT || 9002;
 const SERVICE_NAME = 'websocket-service';
@@ -26,7 +27,7 @@ const errorHandler = new ErrorHandler(SERVICE_NAME);
 // Socket.IO setup
 const io = socketIo(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    origin: "*",
     methods: ["GET", "POST"],
     credentials: true
   },

@@ -1,6 +1,5 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
 const { connect: connectRabbitMQ } = require("/app/shared/rabbitmq");
 
 const { initPublishers } = require("./events/producer");
@@ -16,7 +15,7 @@ app.set('trust proxy', true);
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+
 
 // Request logging
 app.use((req, res, next) => {

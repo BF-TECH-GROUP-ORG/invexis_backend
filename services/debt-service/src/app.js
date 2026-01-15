@@ -30,7 +30,7 @@ try {
 const app = express();
 
 // ✅ Trust proxy - Required for rate limiting behind API gateway
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // Middleware - order matters for performance
 app.use(helmet());
@@ -38,6 +38,21 @@ app.use(compression({ threshold: 512, level: 6 })); // Compress responses > 512 
 app.use(express.json({ limit: '10mb' })); // Reduced from 100mb for better memory usage
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('combined')); // Use combined format for production-ready logging
+
+// 🔒 SECURITY: Rate Limiting (DDoS Prevention)
+const rateLimit = require("express-rate-limit");
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        status: 429,
+        error: "TOO_MANY_REQUESTS",
+        message: "Too many requests from this IP, please try again after 15 minutes"
+    }
+});
+app.use(apiLimiter);
 
 // Request timeout middleware - prevent hanging requests (30s timeout)
 app.use((req, res, next) => {
@@ -47,7 +62,10 @@ app.use((req, res, next) => {
 });
 
 // Routes
-app.use('/debt', debtRoutes);
+const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+
+app.use('/debt', authenticateToken, checkSubscriptionStatus(), debtRoutes);
 app.use('/events', eventRoutes);
 
 // Health check endpoint

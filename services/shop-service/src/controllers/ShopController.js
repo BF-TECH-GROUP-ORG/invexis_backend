@@ -4,6 +4,7 @@ const asyncHandler = require("express-async-handler");
 const { Shop, ShopOperatingHours, ShopPreferences } = require("../models/index.model");
 const { shopEvents } = require("../events/eventHelpers");
 const db = require("../config/db");
+const tiers = require("/app/shared/config/tierFeatures.config");
 
 /**
  * @desc    Create a new shop
@@ -11,6 +12,13 @@ const db = require("../config/db");
  * @access  Private (Company Admin)
  */
 const createShop = asyncHandler(async (req, res) => {
+  const companyId = req.user?.companyId || req.body.companyId;
+
+  if (!companyId) {
+    res.status(400);
+    throw new Error("Company ID is required");
+  }
+
   const {
     name,
     address_line1,
@@ -28,10 +36,18 @@ const createShop = asyncHandler(async (req, res) => {
     created_by
   } = req.body;
 
-  const companyId = req.user?.companyId || req.body.companyId;
-  if (!companyId) {
-    res.status(400);
-    throw new Error("Company ID is required");
+  // Tier-Based Shop Limit Enforcement
+  // Verified by checkSubscriptionStatus middleware
+  const tier = req.subscription?.tier || "basic";
+  const tierConfig = tiers.getTierConfig(tier);
+  const shopLimit = tierConfig.features?.shops?.limit || 1;
+
+  if (shopLimit !== -1) { // -1 means unlimited
+    const currentShopCount = await Shop.countByCompany(companyId);
+    if (parseInt(currentShopCount) >= shopLimit) {
+      res.status(403);
+      throw new Error(`Shop limit reached for ${tier} tier (${shopLimit}). Please upgrade your subscription.`);
+    }
   }
 
   // Validate required fields

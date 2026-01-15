@@ -20,8 +20,7 @@ const ProcessedEventSchema = new mongoose.Schema({
     },
     processedAt: {
         type: Date,
-        default: Date.now,
-        index: true
+        default: Date.now
     },
     metadata: {
         type: mongoose.Schema.Types.Mixed,

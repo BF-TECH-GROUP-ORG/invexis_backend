@@ -2,7 +2,12 @@ const express = require("express");
 const router = express.Router();
 const shopController = require("../controllers/ShopController");
 const operatingHoursController = require("../controllers/ShopOperatingHoursController");
+const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
 
+// 🔒 Global Shop Service Protection
+router.use(authenticateToken);
+router.use(checkSubscriptionStatus());
 
 router.post("/", shopController.createShop);
 router.get("/", shopController.getShops);
@@ -19,8 +24,5 @@ router.patch("/:shopId/operating-hours/:dayOfWeek", operatingHoursController.upd
 router.delete("/:shopId/operating-hours", operatingHoursController.clearOperatingHours);
 router.get("/:shopId/is-open", operatingHoursController.checkShopOpen);
 
-// ❌ Department management removed - Now handled exclusively by Company Service
-// Shops no longer manage departments
-// Use Company Service endpoints: /company-service/department-users
 
 module.exports = router;

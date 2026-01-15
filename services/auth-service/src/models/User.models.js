@@ -66,19 +66,19 @@ const UserSchema = new mongoose.Schema({
 
     // References (all)
     preferences: { type: mongoose.Schema.Types.ObjectId, ref: "Preference", default: null },
-    loginHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: "LoginHistory", default: [] }],
-    sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: "Session", default: [] }],
+    loginHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: "LoginHistory", default: [], select: false }],
+    sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: "Session", default: [], select: false }],
     consent: [{ type: mongoose.Schema.Types.ObjectId, ref: "Consent", default: null }],
-    verificationTokens: [{ type: mongoose.Schema.Types.ObjectId, ref: "Verification", default: [] }],
+    verificationTokens: [{ type: mongoose.Schema.Types.ObjectId, ref: "Verification", default: [], select: false }],
 
     // Auth Mgmt (all)
     lastLoginAt: { type: Date },
-    failedLoginAttempts: { type: Number, default: 0 },
+    failedLoginAttempts: { type: Number, default: 0, select: false },
     lockUntil: { type: Date },
     isDeleted: { type: Boolean, default: false },
     accountStatus: { type: String, enum: ["active", "deactivated", "banned"], default: "active" },
     deletedAt: { type: Date },
-    notes: [{ type: String }]
+    notes: [{ type: String, select: false }]
 
 }, { timestamps: true });
 

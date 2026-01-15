@@ -29,7 +29,11 @@ const registerPublishers = async (publisherConfigs) => {
       emittedAt: new Date().toISOString(),
     };
 
-    await publish(config.exchange, routingKey, event, metadata);
+    const success = await publish(config.exchange, routingKey, event, metadata);
+    if (!success) {
+      console.warn(`⚠️ Failed to publish event: ${routingKey}`);
+      throw new Error(`Failed to publish event: ${routingKey}`);
+    }
     console.log(`📤 Published event: ${routingKey}`, payload);
   };
 

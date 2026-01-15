@@ -15,12 +15,12 @@ const { getRedisClient } = require("../utils/redis");
 
 // Default rate limits per tier (requests per minute)
 const DEFAULT_LIMITS = {
-  basic: 100,
-  mid: 500,
-  pro: 2000,
+  basic: 10000,
+  mid: 50000,
+  pro: 70000,
 };
 
-const WINDOW_MS = 60000; // 1 minute
+const WINDOW_MS = 6000000; // 10 minutes
 
 // In-memory fallback (when Redis unavailable)
 const inMemoryCounters = new Map();
@@ -46,6 +46,11 @@ function checkRateLimits(options = {}) {
 
   return asyncHandler(async (req, res, next) => {
     try {
+      // ✅ BYPASS: Super Admin is exempt from rate limits
+      if (req.user && req.user.role === "super_admin") {
+        return next();
+      }
+
       // Get subscription (set by checkSubscriptionStatus)
       if (!req.subscription) {
         return next(); // Skip rate limiting if no subscription
@@ -67,23 +72,23 @@ function checkRateLimits(options = {}) {
         // Try Redis first
         const redis = getRedisClient();
         const cached = await redis.incr(counterKey);
-        
+
         if (cached === 1) {
           // First request in this window
           await redis.expire(counterKey, Math.ceil(WINDOW_MS / 1000));
         }
-        
+
         count = cached;
         fromCache = true;
       } catch (err) {
         // Fallback to in-memory
         console.warn("Redis rate limit check failed, using in-memory:", err.message);
-        
+
         const counter = inMemoryCounters.get(counterKey) || {
           count: 0,
           createdAt: now,
         };
-        
+
         counter.count++;
         inMemoryCounters.set(counterKey, counter);
         count = counter.count;

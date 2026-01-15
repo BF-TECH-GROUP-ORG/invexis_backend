@@ -32,32 +32,7 @@ class InvoiceController {
         }
     }
 
-    /**
-     * Get user invoices
-     * GET /payment/invoices/user/:user_id
-     */
-    async getUserInvoices(req, res) {
-        try {
-            const { user_id } = req.params;
-            const { limit, offset, status } = req.query;
 
-            if (!user_id) {
-                return errorResponse(res, 'User ID required', 400);
-            }
-
-            const invoices = await invoiceService.getUserInvoices(user_id, {
-                limit: parseInt(limit) || 50,
-                offset: parseInt(offset) || 0,
-                status
-            });
-
-            return successResponse(res, invoices, 'User invoices retrieved');
-
-        } catch (error) {
-            console.error('Get user invoices error:', error);
-            return errorResponse(res, error.message, 500);
-        }
-    }
 
     /**
      * Get seller invoices
@@ -82,6 +57,60 @@ class InvoiceController {
 
         } catch (error) {
             console.error('Get seller invoices error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * Get company invoices
+     * GET /payment/invoices/company/:company_id
+     */
+    async getCompanyInvoices(req, res) {
+        try {
+            const { company_id } = req.params;
+            const { limit, offset, status } = req.query;
+
+            if (!company_id) {
+                return errorResponse(res, 'Company ID required', 400);
+            }
+
+            const invoices = await invoiceService.getCompanyInvoices(company_id, {
+                limit: parseInt(limit) || 50,
+                offset: parseInt(offset) || 0,
+                status
+            });
+
+            return successResponse(res, invoices, 'Company invoices retrieved');
+
+        } catch (error) {
+            console.error('Get company invoices error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * Get shop invoices
+     * GET /payment/invoices/shop/:shop_id
+     */
+    async getShopInvoices(req, res) {
+        try {
+            const { shop_id } = req.params;
+            const { limit, offset, status } = req.query;
+
+            if (!shop_id) {
+                return errorResponse(res, 'Shop ID required', 400);
+            }
+
+            const invoices = await invoiceService.getShopInvoices(shop_id, {
+                limit: parseInt(limit) || 50,
+                offset: parseInt(offset) || 0,
+                status
+            });
+
+            return successResponse(res, invoices, 'Shop invoices retrieved');
+
+        } catch (error) {
+            console.error('Get shop invoices error:', error);
             return errorResponse(res, error.message, 500);
         }
     }

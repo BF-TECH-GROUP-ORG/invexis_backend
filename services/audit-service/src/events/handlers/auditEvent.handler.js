@@ -1,7 +1,7 @@
 "use strict";
 
 const AuditLog = require("../../models/AuditLog.model");
-const { getEventBus } = require('/app/shared/events');
+const producer = require('../producer');
 
 /**
  * Classify event severity based on event type and data
@@ -158,8 +158,7 @@ const handleAuditEvent = async (event, routingKey) => {
         // Emit notification for critical logs
         if (severity === 'critical') {
             try {
-                const eventBus = getEventBus();
-                await eventBus.emit('audit.critical.log', {
+                await producer.emit('audit.critical.log', {
                     logId: auditLog._id,
                     event_type: routingKey,
                     severity,

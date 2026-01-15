@@ -2,7 +2,7 @@
 // Payment controller handling all payment-related endpoints
 
 const paymentService = require('../services/paymentService');
-const { successResponse, errorResponse } = require('../utils/responses');
+const { successResponse, errorResponse, paginatedResponse } = require('../utils/responses');
 const { validate, paymentInitiationSchema } = require('../utils/validators');
 
 class PaymentController {
@@ -12,40 +12,18 @@ class PaymentController {
      */
     async initiatePayment(req, res) {
         try {
-            // Validate request body
+            // 1. Validate request body
             const { error, value } = validate(paymentInitiationSchema, req.body);
             if (error) {
                 return errorResponse(res, `Validation error: ${error.message} `, 400);
             }
 
-            // Extract user from auth middleware (if available)
-            const user_id = req.user?.id || req.body.user_id;
-            if (!user_id) {
-                return errorResponse(res, 'User ID required', 400);
-            }
-
+            // 2. Enrich with context (Optional metadata for security or tracking)
             const paymentData = {
-                user_id,
-                seller_id: req.body.seller_id,
-                company_id: req.body.company_id,
-                shop_id: req.body.shop_id,
-                order_id: req.body.order_id,
-                payout_recipient_id: req.body.payout_recipient_id,
-                payout_details: req.body.payout_details,
-                amount: req.body.amount,
-                currency: req.body.currency,
-                description: req.body.description,
-                method: req.body.paymentMethod,
-                gateway: req.body.gateway,
-                phoneNumber: req.body.phoneNumber,
-                customer_email: req.body.customerEmail,
-                line_items: req.body.lineItems,
-                metadata: req.body.metadata,
-                ip: req.ip,
-                device_fingerprint: req.headers['x-device-fingerprint'],
-                location: req.body.location
+                ...req.body
             };
 
+            // 3. Delegate to service (where smart normalization happens)
             const result = await paymentService.initiatePayment(paymentData);
 
             return successResponse(res, result, 'Payment initiated successfully');
@@ -78,32 +56,7 @@ class PaymentController {
         }
     }
 
-    /**
-     * Get user payments
-     * GET /payment/user/:user_id
-     */
-    async getUserPayments(req, res) {
-        try {
-            const { user_id } = req.params;
-            const { limit, offset, status } = req.query;
 
-            if (!user_id) {
-                return errorResponse(res, 'User ID required', 400);
-            }
-
-            const payments = await paymentService.getUserPayments(user_id, {
-                limit: parseInt(limit) || 50,
-                offset: parseInt(offset) || 0,
-                status
-            });
-
-            return successResponse(res, payments, 'User payments retrieved');
-
-        } catch (error) {
-            console.error('Get user payments error:', error);
-            return errorResponse(res, error.message, 500);
-        }
-    }
 
     /**
      * Get seller payments
@@ -118,16 +71,82 @@ class PaymentController {
                 return errorResponse(res, 'Seller ID required', 400);
             }
 
-            const payments = await paymentService.getSellerPayments(seller_id, {
+            const { data, total } = await paymentService.getSellerPayments(seller_id, {
                 limit: parseInt(limit) || 50,
                 offset: parseInt(offset) || 0,
                 status
             });
 
-            return successResponse(res, payments, 'Seller payments retrieved');
+            return paginatedResponse(res, data, {
+                total,
+                limit: parseInt(limit) || 50,
+                offset: parseInt(offset) || 0
+            }, 'Seller payments retrieved');
 
         } catch (error) {
             console.error('Get seller payments error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * Get company payments
+     * GET /payment/company/:company_id
+     */
+    async getCompanyPayments(req, res) {
+        try {
+            const { company_id } = req.params;
+            const { limit, offset, status } = req.query;
+
+            if (!company_id) {
+                return errorResponse(res, 'Company ID required', 400);
+            }
+
+            const { data, total } = await paymentService.getCompanyPayments(company_id, {
+                limit: parseInt(limit) || 50,
+                offset: parseInt(offset) || 0,
+                status
+            });
+
+            return paginatedResponse(res, data, {
+                total,
+                limit: parseInt(limit) || 50,
+                offset: parseInt(offset) || 0
+            }, 'Company payments retrieved');
+
+        } catch (error) {
+            console.error('Get company payments error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * Get shop payments
+     * GET /payment/shop/:shop_id
+     */
+    async getShopPayments(req, res) {
+        try {
+            const { shop_id } = req.params;
+            const { limit, offset, status } = req.query;
+
+            if (!shop_id) {
+                return errorResponse(res, 'Shop ID required', 400);
+            }
+
+            const { data, total } = await paymentService.getShopPayments(shop_id, {
+                limit: parseInt(limit) || 50,
+                offset: parseInt(offset) || 0,
+                status
+            });
+
+            return paginatedResponse(res, data, {
+                total,
+                limit: parseInt(limit) || 50,
+                offset: parseInt(offset) || 0
+            }, 'Shop payments retrieved');
+
+        } catch (error) {
+            console.error('Get shop payments error:', error);
             return errorResponse(res, error.message, 500);
         }
     }
@@ -151,6 +170,20 @@ class PaymentController {
 
         } catch (error) {
             console.error('Cancel payment error:', error);
+            return errorResponse(res, error.message, 500);
+        }
+    }
+
+    /**
+     * Get all company settings
+     * GET /payment/settings/all
+     */
+    async getAllSettings(req, res) {
+        try {
+            const result = await paymentService.getAllSettings();
+            return successResponse(res, result, 'All company settings retrieved');
+        } catch (error) {
+            console.error('Get all settings error:', error);
             return errorResponse(res, error.message, 500);
         }
     }

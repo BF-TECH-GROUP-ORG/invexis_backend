@@ -1,12 +1,17 @@
 {
-  "companyId": "507f1f77bcf86cd799439011",
-  "shopId": "507f1f77bcf86cd799439012",
-  "name": "Samsung Galaxy S24 Ultra - 256GB",
+  "companyId": "2b51c838-8dc2-4c38-bbe1-fbeda67fae1f",
+  "shopId": "f2a03805-a11d-4466-a318-fbbf64f6ad66",
+  "name": "bahirwa frank",
   "description": "Premium flagship smartphone with advanced AI features, 6.8-inch AMOLED display, and 200MP camera system.",
-  "brand": "Samsung",
+  "brand": "eddy",
   "manufacturer": "Samsung Electronics",
-  "tags": ["smartphone", "flagship", "android", "5g"],
-  "categoryId": "507f1f77bcf86cd799439100",
+  "tags": [
+    "smartphone",
+    "flagship",
+    "android",
+    "5g"
+  ],
+  "categoryId": "693bfba22796d0fa08565f12",
   "condition": "new",
   "availability": "in_stock",
   "status": "active",
@@ -48,7 +53,7 @@
       "sortOrder": 2
     }
   ],
-  "videoUrls": [
+  "videos": [
     "https://youtube.com/watch?v=samsung-s24-ultra"
   ],
   "specs": [

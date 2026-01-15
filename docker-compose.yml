@@ -119,7 +119,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: invexispass
     ports:
-      - "27018:27017"
+      - "27019:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
@@ -183,8 +183,8 @@ services:
       RABBITMQ_DEFAULT_USER: invexis
       RABBITMQ_DEFAULT_PASS: invexispass
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5673:5672"
+      - "15673:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -602,6 +602,70 @@ services:
       - "traefik.enable=false"
     ports:
       - "9002:9002"
+
+  report-service:
+    build: ./services/report-service
+    container_name: invexis-report-service
+    restart: unless-stopped
+    command: npx nodemon src/index.js
+    environment:
+      NODE_ENV: development
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/reportdb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./shared:/app/shared
+      - ./services/report-service:/app
+      - ./logs/report-service:/app/logs
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - redis
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9003/health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - invexis-network
+    user: "node"
+    labels:
+      # - "traefik.enable=true"
+      # - "traefik.http.routers.report-service.rule=Host(`report-service.local`)"
+      - "traefik.enable=false"
+    ports:
+      - "9003:9003"
+
+  document-service:
+    build: ./services/document-service
+    container_name: invexis-document-service
+    restart: unless-stopped
+    command: npm run dev
+    environment:
+      NODE_ENV: development
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/documentdb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
+    volumes:
+      - ./shared:/app/shared
+      - ./services/document-service:/app
+      - ./logs/document-service:/app/logs
+    depends_on:
+      - mongodb
+      - rabbitmq
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9004/health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - invexis-network
+    user: "node"
+    labels:
+      - "traefik.enable=false"
+    ports:
+      - "9004:9004"
   # ----------------------
   # Volumes
   # ======================
@@ -652,4 +716,5 @@ volumes:
 
 networks:
   invexis-network:
+    name: invexis-network
     driver: bridge

@@ -24,6 +24,49 @@ function getRefreshCookieOptions(req) {
 // Register a new user
 const register = async (req, res) => {
     const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
+
+    // Auto-generate password (5 chars: Uppercase, Numbers, Symbols)
+    // ONLY if NOT super_admin
+    // Super Admin must provide their own password
+    if (req.body.role === 'super_admin') {
+        if (!req.body.password) {
+            return res.status(400).json({ ok: false, message: 'Password is required for super_admin' });
+        }
+        // No generatedPassword for super_admin
+    } else {
+        // Characters: A-Z, a-z, 0-9, !@#$%^&*
+        // Logic: Ensure at least one of each required type to pass validation regex
+        const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const lower = "abcdefghijklmnopqrstuvwxyz";
+        const nums = "0123456789";
+        const syms = "!@#$%^&*";
+        const allChars = upper + lower + nums + syms;
+
+        let generatedPassword = "";
+        // Force one of each to ensure compliance
+        generatedPassword += upper.charAt(Math.floor(Math.random() * upper.length));
+        generatedPassword += lower.charAt(Math.floor(Math.random() * lower.length));
+        generatedPassword += nums.charAt(Math.floor(Math.random() * nums.length));
+        generatedPassword += syms.charAt(Math.floor(Math.random() * syms.length));
+
+        // Fill remaining 2 chars randomly
+        for (let i = 0; i < 2; i++) {
+            generatedPassword += allChars.charAt(Math.floor(Math.random() * allChars.length));
+        }
+
+        // Shuffle the password to avoid predictable patterns
+        generatedPassword = generatedPassword.split('').sort(() => 0.5 - Math.random()).join('');
+
+        // Inject generated password into body
+        if (generatedPassword) {
+            req.body.password = generatedPassword;
+            req.body.generatedPassword = generatedPassword;
+        }
+    }
+
+    // DEBUG: Confirm register flow
+    console.log(`🚀 [DEBUG] Registering user: ${req.body.email}, Role: ${req.body.role}, Pwd: ${req.body.generatedPassword ? 'Generated' : 'Manual'}`);
+
     const result = await authService.register(req.body, options);
 
     // If result has an error (indicated by status and message)
@@ -54,10 +97,42 @@ const login = async (req, res) => {
         return res.status(result.status || 400).json({ ok: false, message: result.message });
     }
 
+    // 🔍 PROACTIVE SUBSCRIPTION CHECK
+    // If the user's company subscription is expired, we flag it here
+    // so the Frontend can redirect them to the Renewal Page immediately.
+    let subscriptionStatus = null;
+    if (result.user && result.user.companies && result.user.companies.length > 0) {
+        try {
+            const SubscriptionUtil = require('/app/shared/utils/SubscriptionUtil');
+            // Check the first company (assuming single-company user for now)
+            const sub = await SubscriptionUtil.getSubscriptionStatus(result.user.companies[0]);
+
+            if (sub && (sub.isExpired || !sub.isActive)) {
+                subscriptionStatus = {
+                    status: 'expired',
+                    companyId: result.user.companies[0],
+                    expiryDate: sub.endDate,
+                    tier: sub.tier
+                };
+            }
+        } catch (subErr) {
+            console.warn("Auth Login Subscription Check Failed:", subErr.message);
+            // Non-blocking error: allow login to proceed, middleware will catch them later
+        }
+    }
+
     res.cookie('refreshToken', result.refreshToken, {
         ...getRefreshCookieOptions(req)
     });
-    res.json({ ok: true, accessToken: result.accessToken, user: result.user });
+
+    // Return token + subscription warning if applicable
+    res.json({
+        ok: true,
+        accessToken: result.accessToken,
+        expires_in: tokenService.expiresIn,
+        user: result.user,
+        subscription: subscriptionStatus // Frontend checks this field
+    });
 };
 
 // Request OTP for login
@@ -90,7 +165,7 @@ const verifyOtpLogin = async (req, res) => {
     res.cookie('refreshToken', result.refreshToken, {
         ...getRefreshCookieOptions(req)
     });
-    res.json({ ok: true, accessToken: result.accessToken, user: result.user });
+    res.json({ ok: true, accessToken: result.accessToken, expires_in: tokenService.expiresIn, user: result.user });
 };
 
 // Google OAuth callback
@@ -167,7 +242,7 @@ const googleCallback = async (req, res, next) => {
         const params = new URLSearchParams({
             access_token: accessToken,
             token_type: 'Bearer',
-            expires_in: 900, // 15 minutes
+            expires_in: tokenService.expiresIn,
             provider: 'google',
             status: 'success',
             is_new_user: isNewUser.toString()
@@ -204,7 +279,7 @@ const refresh = async (req, res, next) => {
         return res.json({
             ok: true,
             accessToken: tokens.accessToken,
-            expiresIn: 900, // 15 min
+            expires_in: tokenService.expiresIn,
         });
     } catch (err) {
         if (
@@ -251,7 +326,7 @@ const logout = async (req, res, next) => {
             ok: true,
             message: result.message
         });
-        
+
         console.log(`[LOGOUT] Logout completed in ${Date.now() - startTime}ms`);
     } catch (err) {
         next(err);
@@ -495,12 +570,12 @@ const updateProfile = async (req, res, next) => {
     try {
         const profileImage = req.body.profileImage || null;
         const out = await authService.updateProfile(req.user._id, req.body, profileImage);
-        
+
         // Handle validation errors from service
         if (out.status && out.message) {
             return res.status(out.status).json({ ok: false, message: out.message });
         }
-        
+
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -547,12 +622,12 @@ const updateUser = async (req, res, next) => {
     try {
         const { id } = req.params;
         const out = await authService.updateUser(req.user._id, id, req.body);
-        
+
         // Handle validation errors from service
         if (out.status && out.message) {
             return res.status(out.status).json({ ok: false, message: out.message });
         }
-        
+
         res.json({ ok: true, ...out });
     } catch (err) {
         next(err);
@@ -691,16 +766,16 @@ const getMe = async (req, res, next) => {
     try {
         // User data is already attached by authentication middleware
         if (!req.user) {
-            return res.status(401).json({ 
-                ok: false, 
-                message: 'User not authenticated' 
+            return res.status(401).json({
+                ok: false,
+                message: 'User not authenticated'
             });
         }
 
         // Return user data (already fetched by middleware)
-        res.json({ 
-            ok: true, 
-            user: req.user 
+        res.json({
+            ok: true,
+            user: req.user
         });
     } catch (err) {
         console.error('Error in getMe:', err);

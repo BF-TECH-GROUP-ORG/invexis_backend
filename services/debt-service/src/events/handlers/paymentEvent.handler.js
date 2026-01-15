@@ -14,43 +14,86 @@ async function handlePaymentProcessed(data) {
     const {
         paymentId,
         debtId,
-        customerId,
+        orderId,
+        saleId,
         amount,
         currency,
         paymentMethod,
         traceId
     } = data;
 
-    console.log(`💳 [payment.processed] Processing payment ${paymentId}`, { traceId, debtId, amount });
+    const targetOrderId = orderId || saleId;
+    console.log(`💳 [payment.processed] Processing payment ${paymentId}`, { traceId, debtId, targetOrderId, amount });
 
     try {
         // Use event deduplication to prevent duplicate processing
         const processed = await processEventOnce(
             `payment_processed_${paymentId}`,
             async () => {
-                // Find debt
-                const debt = await Debt.findById(debtId);
+                // Find debt by ID or Order ID
+                let debt;
+                if (debtId) {
+                    debt = await Debt.findById(debtId);
+                } else if (targetOrderId) {
+                    // Try finding by ID first if orderId maps to _id
+                    if (targetOrderId.match(/^[0-9a-fA-F]{24}$/)) {
+                        debt = await Debt.findById(targetOrderId);
+                    }
+                    if (!debt) {
+                        debt = await Debt.findOne({ salesId: targetOrderId, isDeleted: false });
+                    }
+                }
+
                 if (!debt) {
-                    console.warn(`⚠️ Debt ${debtId} not found for payment ${paymentId}`);
+                    console.warn(`⚠️ Debt not found for payment ${paymentId}`);
                     return { success: false, message: 'Debt not found' };
                 }
 
-                // Update debt with payment
-                debt.amountPaid = (debt.amountPaid || 0) + amount;
+                // 2. Find Repayment (if exists) and update status
+                // We expect repaymentId in data.metadata (from payload)
+                const Repayment = require('../../models/repayment.model');
+                let repaymentId = data.metadata?.repaymentId;
+
+                if (repaymentId) {
+                    const repayment = await Repayment.findById(repaymentId);
+                    if (repayment) {
+                        if (repayment.status === 'succeeded') {
+                            console.log(`ℹ️ Repayment ${repaymentId} already succeeded. Skipping.`);
+                            return { success: true, message: 'Already processed' };
+                        }
+                        repayment.status = 'succeeded';
+                        await repayment.save();
+                        console.log(`✅ Repayment ${repaymentId} marked as SUCCEEDED`);
+                    }
+                } else {
+                    // Fallback: This might be an external payment not initiated by us?
+                    // Or we just credit the debt directly if no specific repayment record found
+                    console.warn(`⚠️ No repaymentId in metadata for payment ${paymentId}. Crediting debt directly.`);
+                }
+
+                // 3. Update Debt Balance
+                debt.amountPaidNow = (debt.amountPaidNow || 0) + amount;
+                debt.balance = Math.max(0, debt.totalAmount - debt.amountPaidNow);
                 debt.lastPaymentDate = new Date();
-                debt.lastPaymentMethod = paymentMethod;
-                
+
+                // Track in balance history
+                if (debt.balanceHistory) {
+                    debt.balanceHistory.push({
+                        date: new Date(),
+                        balance: debt.balance
+                    });
+                }
+
                 // Check if fully paid
-                if (debt.amountPaid >= debt.totalAmount) {
-                    debt.status = 'SETTLED';
-                    debt.settledAt = new Date();
-                    console.log(`✅ Debt ${debtId} fully settled`);
-                } else if (debt.amountPaid > 0) {
+                if (debt.balance <= 0) {
+                    debt.status = 'PAID';
+                    console.log(`✅ Debt ${debt._id} fully paid`);
+                } else if (debt.amountPaidNow > 0) {
                     debt.status = 'PARTIALLY_PAID';
                 }
 
                 await debt.save();
-                console.log(`✅ Payment ${paymentId} applied to debt ${debtId}`);
+                console.log(`✅ Payment ${paymentId} applied to debt ${debt._id}`);
                 return { success: true, message: 'Payment processed' };
             }
         );
@@ -69,25 +112,41 @@ async function handlePaymentFailed(data) {
     const {
         paymentId,
         debtId,
-        customerId,
-        amount,
+        orderId,
+        saleId,
         failureReason,
         traceId
     } = data;
 
-    console.log(`❌ [payment.failed] Payment ${paymentId} failed`, { traceId, debtId, failureReason });
+    const targetOrderId = orderId || saleId;
+    console.log(`❌ [payment.failed] Payment ${paymentId} failed`, { traceId, debtId, targetOrderId });
 
     try {
-        const debt = await Debt.findById(debtId);
+        let debt;
+        if (debtId) {
+            debt = await Debt.findById(debtId);
+        } else if (targetOrderId) {
+            debt = await Debt.findOne({ salesId: targetOrderId, isDeleted: false });
+        }
+
         if (!debt) return;
+
+        // Update Repayment Status to Failed
+        const Repayment = require('../../models/repayment.model');
+        let repaymentId = data.metadata?.repaymentId;
+
+        if (repaymentId) {
+            await Repayment.findByIdAndUpdate(repaymentId, { status: 'failed' });
+            console.log(`❌ Repayment ${repaymentId} marked as FAILED`);
+        }
 
         // Log failure reason
         debt.failedPaymentAttempts = (debt.failedPaymentAttempts || 0) + 1;
-        debt.lastFailureReason = failureReason;
-        debt.lastFailureDate = new Date();
+        // The model doesn't explicitly have lastFailureReason, but we can store in metadata or reminderHistory if needed
+        // For now, just logging to console as well
+        console.log(`✅ Logged failed payment attempt for debt ${debt._id} (Reason: ${failureReason})`);
 
         await debt.save();
-        console.log(`✅ Logged failed payment attempt for debt ${debtId}`);
     } catch (error) {
         console.error(`❌ Error handling payment failure:`, error.message);
         throw error;
@@ -101,36 +160,45 @@ async function handlePaymentRefunded(data) {
     const {
         paymentId,
         debtId,
-        customerId,
+        orderId,
+        saleId,
         amount,
         refundReason,
         traceId
     } = data;
 
-    console.log(`🔄 [payment.refunded] Payment ${paymentId} refunded`, { traceId, debtId, amount });
+    const targetOrderId = orderId || saleId;
+    console.log(`🔄 [payment.refunded] Payment ${paymentId} refunded`, { traceId, debtId, targetOrderId, amount });
 
     try {
         const processed = await processEventOnce(
             `payment_refunded_${paymentId}`,
             async () => {
-                const debt = await Debt.findById(debtId);
+                let debt;
+                if (debtId) {
+                    debt = await Debt.findById(debtId);
+                } else if (targetOrderId) {
+                    debt = await Debt.findOne({ salesId: targetOrderId, isDeleted: false });
+                }
+
                 if (!debt) {
-                    console.warn(`⚠️ Debt ${debtId} not found for refund ${paymentId}`);
+                    console.warn(`⚠️ Debt not found for refund ${paymentId}`);
                     return;
                 }
 
                 // Reverse payment
-                debt.amountPaid = Math.max(0, (debt.amountPaid || 0) - amount);
-                
+                debt.amountPaidNow = Math.max(0, (debt.amountPaidNow || 0) - amount);
+                debt.balance = Math.min(debt.totalAmount, debt.totalAmount - debt.amountPaidNow);
+
                 // Update status
-                if (debt.amountPaid <= 0) {
-                    debt.status = debt.totalAmount > 0 ? 'UNPAID' : 'SETTLED';
-                } else if (debt.amountPaid < debt.totalAmount) {
+                if (debt.amountPaidNow <= 0) {
+                    debt.status = 'UNPAID';
+                } else if (debt.amountPaidNow < debt.totalAmount) {
                     debt.status = 'PARTIALLY_PAID';
                 }
 
                 await debt.save();
-                console.log(`✅ Refund processed for debt ${debtId}`);
+                console.log(`✅ Refund processed for debt ${debt._id}`);
             }
         );
 
@@ -147,15 +215,19 @@ async function handlePaymentRefunded(data) {
 async function handlePaymentEvent(event, routingKey) {
     const { type, data } = event;
 
-    switch (routingKey) {
+    // Support both routingKey and event.type
+    const eventType = type || routingKey;
+
+    switch (eventType) {
         case 'payment.processed':
+        case 'payment.succeeded':
             return await handlePaymentProcessed(data);
         case 'payment.failed':
             return await handlePaymentFailed(data);
         case 'payment.refunded':
             return await handlePaymentRefunded(data);
         default:
-            console.warn(`⚠️ Unknown payment event: ${routingKey}`);
+            console.warn(`⚠️ Unknown payment event: ${eventType}`);
             return { success: false };
     }
 }

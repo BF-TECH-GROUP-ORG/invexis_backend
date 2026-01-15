@@ -137,7 +137,7 @@ const updateSubscription = asyncHandler(async (req, res) => {
  */
 const renewSubscription = asyncHandler(async (req, res) => {
   const { companyId } = req.params;
-  const { tier, amount, durationDays } = req.body;
+  const { tier, amount, durationDays, paymentMethod } = req.body;
 
   if (!tier || !amount || !durationDays) {
     res.status(400);
@@ -163,8 +163,141 @@ const renewSubscription = asyncHandler(async (req, res) => {
     // Create outbox event within transaction (will be published by dispatcher)
     await subscriptionEvents.renewed(result, trx);
 
+    // Trigger Payment Request
+    // Note: In a real flow we might want to wait for payment BEFORE renewing, 
+    // but here we follow the "initiate and process" pattern.
+    const { emit } = require("../events/producer");
+    // We emit this outside the transaction or as an outbox event? 
+    // For simplicity, we'll try to emit it directly here, but ideally it should be an outbox item.
+    // However, since `subscriptionEvents` are robust, let's treat payment request as a side effect.
+    // We will emit it AFTER the transaction commits to ensure we don't charge if DB fails.
+
     return result;
   });
+
+  // Emit Payment Request asynchronously after successful DB commit
+  try {
+    const { emit } = require("../events/producer");
+    const company = await Company.findCompanyById(companyId);
+
+    // Determine Gateway based on payment method
+    let gateway = 'mtn_momo'; // Default
+    let schemaPaymentMethod = 'mobile_money'; // Default
+    const normalizedMethod = (paymentMethod || 'mtn').toLowerCase();
+
+    if (normalizedMethod === 'bank_transfer' || normalizedMethod === 'card') {
+      gateway = 'manual';
+      schemaPaymentMethod = normalizedMethod;
+    } else if (normalizedMethod === 'mtn' || normalizedMethod === 'mobile') {
+      gateway = 'mtn_momo';
+      schemaPaymentMethod = 'mobile_money';
+    } else if (normalizedMethod === 'airtel') {
+      gateway = 'airtel_money';
+      schemaPaymentMethod = 'mobile_money';
+    } else {
+      gateway = 'manual';
+      schemaPaymentMethod = 'manual';
+    }
+
+    // Helper to extract phone from payment_phones
+    const getPaymentPhone = (comp, providerKeys) => {
+      if (!comp?.payment_phones) return null;
+      // Parse if string
+      let phones = comp.payment_phones;
+      if (typeof phones === 'string') {
+        try { phones = JSON.parse(phones); } catch (e) { phones = []; }
+      }
+      if (!Array.isArray(phones)) return null;
+
+      // Find matching provider
+      const match = phones.find(p =>
+        providerKeys.includes(p.provider?.toUpperCase()) && p.enabled !== false
+      );
+      return match ? match.phoneNumber : null;
+    };
+
+    // Helper to get Stripe Payment Method ID
+    const getStripePaymentMethod = (sub, comp) => {
+      // 1. Check subscription specific method
+      if (sub.stripe_payment_method_id) return sub.stripe_payment_method_id;
+
+      // 2. Check company payment profile
+      if (comp?.payment_profile) {
+        let profile = comp.payment_profile;
+        if (typeof profile === 'string') {
+          try { profile = JSON.parse(profile); } catch (e) { profile = {}; }
+        }
+        if (profile.stripe && profile.stripe.paymentMethodId) {
+          return profile.stripe.paymentMethodId;
+        }
+      }
+      return null; // No saved method found
+    };
+
+    let targetPhone = subscription.momo_phone_number;
+    let paymentMethodId = null;
+
+    if (gateway === 'stripe') {
+      paymentMethodId = getStripePaymentMethod(subscription, company);
+      if (!paymentMethodId) {
+        console.warn(`⚠️ No Stripe payment method found for company ${companyId}`);
+        // Depending on logic, we might want to continue to let user enter card on checkout, 
+        // but if this is a backend-initiated charge it might fail without a method.
+        // For now, we proceed, payment service might handle "new card" flow or error.
+      }
+    } else {
+      // Phone logic for mobile money
+      if (!targetPhone) {
+        if (gateway === 'mtn_momo') targetPhone = getPaymentPhone(company, ['MTN', 'MTN_MOMO']);
+        else if (gateway === 'airtel_money') targetPhone = getPaymentPhone(company, ['AIRTEL', 'AIRTEL_MONEY']);
+        else if (gateway === 'mpesa') targetPhone = getPaymentPhone(company, ['MPESA']);
+      }
+      // Fallback to main company phone
+      if (!targetPhone) targetPhone = company?.phone;
+    }
+
+    const payload = {
+      event: 'PAYMENT_REQUESTED',
+      source: 'company-service',
+      paymentType: 'SUBSCRIPTION',
+      referenceId: `SUB-${companyId}-${Date.now()}`,
+      companyId: companyId,
+      // Use system UUID or fixed string if no user, but schema expects UUID. 
+      // For now 'system' is accepted by payment-service, but we should be consistent.
+      sellerId: req.user ? req.user.userId : 'system',
+      amount: amount,
+      currency: 'RWF',
+      description: `${tier.toUpperCase()} Tier Subscription - ${durationDays} days`,
+      paymentMethod: schemaPaymentMethod,
+      gateway: gateway,
+      phoneNumber: targetPhone, // Will be null/undefined for Stripe, which is fine
+      customer: {
+        name: company?.name || 'Company Admin', // Fixed: company.name not company_name
+        email: company?.email || 'admin@company.com',
+        phone: targetPhone || company?.phone
+      },
+      lineItems: [{
+        id: `tier_${tier}`,
+        name: `${tier.toUpperCase()} Tier Subscription`,
+        qty: 1,
+        price: amount
+      }],
+      idempotencyKey: `pay_sub_${companyId}_${Date.now()}`,
+      metadata: {
+        subscriptionId: renewed.id,
+        companyId: companyId,
+        tier: tier,
+        durationDays: durationDays,
+        initiatedBy: req.user ? req.user.userId : 'system',
+        stripePaymentMethodId: paymentMethodId // Pass this to payment service
+      }
+    };
+
+    await emit('subscription.payment.requested', payload);
+    console.log(`📤 Triggered payment request for subscription renewal: ${companyId}`);
+  } catch (e) {
+    console.error("Failed to emit subscription payment event", e);
+  }
 
   res.json({
     success: true,
@@ -191,7 +324,7 @@ const deactivateSubscription = asyncHandler(async (req, res) => {
     const result = await Subscription.deactivate(companyId, trx);
 
     // Create outbox event within transaction (will be published by dispatcher)
-    await subscriptionEvents.deactivated(companyId, trx);
+    await subscriptionEvents.deactivated(result, trx);
 
     return result;
   });
@@ -223,6 +356,7 @@ const checkSubscriptionStatus = asyncHandler(async (req, res) => {
 
   const status = {
     is_active: subscription.is_active,
+    company_status: company.status,
     tier: subscription.tier,
     end_date: subscription.end_date,
     days_remaining: daysRemaining,

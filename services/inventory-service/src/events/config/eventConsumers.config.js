@@ -71,6 +71,19 @@ module.exports = [
       "inventory.adjusted",
       "stock.received"
     ]
+  },
+  {
+    name: "documents",
+    queue: "inventory_document_events",
+    exchange: "events_topic",
+    pattern: "document.product.*.created",
+    handler: require("../../utils/events/documentHandler"),
+    events: [
+      "document.product.qr.created",
+      "document.product.barcode.created",
+      "document.product.image.created",
+      "document.product.video.created"
+    ]
   }
 ];
 

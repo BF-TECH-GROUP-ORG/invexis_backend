@@ -140,9 +140,15 @@ router.get('/graph/category-graph', graphController.getCategoryGraph);
 router.get('/graph/customer-patterns/:userId', graphController.getCustomerBehaviorPatterns);
 router.get('/graph/customer-journey/:userId', graphController.getCustomerJourney);
 
+const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+const { checkFeatureAccess } = require('/app/shared/middlewares/subscription/checkFeatureAccess');
+
 // ============================================
 // PRODUCT MANAGEMENT (Admin)
+// 🔒 SECURED: Pro Tier Only
 // ============================================
+router.use('/management', authenticateToken, checkSubscriptionStatus(), checkFeatureAccess('ecommerce', 'enabled'));
 
 // Bulk Operations
 router.post('/management/products/bulk-update', productManagementController.bulkUpdateProducts);

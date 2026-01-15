@@ -3,12 +3,13 @@ const redis = require('/app/shared/redis');
 const crypto = require('crypto');
 const Stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// 1. Idempotency Check (key: userId + idempotencyKey from header/body)
+// 1. Idempotency Check (key: identifier + idempotencyKey from header/body)
 const idempotencyCheck = async (req, res, next) => {
     const idempotencyKey = req.headers['idempotency-key'] || req.body.idempotencyKey;
     if (!idempotencyKey) return res.status(400).json({ success: false, message: 'Idempotency key required' });
 
-    const cacheKey = `idempotency:${req.user.id}:${idempotencyKey}`;
+    const identifier = req.user?.id || req.ip;
+    const cacheKey = `idempotency:${identifier}:${idempotencyKey}`;
     const cached = await redis.get(cacheKey);
     if (cached) {
         return res.json(JSON.parse(cached));  // Return cached response
@@ -28,9 +29,9 @@ const cacheIdempotencyResponse = (req, res, next) => {
     next();
 };
 
-// 2. Rate Limiting for Payments (Redis-based, 5/hour per user)
-const rateLimitPayments = (max = 5, window = 3600) => async (req, res, next) => {
-    const key = `rate:payments:${req.user.id}`;
+const rateLimitPayments = (max = 10, window = 3600) => async (req, res, next) => {
+    const identifier = req.user?.id || req.ip;
+    const key = `rate:payments:${identifier}`;
     const current = parseInt(await redis.get(key) || 0);
     if (current >= max) return res.status(429).json({ success: false, message: 'Rate limit exceeded' });
 

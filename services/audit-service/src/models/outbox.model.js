@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 const outboxSchema = new mongoose.Schema({
     routing_key: { type: String, required: true },
     payload: { type: Object, required: true },
-    status: { type: String, enum: ["PENDING", "SENT", "FAILED"], default: "PENDING" },
+    status: { type: String, enum: ["PENDING", "PROCESSING", "SENT", "FAILED"], default: "PENDING" },
     error: { type: String },
     retries: { type: Number, default: 0 },
     created_at: { type: Date, default: Date.now },
@@ -15,6 +15,11 @@ const outboxSchema = new mongoose.Schema({
 // Static method to find pending events
 outboxSchema.statics.findPending = function (limit = 50) {
     return this.find({ status: "PENDING" }).limit(limit).sort({ created_at: 1 });
+};
+
+// Static method to mark as processing
+outboxSchema.statics.markAsProcessing = function (id) {
+    return this.findByIdAndUpdate(id, { status: "PROCESSING", updated_at: new Date() });
 };
 
 // Static method to mark as sent
@@ -37,12 +42,11 @@ outboxSchema.statics.resetStaleProcessing = async function (staleMinutes = 5) {
     const staleTime = new Date(Date.now() - staleMinutes * 60 * 1000);
     const result = await this.updateMany(
         {
-            status: "PENDING",
-            created_at: { $lt: staleTime },
-            retries: { $lt: 3 }
+            status: "PROCESSING",
+            updated_at: { $lt: staleTime }
         },
         {
-            $set: { updated_at: new Date() }
+            $set: { status: "PENDING", updated_at: new Date() }
         }
     );
     return result.modifiedCount;

@@ -45,7 +45,7 @@ class AirtelMoneyGateway {
      * @returns {Promise<Object>} Payment initiation result
      */
     async initiatePayment(paymentData) {
-        const { amount, currency, phoneNumber, description, metadata } = paymentData;
+        const { amount, currency, phoneNumber, description, metadata, payee } = paymentData;
         const transactionId = uuidv4();
 
         try {
@@ -54,7 +54,7 @@ class AirtelMoneyGateway {
             const body = {
                 reference: transactionId,
                 subscriber: {
-                    country: metadata?.country || 'UG', // Uganda
+                    country: metadata?.country || 'UG',
                     currency: currency || 'UGX',
                     msisdn: phoneNumber.replace(/[^0-9]/g, '')
                 },
@@ -65,6 +65,21 @@ class AirtelMoneyGateway {
                     id: transactionId
                 }
             };
+
+            // Add payee if provided (multi-party routing)
+            if (payee && payee.airtel_phone) {
+                body.payee = {
+                    msisdn: payee.airtel_phone.replace(/[^0-9]/g, '')
+                };
+
+                // Add descriptive messages if supported by API/Metadata
+                body.note = description || `Payment for ${payee.name}`;
+                if (payee.name === 'Invexis') {
+                    body.note = payee.context || 'Payment to Invexis';
+                }
+
+                console.log(`[AirtelGateway] Routing payment to payee (${payee.name}): ${body.payee.msisdn}`);
+            }
 
             const response = await axios.post(
                 `${AIRTEL_MONEY_BASE_URL}/merchant/v1/payments/`,

@@ -13,13 +13,14 @@ class InvoiceRepository {
     async createInvoice(invoiceData) {
         const {
             payment_id,
-            user_id,
             seller_id,
             company_id,
+            shop_id,
             amount_due,
             currency,
             status,
             line_items,
+            customer,
             pdf_url,
             metadata
         } = invoiceData;
@@ -30,13 +31,14 @@ class InvoiceRepository {
             .insert({
                 invoice_id,
                 payment_id,
-                user_id,
                 seller_id,
                 company_id,
+                shop_id,
                 amount_due,
                 currency: currency || 'XAF',
                 status: status || 'open',
                 line_items: line_items || [],
+                customer: customer || {},
                 pdf_url,
                 metadata: metadata || {},
                 created_at: new Date()
@@ -108,28 +110,6 @@ class InvoiceRepository {
     }
 
     /**
-     * Get invoices by user
-     * @param {string} user_id - User UUID
-     * @param {Object} options - Query options
-     * @returns {Promise<Array>} List of invoices
-     */
-    async getInvoicesByUser(user_id, options = {}) {
-        const { limit = 50, offset = 0, status } = options;
-
-        let query = db('invoices')
-            .where({ user_id })
-            .orderBy('created_at', 'desc')
-            .limit(limit)
-            .offset(offset);
-
-        if (status) {
-            query = query.where({ status });
-        }
-
-        return await query;
-    }
-
-    /**
      * Get invoices by seller
      * @param {string} seller_id - Seller UUID
      * @param {Object} options - Query options
@@ -162,6 +142,28 @@ class InvoiceRepository {
 
         let query = db('invoices')
             .where({ company_id })
+            .orderBy('created_at', 'desc')
+            .limit(limit)
+            .offset(offset);
+
+        if (status) {
+            query = query.where({ status });
+        }
+
+        return await query;
+    }
+
+    /**
+     * Get invoices by shop (via metadata)
+     * @param {string} shop_id - Shop UUID
+     * @param {Object} options - Query options
+     * @returns {Promise<Array>} List of invoices
+     */
+    async getInvoicesByShop(shop_id, options = {}) {
+        const { limit = 50, offset = 0, status } = options;
+
+        let query = db('invoices')
+            .where({ shop_id })
             .orderBy('created_at', 'desc')
             .limit(limit)
             .offset(offset);

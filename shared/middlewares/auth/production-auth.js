@@ -3,7 +3,7 @@
 
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
-const { getLogger } = require('../../logger');
+const { getLogger } = require('/app/shared/logger');
 const redis = require('/app/shared/redis');
 
 const logger = getLogger('auth-middleware');
@@ -436,6 +436,89 @@ async function blacklistToken(token, expiresIn = 3600) {
   logger.info('Token blacklisted', { token: token.substring(0, 20) + '...' });
 }
 
+/**
+ * Helper: Format time for comparison (HH:MM)
+ */
+function formatTime(date) {
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+/**
+ * Check if shop is open based on hours from Redis
+ */
+async function checkShopStatus(shopId) {
+  const shopHoursKey = `shop:hours:${shopId}`;
+  try {
+    const cachedHours = await redis.get(shopHoursKey);
+
+    if (!cachedHours) {
+      return { isOpen: true, message: 'Open (unrestricted)' };
+    }
+
+    const hours = JSON.parse(cachedHours);
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0-6
+    const currentTime = formatTime(now);
+
+    const todayHours = hours.find(h => h.day_of_week === dayOfWeek);
+
+    if (!todayHours || !todayHours.open_time || !todayHours.close_time) {
+      return { isOpen: false, message: 'Closed today' };
+    }
+
+    const isOpen = currentTime >= todayHours.open_time && currentTime < todayHours.close_time;
+    return {
+      isOpen,
+      message: isOpen ? 'Open' : `Closed (opens at ${todayHours.open_time})`
+    };
+  } catch (e) {
+    logger.warn('Error checking shop status from cache', { shopId, error: e.message });
+    return { isOpen: true, message: 'Open (cache error)' };
+  }
+}
+
+/**
+ * Middleware: Enforce shop operating hours
+ * Admins are bypassed. Users must have at least one assigned shop open.
+ */
+const requireOperatingHours = async (req, res, next) => {
+  if (!req.user) return next();
+
+  // ✅ BYPASS: Admins always allowed
+  if (req.user.role === 'company_admin' || req.user.role === 'super_admin') {
+    return next();
+  }
+
+  const userShops = req.user.shops || [];
+
+  if (userShops.length === 0) {
+    // No shops assigned, assume system-wide access or limited by other middleware
+    return next();
+  }
+
+  try {
+    // Check all assigned shops - allowed if ANY shop is open
+    const statuses = await Promise.all(userShops.map(id => checkShopStatus(id)));
+    const isOpen = statuses.some(s => s.isOpen);
+
+    if (!isOpen) {
+      const messages = statuses.map(s => s.message).join(' | ');
+      return res.status(403).json({
+        success: false,
+        error: `System access locked: Shops are currently closed. [${messages}]`,
+        code: 'SHOP_CLOSED_ACCESS_DENIED'
+      });
+    }
+
+    next();
+  } catch (err) {
+    logger.error('Operating hours check failed', { error: err.message });
+    next(); // Fail open to avoid blocking users on cache errors
+  }
+};
+
 module.exports = {
   authenticateToken,
   optionalAuth,
@@ -443,6 +526,7 @@ module.exports = {
   requireCompanyAccess,
   requirePermission,
   requireAdmin,
+  requireOperatingHours,
   invalidateUserCache,
   blacklistToken,
   AuthenticationError,

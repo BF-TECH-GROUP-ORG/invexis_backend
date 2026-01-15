@@ -15,6 +15,5 @@ const CrossCompanySummarySchema = new mongoose.Schema({
     lastUpdated: { type: Date, default: Date.now }
 });
 
-CrossCompanySummarySchema.index({ hashedCustomerId: 1 });
 
 module.exports = mongoose.model('CrossCompanySummary', CrossCompanySummarySchema);

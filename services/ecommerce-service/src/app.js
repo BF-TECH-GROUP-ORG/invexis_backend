@@ -16,6 +16,21 @@ const app = express();
 
 // Middleware
 app.use(helmet());
+
+// 🔒 SECURITY: Rate Limiting (DDoS Prevention)
+const rateLimit = require("express-rate-limit");
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 429,
+    error: "TOO_MANY_REQUESTS",
+    message: "Too many requests from this IP, please try again after 15 minutes"
+  }
+});
+app.use(apiLimiter);
 // CORS is handled at the API gateway; do not enable here
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

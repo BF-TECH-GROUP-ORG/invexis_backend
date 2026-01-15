@@ -108,7 +108,7 @@ async function createDebt(payload) {
             createdAt: saved.createdAt || new Date(),
             createdBy: createdBy || undefined
         };
-        
+
         // Fire-and-forget: publish event to RabbitMQ + enqueue summaries, invalidate cache
         Promise.all([
             // Publish DEBT_CREATED event to RabbitMQ immediately
@@ -217,50 +217,60 @@ async function recordRepayment(payload) {
             paymentMethod,
             paymentReference,
             createdBy: createdBy || undefined
+
         });
 
-        // Update debt in-memory for immediate read availability
-        debt.amountPaidNow = Number(debt.amountPaidNow) + Number(amountPaid);
-        debt.balance = Number(debt.totalAmount) - Number(debt.amountPaidNow);
-        debt.status = await computeStatus(debt.totalAmount, debt.amountPaidNow);
-        debt.repayments = debt.repayments || [];
-        debt.repayments.push(repayment._id);
-        debt.balanceHistory = debt.balanceHistory || [];
-        debt.balanceHistory.push({ date: new Date(), balance: debt.balance });
-        debt.updatedAt = new Date();
-        // enqueue updated debt for persistence
-        inMemoryStore.createDebt(debt);
+        // Trigger Payment Event if applicable (MTN/Airtel/Card)
+        const normalizedPaymentMethod = String(paymentMethod).toLowerCase();
 
-        // IMMEDIATE DB WRITE: persist repayment + updated debt directly to MongoDB so UI reflects changes instantly
-        // When balance reaches 0 or less, automatically mark debt as PAID
-        let savedDebt, wasAutoPaid = false;
-        try {
-            // Write repayment directly to DB
-            await Repayment.create({
-                _id: repayment._id,
-                companyId,
-                shopId,
-                hashedCustomerId: debt.hashedCustomerId,
-                debtId: debt._id,
-                paymentId: repaymentId,
-                amountPaid,
-                paymentMethod,
-                paymentReference,
-                createdBy: createdBy || undefined,
-                paidAt: new Date(),
-                createdAt: new Date()
-            });
+        // Logic Branch: CASH vs ASYNC (Mobile/Card/Bank Transfer)
+        const isAsyncPayment = ['mobile', 'card', 'mtn_momo', 'airtel_money', 'mtn', 'airtel', 'bank_transfer'].includes(normalizedPaymentMethod);
+        const isCash = normalizedPaymentMethod === 'cash';
 
-            // Auto-mark debt as PAID if balance is 0 or less
+        // 1. Prepare Repayment Record (Pending or Succeeded)
+        const initialStatus = isCash ? 'succeeded' : 'pending';
+
+        // Write repayment directly to DB first
+        const savedRepayment = await Repayment.create({
+            _id: repaymentId,
+            companyId,
+            shopId,
+            hashedCustomerId: debt.hashedCustomerId,
+            debtId: debt._id,
+            paymentId: repaymentId,
+            amountPaid,
+            paymentMethod,
+            paymentReference,
+            createdBy: createdBy || undefined,
+            status: initialStatus,
+            paidAt: new Date(),
+            createdAt: new Date()
+        });
+
+        // 2. If CASH, update Debt immediately
+        let savedDebt = null;
+        let wasAutoPaid = false;
+
+        if (isCash) {
+            // Update debt in-memory
+            debt.amountPaidNow = Number(debt.amountPaidNow) + Number(amountPaid);
+            debt.balance = Number(debt.totalAmount) - Number(debt.amountPaidNow);
+            debt.status = await computeStatus(debt.totalAmount, debt.amountPaidNow);
+            debt.repayments = debt.repayments || [];
+            debt.repayments.push(repayment._id);
+            debt.balanceHistory = debt.balanceHistory || [];
+            debt.balanceHistory.push({ date: new Date(), balance: debt.balance });
+            debt.updatedAt = new Date(); // Update timestamp
+
             const finalStatus = debt.balance <= 0 ? 'PAID' : debt.status;
-            wasAutoPaid = finalStatus === 'PAID' && debt.status !== 'PAID';
+            wasAutoPaid = finalStatus === 'PAID'; // && debt.status !== 'PAID'; (logic check simplified)
 
-            // Write updated debt directly to DB
+            // Persist Debt update
             savedDebt = await Debt.findOneAndUpdate(
                 { _id: debtId, companyId, isDeleted: false },
                 {
                     amountPaidNow: debt.amountPaidNow,
-                    balance: Math.max(0, debt.balance), // ensure balance never goes negative
+                    balance: Math.max(0, debt.balance),
                     status: finalStatus,
                     repayments: debt.repayments,
                     balanceHistory: debt.balanceHistory,
@@ -268,29 +278,80 @@ async function recordRepayment(payload) {
                 },
                 { new: true, lean: true }
             );
+        }
 
-            // Update result object to reflect DB-persisted debt (UI gets fresh data)
-            if (savedDebt) {
-                Object.assign(debt, savedDebt);
-            }
+        // 3. If ASYNC, emit event and return (Debt not updated yet)
+        if (isAsyncPayment) {
+            const payerPhone = payload.phoneNumber || debt.customer?.phone;
+            if (payerPhone) {
+                // Determine Gateway and Method based on Repayment model enums
+                let gateway = 'mtn_momo'; // Default
+                let schemaPaymentMethod = 'mobile_money'; // Default
 
-            // If debt was auto-marked PAID, publish that event (async, non-blocking)
-            if (wasAutoPaid) {
-                try {
-                    if (global && typeof global.rabbitmqPublish === 'function') {
-                        global.rabbitmqPublish('debt.fully_paid', { debtId: debt._id, companyId }).catch(() => { });
+                if (normalizedPaymentMethod === 'bank_transfer' || normalizedPaymentMethod === 'card') {
+                    gateway = 'manual';
+                    schemaPaymentMethod = normalizedPaymentMethod;
+                } else if (normalizedPaymentMethod === 'mtn' || normalizedPaymentMethod.includes('mtn')) {
+                    gateway = 'mtn_momo';
+                    schemaPaymentMethod = 'mobile_money';
+                } else if (normalizedPaymentMethod.includes('airtel')) {
+                    gateway = 'airtel_money';
+                    schemaPaymentMethod = 'mobile_money';
+                } else {
+                    gateway = 'manual';
+                    schemaPaymentMethod = 'manual';
+                }
+
+                const exchange = 'events_topic';
+                const routingKey = 'debts.payment.requested';
+
+                const eventPayload = {
+                    event: 'PAYMENT_REQUESTED',
+                    source: 'debt-service',
+                    paymentType: 'DEBT',
+                    referenceId: `DEBT-${repaymentId}`,
+                    orderId: String(debt._id),
+                    companyId: companyId,
+                    shopId: shopId,
+                    sellerId: createdBy && createdBy.id ? createdBy.id : (typeof createdBy === 'string' ? createdBy : 'unknown'),
+                    amount: amountPaid,
+                    currency: 'RWF',
+                    description: `Debt Repayment for ${debt.customer?.name || 'Customer'}`,
+                    paymentMethod: schemaPaymentMethod,
+                    gateway: gateway,
+                    phoneNumber: payerPhone,
+                    customer: {
+                        name: debt.customer?.name || 'Unknown Customer',
+                        email: debt.customer?.email || 'no-email@provided.com',
+                        phone: payerPhone
+                    },
+                    lineItems: [{
+                        id: String(repaymentId),
+                        name: 'Debt Repayment',
+                        qty: 1,
+                        price: amountPaid
+                    }],
+                    idempotencyKey: `pay_debt_${repaymentId}`,
+                    metadata: {
+                        repaymentId: String(repaymentId),
+                        debtId: String(debtId),
+                        shopId: String(shopId),
+                        initiatedBy: createdBy
                     }
-                } catch (e) { }
+                };
+
+                if (global && typeof global.rabbitmqPublish === 'function') {
+                    await global.rabbitmqPublish(exchange, routingKey, eventPayload)
+                        .then(() => console.log(`[DebtService] 📤 Emitted ${routingKey} to ${exchange}`))
+                        .catch(err => console.error('Failed to emit DEBT payment request:', err));
+                }
             }
-        } catch (e) {
-            console.error('Direct DB write failed:', e.message);
-            throw new Error(`Failed to persist repayment: ${e.message}`);
         }
 
         // Fire-and-forget: enqueue summaries, events, publish immediate, invalidate cache, cache response for deduplication
         const result = { debt, repayment };
         const debtEventHandler = require('../events/handlers/debtEvent.handler');
-        
+
         Promise.all([
             // Enqueue summary updates into the same durable pipeline
             inMemoryStore.enqueueSummary({
@@ -444,16 +505,16 @@ async function crossCompanyCustomerDebts({ hashedCustomerId, requestingCompanyId
 async function getDebtWithRepayments({ companyId, debtId }) {
     const debt = await debtRepo.findById(debtId, companyId);
     if (!debt) throw new Error('Debt not found');
-    
+
     // Load repayments with details, sorted by most recent first
     const repayments = await Repayment.find({ debtId: debt._id })
         .sort({ paidAt: -1 })
         .lean()
         .exec();
-    
+
     // Convert debt to plain object
     const plain = debt.toObject ? debt.toObject() : debt;
-    
+
     // Attach repayments with formatted details
     plain.repayments = repayments.map(r => ({
         _id: r._id,
@@ -466,7 +527,7 @@ async function getDebtWithRepayments({ companyId, debtId }) {
         createdBy: r.createdBy,
         customer: r.customer
     }));
-    
+
     // Add payment summary
     plain.paymentSummary = {
         totalRepayments: repayments.length,
@@ -474,7 +535,7 @@ async function getDebtWithRepayments({ companyId, debtId }) {
         remainingBalance: plain.balance,
         lastPaymentDate: repayments.length > 0 ? repayments[0].paidAt : null
     };
-    
+
     return plain;
 }
 

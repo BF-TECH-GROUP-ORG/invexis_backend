@@ -41,7 +41,7 @@ const PORT = process.env.PORT || 9000;
 const app = express();
 
 // ✅ Trust proxy - Required for rate limiting behind API gateway
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // Initialize health checker and security manager
 const healthChecker = new HealthChecker('sales-service');
@@ -59,6 +59,23 @@ app.use(helmet({
   },
 }));
 
+const { parseTierHeaders } = require('/app/shared/middlewares');
+
+// 🔒 SECURITY: Rate Limiting (DDoS Prevention)
+const rateLimit = require("express-rate-limit");
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 429,
+    error: "TOO_MANY_REQUESTS",
+    message: "Too many requests from this IP, please try again after 15 minutes"
+  }
+});
+app.use(apiLimiter);
+
 // Trust API Gateway - validate requests come from gateway  
 app.use((req, res, next) => {
   const gatewayHeader = req.headers['x-gateway-request'];
@@ -67,6 +84,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Parse tier headers from gateway
+app.use(parseTierHeaders);
 
 app.use(compression());
 
@@ -169,7 +189,10 @@ app.get("/", (req, res) => {
 });
 
 // API Routes
-app.use("/sales", salesRouter);
+const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+
+app.use("/sales", authenticateToken, checkSubscriptionStatus(), salesRouter);
 
 
 // Serve PDF files statically
@@ -201,10 +224,10 @@ const initializeDatabase = async () => {
   try {
     await sequelize.authenticate();
     console.log("✅ Database connection established");
-    
+
     // Only create tables if they don't exist, don't alter them
     await sequelize.sync({ force: false, alter: false });
-    
+
     // Manually add the unique constraint if it doesn't exist
     try {
       const [results] = await sequelize.query(`
@@ -214,7 +237,7 @@ const initializeDatabase = async () => {
         AND table_name = 'invoices' 
         AND index_name = 'invoices_invoiceNumber'
       `);
-      
+
       if (results[0].index_count === 0) {
         console.log("Adding unique index on invoiceNumber...");
         await sequelize.query(`
@@ -226,7 +249,7 @@ const initializeDatabase = async () => {
       console.warn("⚠️ Could not ensure invoiceNumber index:", indexError.message);
       // Continue running even if index creation fails
     }
-    
+
     console.log("✅ Database models synchronized");
   } catch (error) {
     console.error("❌ Failed to connect to database:", error);
@@ -255,11 +278,4 @@ const initialize = async () => {
 };
 
 
-app.listen(PORT, () => {
-  initialize()
-  console.log(`🚀 Sales Service running on port ${PORT}`);
-  console.log(`📍 Health check: http://localhost:${PORT}/health`);
-  console.log(`📍 Sales endpoint: http://localhost:${PORT}/sales`);
-  console.log(`📍 KnownUsers endpoint: http://localhost:${PORT}/known-users`);
-});
-module.exports = app;
+module.exports = { app, initialize };

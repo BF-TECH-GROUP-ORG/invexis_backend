@@ -16,7 +16,7 @@ async function processBatch() {
         for (const ev of events) {
             try {
                 console.log(`[OutboxWorker] 📤 Processing event: ${ev.eventType} for debt ${ev.payload?.debtId}`);
-                
+
                 // Route events to appropriate handlers
                 if (ev.eventType === 'DEBT_CREATED') {
                     await debtEventHandler.handleDebtCreated(ev.payload);
@@ -28,10 +28,10 @@ async function processBatch() {
                     // Generic RabbitMQ publish for other events
                     if (global && typeof global.rabbitmqPublish === 'function') {
                         const routingKey = ev.eventType.toLowerCase().replace(/_/g, '.');
-                        await global.rabbitmqPublish('debt.events', routingKey, ev.payload);
+                        await global.rabbitmqPublish('events_topic', routingKey, ev.payload);
                     }
                 }
-                
+
                 await eventRepo.markProcessed(ev._id);
                 console.log(`[OutboxWorker] ✅ Event processed: ${ev.eventType}`);
             } catch (err) {

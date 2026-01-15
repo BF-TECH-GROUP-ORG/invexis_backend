@@ -102,6 +102,17 @@ module.exports = {
             "channels": ["email", "push"],
             "priority": "high"
         },
+        // Actual events emitted by inventory-service
+        "inventory.product.low_stock": {
+            "service": "Notification-Service",
+            "channels": ["email", "push", "in-app"],
+            "priority": "high"
+        },
+        "inventory.product.out_of_stock": {
+            "service": "Notification-Service",
+            "channels": ["email", "sms", "push", "in-app"],
+            "priority": "urgent"
+        },
 
         // --- Sale Events ---
         "sales.created": { // Legacy support
@@ -119,7 +130,17 @@ module.exports = {
             "channels": ["in-app"],
             "priority": "normal"
         },
+        "sale.updated": {
+            "service": "Notification-Service",
+            "channels": ["in-app"],
+            "priority": "low"
+        },
         "sale.cancelled": {
+            "service": "Notification-Service",
+            "channels": ["email", "in-app"],
+            "priority": "high"
+        },
+        "sale.deleted": {
             "service": "Notification-Service",
             "channels": ["email", "in-app"],
             "priority": "high"
@@ -128,6 +149,11 @@ module.exports = {
             "service": "Notification-Service",
             "channels": ["email", "sms", "in-app"],
             "priority": "medium"
+        },
+        "sale.return.created": {
+            "service": "Notification-Service",
+            "channels": ["email", "push", "in-app"],
+            "priority": "high"
         },
         "sales.refunded": { // Legacy support
             "service": "Notification-Service",

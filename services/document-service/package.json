@@ -1,0 +1,39 @@
+{
+    "name": "document-service",
+    "version": "1.0.0",
+    "description": "Service for managing documents and files",
+    "main": "src/index.js",
+    "scripts": {
+        "start": "node src/index.js",
+        "dev": "nodemon src/index.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "invexis",
+        "document",
+        "microservice"
+    ],
+    "author": "Invexis Team",
+    "license": "ISC",
+    "dependencies": {
+        "bwip-js": "^4.8.0",
+        "cloudinary": "^2.8.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
+        "helmet": "^7.1.0",
+        "ioredis": "^5.8.2",
+        "mongoose": "^8.0.3",
+        "morgan": "^1.10.0",
+        "multer": "^2.0.2",
+        "multer-storage-cloudinary": "^4.0.0",
+        "pdfkit": "^0.17.2",
+        "prom-client": "^15.0.0",
+        "qrcode": "^1.5.4",
+        "uuid": "^13.0.0",
+        "winston": "^3.11.0"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.2"
+    }
+}

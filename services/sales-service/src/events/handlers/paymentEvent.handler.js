@@ -27,6 +27,7 @@ module.exports = async function handlePaymentEvent(event) {
         switch (type) {
           case "payment.completed":
           case "payment.success":
+          case "payment.succeeded":
             await handlePaymentSuccess(data);
             break;
 
@@ -39,6 +40,7 @@ module.exports = async function handlePaymentEvent(event) {
             await handlePaymentRefunded(data);
             break;
 
+          case "payment.processed":
           case "payment.pending":
             await handlePaymentPending(data);
             break;
@@ -67,7 +69,10 @@ module.exports = async function handlePaymentEvent(event) {
  * Handle successful payment
  */
 async function handlePaymentSuccess(data) {
-  const { saleId, paymentId, amount } = data;
+  // Extract saleId from root or metadata
+  const saleId = data.saleId || data.metadata?.saleId;
+  const paymentId = data.paymentId;
+  const amount = data.amount;
 
   if (!saleId) {
     console.warn("⚠️ Payment success event missing saleId");
@@ -91,6 +96,8 @@ async function handlePaymentSuccess(data) {
       // Update associated invoice if exists
       await Invoice.update({ status: "paid" }, { where: { saleId } });
       console.log(`✅ Invoice for sale ${saleId} marked as paid`);
+    } else {
+      console.warn(`⚠️ No sale found with saleId: ${saleId}`);
     }
   } catch (error) {
     console.error(`❌ Error updating sale ${saleId} to paid:`, error.message);
@@ -102,7 +109,10 @@ async function handlePaymentSuccess(data) {
  * Handle failed payment
  */
 async function handlePaymentFailed(data) {
-  const { saleId, paymentId, reason } = data;
+  // Extract saleId from root or metadata
+  const saleId = data.saleId || data.metadata?.saleId;
+  const paymentId = data.paymentId;
+  const reason = data.reason || data.failureReason;
 
   if (!saleId) {
     console.warn("⚠️ Payment failed event missing saleId");
@@ -120,6 +130,8 @@ async function handlePaymentFailed(data) {
 
     if (updated) {
       console.log(`❌ Sale ${saleId} marked as failed (Reason: ${reason})`);
+    } else {
+      console.warn(`⚠️ No sale found with saleId: ${saleId}`);
     }
   } catch (error) {
     console.error(`❌ Error updating sale ${saleId} to failed:`, error.message);
@@ -164,7 +176,9 @@ async function handlePaymentRefunded(data) {
  * Handle pending payment
  */
 async function handlePaymentPending(data) {
-  const { saleId, paymentId } = data;
+  // Extract saleId from root or metadata
+  const saleId = data.saleId || data.metadata?.saleId;
+  const paymentId = data.paymentId;
 
   if (!saleId) {
     console.warn("⚠️ Payment pending event missing saleId");

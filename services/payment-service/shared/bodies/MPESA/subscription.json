@@ -1,0 +1,25 @@
+{
+    "companyId": "4d9a3e7f-5856-4621-bb02-f304a24bafcb",
+    "paymentType": "SUBSCRIPTION",
+    "amount": 5000,
+    "currency": "KES",
+    "sellerId": "660e8400-e29b-41d4-a716-446655440000",
+    "description": "Platform Subscription (M-Pesa)",
+    "paymentMethod": "mpesa",
+    "gateway": "mpesa",
+    "phoneNumber": "254700000000",
+    "customer": {
+        "name": "M-Pesa Owner",
+        "email": "owner.mpesa@example.com"
+    },
+    "lineItems": [
+        {
+            "name": "Standard Tier Monthly",
+            "qty": 1,
+            "price": 5000
+        }
+    ],
+    "metadata": {
+        "country": "KE"
+    }
+}

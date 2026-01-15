@@ -7,7 +7,9 @@ const baseUserSchema = Joi.object({
     email: Joi.string().email({ tlds: { allow: false } }).required(),
     phone: Joi.string().pattern(/^\+?[1-9]\d{1,14}$/).required(), // Required for all (SMS/analytics)
     profilePicture: Joi.string().uri().optional(),
-    password: Joi.string().min(8).max(128).pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/).required(),
+    // Relaxed validation to allow 6-char auto-generated passwords
+    password: Joi.string().min(6).max(128).optional(),
+    generatedPassword: Joi.string().optional(), // Allow internal flag
     googleId: Joi.string().optional(),
     gender: Joi.string().valid("male", "female", "other").optional(),
     role: Joi.string().valid("super_admin", "company_admin", "shop_manager", "worker", "customer").required(),
@@ -90,8 +92,8 @@ const registerSchema = baseUserSchema.keys({
             const validDepartments = ['sales', 'management'];
             const invalidDepartments = value.assignedDepartments.filter(dept => !validDepartments.includes(dept.trim().toLowerCase()));
             if (invalidDepartments.length > 0) {
-                return helpers.error('any.invalid', { 
-                    message: `Invalid departments: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}` 
+                return helpers.error('any.invalid', {
+                    message: `Invalid departments: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`
                 });
             }
             // Normalize to lowercase and trim
@@ -165,8 +167,8 @@ const updateUserSchema = baseUserSchema.keys({
         const validDepartments = ['sales', 'management'];
         const invalidDepartments = value.assignedDepartments.filter(dept => !validDepartments.includes(dept.trim().toLowerCase()));
         if (invalidDepartments.length > 0) {
-            return helpers.error('any.invalid', { 
-                message: `Invalid departments: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}` 
+            return helpers.error('any.invalid', {
+                message: `Invalid departments: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`
             });
         }
         // Normalize to lowercase and trim

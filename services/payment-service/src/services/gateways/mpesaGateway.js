@@ -70,12 +70,16 @@ class MpesaGateway {
      * @returns {Promise<Object>} Payment initiation result
      */
     async initiatePayment(paymentData) {
-        const { amount, phoneNumber, description, metadata } = paymentData;
+        const { amount, phoneNumber, description, metadata, payee, reference_id } = paymentData;
 
         try {
             const token = await this.getAccessToken();
             const timestamp = this.getTimestamp();
             const password = this.generatePassword(timestamp);
+
+            // Use internal reference ID or Payee Name for AccountReference (vital for reconciliation)
+            // Truncate to 12 chars as per some M-Pesa API limits, or keep it safe
+            const accountRef = reference_id || (payee ? payee.name : 'Invexis');
 
             const body = {
                 BusinessShortCode: MPESA_SHORTCODE,
@@ -83,13 +87,18 @@ class MpesaGateway {
                 Timestamp: timestamp,
                 TransactionType: 'CustomerPayBillOnline',
                 Amount: Math.round(amount),
-                PartyA: phoneNumber.replace(/[^0-9]/g, ''), // Customer phone number
+                PartyA: phoneNumber.replace(/[^0-9]/g, ''),
                 PartyB: MPESA_SHORTCODE,
                 PhoneNumber: phoneNumber.replace(/[^0-9]/g, ''),
                 CallBackURL: MPESA_CALLBACK_URL,
-                AccountReference: metadata?.account_reference || 'Invexis',
-                TransactionDesc: description || 'Payment via Invexis'
+                AccountReference: accountRef.substring(0, 12), // Safaricom limit often 12 chars
+                TransactionDesc: description || (payee ? `Payment for ${payee.name}` : 'Payment via Invexis')
             };
+
+            // Log routing info if payee is provided
+            if (payee && payee.mpesa_phone) {
+                console.log(`Initiating M-Pesa payment for payee (${payee.name}): ${payee.mpesa_phone}`);
+            }
 
             const response = await axios.post(
                 `${MPESA_BASE_URL}/mpesa/stkpush/v1/processrequest`,

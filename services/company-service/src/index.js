@@ -28,16 +28,41 @@ const server = app.listen(PORT, async () => {
     nodeVersion: process.version,
     pid: process.pid
   });
-  
+
   console.log(`🏢 Company Service running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
-  
+
   // Initialize background worker queue
   try {
     await initWorkerQueue();
     logger.info('Background worker queue initialized successfully');
   } catch (err) {
     logger.warn('Background worker queue initialization failed (non-blocking)', { error: err.message });
+  }
+
+  // Start subscription auto-renewal cron job
+  try {
+    const subscriptionRenewalCron = require('./cron/subscriptionRenewal.cron');
+    subscriptionRenewalCron.start();
+    logger.info('Subscription auto-renewal cron job started');
+  } catch (err) {
+    logger.warn('Subscription cron job initialization failed (non-blocking)', { error: err.message });
+  }
+
+  // 📦 Start Outbox Dispatcher
+  try {
+    const { initPublishers } = require('./events/producer');
+    const { startOutboxDispatcher } = require('./workers/outboxDispatcher');
+
+    // 1. Initialize Publishers
+    await initPublishers();
+
+    // 2. Start Dispatcher (every 5 seconds)
+    startOutboxDispatcher(5000);
+
+    logger.info('Outbox Dispatcher & Publishers initialized successfully');
+  } catch (err) {
+    logger.error('Failed to start Outbox Dispatcher', { error: err.message });
   }
 });
 
@@ -71,19 +96,19 @@ process.on("SIGINT", gracefulShutdown);
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Promise Rejection', {
-        reason: reason?.message || reason,
-        stack: reason?.stack
-    });
-    process.exit(1);
+  logger.error('Unhandled Promise Rejection', {
+    reason: reason?.message || reason,
+    stack: reason?.stack
+  });
+  process.exit(1);
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
-    logger.error('Uncaught Exception', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-    });
-    process.exit(1);
+  logger.error('Uncaught Exception', {
+    message: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  process.exit(1);
 });

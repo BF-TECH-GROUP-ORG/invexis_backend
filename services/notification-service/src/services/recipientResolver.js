@@ -305,6 +305,9 @@ class RecipientResolver {
             'inventory.low.stock': {
                 roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
+            'inventory.product.low_stock': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
             'inventory.out_of_stock': {
                 roles: [
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
@@ -312,6 +315,12 @@ class RecipientResolver {
                 ]
             },
             'inventory.out.of.stock': {
+                roles: [
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
+                    AUTH_ROLES.COMPANY_ADMIN
+                ]
+            },
+            'inventory.product.out_of_stock': {
                 roles: [
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
                     AUTH_ROLES.COMPANY_ADMIN
@@ -325,7 +334,18 @@ class RecipientResolver {
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
             },
+            'sale.updated': {
+                roles: [
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
             'sale.completed': { roles: [AUTH_ROLES.WORKER] },
+            'sale.deleted': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
             'sale.cancelled': {
                 roles: [
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },

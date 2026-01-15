@@ -32,7 +32,7 @@ const createServiceProxy = (serviceName, serviceUrl, options = {}) => {
       // Add gateway identification header for service trust
       proxyReq.setHeader("X-Gateway-Request", "true");
       proxyReq.setHeader("X-Gateway-Service", serviceName);
-      
+
       // Forward user info from auth middleware if available
       if (req.user) {
         const user = req.user;
@@ -49,6 +49,12 @@ const createServiceProxy = (serviceName, serviceUrl, options = {}) => {
           safeSetHeader("X-User-Shops", JSON.stringify(user.shops));
         }
         safeSetHeader("X-Company-Id", user.companyId);
+      }
+
+      // Forward subscription info if available
+      if (req.subscription) {
+        safeSetHeader("X-Subscription-Tier", req.subscription.tier);
+        safeSetHeader("X-Subscription-Active", req.subscription.is_active);
       }
 
       // Handle body for POST/PUT/PATCH
@@ -134,6 +140,8 @@ routes.get("/health/all", async (req, res) => {
     checkService("analytics", services.ANALYTICS_SERVICE),
     checkService("audit", services.AUDIT_SERVICE),
     checkService("debt", services.DEBT_SERVICE),
+    checkService("document", services.DOCUMENT_SERVICE),
+    checkService("report", services.REPORT_SERVICE),
     checkService("websocket", services.WEBSOCKET_SERVICE),
   ]);
 
@@ -149,6 +157,8 @@ routes.get("/health/all", async (req, res) => {
     "analytics",
     "audit",
     "debt",
+    "document",
+    "report",
     "websocket",
   ];
 
@@ -279,6 +289,20 @@ const debtProxy = createServiceProxy("DEBT", services.DEBT_SERVICE, {
 });
 
 /**
+ * Document Service Proxy
+ */
+const documentProxy = createServiceProxy("DOCUMENT", services.DOCUMENT_SERVICE, {
+  pathRewrite: { "^/api/document": "/document" },
+});
+
+/**
+ * Report Service Proxy
+ */
+const reportProxy = createServiceProxy("REPORT", services.REPORT_SERVICE, {
+  pathRewrite: { "^/api/report": "/report" },
+});
+
+/**
  * WebSocket Service Proxy
  * Routes: /api/websocket/* → http://websocket-service:9002/*
  * Supports WebSocket upgrade
@@ -327,6 +351,8 @@ module.exports = {
   analyticsProxy,
   auditProxy,
   debtProxy,
+  documentProxy,
+  reportProxy,
   websocketProxy,
   authenticateToken, // For custom routes
 };

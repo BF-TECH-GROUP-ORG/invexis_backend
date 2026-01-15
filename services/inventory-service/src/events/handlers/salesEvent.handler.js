@@ -19,12 +19,12 @@ const { processEventOnce } = require('../../utils/eventDeduplication');
 async function handleSaleCreated(data) {
   const { saleId, items, traceId, companyId, shopId, soldBy } = data;
 
-  logger.info(`💰 [sale.created] Processing sale ${saleId}`, {
+  logger.info(`💰 [INVENTORY DEBUG] [sale.created] Processing sale ${saleId} with ${items.length} items`, {
     traceId,
     companyId,
     shopId,
-    itemsCount: items?.length || 0,
-    items: items?.map(i => ({ productId: i.productId, quantity: i.quantity }))
+    items,
+    timestamp: new Date().toISOString()
   });
 
   if (!items || !Array.isArray(items) || items.length === 0) {

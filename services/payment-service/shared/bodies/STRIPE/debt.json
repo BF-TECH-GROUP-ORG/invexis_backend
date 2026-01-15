@@ -1,0 +1,21 @@
+{
+    "companyId": "4d9a3e7f-5856-4621-bb02-f304a24bafcb",
+    "paymentType": "DEBT",
+    "amount": 15000,
+    "currency": "RWF",
+    "sellerId": "660e8400-e29b-41d4-a716-446655440000",
+    "description": "Debt Settlement for INV-2024-001 (Card)",
+    "paymentMethod": "card",
+    "gateway": "stripe",
+    "customer": {
+        "name": "John Debtor",
+        "email": "john.debtor@example.com"
+    },
+    "lineItems": [
+        {
+            "name": "Partial Debt Payment",
+            "qty": 1,
+            "price": 15000
+        }
+    ]
+}

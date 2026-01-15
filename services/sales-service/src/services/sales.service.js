@@ -68,7 +68,7 @@ class SalesService {
           await OutboxService.create(
             {
               type: "sale.item.added",
-              exchange: "invexis_events",
+              exchange: "events_topic",
               routingKey: "sale.item.added",
               payload: {
                 saleId: sale.saleId,
@@ -89,7 +89,7 @@ class SalesService {
       await OutboxService.create(
         {
           type: "sale.created",
-          exchange: "invexis_events",
+          exchange: "events_topic",
           routingKey: "sale.created",
           // Include debt-related metadata so debt-service can correlate and update debts reliably
           payload: {
@@ -157,7 +157,7 @@ class SalesService {
       await OutboxService.create(
         {
           type: "sale.completed",
-          exchange: "invexis_events",
+          exchange: "events_topic",
           routingKey: "sale.completed",
           payload: {
             saleId: sale.saleId,
@@ -176,7 +176,7 @@ class SalesService {
       await OutboxService.create(
         {
           type: "sale.payment.completed",
-          exchange: "invexis_events",
+          exchange: "events_topic",
           routingKey: "sale.payment.completed",
           payload: {
             saleId: sale.saleId,
@@ -303,7 +303,7 @@ class SalesService {
       await OutboxService.create(
         {
           type: "invoice.created",
-          exchange: "invexis_events",
+          exchange: "events_topic",
           routingKey: "invoice.created",
           payload: {
             invoiceId: invoice.invoiceId,

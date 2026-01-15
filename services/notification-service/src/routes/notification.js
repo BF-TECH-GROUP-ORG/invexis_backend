@@ -4,8 +4,11 @@ const router = express.Router();
 const NotificationController = require('../controllers/NotificationController');
 const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
 
-// Apply Auth Middleware to all routes
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+
+// Apply Auth & Subscription Middleware to all routes
 router.use(authenticateToken);
+router.use(checkSubscriptionStatus());
 
 // Mark as read
 router.post('/mark-read', NotificationController.markAsRead);

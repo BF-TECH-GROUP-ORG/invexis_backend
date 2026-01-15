@@ -210,6 +210,17 @@ class NotificationEventProcessor {
 
         // Event-specific extractions
         switch (eventType) {
+            case 'user.created':
+                return {
+                    ...extracted,
+                    email: data.email,
+                    phone: data.phone,
+                    userName: data.firstName || data.name || 'User',
+                    password: data.password || data.generatedPassword, // Critical for welcome email
+                    role: data.role,
+                    companyName: data.companyName || 'Invexis'
+                };
+
             case 'company.created':
             case 'company.updated':
                 return {
@@ -221,9 +232,13 @@ class NotificationEventProcessor {
                 };
 
             case 'sale.created':
+            case 'sale.updated':
+            case 'sale.deleted':
+            case 'sale.cancelled':
             case 'sale.return.created':
                 return {
                     ...extracted,
+                    saleId: data.saleId || data.id,
                     totalAmount: data.totalAmount || data.refundAmount,
                     customerId: data.customerId,
                     items: data.items
@@ -231,12 +246,18 @@ class NotificationEventProcessor {
 
             case 'inventory.low_stock':
             case 'inventory.out_of_stock':
+            case 'inventory.product.low_stock':
+            case 'inventory.product.out_of_stock':
                 return {
                     ...extracted,
                     productId: data.productId,
                     productName: data.productName || data.name,
+                    sku: data.sku,
                     currentStock: data.currentStock || data.stock,
-                    threshold: data.threshold
+                    threshold: data.threshold,
+                    percentageOfThreshold: data.percentageOfThreshold,
+                    suggestedReorderQty: data.suggestedReorderQty,
+                    priority: data.priority
                 };
 
             case 'debt.overdue':
@@ -259,7 +280,12 @@ class NotificationEventProcessor {
      */
     async createNotification({ eventType, eventId, source, emittedAt, userId, role, intent, channels, priority, data }) {
         // Determine template name from event type
-        const templateName = this.getTemplateName(eventType);
+        let templateName = this.getTemplateName(eventType);
+
+        // Dynamic template selection for user.created
+        if (eventType === 'user.created') {
+            templateName = data.password ? 'welcome' : 'welcome_manual';
+        }
 
         // Build channel configuration first
         const channelConfig = this.buildChannelConfig(channels);
@@ -369,15 +395,24 @@ class NotificationEventProcessor {
      */
     getTemplateName(eventType) {
         const mapping = {
+            'user.created': 'welcome', // Default to welcome (will be refined in createNotification)
             'company.created': 'welcome',
             'company.suspended': 'company_suspended',
             'shop.created': 'shop_created',
             'sale.created': 'sale_confirmation',
+            'sale.updated': 'sale_updated',
+            'sale.deleted': 'sale_deleted',
+            'sale.cancelled': 'sale_cancelled',
             'sale.return.created': 'sale_return',
             'inventory.low_stock': 'low_stock_alert',
+            'inventory.product.low_stock': 'low_stock_alert',
             'inventory.out_of_stock': 'out_of_stock_alert',
+            'inventory.product.out_of_stock': 'out_of_stock_alert',
             'debt.overdue': 'debt_overdue',
+            'debt.repaid': 'payment_success',
+            'debt.fully.paid': 'payment_success',
             'payment.success': 'payment_success',
+            'payment.processed': 'payment_success',
             'payment.failed': 'payment_failed'
         };
 
@@ -401,9 +436,14 @@ class NotificationEventProcessor {
             'company.created': 'Welcome to Invexis!',
             'shop.created': 'New Shop Created',
             'sale.created': 'New Sale Recorded',
+            'sale.updated': 'Sale Updated',
+            'sale.deleted': 'Sale Deleted',
+            'sale.cancelled': 'Sale Cancelled',
             'sale.return.created': 'Product Return Initiated',
             'inventory.low_stock': '⚠️ Low Stock Alert',
+            'inventory.product.low_stock': '⚠️ Low Stock Alert',
             'inventory.out_of_stock': '🚨 Out of Stock',
+            'inventory.product.out_of_stock': '🚨 Out of Stock',
             'debt.overdue': '⏰ Payment Overdue',
             'payment.success': '✅ Payment Successful',
             'payment.failed': '❌ Payment Failed'
@@ -416,9 +456,14 @@ class NotificationEventProcessor {
             'company.created': `Welcome, ${data.name || 'Admin'}! Your account is ready.`,
             'shop.created': `Shop "${data.name}" has been successfully created.`,
             'sale.created': `New sale for $${data.totalAmount || 0} recorded.`,
+            'sale.updated': `Sale ${data.saleId || data.id} has been updated.`,
+            'sale.deleted': `Sale ${data.saleId || data.id} has been deleted.`,
+            'sale.cancelled': `Sale ${data.saleId || data.id} has been cancelled.`,
             'sale.return.created': `Return for sale ${data.saleId} initiated ($${data.refundAmount || 0}).`,
-            'inventory.low_stock': `${data.productName || 'Product'} is running low (${data.currentStock || 0} left).`,
+            'inventory.low_stock': `${data.productName || 'Product'} is running low (${data.currentStock || 0} left, threshold: ${data.threshold || 0}).`,
+            'inventory.product.low_stock': `${data.productName || 'Product'} is running low (${data.currentStock || 0} left, threshold: ${data.threshold || 0}).`,
             'inventory.out_of_stock': `${data.productName || 'Product'} is out of stock.`,
+            'inventory.product.out_of_stock': `${data.productName || 'Product'} is out of stock.`,
             'debt.overdue': `Payment of $${data.amount || 0} is overdue.`
         };
         return bodies[eventType] || 'You have a new notification.';

@@ -5,7 +5,6 @@
 
 const Department = require("../models/department.model");
 const Company = require("../models/company.model");
-const DepartmentUser = require("../models/departmentUser.model");
 const { DEPARTMENTS } = require("../constants/departments");
 const { getCache, setCache, delCache } = require('../utils/redisHelper');
 
@@ -53,30 +52,14 @@ const getDepartmentsByCompany = async (req, res) => {
         // Get all departments for this company
         const departments = await Department.findByCompany(companyId);
 
-        // ✅ Optimized: Batch fetch user counts instead of N+1 queries
-        const db = require("../config");
-        const userCountsMap = await db("department_users")
-            .select("department_id")
-            .count("* as count")
-            .where("status", "active")
-            .whereIn("department_id", departments.map(d => d.id))
-            .groupBy("department_id")
-            .then(rows => {
-                const map = {};
-                rows.forEach(row => {
-                    map[row.department_id] = parseInt(row.count) || 0;
-                });
-                return map;
-            });
-
-        // Enrich with user counts
+        // Enrich with user counts (Set to 0 as DepartmentUser model is removed)
         const enrichedDepartments = departments.map(dept => ({
             ...dept,
-            activeUserCount: userCountsMap[dept.id] || 0
+            activeUserCount: 0
         }));
 
         // Cache the result (fire-and-forget, 5min TTL)
-        setCache(cacheKey, enrichedDepartments, 300).catch(() => {});
+        setCache(cacheKey, enrichedDepartments, 300).catch(() => { });
 
         res.status(200).json({
             ok: true,
@@ -101,7 +84,7 @@ const getDepartmentById = async (req, res) => {
     try {
         const { departmentId } = req.params;
         const { companyId } = req.query;
-        
+
         // Create cache key
         const cacheKey = companyId ? `department:${departmentId}:${companyId}` : `department:${departmentId}`;
 
@@ -148,27 +131,14 @@ const getDepartmentById = async (req, res) => {
         }
 
         // Cache the result (fire-and-forget, 5min TTL)
-        setCache(cacheKey, department, 300).catch(() => {});
-
-        // ✅ Optimized: Get both counts with single query
-        const db = require("../config");
-        const counts = await db("department_users")
-            .select(
-                db.raw("COUNT(*) FILTER (WHERE status = 'active') as active_count"),
-                db.raw("COUNT(*) as total_count")
-            )
-            .where("department_id", departmentId)
-            .first();
-
-        const activeUserCount = parseInt(counts?.active_count) || 0;
-        const totalUserCount = parseInt(counts?.total_count) || 0;
+        setCache(cacheKey, department, 300).catch(() => { });
 
         res.status(200).json({
             ok: true,
             data: {
                 ...department,
-                activeUserCount,
-                totalUserCount
+                activeUserCount: 0,
+                totalUserCount: 0
             }
         });
     } catch (error) {
@@ -322,20 +292,14 @@ const getDepartmentStats = async (req, res) => {
             });
         }
 
-        // Get stats
-        const activeUserCount = await DepartmentUser.countActiveByDepartment(departmentId);
-        const totalUserCount = await DepartmentUser.countByDepartment(departmentId);
-        const managerCount = await DepartmentUser.countByDepartmentAndRole(departmentId, "manager");
-        const sellerCount = await DepartmentUser.countByDepartmentAndRole(departmentId, "seller");
-
         res.status(200).json({
             ok: true,
             data: {
                 departmentId,
-                activeUserCount,
-                totalUserCount,
-                managerCount,
-                sellerCount,
+                activeUserCount: 0,
+                totalUserCount: 0,
+                managerCount: 0,
+                sellerCount: 0,
                 status: department.status
             }
         });
@@ -393,3 +357,4 @@ module.exports = {
     getDepartmentStats,
     getAllDepartments
 };
+

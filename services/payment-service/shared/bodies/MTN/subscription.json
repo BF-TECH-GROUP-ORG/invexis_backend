@@ -1,0 +1,22 @@
+{
+    "companyId": "4d9a3e7f-5856-4621-bb02-f304a24bafcb",
+    "paymentType": "SUBSCRIPTION",
+    "amount": 20000,
+    "currency": "EUR",
+    "sellerId": "660e8400-e29b-41d4-a716-446655440000",
+    "description": "Monthly Platform Subscription (Pro Tier)",
+    "paymentMethod": "mobile_money",
+    "gateway": "mtn_momo",
+    "phoneNumber": "237670000000",
+    "customer": {
+        "name": "Company Admin",
+        "email": "admin@company.com"
+    },
+    "lineItems": [
+        {
+            "name": "Pro Tier Subscription",
+            "qty": 1,
+            "price": 20000
+        }
+    ]
+}

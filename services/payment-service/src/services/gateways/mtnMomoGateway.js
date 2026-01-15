@@ -6,18 +6,26 @@ const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 
 const {
-    MTN_BASE_URL,
-    MTN_SUBSCRIPTION_KEY,
-    MTN_USER,
-    MTN_API_KEY,
-    MTN_TARGET_ENVIRONMENT,
+    MTN_MOMO_BASE_URL,
+    MTN_MOMO_SUBSCRIPTION_KEY,
+    MTN_MOMO_API_USER,
+    MTN_MOMO_API_KEY,
+    MTN_TARGET_ENVIRONMENT = 'sandbox',
     MTN_RETRY_LIMIT = 3,
     MTN_RETRY_DELAY_MS = 1000,
 } = process.env;
 
+// For backward compatibility and cleaner code
+const MTN_BASE_URL = MTN_MOMO_BASE_URL?.trim();
+const MTN_SUBSCRIPTION_KEY = MTN_MOMO_SUBSCRIPTION_KEY?.trim();
+const MTN_USER = MTN_MOMO_API_USER?.trim();
+const MTN_API_KEY = MTN_MOMO_API_KEY?.trim();
+const MTN_ENV = MTN_TARGET_ENVIRONMENT?.trim() || 'sandbox';
+
 // Validate MTN credentials
-if (!MTN_BASE_URL || !MTN_SUBSCRIPTION_KEY || !MTN_USER || !MTN_API_KEY) {
-    throw new Error('Missing one or more MTN MoMo environment variables (MTN_BASE_URL, MTN_SUBSCRIPTION_KEY, MTN_USER, MTN_API_KEY). Please check your .env file.');
+const MTN_CONFIGURED = !!(MTN_BASE_URL && MTN_SUBSCRIPTION_KEY && MTN_USER && MTN_API_KEY);
+if (!MTN_CONFIGURED) {
+    console.warn('⚠️ MTN MoMo gateway not configured: Missing one or more environment variables (MTN_MOMO_BASE_URL, MTN_MOMO_SUBSCRIPTION_KEY, MTN_MOMO_API_USER, MTN_MOMO_API_KEY). MTN payments will not be available.');
 }
 
 class MTNMomoGateway {
@@ -26,6 +34,10 @@ class MTNMomoGateway {
      * @returns {Promise<string>} Access token
      */
     async getAccessToken() {
+        if (!MTN_CONFIGURED) {
+            throw new Error('MTN MoMo gateway is not configured. Please set MTN_BASE_URL, MTN_SUBSCRIPTION_KEY, MTN_USER, and MTN_API_KEY in your .env file.');
+        }
+
         try {
             const response = await axios.post(
                 `${MTN_BASE_URL}/collection/token/`,
@@ -57,20 +69,39 @@ class MTNMomoGateway {
      * @returns {Promise<Object>} Payment initiation result
      */
     async initiatePayment(paymentData) {
-        const { amount, currency, phoneNumber, description, metadata } = paymentData;
+        const { amount, currency, phoneNumber, description, metadata, payee } = paymentData;
         const referenceId = uuidv4();
 
         const body = {
             amount: amount.toString(),
-            currency: currency || 'EUR',
+            currency: currency || 'XAF',
             externalId: referenceId,
             payer: {
                 partyIdType: 'MSISDN',
                 partyId: phoneNumber.replace(/[^0-9]/g, ''), // Remove non-numeric characters
             },
-            payerMessage: description || 'Invexis Payment',
+            payerMessage: description || 'Payment via Invexis',
             payeeNote: 'Payment via Invexis',
         };
+
+        // Add payee if provided (multi-party routing)
+        if (payee && payee.momo_phone) {
+            body.payee = {
+                partyIdType: 'MSISDN',
+                partyId: payee.momo_phone.replace(/[^0-9]/g, '')
+            };
+
+            // Set descriptive messages based on the payee and context
+            if (payee.name === 'Invexis') {
+                body.payerMessage = payee.context || 'Payment to Invexis';
+                body.payeeNote = payee.context || 'Payment to Invexis';
+            } else {
+                body.payerMessage = description || `Paying ${payee.name} via Invexis`;
+                body.payeeNote = `Payment for ${payee.name}`;
+            }
+
+            console.log(`Routing payment to payee (${payee.name}): ${body.payee.partyId}`);
+        }
 
         // Retry logic for transient errors
         let attempt = 0;
@@ -87,7 +118,7 @@ class MTNMomoGateway {
                     {
                         headers: {
                             'X-Reference-Id': referenceId,
-                            'X-Target-Environment': MTN_TARGET_ENVIRONMENT,
+                            'X-Target-Environment': MTN_ENV,
                             'Ocp-Apim-Subscription-Key': MTN_SUBSCRIPTION_KEY,
                             Authorization: `Bearer ${token}`,
                             'Content-Type': 'application/json',
@@ -186,4 +217,4 @@ class MTNMomoGateway {
     }
 }
 
-module.exports = new MTNMomoGateway();
+module.exports = new MTNMomoGateway()

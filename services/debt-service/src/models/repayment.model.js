@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 // models/repayment.model.js
 const RepaymentSchema = new mongoose.Schema({
-    companyId: { type: String ,required: true },
+    companyId: { type: String, required: true },
     shopId: { type: String, required: true },
 
     // We no longer store raw customerId or embedded customer object here.
@@ -17,7 +17,7 @@ const RepaymentSchema = new mongoose.Schema({
     amountPaid: { type: Number, required: true },
     paymentMethod: {
         type: String,
-        enum: ["CASH", "CARD", "MOBILE_MONEY", "BANK_TRANSFER", "OTHER"],
+        enum: ["CASH", "MTN", "AIRTEL", "MPESA", "BANK_TRANSFER"],
         default: "CASH"
     },
     paymentReference: { type: String },
@@ -28,6 +28,13 @@ const RepaymentSchema = new mongoose.Schema({
         id: { type: String },
         name: { type: String }
     },
+
+    status: {
+        type: String,
+        enum: ['pending', 'succeeded', 'failed'],
+        default: 'pending'
+    },
+
 
     paidAt: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now }

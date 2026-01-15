@@ -21,6 +21,13 @@ healthChecker.setupRoutes(app);
 // Setup graceful shutdown
 healthChecker.setupGracefulShutdown();
 
+// Initialize subscription event consumer for Redis cache sync
+const { initSubscriptionEventConsumer } = require("./events/subscriptionEventConsumer");
+initSubscriptionEventConsumer().catch(err => {
+  logger.error("Failed to initialize subscription event consumer", { error: err.message });
+  logger.warn("Gateway will continue without event-driven cache updates");
+});
+
 // Start server
 const server = app.listen(PORT, "0.0.0.0", () => {
   logger.info("API Gateway started successfully", {
@@ -48,6 +55,8 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log("  *    /api/inventory → Inventory Service");
   console.log("  *    /api/sales     → Sales Service");
   console.log("  *    /api/payment   → Payment Service");
+  console.log("  *    /api/document  → Document Service");
+  console.log("  *    /api/report    → Report Service");
   console.log("  *    /api/ecommerce → E-commerce Service");
   console.log("  *    /api/notification → Notification Service");
   console.log("  *    /api/analytics → Analytics Service");
@@ -60,17 +69,17 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 // Enhanced graceful shutdown
 const shutdown = async (signal) => {
   logger.info(`Received ${signal}, starting graceful shutdown`);
-  
+
   server.close(async (err) => {
     if (err) {
       logger.error("Error closing server", { error: err.message });
       process.exit(1);
     }
-    
+
     logger.info("Server closed successfully");
     process.exit(0);
   });
-  
+
   // Force close after 30 seconds
   setTimeout(() => {
     logger.error("Forced shutdown after timeout");

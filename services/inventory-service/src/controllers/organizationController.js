@@ -2024,74 +2024,30 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         logger.info(`✓ Replicated variations, stocks and specs for destination product ${destinationProductId}`);
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
-        setImmediate(async () => {
-            try {
-                const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
-                const { uploadBuffer } = require('../utils/uploadUtil');
+        if (process.nextTick) {
+            setImmediate(async () => {
+                try {
+                    const skuValue = destinationProduct[0].sku;
+                    if (!skuValue) {
+                        logger.warn(`⚠️ Cannot generate QR/Barcode for transferred product ${destinationProductId} - SKU missing`);
+                        return;
+                    }
 
-                const skuValue = destinationProduct[0].sku;
-                if (!skuValue) {
-                    logger.warn(`⚠️ Cannot generate QR/Barcode for transferred product ${destinationProductId} - SKU missing`);
-                    return;
+                    logger.info(`🔄 Requesting QR/Barcode generation for transferred product SKU: ${skuValue}`);
+
+                    const { requestQRCode, requestBarcode } = require('../utils/events/documentRequests');
+
+                    await Promise.all([
+                        requestQRCode(destinationProductId.toString(), skuValue, companyId),
+                        requestBarcode(destinationProductId.toString(), skuValue, companyId)
+                    ]);
+
+                    logger.info(`✅ QR/Barcode generation requests sent for transferred product SKU: ${skuValue}`);
+                } catch (err) {
+                    logger.error('Failed to request QR/barcode generation for transferred product:', err);
                 }
-
-                logger.info(`🔄 Generating QR/Barcode for transferred product SKU: ${skuValue}`);
-                const [qrBuffer, barcodeBuffer] = await Promise.all([
-                    generateQRCodeBuffer(skuValue),
-                    generateBarcodeBuffer(skuValue)
-                ]);
-
-                // Create placeholders and enqueue background upload tasks
-                const uploadTaskRepo = require('../repositories/uploadTaskRepository');
-                const placeholderQrId = `placeholder_qr_${Date.now()}`;
-                const placeholderBarcodeId = `placeholder_barcode_${Date.now()}`;
-                const placeholderQrUrl = `https://via.placeholder.com/400x300?text=QR+${encodeURIComponent(skuValue)}`;
-                const placeholderBarcodeUrl = `https://via.placeholder.com/400x300?text=BAR+${encodeURIComponent(skuValue)}`;
-
-                await Product.updateOne({ _id: destinationProductId }, {
-                    qrCodeUrl: placeholderQrUrl,
-                    barcodeUrl: placeholderBarcodeUrl,
-                    qrCloudinaryId: placeholderQrId,
-                    barcodeCloudinaryId: placeholderBarcodeId
-                });
-
-                try {
-                    await uploadTaskRepo.createTask({
-                        companyId: destinationProduct[0].companyId,
-                        shopId: destinationProduct[0].shopId,
-                        productId: destinationProductId,
-                        field: 'qr',
-                        placeholderId: placeholderQrId,
-                        placeholderUrl: placeholderQrUrl,
-                        originalName: `qr_${skuValue}.png`,
-                        folder: `QrBar_Codes/${destinationProductId}`,
-                        publicIdHint: `qr_${skuValue}`,
-                        filePath: null,
-                        fileBase64: qrBuffer.toString('base64')
-                    });
-                } catch (e) { logger.warn('Failed to enqueue QR upload task:', e && e.message ? e.message : e); }
-
-                try {
-                    await uploadTaskRepo.createTask({
-                        companyId: destinationProduct[0].companyId,
-                        shopId: destinationProduct[0].shopId,
-                        productId: destinationProductId,
-                        field: 'barcode',
-                        placeholderId: placeholderBarcodeId,
-                        placeholderUrl: placeholderBarcodeUrl,
-                        originalName: `bar_${skuValue}.png`,
-                        folder: `QrBar_Codes/${destinationProductId}`,
-                        publicIdHint: `bar_${skuValue}`,
-                        filePath: null,
-                        fileBase64: barcodeBuffer.toString('base64')
-                    });
-                } catch (e) { logger.warn('Failed to enqueue barcode upload task:', e && e.message ? e.message : e); }
-
-                logger.info(`✅ QR/Barcode generation enqueued for transferred product SKU: ${skuValue}`);
-            } catch (err) {
-                logger.error('Failed to generate QR/barcode for transferred product:', err);
-            }
-        });
+            });
+        }
 
         // ========== STEP 4: Create pricing for destination product ==========
         // Copy ALL pricing information from source
@@ -2174,11 +2130,9 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
         });
         await destinationStock.save();
 
-        // ========== STEP 5: Update ProductStock records manually ==========
-        // For transfers, we handle stock updates manually (StockChange pre-save hook is skipped for transfers)
-        const sourceStockAfter = sourceStockBefore - quantity;
-        sourceStock.stockQty = sourceStockAfter;
-        await sourceStock.save();
+        // ========== STEP 5: Source stock remains UNCHANGED (no deduction) ==========
+        // Per business requirement: transfers create new product instances without reducing source stock
+        const sourceStockAfter = sourceStockBefore; // No change
 
         // Destination stock was already created with quantity
 
@@ -2190,16 +2144,18 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
             shopId: sourceShopId,
             productId,
             type: 'transfer',
-            qty: -quantity,
+            qty: 0, // No deduction from source
             previous: sourceStockBefore,
-            new: sourceStockAfter,
-            reason: reason || `Transferred ${quantity} units to shop ${destinationShopId}`,
+            new: sourceStockAfter, // Same as before
+            reason: reason || `Transferred ${quantity} units to shop ${destinationShopId} (source stock unchanged)`,
             userId: userId,
             metadata: {
                 transferType: 'intra_company',
                 direction: 'out',
                 destinationShop: destinationShopId,
-                destinationProductId: destinationProductId
+                destinationProductId: destinationProductId,
+                transferredQty: quantity,
+                note: 'Source stock not deducted per business logic'
             }
         });
         await sourceStockChange.save();
@@ -2477,47 +2433,31 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
         logger.info(`✓ Replicated variations, stocks and specs for destination product ${destinationProductId}`);
 
         // ========== STEP 3.5: Generate QR code and barcode images for destination product ==========
-        setImmediate(async () => {
-            try {
-                const { generateQRCodeBuffer, generateBarcodeBuffer } = require('../utils/imageGenerator');
-                const { uploadBuffer } = require('../utils/uploadUtil');
-
-                const skuValue = destinationProduct[0].sku;
-                if (!skuValue) {
-                    logger.warn(`⚠️ Cannot generate QR/Barcode for cross-company transferred product ${destinationProductId} - SKU missing`);
-                    return;
-                }
-
-                logger.info(`🔄 Generating QR/Barcode for cross-company transferred product SKU: ${skuValue}`);
-                const [qrBuffer, barcodeBuffer] = await Promise.all([
-                    generateQRCodeBuffer(skuValue),
-                    generateBarcodeBuffer(skuValue)
-                ]);
-
-                const [qrUpload, barcodeUpload] = await Promise.all([
-                    uploadBuffer(qrBuffer, `QrBar_Codes/${destinationProductId}`),
-                    uploadBuffer(barcodeBuffer, `QrBar_Codes/${destinationProductId}`)
-                ]);
-
-                const qrUpdateRes = await Product.updateOne(
-                    { _id: destinationProductId },
-                    {
-                        qrCodeUrl: qrUpload.secure_url,
-                        barcodeUrl: barcodeUpload.secure_url,
-                        qrCloudinaryId: qrUpload.public_id,
-                        barcodeCloudinaryId: barcodeUpload.public_id
+        if (process.nextTick) {
+            setImmediate(async () => {
+                try {
+                    const skuValue = destinationProduct[0].sku;
+                    if (!skuValue) {
+                        logger.warn(`⚠️ Cannot generate QR/Barcode for cross-company transferred product ${destinationProductId} - SKU missing`);
+                        return;
                     }
-                );
-                const qrModified = qrUpdateRes && (qrUpdateRes.modifiedCount || qrUpdateRes.nModified || 0);
-                if (!qrModified) {
-                    logger.warn(`QR/Barcode upload completed but Product update did not modify ${destinationProductId}. updateResult=${JSON.stringify(qrUpdateRes)}`);
-                } else {
-                    logger.info(`✅ QR/Barcode generated and saved for cross-company transferred product SKU: ${skuValue}`);
+
+                    logger.info(`🔄 Requesting QR/Barcode generation for cross-company transferred product SKU: ${skuValue}`);
+
+                    // Request QR/Barcode generation from document-service
+                    const { requestQRCode, requestBarcode } = require('../utils/events/documentRequests');
+
+                    await Promise.all([
+                        requestQRCode(destinationProductId.toString(), skuValue, toCompanyId),
+                        requestBarcode(destinationProductId.toString(), skuValue, toCompanyId)
+                    ]);
+
+                    logger.info(`✅ QR/Barcode generation requests sent for cross-company product SKU: ${skuValue}`);
+                } catch (err) {
+                    logger.error('Failed to request QR/barcode for cross-company transfer:', err);
                 }
-            } catch (err) {
-                logger.error('Failed to generate QR/barcode for cross-company transferred product:', err);
-            }
-        });
+            });
+        }
 
         // ========== STEP 4: Create pricing for destination product ==========
         // Copy ALL pricing information from source
@@ -3236,10 +3176,11 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
                 // Replicate product specifications
                 await replicateProductSpecs(productId, destinationProductId);
 
-                // Update source stock
+                // ========== Source stock remains UNCHANGED (no deduction) ==========
                 const sourceStockBefore = sourceStock.stockQty;
-                sourceStock.stockQty -= quantity;
-                await sourceStock.save();
+                // sourceStock.stockQty -= quantity;  // Removed: source stock not deducted
+                // await sourceStock.save();
+                const sourceStockAfter = sourceStockBefore; // No change
 
                 // Create stock change records
                 await StockChange.insertMany([
@@ -3248,11 +3189,16 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
                         shopId: sourceShopId,
                         productId,
                         type: 'transfer',
-                        qty: -quantity,
+                        qty: 0, // No deduction from source
                         previous: sourceStockBefore,
-                        new: sourceStock.stockQty,
-                        reason: reason || `Bulk transfer to ${destinationShopId}`,
-                        userId
+                        new: sourceStockAfter, // Same as before
+                        reason: reason || `Bulk transfer to ${destinationShopId} (source stock unchanged)`,
+                        userId,
+                        metadata: {
+                            transferType: 'intra_company_bulk',
+                            transferredQty: quantity,
+                            note: 'Source stock not deducted per business logic'
+                        }
                     },
                     {
                         companyId,
@@ -3292,6 +3238,20 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
                     notes: notes,
                     initiatedAt: new Date(),
                     completedAt: new Date()
+                });
+
+                // Trigger document generation (QR/Barcode)
+                // Use setImmediate to avoid blocking the bulk loop
+                setImmediate(async () => {
+                    try {
+                        const { requestQRCode, requestBarcode } = require('../utils/events/documentRequests');
+                        await Promise.all([
+                            requestQRCode(destinationProductId.toString(), destinationProduct.sku, companyId),
+                            requestBarcode(destinationProductId.toString(), destinationProduct.sku, companyId)
+                        ]).catch(err => logger.warn(`BulkIntra: doc gen error for ${destinationProductId}`, err));
+                    } catch (e) {
+                        logger.warn('BulkIntra: failed to init doc gen', e);
+                    }
                 });
 
                 results.successful.push({
@@ -3542,10 +3502,11 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
                 // Replicate product specifications
                 await replicateProductSpecs(productId, destinationProductId);
 
-                // Update source stock
+                // ========== Source stock remains UNCHANGED (no deduction) ==========
                 const sourceStockBefore = sourceStock.stockQty;
-                sourceStock.stockQty -= quantity;
-                await sourceStock.save();
+                // sourceStock.stockQty -= quantity;  // Removed: source stock not deducted
+                // await sourceStock.save();
+                const sourceStockAfter = sourceStockBefore; // No change
 
                 // Create stock change records
                 await StockChange.insertMany([
@@ -3554,12 +3515,16 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
                         shopId: sourceShopId,
                         productId,
                         type: 'transfer',
-                        qty: -quantity,
+                        qty: 0, // No deduction from source
                         previous: sourceStockBefore,
-                        new: sourceStock.stockQty,
-                        reason: reason || `Bulk cross-company transfer to ${toCompanyId}`,
+                        new: sourceStockAfter, // Same as before
+                        reason: reason || `Cross-company bulk transfer to ${toCompanyId} (source stock unchanged)`,
                         userId,
-                        metadata: { transferType: 'cross_company', direction: 'out' }
+                        metadata: {
+                            transferType: 'cross_company_bulk',
+                            transferredQty: quantity,
+                            note: 'Source stock not deducted per business logic'
+                        }
                     },
                     {
                         companyId: toCompanyId,
@@ -3600,6 +3565,20 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
                     notes: notes,
                     initiatedAt: new Date(),
                     completedAt: new Date()
+                });
+
+                // Trigger document generation (QR/Barcode)
+                // Use setImmediate to avoid blocking the bulk loop
+                setImmediate(async () => {
+                    try {
+                        const { requestQRCode, requestBarcode } = require('../utils/events/documentRequests');
+                        await Promise.all([
+                            requestQRCode(destinationProductId.toString(), destinationProduct.sku, toCompanyId),
+                            requestBarcode(destinationProductId.toString(), destinationProduct.sku, toCompanyId)
+                        ]).catch(err => logger.warn(`BulkCross: doc gen error for ${destinationProductId}`, err));
+                    } catch (e) {
+                        logger.warn('BulkCross: failed to init doc gen', e);
+                    }
                 });
 
                 results.successful.push({

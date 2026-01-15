@@ -68,19 +68,51 @@ const deliverNotification = async ({ notificationId }) => {
   }
 
   // Push
-  if (
-    notification.channels.push &&
-    prefs.push &&
-    notification.payload.fcmToken
-  ) {
-    const result = await sendPush(
-      notification,
-      notification.payload.fcmToken,
-      userId,
-      companyId
-    );
-    results.push({ channel: "push", ...result });
-    if (result.success) successes++;
+  if (notification.channels.push && prefs.push) {
+    // 1. Get tokens from DB
+    const UserDevice = require("../models/UserDevice");
+    const devices = await UserDevice.find({ userId, isActive: true });
+
+    // 2. Get tokens from payload (legacy/manual override)
+    const payloadTokens = notification.payload.fcmToken
+      ? (Array.isArray(notification.payload.fcmToken) ? notification.payload.fcmToken : [notification.payload.fcmToken])
+      : [];
+
+    // 3. Merge unique tokens
+    const dbTokens = devices.map(d => d.fcmToken);
+    const allTokens = [...new Set([...payloadTokens, ...dbTokens])];
+
+    if (allTokens.length > 0) {
+      logger.debug(`📱 Sending push to ${allTokens.length} device(s) for user ${userId}`);
+
+      for (const token of allTokens) {
+        // Avoid sending to invalid/empty tokens
+        if (!token) continue;
+
+        const result = await sendPush(
+          notification,
+          token,
+          userId,
+          companyId
+        );
+
+        // Check for invalid token errors and cleanup
+        if (!result.success && result.error) {
+          const errCode = result.error.code || result.error.errorInfo?.code;
+          if (errCode === 'messaging/registration-token-not-registered' ||
+            errCode === 'messaging/invalid-argument' ||
+            result.error.message?.includes('Entity was not found')) {
+            await UserDevice.deleteOne({ fcmToken: token });
+            logger.info(`🗑️ Removed invalid FCM token: ${token}`);
+          }
+        }
+
+        results.push({ channel: "push", ...result });
+        if (result.success) successes++;
+      }
+    } else {
+      logger.debug(`📭 No push tokens found for user ${userId}`);
+    }
   }
 
   // In-App (via WebSocket service)

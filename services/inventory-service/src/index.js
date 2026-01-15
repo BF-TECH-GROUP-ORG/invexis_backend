@@ -10,25 +10,7 @@ const server = app.listen(PORT, () => {
   logger.info(`🚀 Inventory Service running on port ${PORT}`);
 });
 
-// Start background upload retry worker (best-effort)
-try {
-  const uploadRetryWorker = require('./workers/uploadRetryWorker');
-  if (uploadRetryWorker && typeof uploadRetryWorker.loop === 'function') {
-    uploadRetryWorker.loop(5000);
-  }
-} catch (e) {
-  logger.warn('UploadRetryWorker failed to start:', e && e.message ? e.message : e);
-}
 
-// Start background upload cleanup worker (deletes old failed tasks)
-try {
-  const uploadCleanupWorker = require('./workers/uploadCleanupWorker');
-  if (uploadCleanupWorker && typeof uploadCleanupWorker.loop === 'function') {
-    uploadCleanupWorker.loop(60 * 60 * 1000); // Run every hour
-  }
-} catch (e) {
-  logger.warn('UploadCleanupWorker failed to start:', e && e.message ? e.message : e);
-}
 
 // Graceful shutdown
 const gracefulShutdown = async (signal) => {

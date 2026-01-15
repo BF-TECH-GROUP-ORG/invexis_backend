@@ -20,10 +20,10 @@ const {
 } = require('../controllers/analyticsController');
 
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
+const { requireTier } = require('/app/shared/middlewares/subscription/production-subscription');
 
-/**
- * Comprehensive Inventory Overview
- */
+// All analytics now available for all tiers
+// router.use(requireTier('pro'));
 router.get('/overview', authenticateToken, requireRole(['super_admin', 'company_admin']), getOverview);
 
 /**

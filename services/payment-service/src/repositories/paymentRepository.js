@@ -12,51 +12,59 @@ class PaymentRepository {
      */
     async createPayment(paymentData) {
         const {
-            user_id,
             seller_id,
             company_id,
             shop_id,
             order_id,
-            payout_recipient_id,
-            payout_details,
             amount,
             currency,
             description,
-            method,
-            gateway,
+            type,           // SALE, DEBT, TIER, SUBSCRIPTION, ECOMM
+            method,         // CARD, MOBILE_MONEY
+            gateway,        // STRIPE, MTN_MOMO, etc
             gateway_token,
-            customer_email,
+            reference_id,   // External reference (Sale ID)
+            idempotency_key,
+            customer,       // { name, email, phone }
             line_items,
             metadata,
-            ip,
-            device_fingerprint,
+            payout_recipient_id,
+            payout_details,
             location
         } = paymentData;
 
         const payment_id = uuidv4();
 
+        // Payout status should only be 'pending' for e-commerce (ECOMM) that require it
+        // Otherwise it defaults to 'not_required' via DB default
+        let initial_payout_status = 'not_required';
+        if (type === 'ECOMM' && payout_recipient_id) {
+            initial_payout_status = 'pending';
+        }
+
         const [payment] = await db('payments')
             .insert({
                 payment_id,
-                user_id,
                 seller_id,
                 company_id,
                 shop_id,
                 order_id,
-                payout_recipient_id,
-                payout_details: payout_details || {},
                 amount,
                 currency: currency || 'XAF',
                 description,
+                type: type || 'SALE',
                 method,
                 gateway,
                 gateway_token,
-                customer_email,
+                reference_id,
+                idempotency_key,
+                customer: customer || {},
                 line_items: JSON.stringify(line_items || []),
                 status: 'pending',
+                payout_status: initial_payout_status,
+                payout_recipient_id,
+                payout_details: payout_details || {},
                 metadata: metadata || {},
-                ip,
-                device_fingerprint,
                 location: location || {},
                 created_at: new Date(),
                 updated_at: new Date()
@@ -64,6 +72,21 @@ class PaymentRepository {
             .returning('*');
 
         return payment;
+    }
+
+    /**
+     * Get payment by idempotency_key
+     * @param {string} idempotency_key - Unique key for idempotency
+     * @returns {Promise<Object|null>} Payment record
+     */
+    async getPaymentByIdempotencyKey(idempotency_key) {
+        if (!idempotency_key) return null;
+
+        const payment = await db('payments')
+            .where({ idempotency_key })
+            .first();
+
+        return payment || null;
     }
 
     /**
@@ -112,28 +135,6 @@ class PaymentRepository {
     }
 
     /**
-     * Get all payments for a user
-     * @param {string} user_id - User UUID
-     * @param {Object} options - Query options (limit, offset, status)
-     * @returns {Promise<Array>} List of payments
-     */
-    async getPaymentsByUser(user_id, options = {}) {
-        const { limit = 50, offset = 0, status } = options;
-
-        let query = db('payments')
-            .where({ user_id })
-            .orderBy('created_at', 'desc')
-            .limit(limit)
-            .offset(offset);
-
-        if (status) {
-            query = query.where({ status });
-        }
-
-        return await query;
-    }
-
-    /**
      * Get all payments for a seller
      * @param {string} seller_id - Seller UUID
      * @param {Object} options - Query options (limit, offset, status)
@@ -142,17 +143,20 @@ class PaymentRepository {
     async getPaymentsBySeller(seller_id, options = {}) {
         const { limit = 50, offset = 0, status } = options;
 
-        let query = db('payments')
-            .where({ seller_id })
-            .orderBy('created_at', 'desc')
-            .limit(limit)
-            .offset(offset);
+        let query = db('payments').where({ seller_id });
+        let countQuery = db('payments').where({ seller_id }).count('payment_id as total');
 
         if (status) {
             query = query.where({ status });
+            countQuery = countQuery.where({ status });
         }
 
-        return await query;
+        const [data, [{ total }]] = await Promise.all([
+            query.orderBy('created_at', 'desc').limit(limit).offset(offset),
+            countQuery
+        ]);
+
+        return { data, total };
     }
 
     /**
@@ -164,17 +168,45 @@ class PaymentRepository {
     async getPaymentsByCompany(company_id, options = {}) {
         const { limit = 50, offset = 0, status } = options;
 
-        let query = db('payments')
-            .where({ company_id })
-            .orderBy('created_at', 'desc')
-            .limit(limit)
-            .offset(offset);
+        let query = db('payments').where({ company_id });
+        let countQuery = db('payments').where({ company_id }).count('payment_id as total');
 
         if (status) {
             query = query.where({ status });
+            countQuery = countQuery.where({ status });
         }
 
-        return await query;
+        const [data, [{ total }]] = await Promise.all([
+            query.orderBy('created_at', 'desc').limit(limit).offset(offset),
+            countQuery
+        ]);
+
+        return { data, total };
+    }
+
+    /**
+     * Get all payments for a shop
+     * @param {string} shop_id - Shop UUID
+     * @param {Object} options - Query options (limit, offset, status)
+     * @returns {Promise<Array>} List of payments
+     */
+    async getPaymentsByShop(shop_id, options = {}) {
+        const { limit = 50, offset = 0, status } = options;
+
+        let query = db('payments').where({ shop_id });
+        let countQuery = db('payments').where({ shop_id }).count('payment_id as total');
+
+        if (status) {
+            query = query.where({ status });
+            countQuery = countQuery.where({ status });
+        }
+
+        const [data, [{ total }]] = await Promise.all([
+            query.orderBy('created_at', 'desc').limit(limit).offset(offset),
+            countQuery
+        ]);
+
+        return { data, total };
     }
 
     /**
@@ -210,6 +242,19 @@ class PaymentRepository {
             .first();
 
         return payment || null;
+    }
+
+
+
+    /**
+     * Get payments that need to be retried
+     * @returns {Promise<Array>} List of retryable payments
+     */
+    async getPaymentsToRetry() {
+        return await db('payments')
+            .where({ status: 'failed' })
+            .whereRaw("metadata->>'retry_count' IS NULL OR (metadata->>'retry_count')::int < 3")
+            .where('created_at', '>', new Date(Date.now() - 24 * 60 * 60 * 1000)); // Last 24 hours
     }
 }
 

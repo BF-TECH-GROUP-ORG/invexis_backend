@@ -3,7 +3,7 @@ const { v4: uuidv4 } = require("uuid");
 const {
   getTierConfig,
   isFeatureEnabled,
-} = require("../config/tierFeatures.config");
+} = require("/app/shared/config/tierFeatures.config");
 
 class Subscription {
   static table = "subscriptions";
@@ -11,16 +11,25 @@ class Subscription {
   constructor(data) {
     this.id = uuidv4();
     this.company_id = data.company_id;
-    this.tier = data.tier || "basic";
+    this.tier = data.tier || "Basic";
     this.start_date = data.start_date || new Date();
     this.end_date = data.end_date || null;
     this.is_active = data.is_active !== undefined ? data.is_active : true;
     this.amount = data.amount || 0;
     this.currency = data.currency || "RWF";
+
+    // Advanced Billing Fields (Moved from Payment Service)
+    this.auto_renew = data.auto_renew !== undefined ? data.auto_renew : false;
+    this.payment_priority = data.payment_priority || ["MTN", "CARD"];
+    this.stripe_payment_method_id = data.stripe_payment_method_id || null;
+    this.momo_phone_number = data.momo_phone_number || null;
+    this.last_billing_status = data.last_billing_status || null;
+    this.last_billing_attempt = data.last_billing_attempt || null;
+
     this.payment_reference = data.payment_reference || null;
     this.metadata = data.metadata || {};
-    this.createdAt = new Date();
-    this.updatedAt = new Date();
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
   }
 
   /**
@@ -171,6 +180,18 @@ class Subscription {
     const now = new Date();
     const endDate = new Date(this.end_date);
     return Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+  }
+
+  /**
+   * Get all subscriptions due for auto-renewal
+   * @returns {Promise<Array>} List of subscriptions
+   */
+  static async getDueRenewals() {
+    return db(this.table)
+      .where("is_active", true)
+      .andWhere("auto_renew", true)
+      .andWhere("end_date", "<=", new Date())
+      .whereRaw("(last_billing_attempt IS NULL OR last_billing_attempt < ?)", [new Date(Date.now() - 24 * 60 * 60 * 1000)]); // Once every 24h
   }
 }
 

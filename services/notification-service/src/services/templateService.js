@@ -94,7 +94,13 @@ const templatesRegistry = require("../config/templates");
  * @returns {object} Compiled content for each channel
  */
 const compileTemplatesForChannels = async (templateName, payload, channels) => {
-  const enabledChannels = Object.keys(channels).filter(channel => channels[channel]);
+  let enabledChannels = [];
+  if (Array.isArray(channels)) {
+    enabledChannels = channels;
+  } else if (typeof channels === 'object' && channels !== null) {
+    enabledChannels = Object.keys(channels).filter(channel => channels[channel]);
+  }
+
   const compiledContent = {};
 
   try {

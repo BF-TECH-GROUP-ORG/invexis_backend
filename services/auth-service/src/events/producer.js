@@ -12,8 +12,9 @@ const publishUserEvent = {
     /**
      * User created event
      * @param {Object} user - The created user object
+     * @param {String} [password] - The auto-generated password (optional)
      */
-    async created(user) {
+    async created(user, password) {
         try {
             const eventData = {
                 type: 'user.created',
@@ -28,11 +29,13 @@ const publishUserEvent = {
                     companies: user.companies || [],
                     shops: user.shops || [],
                     createdAt: user.createdAt,
+                    password, // Pass plain password if provided (for notification)
                 }
             };
 
+            console.log(`🚀 [DEBUG] Publishing user.created to Exchange: ${exchanges.topic}, RoutingKey: auth.user.created`);
             await publish(exchanges.topic, 'auth.user.created', eventData);
-            console.log(`✅ Published user.created event for user ${user._id}`);
+            console.log(`✅ [DEBUG] Successfully published user.created event for user ${user._id}`);
         } catch (error) {
             console.error('❌ Failed to publish user.created event:', error.message);
             throw error;
@@ -53,8 +56,10 @@ const publishUserEvent = {
                 }
             };
 
+            console.log(`🚀 [DEBUG-AUTH] Preparing to publish user.updated for ${user._id}`);
+            console.log(`🚀 [DEBUG-AUTH] Exchange: ${exchanges.topic}, Key: auth.user.updated`);
             await publish(exchanges.topic, 'auth.user.updated', eventData);
-            console.log(`✅ Published user.updated event for user ${user._id}`);
+            console.log(`✅ [DEBUG-AUTH] Successfully published user.updated event for user ${user._id}`);
         } catch (error) {
             console.error('❌ Failed to publish user.updated event:', error.message);
         }

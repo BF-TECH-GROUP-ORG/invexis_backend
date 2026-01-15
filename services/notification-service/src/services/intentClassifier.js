@@ -19,17 +19,20 @@ class IntentClassifier {
             'product.created': NOTIFICATION_INTENTS.OPERATIONAL,
             'product.updated': NOTIFICATION_INTENTS.OPERATIONAL,
             'sale.created': NOTIFICATION_INTENTS.OPERATIONAL,
+            'sale.updated': NOTIFICATION_INTENTS.OPERATIONAL,
             'sale.completed': NOTIFICATION_INTENTS.OPERATIONAL,
             'inventory.low_stock': NOTIFICATION_INTENTS.OPERATIONAL,
+            'inventory.product.low_stock': NOTIFICATION_INTENTS.OPERATIONAL,
 
             // Financial - money, payments, debt
             'payment.success': NOTIFICATION_INTENTS.FINANCIAL,
+            'payment.processed': NOTIFICATION_INTENTS.FINANCIAL,
             'payment.refunded': NOTIFICATION_INTENTS.FINANCIAL,
             'sale.refunded': NOTIFICATION_INTENTS.FINANCIAL,
             'sale.return.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.created': NOTIFICATION_INTENTS.FINANCIAL,
-            'debt.fully_paid': NOTIFICATION_INTENTS.FINANCIAL,
-            'debt.repayment.created': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.repaid': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.fully.paid': NOTIFICATION_INTENTS.FINANCIAL,
             'subscription.expiring': NOTIFICATION_INTENTS.FINANCIAL,
 
             // Risk/Security - suspension, failure, anomalies
@@ -38,7 +41,9 @@ class IntentClassifier {
             'user.suspended': NOTIFICATION_INTENTS.RISK_SECURITY,
             'payment.failed': NOTIFICATION_INTENTS.RISK_SECURITY,
             'inventory.out_of_stock': NOTIFICATION_INTENTS.RISK_SECURITY,
+            'inventory.product.out_of_stock': NOTIFICATION_INTENTS.RISK_SECURITY,
             'sale.cancelled': NOTIFICATION_INTENTS.RISK_SECURITY,
+            'sale.deleted': NOTIFICATION_INTENTS.RISK_SECURITY,
             'debt.overdue': NOTIFICATION_INTENTS.RISK_SECURITY,
             'debt.reminder.overdue': NOTIFICATION_INTENTS.RISK_SECURITY,
             'subscription.expired': NOTIFICATION_INTENTS.RISK_SECURITY,
@@ -84,7 +89,8 @@ class IntentClassifier {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
                 [AUTH_ROLES.WORKER]: ['in-app'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.CUSTOMER]: ['email', 'in-app']
+                [AUTH_ROLES.CUSTOMER]: ['email', 'in-app'],
+                'AFFECTED_USER': ['email', 'in-app', 'sms']
             },
 
             [NOTIFICATION_INTENTS.STRATEGIC_INSIGHT]: {

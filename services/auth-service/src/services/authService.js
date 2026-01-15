@@ -117,13 +117,7 @@ async function getCachedUser(userId, select = '-password -twoFASecret', populate
     return user;
 }
 
-async function invalidateUserCache(userId) {
-    // ✅ Parallel invalidation (don't wait for both)
-    return Promise.all([
-        redis.del(`user:${userId}`),
-        redis.del(`sessions:${userId}`)
-    ]).catch(() => { });
-}
+// function invalidateUserCache(userId) removed - consolidated below
 
 async function rateLimit(key, max = 10, window = CACHE_TTLS.rateLimit) {
     const countKey = `rate:${key}`;
@@ -316,16 +310,21 @@ async function setupSubscribers() {
  * @param {String} userId - User ID to invalidate
  * @param {String[]} cacheTypes - Types of caches to invalidate (user, sessions, consents, all)
  */
-function invalidateUserCache(userId, cacheTypes = ['all']) {
+async function invalidateUserCache(userId, cacheTypes = ['all']) {
+    const promises = [];
+
     if (cacheTypes.includes('all') || cacheTypes.includes('user')) {
-        redis.del(`user:${userId}`).catch(() => { });
+        promises.push(redis.del(`user:${userId}`));
     }
     if (cacheTypes.includes('all') || cacheTypes.includes('sessions')) {
-        redis.del(`sessions:${userId}`).catch(() => { });
+        promises.push(redis.del(`sessions:${userId}`));
     }
     if (cacheTypes.includes('all') || cacheTypes.includes('consents')) {
-        redis.del(`consents:${userId}`).catch(() => { });
+        promises.push(redis.del(`consents:${userId}`));
     }
+
+    // Return promise so caller can await or catch
+    return Promise.all(promises).catch(() => { });
 }
 
 /**
@@ -508,7 +507,10 @@ async function register(data, options = {}) {
 
     // Publish user.created event for company service to create company-user relationship
     // Optimized: Fire-and-forget
-    publishUserEvent.created(user).catch(e => console.warn('Failed to publish user.created:', e.message));
+    // Publish user.created event for company service to create company-user relationship
+    // Optimized: Fire-and-forget
+    // Pass the raw password (generated or provided) so it can be sent via notification
+    publishUserEvent.created(user, data.generatedPassword || data.password).catch(e => console.warn('Failed to publish user.created:', e.message));
 
     // Role-specific events (Fire-and-forget)
     publishEvent('user.registered', { userId: user._id, role: user.role, email: user.email, phone: user.phone, firstName: user.firstName, lastName: user.lastName })
@@ -623,6 +625,11 @@ async function login(data, options = {}) {
 
             // Shop hours check - optimized to batch Redis calls
             (async () => {
+                // ✅ BYPASS: Admins always allowed
+                if (['company_admin', 'super_admin'].includes(user.role)) {
+                    return null;
+                }
+
                 if (user.shops && user.shops.length > 0) {
                     // ✅ Batch all Redis calls in parallel
                     const shopHoursPromises = user.shops.map(shopId =>

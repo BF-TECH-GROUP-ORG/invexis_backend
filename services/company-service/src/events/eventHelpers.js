@@ -27,7 +27,13 @@ const companyEvents = {
           phone: company.phone,  // Added for SMS notifications
           fcmToken: company.fcmToken,  // Added for push notifications
           domain: company.domain,
+          country: company.country,
           tier: company.tier,
+          paymentProfile: company.payment_profile,
+          payment_phones: company.payment_phones, // Important for payment-service sync
+          subscription: company.subscription,
+          fees: company.fees,
+          compliance: company.compliance,
           createdAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -47,9 +53,16 @@ const companyEvents = {
         routingKey: "company.updated",
         payload: {
           companyId: company.id,
+          companyAdminId: company.company_admin_id, // Added for auth-service sync on update
           name: company.name,
           domain: company.domain,
+          country: company.country,
           tier: company.tier,
+          paymentProfile: company.payment_profile,
+          payment_phones: company.payment_phones, // Sync payment phones
+          subscription: company.subscription,
+          fees: company.fees,
+          compliance: company.compliance,
           updatedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -98,6 +111,28 @@ const companyEvents = {
   },
 
   /**
+   * Explicit creation success event (emitted when all initial setup is done)
+   */
+  async createdSuccess(company, trx = null) {
+    return await Outbox.create(
+      {
+        type: "company.creation.success",
+        exchange: "events_topic",
+        routingKey: "company.creation.success",
+        payload: {
+          companyId: company.id,
+          name: company.name,
+          paymentProfile: company.payment_profile,
+          payment_phones: company.payment_phones,
+          timestamp: new Date().toISOString(),
+          traceId: uuidv4(),
+        },
+      },
+      trx
+    );
+  },
+
+  /**
    * Create outbox event for company tier change
    */
   async tierChanged(companyId, tier, trx = null) {
@@ -110,6 +145,29 @@ const companyEvents = {
           companyId,
           tier,
           changedAt: new Date().toISOString(),
+          traceId: uuidv4(),
+        },
+      },
+      trx
+    );
+  },
+
+  /**
+   * Create outbox event for when onboarding link is ready
+   */
+  async onboardingReady(company, link, trx = null) {
+    return await Outbox.create(
+      {
+        type: "company.onboarding_ready",
+        exchange: "events_topic",
+        routingKey: "company.onboarding_ready",
+        payload: {
+          companyId: company.id,
+          adminId: company.createdBy, // We send to the creator/admin
+          name: company.name,
+          email: company.email,
+          onboardingLink: link,
+          generatedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
       },
@@ -132,6 +190,8 @@ const subscriptionEvents = {
           subscriptionId: subscription.id,
           companyId: subscription.company_id,
           tier: subscription.tier,
+          is_active: subscription.is_active,
+          end_date: subscription.end_date,
           amount: subscription.amount,
           createdAt: new Date().toISOString(),
           traceId: uuidv4(),
@@ -154,6 +214,8 @@ const subscriptionEvents = {
           subscriptionId: subscription.id,
           companyId: subscription.company_id,
           tier: subscription.tier,
+          is_active: subscription.is_active,
+          end_date: subscription.end_date,
           updatedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -175,6 +237,8 @@ const subscriptionEvents = {
           subscriptionId: subscription.id,
           companyId: subscription.company_id,
           tier: subscription.tier,
+          is_active: subscription.is_active,
+          end_date: subscription.end_date,
           renewedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -186,14 +250,18 @@ const subscriptionEvents = {
   /**
    * Create outbox event for subscription deactivation
    */
-  async deactivated(companyId, trx = null) {
+  async deactivated(subscription, trx = null) {
     return await Outbox.create(
       {
         type: "subscription.deactivated",
         exchange: "events_topic",
         routingKey: "subscription.deactivated",
         payload: {
-          companyId,
+          subscriptionId: subscription.id,
+          companyId: subscription.company_id,
+          tier: subscription.tier,
+          is_active: false,
+          end_date: subscription.end_date,
           deactivatedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
@@ -335,3 +403,4 @@ module.exports = {
   subscriptionEvents,
   departmentUserEvents,
 };
+

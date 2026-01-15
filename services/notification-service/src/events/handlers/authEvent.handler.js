@@ -70,28 +70,54 @@ async function handleUserCreated(data) {
     const notifPrefs = userPrefs.notifications || {};
 
     // Determine channels based on preferences
-    const channels = {
-      // Email enabled by default if not explicitly disabled
-      email: !!email && (notifPrefs.email !== false),
-      inApp: true,
-      // SMS disabled by default unless explicitly enabled
-      sms: !!phone && (notifPrefs.sms === true)
-    };
+    const channels = [];
+
+    // Email enabled by default if not explicitly disabled
+    if (!!email && (notifPrefs.email !== false)) {
+      channels.push('email');
+    }
+
+    // Always enable In-App
+    channels.push('in-app');
+
+    // SMS disabled by default unless explicitly enabled OR if password delivery is required
+    // "Refining Password & SMS Delivery": ensure auto-generated password is sent via SMS
+    const shouldSendSms = !!phone && (
+      notifPrefs.sms === true ||
+      (!!data.password && true) // Explicitly allow SMS for password delivery
+    );
+
+    if (shouldSendSms) {
+      channels.push('sms');
+    }
 
     if (!phone) {
       logger.warn(`⚠️ No phone number for user ${userId}, SMS skipped`);
     }
+
+    // Determine greeting based on gender
+    let title = "";
+    if (data.gender) {
+      const lowerGender = data.gender.toLowerCase();
+      if (lowerGender === 'm' || lowerGender === 'male') title = "Mr.";
+      else if (lowerGender === 'f' || lowerGender === 'female') title = "Ms.";
+    }
+
+    // Select template: 'welcome' (with password) or 'welcome_manual' (no password)
+    const templateName = data.password ? "welcome" : "welcome_manual";
 
     await dispatchEvent({
       event: "user.created",
       data: {
         email,
         phone,
+        title, // Pass title to template
+        userName: data.userName || data.firstName || "User",
         ...data,
       },
       recipients: [userId],
       companyId,
-      templateName: "welcome",
+      templateName,
       channels
     });
 
@@ -124,22 +150,24 @@ async function handleVerificationRequested(data) {
     const notifPrefs = userPrefs.notifications || {};
 
     // Precise channel selection for OTP
-    const channels = {
-      inApp: true, // Always send real-time OTP
-      email: type === 'email' && !!email && (notifPrefs.email !== false),
-      sms: type === 'phone' && !!phone // SMS mandates explicit phone verification flow, usually overrides pref if it's the requested method, but adhering to pref-aware logic:
-      // If user requested phone verification, we MUST send SMS regardless of general preference? 
-      // Logic: If I click "Verify Phone", I expect an SMS. 
-      // So for verification.requested where type IS phone, we force SMS true.
-      // But let's respect the "preference-based" request from user prompt. 
-      // Prompt says: "send them those otps for them to verify based on preferences"
-      // AND "inApp needs to be in realtime... all other user types need to verify either one of phone or email".
-      // If I request phone verification, I implicitly want an SMS. Use type-based logic + preferences fallback.
-    };
+    const channels = ['in-app']; // Always send real-time OTP
 
-    // Force channel if it matches the verification type requested
-    if (type === 'email') channels.email = true;
-    if (type === 'phone') channels.sms = true;
+    // Email
+    if ((type === 'email' || type === 'both') && !!email && (notifPrefs.email !== false)) {
+      channels.push('email');
+    }
+    // Force email if explicitly requested
+    if (type === 'email' && !channels.includes('email') && !!email) {
+      channels.push('email');
+    }
+
+    // SMS
+    // If user requested phone verification, we MUST send SMS regardless of general preference
+    const shouldSendSms = !!phone && (type === 'phone' || type === 'both' || notifPrefs.sms === true);
+
+    if (shouldSendSms) {
+      channels.push('sms');
+    }
 
     await dispatchEvent({
       event: "verification.requested",
@@ -190,11 +218,11 @@ async function handlePasswordReset(data) {
 
     const { dispatchEvent } = require("../../services/dispatcher");
 
-    const channels = {
-      email: !!email,
-      sms: !!phone,
-      inApp: false // Usually password reset is external to app flow
-    };
+    const channels = [];
+    if (!!email) channels.push('email');
+    if (!!phone) channels.push('sms');
+    // usually password reset is external to app flow, but we can keep in-app if needed. logic said 'false' before.
+    // channels.inApp = false;
 
     await dispatchEvent({
       event: "user.password.reset",

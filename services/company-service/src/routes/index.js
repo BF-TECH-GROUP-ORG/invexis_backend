@@ -1,9 +1,7 @@
 const companyRoutes = require('./companyRoutes');
-const roleRoutes = require('./roleRoutes');
-const companyUserRoutes = require('./companyUserRoutes');
-const departmentUserRoutes = require('./departmentUserRoutes');
-const companyAdminRoutes = require('./companyAdminRoutes');
 const subscriptionRoutes = require('./subscriptionRoutes');
+// STRIPE DISABLED: Commenting out Stripe webhook functionality
+// const { handleStripeConnectWebhook } = require('../controllers/webhookController');
 const express = require('express')
 const router = express.Router()
 
@@ -11,11 +9,9 @@ router.get('/', (req, res) => {
     res.json({ message: "company service routed to gateway" })
 })
 router.use('/companies', companyRoutes);
-router.use('/roles', roleRoutes);
-router.use('/company-users', companyUserRoutes);
-router.use('/department-users', departmentUserRoutes);
-router.use('/company-admins', companyAdminRoutes);
 router.use('/subscriptions', subscriptionRoutes);
+// STRIPE DISABLED: Webhook route commented out
+// router.post('/webhooks/stripe/connect', handleStripeConnectWebhook);
 
 
 module.exports = router

@@ -7,6 +7,7 @@ const { SecurityManager } = require("/app/shared/security");
 const { ErrorHandler } = require("/app/shared/errorHandler");
 
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 8008;
 const SERVICE_NAME = 'notification-service';
 
@@ -60,6 +61,15 @@ try {
 }
 
 // Routes
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'healthy', service: 'notification-service', timestamp: new Date() });
+});
+
+// Device Registry Routes
+const deviceRoutes = require('./routes/device.routes');
+app.use('/devices', deviceRoutes);
+
 // Health endpoint defined before API routes to prevent conflicts
 app.get("/health", (_req, res) => {
   res.json({
@@ -181,6 +191,15 @@ const startServer = async () => {
         pid: process.pid
       });
 
+      console.log(`
+      ╔══════════════════════════════════════════════════════════════╗
+      ║                                                              ║
+      ║   🔔  NOTIFICATION SERVICE ONLINE                            ║
+      ║   🚀  Listening for: user.created, sale.created, etc.        ║
+      ║   📡  Port: ${PORT}                                          ║
+      ║                                                              ║
+      ╚══════════════════════════════════════════════════════════════╝
+      `);
       console.log(`🔔 Notification Service running on port ${PORT}`);
     });
 
