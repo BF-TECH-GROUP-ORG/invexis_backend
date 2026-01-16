@@ -82,10 +82,16 @@ class WebSocketPublisher {
         data: {
           notificationId: notification._id.toString(),
           companyId: notification.companyId?.toString(),
+          shopId: notification.shopId?.toString(),
           scope: notification.scope,
           title: notification.title,
           body: notification.body,
-          priority: notification.priority
+          priority: notification.priority,
+          // Include compiled content for rich notifications
+          content: notification.compiledContent?.inApp || {
+            title: notification.title,
+            body: notification.body
+          }
         },
         emittedAt: new Date().toISOString(),
         id: `ws-broadcast-${notification._id}-${Date.now()}`

@@ -4,6 +4,8 @@
  * Publishes directly to shared RabbitMQ for other services to consume
  */
 
+const { v4: uuidv4 } = require('uuid');
+
 const publishToRabbitMQ = async (eventType, payload) => {
     try {
         if (global && typeof global.rabbitmqPublish === 'function') {
@@ -12,6 +14,7 @@ const publishToRabbitMQ = async (eventType, payload) => {
             const exchange = 'events_topic'; // Use standard hub
 
             console.log(`[DebtEventHandler] 📤 Publishing ${eventType} to exchange="${exchange}", routingKey="${routingKey}"`);
+            console.log(`[DebtEventHandler] 📤 Payload:`, JSON.stringify(payload, null, 2));
 
             // Publish to RabbitMQ
             await global.rabbitmqPublish(exchange, routingKey, payload);
@@ -51,10 +54,14 @@ const handleDebtCreated = async (payload) => {
 
         // Enrich event with structured data
         const enrichedEvent = {
-            eventType: 'DEBT_CREATED',
+            id: uuidv4(), // Unique Event ID
+            eventType: 'debt.created', // Standard dot notation
+            type: 'debt.created', // Redundant but safe for consumers
             debtId,
             companyId,
             shopId,
+            userId: salesStaffId || createdBy?.id, // For "affected user" scoping
+            amount: totalAmount, // Clear top-level amount for notifications
             salesStaffId,
             customer: {
                 id: customer?.id,
@@ -87,19 +94,19 @@ const handleDebtCreated = async (payload) => {
 
         // Log the enriched payload (helps debugging and mirrors inventory service behaviour)
         try {
-            console.log('[DebtEventHandler] ▶️ DEBT_CREATED payload:', JSON.stringify(enrichedEvent));
+            console.log('[DebtEventHandler] ▶️ debt.created payload:', JSON.stringify(enrichedEvent));
         } catch (e) { /* ignore stringify errors */ }
 
         // Publish to RabbitMQ
-        const published = await publishToRabbitMQ('DEBT_CREATED', enrichedEvent);
+        const published = await publishToRabbitMQ('debt.created', enrichedEvent);
 
         if (published) {
-            console.log(`[DebtEventHandler] 🎯 Successfully handled DEBT_CREATED event for debt ${debtId}`);
+            console.log(`[DebtEventHandler] 🎯 Successfully handled debt.created event for debt ${debtId}`);
         }
 
         return enrichedEvent;
     } catch (err) {
-        console.error('[DebtEventHandler] Error handling DEBT_CREATED:', err);
+        console.error('[DebtEventHandler] Error handling debt.created:', err);
         throw err;
     }
 };
@@ -120,19 +127,29 @@ const handleDebtRepaid = async (payload) => {
             paymentReference,
             newBalance,
             newStatus,
-            createdAt
+            createdAt,
+            createdBy
         } = payload;
 
         const enrichedEvent = {
-            eventType: 'DEBT_REPAID',
+            id: uuidv4(),
+            eventType: 'debt.repayment.created', // Standard dot notation matching template
+            type: 'debt.repayment.created',
             debtId,
             repaymentId,
             companyId,
             shopId,
+            userId: createdBy?.id, // For "affected user" scoping
+            amount: amountPaid, // Clear top-level amount
             paymentDetails: {
                 amountPaid,
                 paymentMethod,
                 paymentReference
+            },
+            customer: {
+                name: payload.customer?.name,
+                phone: payload.customer?.phone,
+                email: payload.customer?.email
             },
             debtStatus: {
                 newBalance,
@@ -141,15 +158,15 @@ const handleDebtRepaid = async (payload) => {
             timestamp: createdAt || new Date()
         };
 
-        const published = await publishToRabbitMQ('DEBT_REPAID', enrichedEvent);
+        const published = await publishToRabbitMQ('debt.repayment.created', enrichedEvent);
 
         if (published) {
-            console.log(`[DebtEventHandler] 🎯 Successfully handled DEBT_REPAID event for repayment ${repaymentId}`);
+            console.log(`[DebtEventHandler] 🎯 Successfully handled debt.repayment.created event for repayment ${repaymentId}`);
         }
 
         return enrichedEvent;
     } catch (err) {
-        console.error('[DebtEventHandler] Error handling DEBT_REPAID:', err);
+        console.error('[DebtEventHandler] Error handling debt.repayment.created:', err);
         throw err;
     }
 };
@@ -169,10 +186,18 @@ const handleDebtFullyPaid = async (payload) => {
         } = payload;
 
         const enrichedEvent = {
-            eventType: 'DEBT_FULLY_PAID',
+            id: uuidv4(),
+            eventType: 'debt.fully_paid',
+            type: 'debt.fully_paid',
             debtId,
             companyId,
             shopId,
+            amount: totalAmount,
+            customer: {
+                name: payload.customer?.name,
+                phone: payload.customer?.phone,
+                email: payload.customer?.email
+            },
             debtDetails: {
                 totalAmount
             },
@@ -180,15 +205,146 @@ const handleDebtFullyPaid = async (payload) => {
             timestamp: new Date()
         };
 
-        const published = await publishToRabbitMQ('DEBT_FULLY_PAID', enrichedEvent);
+        const published = await publishToRabbitMQ('debt.fully_paid', enrichedEvent);
 
         if (published) {
-            console.log(`[DebtEventHandler] 🎯 Successfully handled DEBT_FULLY_PAID event for debt ${debtId}`);
+            console.log(`[DebtEventHandler] 🎯 Successfully handled debt.fully_paid event for debt ${debtId}`);
         }
 
         return enrichedEvent;
     } catch (err) {
-        console.error('[DebtEventHandler] Error handling DEBT_FULLY_PAID:', err);
+        console.error('[DebtEventHandler] Error handling debt.fully_paid:', err);
+        throw err;
+    }
+};
+
+/**
+ * Handle DEBT_CANCELLED event
+ * Emits event when a debt is cancelled with write-off
+ */
+const handleDebtCancelled = async (payload) => {
+    try {
+        const {
+            debtId,
+            companyId,
+            shopId,
+            hashedCustomerId,
+            customer,
+            totalAmount,
+            balance,
+            reason,
+            cancelledBy,
+            cancelledAt,
+            createdAt
+        } = payload;
+
+        const enrichedEvent = {
+            id: uuidv4(), // Unique Event ID
+            eventType: 'debt.cancelled',
+            type: 'debt.cancelled',
+            debtId,
+            companyId,
+            shopId,
+            hashedCustomerId,
+            customer: {
+                id: customer?.id,
+                name: customer?.name,
+                phone: customer?.phone,
+                email: customer?.email
+            },
+            debtDetails: {
+                totalAmount,
+                balance,
+                cancelReason: reason
+            },
+            audit: {
+                cancelledBy: cancelledBy ? {
+                    id: cancelledBy.id || cancelledBy,
+                    name: cancelledBy.name || 'Unknown'
+                } : null,
+                cancelledAt: cancelledAt || new Date()
+            },
+            timestamp: createdAt || new Date()
+        };
+
+        // Log the enriched payload
+        try {
+            console.log('[DebtEventHandler] ▶️ debt.cancelled payload:', JSON.stringify(enrichedEvent));
+        } catch (e) { /* ignore stringify errors */ }
+
+        const published = await publishToRabbitMQ('debt.cancelled', enrichedEvent);
+
+        if (published) {
+            console.log(`[DebtEventHandler] 🎯 Successfully handled debt.cancelled event for debt ${debtId}`);
+        }
+
+        return enrichedEvent;
+    } catch (err) {
+        console.error('[DebtEventHandler] Error handling debt.cancelled:', err);
+        throw err;
+    }
+};
+
+/**
+ * Handle DEBT_MARKED_AS_PAID event
+ * Emits event when a debt is marked as fully paid
+ */
+const handleDebtMarkedAsPaid = async (payload) => {
+    try {
+        const {
+            debtId,
+            companyId,
+            shopId,
+            hashedCustomerId,
+            customer,
+            totalAmount,
+            amountPaid,
+            repaymentId,
+            markedAt,
+            markedBy,
+            createdAt
+        } = payload;
+
+        const enrichedEvent = {
+            id: uuidv4(),
+            eventType: 'debt.marked.paid',
+            type: 'debt.marked.paid',
+            debtId,
+            companyId,
+            shopId,
+            hashedCustomerId,
+            repaymentId,
+            amount: totalAmount,
+            customer: {
+                id: customer?.id,
+                name: customer?.name,
+                phone: customer?.phone,
+                email: customer?.email
+            },
+            debtDetails: {
+                totalAmount,
+                amountPaid,
+                status: 'PAID'
+            },
+            audit: {
+                markedBy: markedBy ? {
+                    id: markedBy.id || markedBy,
+                    name: markedBy.name || 'System'
+                } : { id: null, name: 'System' },
+                markedAt: markedAt || new Date()
+            },
+            timestamp: createdAt || new Date()
+        };
+
+        const published = await publishToRabbitMQ('debt.marked.paid', enrichedEvent);
+
+        if (published) {
+            console.log(`[DebtEventHandler] 🎯 Successfully handled debt.marked.paid event for debt ${debtId}`);
+        }
+
+        return enrichedEvent;
+    } catch (err) {
+        console.error('[DebtEventHandler] Error handling debt.marked.paid:', err);
         throw err;
     }
 };
@@ -197,5 +353,7 @@ module.exports = {
     handleDebtCreated,
     handleDebtRepaid,
     handleDebtFullyPaid,
+    handleDebtCancelled,
+    handleDebtMarkedAsPaid,
     publishToRabbitMQ
 };

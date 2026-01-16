@@ -308,6 +308,21 @@ class RecipientResolver {
             'inventory.product.low_stock': {
                 roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
+            'product.created': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'product.updated': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'product.deleted': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
             'inventory.out_of_stock': {
                 roles: [
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
@@ -330,8 +345,17 @@ class RecipientResolver {
             // Sales Events - Both departments get notified
             'sale.created': {
                 roles: [
-                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.SALES },
-                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                    // Sales Workers: Only notify the person who made the sale (AFFECTED_USER logic)
+                    // We achieve this by *removing* the broad department broadcast for Sales Dept
+                    // and relying on "AFFECTED_USER" if we want to notify them, OR enforcing strict "what they did" means they don't even need a notification?
+                    // "and of wht they did only" -> implies they SHOULD get a notification for their own action ("Success! Sale created")
+                    'AFFECTED_USER',
+
+                    // Management Workers: Receive all sales in their shop
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
+
+                    // Company Admins: Receive all sales in their company
+                    AUTH_ROLES.COMPANY_ADMIN
                 ]
             },
             'sale.updated': {
@@ -366,7 +390,7 @@ class RecipientResolver {
             },
 
             // Payment Events
-            'payment.success': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'payment.success': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.WORKER] },
             'payment.failed': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
             'payment.refunded': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
             'subscription.expiring': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
@@ -381,20 +405,44 @@ class RecipientResolver {
 
             // Debt Events - Management department handles debt
             'debt.created': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
             },
             'debt.repayment.created': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
-            },
-            'debt.fully_paid': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
-            'debt.status.updated': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
             },
             'debt.overdue': {
                 roles: [
                     AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
+            },
+            'debt.fully_paid': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'debt.marked.paid': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'debt.cancelled': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'debt.repaid': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'debt.status.updated': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'debt.payment.received': {
+                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'debt.reminder.upcoming': {
                 roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]

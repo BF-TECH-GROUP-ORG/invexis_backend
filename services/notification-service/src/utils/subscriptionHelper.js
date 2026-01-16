@@ -51,7 +51,7 @@ async function filterAllowedChannels(companyId, requestedChannels) {
     if (!requestedChannels || requestedChannels.length === 0) return [];
 
     // Always allow in-app
-    const alwaysAllowed = ['in-app', 'websocket', 'push'];
+    const alwaysAllowed = ['inApp', 'websocket', 'push'];
 
     // Check restricted channels
     const restricted = requestedChannels.filter(c => !alwaysAllowed.includes(c));

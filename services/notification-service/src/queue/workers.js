@@ -14,25 +14,34 @@ const deliverNotification = async ({ notificationId }) => {
     throw new Error("Notification not found");
   }
 
-  const userId = notification.userId.toString();
-  const companyId = notification.companyId.toString();
+  const userId = notification.userId ? notification.userId.toString() : null;
+  const companyId = notification.companyId ? notification.companyId.toString() : null;
 
   // Check user rate limit
-  const userRateLimitOk = await checkUserRateLimit(userId);
-  if (!userRateLimitOk) {
-    logger.warn(`User rate limit exceeded for user ${userId}`);
-    notification.status = "failed";
-    await notification.save();
-    throw new Error("User rate limit exceeded");
+  if (userId) {
+    const userRateLimitOk = await checkUserRateLimit(userId);
+    if (!userRateLimitOk) {
+      logger.warn(`User rate limit exceeded for user ${userId}`);
+      notification.status = "failed";
+      await notification.save();
+      throw new Error("User rate limit exceeded");
+    }
   }
 
   // Handle potential system/unknown companyId for preferences
   const prefCompanyId = (companyId === 'system' || companyId === 'unknown') ? null : companyId;
-  let prefs = await getPreferences(userId, prefCompanyId); // Changed to let
+
+  let prefs;
+  if (userId) {
+    prefs = await getPreferences(userId, prefCompanyId);
+  } else {
+    // Default prefs for system/broadcast notifications where userId is unknown
+    prefs = { email: true, sms: true, push: true, inApp: true };
+  }
 
   // Force enable critical channels if prefs not found or empty
   if (!prefs) {
-    logger.warn(`Preferences not found for user ${userId}, using defaults`);
+    logger.warn(`Preferences not found for user ${userId || 'unknown'}, using defaults`);
     prefs = { email: true, sms: true, push: true, inApp: true };
   }
 
@@ -71,7 +80,10 @@ const deliverNotification = async ({ notificationId }) => {
   if (notification.channels.push && prefs.push) {
     // 1. Get tokens from DB
     const UserDevice = require("../models/UserDevice");
-    const devices = await UserDevice.find({ userId, isActive: true });
+    let devices = [];
+    if (userId) {
+      devices = await UserDevice.find({ userId, isActive: true });
+    }
 
     // 2. Get tokens from payload (legacy/manual override)
     const payloadTokens = notification.payload.fcmToken
@@ -117,7 +129,16 @@ const deliverNotification = async ({ notificationId }) => {
 
   // In-App (via WebSocket service)
   if (notification.channels.inApp && prefs.inApp) {
-    const success = await websocketPublisher.publishNotification(notification);
+    let success = false;
+
+    if (notification.scope !== 'personal') {
+      // Use broadcast publisher for non-personal scopes (company, department, etc.)
+      success = await websocketPublisher.publishBroadcast(notification);
+    } else {
+      // Direct personal message
+      success = await websocketPublisher.publishNotification(notification);
+    }
+
     const result = { success }; // normalize result structure
     results.push({ channel: "inApp", ...result });
     if (result.success) successes++;

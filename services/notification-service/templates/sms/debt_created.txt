@@ -1,0 +1,1 @@
+{{companyName}}: Debt #{{debtId}} recorded for {{amount}}. Due: {{dueDate}}. Contact us to settle.

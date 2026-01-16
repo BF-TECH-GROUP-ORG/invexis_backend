@@ -11,6 +11,7 @@ const { compileTemplatesForChannels } = require('./templateService');
 const recipientResolver = require('./recipientResolver');
 const intentClassifier = require('./intentClassifier');
 const logger = require('../utils/logger');
+const { cleanValue, cleanAmount, extractField } = require('../utils/dataSanitizer');
 
 const notificationQueue = require('../config/queue');
 
@@ -34,7 +35,25 @@ class NotificationEventProcessor {
      */
     async processEvent(event, routingKey) {
         try {
-            const { type, data, id: eventId, emittedAt, source } = event;
+            let { type, data, id: eventId, emittedAt, source } = event;
+
+            // Robust data unwrapping: Some services wrap the payload in 'body' or 'payload'
+            if (data && !data.companyId && (data.body || data.payload || data.data)) {
+                const nested = data.body || data.payload || data.data;
+                if (nested.companyId || nested.id || nested.debtId || nested.saleId) {
+                    logger.debug(`📦 Unwrapping nested payload for ${type}`);
+                    data = { ...data, ...nested };
+                }
+            }
+
+            // Robust ID generation if missing (critical for duplication check)
+            if (!eventId) {
+                const crypto = require('crypto');
+                // Create deterministic ID based on content to allow retries but prevent duplicates
+                const payloadStr = JSON.stringify({ type, routingKey, emittedAt, dataIds: data?.id || data?.saleId || data?.debtId });
+                eventId = crypto.createHash('md5').update(payloadStr).digest('hex');
+                logger.debug(`🆔 Generated eventId ${eventId} for ${type} (was missing)`);
+            }
 
             if (!type) {
                 logger.warn('⚠️ Event missing type field', { routingKey, source, eventId });
@@ -46,8 +65,9 @@ class NotificationEventProcessor {
             // Check if this event type should trigger notifications
             const shouldNotify = intentClassifier.shouldNotify(type);
             if (!shouldNotify) {
-                // Event is not configured for notifications - silently ignore
-                logger.debug(`📭 Event ${type} not configured for notifications`);
+                if (!type.startsWith('notification.')) {
+                    logger.debug(`📭 Event ${type} not configured for notifications`);
+                }
                 return;
             }
 
@@ -99,7 +119,9 @@ class NotificationEventProcessor {
             const notifications = [];
             for (const [role, userIds] of Object.entries(recipientsByRole)) {
                 // Derive channels from intent + role
-                const channels = intentClassifier.getChannelsForIntent(intent, role);
+                // Normalize role for channel lookup (e.g. worker_management -> worker)
+                const channelLookupRole = role.startsWith('worker_') ? 'worker' : role;
+                const channels = intentClassifier.getChannelsForIntent(intent, channelLookupRole);
 
                 logger.debug(`📨 Creating ${userIds.length} notification(s) for ${role}`, {
                     channels,
@@ -238,10 +260,11 @@ class NotificationEventProcessor {
             case 'sale.return.created':
                 return {
                     ...extracted,
-                    saleId: data.saleId || data.id,
-                    totalAmount: data.totalAmount || data.refundAmount,
-                    customerId: data.customerId,
-                    items: data.items
+                    saleId: cleanValue(data.saleId || data.id, 'unknown'),
+                    totalAmount: cleanAmount(data.totalAmount || data.refundAmount || data.amount, 0),
+                    customerId: cleanValue(data.customerId, 'Guest'),
+                    items: data.items,
+                    createdAt: data.createdAt || new Date()
                 };
 
             case 'inventory.low_stock':
@@ -262,14 +285,24 @@ class NotificationEventProcessor {
 
             case 'debt.overdue':
             case 'debt.reminder.overdue':
+            case 'debt.created':
+            case 'debt.repayment.created':
+            case 'debt.fully_paid':
+            case 'debt.marked.paid':
+            case 'debt.cancelled':
+            case 'debt.status.updated':
                 return {
                     ...extracted,
-                    debtId: data.debtId || data.id,
-                    amount: data.amount,
-                    customerName: data.customerName,
-                    dueDate: data.dueDate
+                    debtId: cleanValue(data.debtId || data.id, 'unknown'),
+                    amount: cleanAmount(data.amount || data.paymentDetails?.amountPaid || data.debtDetails?.totalAmount, 0),
+                    originalAmount: cleanAmount(data.originalAmount || data.debtDetails?.totalAmount, 0),
+                    remainingBalance: cleanAmount(data.remainingBalance || data.remainingAmount || data.debtStatus?.newBalance || data.debtDetails?.balance || data.newBalance, 0),
+                    paidAmount: cleanAmount(data.paidAmount || data.amountPaid || data.paymentDetails?.amountPaid || data.debtDetails?.amountPaidNow, 0),
+                    customerName: cleanValue(data.customerName || data.customer?.name, 'Customer'),
+                    dueDate: data.dueDate || data.debtDetails?.dueDate,
+                    status: cleanValue(data.status || data.debtStatus?.newStatus, 'PENDING'),
+                    notes: data.notes
                 };
-
             default:
                 return extracted;
         }
@@ -369,7 +402,7 @@ class NotificationEventProcessor {
             email: channels.includes('email'),
             sms: channels.includes('sms'),
             push: channels.includes('push'),
-            inApp: channels.includes('in-app') || channels.includes('inApp')
+            inApp: channels.includes('inApp')
         };
     }
 
@@ -379,7 +412,7 @@ class NotificationEventProcessor {
     initializeDeliveryStatus(channels) {
         const status = {};
         for (const channel of channels) {
-            const normalizedChannel = channel === 'in-app' ? 'inApp' : channel;
+            const normalizedChannel = channel;
             status[normalizedChannel] = {
                 status: 'pending',
                 sentAt: null,
@@ -399,21 +432,48 @@ class NotificationEventProcessor {
             'company.created': 'welcome',
             'company.suspended': 'company_suspended',
             'shop.created': 'shop_created',
-            'sale.created': 'sale_confirmation',
-            'sale.updated': 'sale_updated',
-            'sale.deleted': 'sale_deleted',
-            'sale.cancelled': 'sale_cancelled',
-            'sale.return.created': 'sale_return',
+
+            // Sales - direct mapping to keys in templates.js
+            'sale.created': 'sale.created',
+            'sale.updated': 'sale.updated',
+            'sale.deleted': 'sale.deleted',
+            'sale.cancelled': 'sale.cancelled',
+            'sale.return.created': 'sale.return.created',
+
+            // Inventory
             'inventory.low_stock': 'low_stock_alert',
             'inventory.product.low_stock': 'low_stock_alert',
             'inventory.out_of_stock': 'out_of_stock_alert',
             'inventory.product.out_of_stock': 'out_of_stock_alert',
-            'debt.overdue': 'debt_overdue',
-            'debt.repaid': 'payment_success',
-            'debt.fully.paid': 'payment_success',
+            'inventory.stock.updated': 'low_stock_alert',
+
+            // Debt - use dot notation to match templates.js
+            'debt.overdue': 'debt.overdue',
+            'debt.created': 'debt.created',
+            'debt.repayment.created': 'debt.repayment.created',
+            'debt.fully_paid': 'debt.fully_paid',
+            'debt.cancelled': 'debt.cancelled',
+            'debt.status.updated': 'debt.status.updated',
+            'debt.deleted': 'debt.cancelled',
+
+            // Products
+            'product.created': 'product_created',
+            'product.updated': 'product_created', // Reuse or add specific
+            'product.deleted': 'product_created',
+
+            'debt.repaid': 'debt.repayment.created', // Map legacy event name
+            'debt.fully.paid': 'debt.fully_paid',   // Map legacy event name
+            'debt.marked.paid': 'debt.payment.received',
+            'debt.payment.received': 'debt.payment.received',
+            'debt.reminder.upcoming': 'debt.created',
+            'debt.reminder.overdue': 'debt.overdue',
+
+            // Payments
             'payment.success': 'payment_success',
             'payment.processed': 'payment_success',
-            'payment.failed': 'payment_failed'
+            'payment.failed': 'payment_failed',
+            'subscription.expiring': 'subscription_expiring',
+            'subscription.expired': 'subscription_expired'
         };
 
         return mapping[eventType] || 'generic_notification';

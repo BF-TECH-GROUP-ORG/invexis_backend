@@ -4,7 +4,9 @@ const mongoose = require("mongoose");
 const Notification = require("../../models/Notification");
 const notificationQueue = require("../../config/queue");
 const logger = require("../../utils/logger");
+const { DEPARTMENTS } = require("../../constants/roles");
 const { sendSMS } = require("../../channels/sms");
+const { cleanValue, cleanAmount, extractField } = require("../../utils/dataSanitizer");
 
 /**
  * Handles debt-related events emitted by debt-service.
@@ -39,6 +41,11 @@ module.exports = async function handleDebtEvent(event, routingKey) {
             return;
         }
 
+        if (type === "debt.marked.paid") {
+            await handleDebtMarkedPaid(data);
+            return;
+        }
+
         if (type === "debt.status.updated") {
             await handleDebtStatusUpdated(data);
             return;
@@ -67,7 +74,12 @@ module.exports = async function handleDebtEvent(event, routingKey) {
 };
 
 async function handleDebtCreated(data) {
-    const { debtId, companyId, shopId, hashedCustomerId, customer, totalAmount } = data || {};
+    const { debtId, companyId, shopId, hashedCustomerId, customer, amount, debtDetails, items } = data || {};
+
+    // Robust extraction
+    const totalDebt = amount || debtDetails?.totalAmount || data.totalAmount;
+    const dueDate = debtDetails?.dueDate || data.dueDate;
+
     if (!companyId || !debtId) {
         logger.warn("⚠️ debt.created missing required fields");
         return;
@@ -86,27 +98,31 @@ async function handleDebtCreated(data) {
                 hashedCustomerId,
                 customer,
                 customerName: customer?.name || "Customer",
-                amount: totalAmount,
+                amount: totalDebt,
+                dueDate,
                 ...data
             },
             companyId,
-            templateName: "debt_created",
-            scope: "company",
-            roles: ["admin", "manager"]
+            templateName: "debt.created",
+            scope: "department",
+            departmentId: DEPARTMENTS.MANAGEMENT,
+            roles: ["company_admin", "worker"]
         });
 
         // Customer SMS
+        const customerPhone = customer?.phone || data.customerPhone || data.phone;
         await sendCustomerSms({
             event: "debt.created.customer",
-            templateName: "debt_created",
+            templateName: "debt.created",
             companyId,
-            phone: customer?.phone,
+            phone: customerPhone,
             payload: {
                 debtId,
-                amount: totalAmount,
-                totalDebt: totalAmount, // Assuming total debt is the amount for new debt
+                amount: totalDebt,
+                totalDebt: totalDebt,
+                dueDate: (dueDate && new Date(dueDate).toLocaleDateString()) || "soon",
                 customerName: customer?.name || "Customer",
-                items: "items", // Placeholder or extract from data if available
+                items: Array.isArray(items) ? items.map(i => `${i.quantity}x ${i.itemName}`).join(', ') : (items || "items"),
                 companyName: data.companyName || "Invexis"
             }
         });
@@ -119,7 +135,13 @@ async function handleDebtCreated(data) {
 }
 
 async function handleRepaymentCreated(data) {
-    const { debtId, repaymentId, companyId, amountPaid, newBalance, customer, hashedCustomerId } = data || {};
+    const { debtId, repaymentId, companyId, amountPaid, newBalance, customer, hashedCustomerId, debtDetails } = data || {};
+
+    // Robust extraction
+    const safeAmount = cleanAmount(amountPaid || data.amount, 0);
+    const safeBalance = cleanAmount(newBalance || data.remainingBalance || data.remainingAmount || data.debtStatus?.newBalance || debtDetails?.balance, 0);
+    const safeCustomerName = cleanValue(customer?.name || data.customerName, "Customer");
+
     if (!companyId || !debtId) {
         logger.warn("⚠️ debt.repayment.created missing required fields");
         return;
@@ -134,29 +156,31 @@ async function handleRepaymentCreated(data) {
             data: {
                 debtId,
                 repaymentId,
-                amount: amountPaid,
-                remainingBalance: newBalance,
+                amount: safeAmount,
+                remainingBalance: safeBalance,
                 companyId,
-                customerName: customer?.name || "Customer",
+                customerName: safeCustomerName,
                 ...data
             },
             companyId,
-            templateName: "debt_paid",
-            scope: "company",
-            roles: ["admin", "manager"]
+            templateName: "debt.repayment.created",
+            scope: "department",
+            departmentId: DEPARTMENTS.MANAGEMENT,
+            roles: ["company_admin", "worker"]
         });
 
         // Customer SMS
+        const customerPhone = customer?.phone || data.customerPhone || data.phone;
         await sendCustomerSms({
             event: "debt.repayment.customer",
-            templateName: "debt_paid",
+            templateName: "debt.payment.received",
             companyId,
-            phone: customer?.phone,
+            phone: customerPhone,
             payload: {
-                amount: amountPaid,
+                amount: safeAmount,
                 debtId,
-                customerName: customer?.name || "Customer",
-                remainingBalance: newBalance,
+                customerName: safeCustomerName,
+                remainingBalance: safeBalance,
                 companyName: data.companyName || "Invexis"
             }
         });
@@ -169,7 +193,12 @@ async function handleRepaymentCreated(data) {
 }
 
 async function handleDebtFullyPaid(data) {
-    const { debtId, companyId, totalAmount, customer, hashedCustomerId } = data || {};
+    const { debtId, companyId, totalAmount, customer, hashedCustomerId, debtDetails } = data || {};
+
+    // Robust extraction
+    const amount = totalAmount || data.amount || debtDetails?.totalAmount || 0;
+    const customerPhone = customer?.phone || data.customerPhone || data.phone;
+
     if (!companyId || !debtId) return;
 
     try {
@@ -187,22 +216,22 @@ async function handleDebtFullyPaid(data) {
                 ...data
             },
             companyId,
-            templateName: "debt_paid", // Reuse paid template
+            templateName: "debt.fully.paid",
             scope: "company",
-            roles: ["admin", "manager"]
+            roles: ["company_admin", "worker"]
         });
 
         // Customer SMS
         await sendCustomerSms({
             event: "debt.fully_paid.customer",
-            templateName: "debt_paid",
+            templateName: "debt.fully.paid",
             companyId,
-            phone: customer?.phone,
+            phone: customerPhone,
             payload: {
                 debtId,
-                amount: totalAmount,
+                totalAmount: amount,
+                amount: amount, // Template uses 'amount' or 'totalAmount'?
                 customerName: customer?.name || "Customer",
-                remainingBalance: 0,
                 companyName: data.companyName || "Invexis"
             }
         });
@@ -214,8 +243,69 @@ async function handleDebtFullyPaid(data) {
     }
 }
 
+async function handleDebtMarkedPaid(data) {
+    const { debtId, companyId, totalAmount, amountPaid, customer, hashedCustomerId, debtDetails } = data || {};
+
+    // Robust extraction
+    const amount = amountPaid || totalAmount || data.amount || debtDetails?.totalAmount || 0;
+    const customerPhone = customer?.phone || data.customerPhone || data.phone;
+
+    if (!companyId || !debtId) return;
+
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+        // Admin Notification
+        const safeAmount = cleanAmount(amount || amountPaid || totalAmount || data.amount, 0);
+        const safeCustomerName = cleanValue(customer?.name || data.customerName, "Customer");
+
+        await dispatchBroadcastEvent({
+            event: "debt.marked.paid",
+            data: {
+                debtId,
+                companyId,
+                amount: safeAmount,
+                totalAmount: cleanAmount(totalAmount || safeAmount, 0),
+                customerName: safeCustomerName,
+                remainingBalance: cleanAmount(data.remainingBalance || data.remainingAmount || data.debtStatus?.newBalance || 0, 0),
+                ...data
+            },
+            companyId,
+            templateName: "debt.payment.received",
+            scope: "department",
+            departmentId: DEPARTMENTS.MANAGEMENT,
+            roles: ["company_admin", "worker"]
+        });
+
+        // Customer SMS
+        await sendCustomerSms({
+            event: "debt.marked.paid.customer",
+            templateName: "debt.payment.received",
+            companyId,
+            phone: customerPhone,
+            payload: {
+                debtId,
+                amount: safeAmount,
+                customerName: safeCustomerName,
+                remainingBalance: 0,
+                companyName: data.companyName || "Invexis"
+            }
+        });
+
+        logger.info(`✅ Queued debt.marked.paid notification for debt ${debtId}`);
+    } catch (error) {
+        logger.error(`❌ Error dispatching debt.marked.paid:`, error.message);
+        throw error;
+    }
+}
+
 async function handleDebtStatusUpdated(data) {
-    const { debtId, status, companyId, customer, amount, totalAmount } = data || {};
+    const { debtId, status, companyId, customer, amount, totalAmount, debtDetails } = data || {};
+
+    // Robust extraction
+    const debtAmount = amount || totalAmount || debtDetails?.totalAmount || 0;
+    const customerPhone = customer?.phone || data.customerPhone || data.phone;
+
     if (!companyId || !debtId) return;
 
     try {
@@ -223,10 +313,18 @@ async function handleDebtStatusUpdated(data) {
 
         await dispatchBroadcastEvent({
             event: "debt.status.updated",
-            data: { debtId, status, companyId, ...data },
+            data: {
+                debtId,
+                status,
+                companyId,
+                amount: debtAmount,
+                customerName: customer?.name || "Customer",
+                ...data
+            },
             companyId,
-            templateName: "debt_updated", // Simplified
-            scope: "company"
+            templateName: "debt.status.updated", // Simplified
+            scope: "company",
+            roles: ["company_admin", "worker"]
         });
 
         // Customer SMS if PAID or FULLY_PAID
@@ -235,13 +333,13 @@ async function handleDebtStatusUpdated(data) {
         if (status === 'PAID' || status === 'FULLY_PAID') {
             await sendCustomerSms({
                 event: "debt.status.updated.customer",
-                templateName: "debt_paid",
+                templateName: "debt.payment.received",
                 companyId,
-                phone: customer?.phone,
+                phone: customerPhone,
                 payload: {
                     debtId,
                     status,
-                    amount: amount || totalAmount, // amount paid or total? usually status update context implies fully paid if status is designated unique
+                    amount: debtAmount,
                     customerName: customer?.name || "Customer",
                     remainingBalance: 0,
                     companyName: data.companyName || "Invexis"
@@ -258,7 +356,13 @@ async function handleDebtStatusUpdated(data) {
 
 async function handleDebtReminder(type, data) {
     // Examples: debt.reminder.upcoming.7, debt.reminder.overdue.3, debt.reminder.final
-    const { debtId, companyId, daysUntilDue, overdueDays, totalAmount } = data || {};
+    const { debtId, companyId, daysUntilDue, overdueDays, totalAmount, customer, debtDetails } = data || {};
+
+    // Robust extraction
+    const amount = data.balance || totalAmount || debtDetails?.totalAmount || 0;
+    const dueDate = data.dueDate || debtDetails?.dueDate;
+    const customerPhone = customer?.phone || data.customerPhone || data.phone;
+
     if (!companyId || !debtId) return;
 
     try {
@@ -272,24 +376,35 @@ async function handleDebtReminder(type, data) {
 
         await dispatchBroadcastEvent({
             event: baseEvent,
-            data: { debtId, companyId, daysUntilDue, overdueDays, totalAmount, reminderType: type, ...data },
+            data: {
+                debtId,
+                companyId,
+                daysUntilDue,
+                overdueDays,
+                totalAmount,
+                amount,
+                customerName: customer?.name || "Customer",
+                reminderType: type,
+                ...data
+            },
             companyId,
-            templateName: "debt_created", // Fallback or new reminder template
-            scope: "company"
+            templateName: "debt.created", // Should be a reminder template, reuse created for now or add specific
+            scope: "company",
+            roles: ["company_admin", "worker"]
         });
 
         // Customer SMS reminder (upcoming or overdue)
         const isOverdue = baseEvent === "debt.reminder.overdue";
         await sendCustomerSms({
             event: isOverdue ? "debt.reminder.overdue.customer" : "debt.reminder.upcoming.customer",
-            templateName: "debt_created", // Should be a reminder template, reuse created for now or add specific
+            templateName: "debt.created", // Should be a reminder template, reuse created for now or add specific
             companyId,
-            phone: data?.customer?.phone,
+            phone: customerPhone,
             payload: {
-                amount: data?.balance || data?.totalAmount,
+                amount: amount,
                 invoiceId: debtId,
-                dueDate: (data?.dueDate && new Date(data.dueDate).toLocaleDateString()) || "",
-                customerName: data?.customer?.name || "Customer",
+                dueDate: (dueDate && new Date(dueDate).toLocaleDateString()) || "",
+                customerName: customer?.name || "Customer",
                 overdueDays: overdueDays || 0,
                 companyName: data.companyName || "Invexis"
             }
@@ -303,7 +418,12 @@ async function handleDebtReminder(type, data) {
 }
 
 async function handleDebtOverdue(data) {
-    const { debtId, companyId, overdueDays, customer, balance, totalAmount, dueDate } = data || {};
+    const { debtId, companyId, overdueDays, customer, balance, totalAmount, dueDate, debtDetails } = data || {};
+
+    // Robust extraction
+    const amount = balance || totalAmount || debtDetails?.balance || debtDetails?.totalAmount || 0;
+    const customerPhone = customer?.phone || data.customerPhone || data.phone;
+
     if (!companyId || !debtId) return;
 
     try {
@@ -311,22 +431,31 @@ async function handleDebtOverdue(data) {
 
         await dispatchBroadcastEvent({
             event: "debt.overdue",
-            data: { debtId, companyId, overdueDays, ...data },
+            data: {
+                debtId,
+                companyId,
+                overdueDays,
+                amount,
+                customerName: customer?.name || "Customer",
+                ...data
+            },
             companyId,
-            templateName: "debt_created", // Ideally 'debt_overdue'
-            scope: "company"
+            templateName: "debt.overdue",
+            scope: "company",
+            roles: ["company_admin", "worker"]
         });
 
         // Customer SMS
         await sendCustomerSms({
             event: "debt.overdue.customer",
-            templateName: "debt_created",
+            templateName: "debt.overdue",
             companyId,
-            phone: customer?.phone,
+            phone: customerPhone,
             payload: {
-                amount: balance || totalAmount,
-                invoiceId: debtId,
-                dueDate: (dueDate && new Date(dueDate).toLocaleDateString()) || "",
+                debtId,
+                amount: amount,
+                daysOverdue: overdueDays || 0,
+                companyName: data.companyName || "Invexis",
                 customerName: customer?.name || "Customer",
                 overdueDays,
                 companyName: data.companyName || "Invexis"
@@ -341,32 +470,52 @@ async function handleDebtOverdue(data) {
 }
 
 async function handleDebtCancelled(data) {
-    const { debtId, companyId, reason, customer, totalAmount, balance } = data || {};
+    const { debtId, companyId, reason, customer, totalAmount, balance, debtDetails } = data || {};
+
+    // Robust extraction
+    const amount = totalAmount || balance || debtDetails?.totalAmount || 0;
+    const customerPhone = customer?.phone || data.customerPhone || data.phone;
+
     if (!companyId || !debtId) return;
+
+    const safeAmount = cleanAmount(amount || totalAmount || balance || data.amount, 0);
+    const safeCustomerName = cleanValue(customer?.name || data.customerName, "Customer");
 
     try {
         const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
         await dispatchBroadcastEvent({
             event: "debt.cancelled",
-            data: { debtId, companyId, reason, totalAmount, balance, customer, ...data },
+            data: {
+                debtId,
+                companyId,
+                reason: reason || "No reason provided",
+                amount: safeAmount,
+                customerName: safeCustomerName,
+                totalAmount: cleanAmount(totalAmount || safeAmount, 0),
+                balance: cleanAmount(balance, 0),
+                customer: customer || { name: safeCustomerName },
+                ...data
+            },
             companyId,
-            templateName: "debt_paid", // Means resolved
-            scope: "company"
+            templateName: "debt.cancelled",
+            scope: "department",
+            departmentId: DEPARTMENTS.MANAGEMENT,
+            roles: ["company_admin", "worker"]
         });
 
         // Customer SMS
         await sendCustomerSms({
             event: "debt.cancelled.customer",
-            templateName: "debt_paid",
+            templateName: "debt.cancelled",
             companyId,
-            phone: customer?.phone,
+            phone: customerPhone,
             payload: {
                 debtId,
                 status: "CANCELLED",
-                amount: totalAmount || balance || 0,
-                customerName: customer?.name || "Customer",
+                amount: safeAmount,
                 reason: reason || "",
+                customerName: safeCustomerName,
                 companyName: data.companyName || "Invexis"
             }
         });
@@ -399,9 +548,13 @@ async function sendCustomerSms({ event, templateName, companyId, phone, payload 
 
         // Note: The SMS channel service usually compiles the template itself using templateName
         const syntheticUserId = new mongoose.Types.ObjectId();
-        await sendSMS(fakeNotification, phone, syntheticUserId, companyId);
+        const result = await sendSMS(fakeNotification, phone, syntheticUserId, companyId);
 
-        logger.info(`✅ Sent customer SMS for ${event} to ${phone}`);
+        if (result.success) {
+            logger.info(`✅ Sent customer SMS for ${event} to ${phone}`);
+        } else {
+            logger.warn(`⚠️ Failed to send customer SMS for ${event} to ${phone}: ${result.error || 'Unknown error'}`);
+        }
     } catch (err) {
         logger.error(`❌ Failed to send customer SMS for ${event}:`, err.message);
     }

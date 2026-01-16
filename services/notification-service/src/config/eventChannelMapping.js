@@ -4,22 +4,22 @@ module.exports = {
         // --- Company Events ---
         "company.created": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app"],
+            "channels": ["email", "inApp"],
             "priority": "high"
         },
         "company.updated": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "low"
         },
         "company.status.changed": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app"],
-            "priority": "medium"
+            "channels": ["email", "inApp"],
+            "priority": "normal"
         },
         "company.suspended": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "in-app"],
+            "channels": ["email", "sms", "inApp"],
             "priority": "urgent"
         },
         "company.deleted": {
@@ -29,71 +29,71 @@ module.exports = {
         },
         "company.tierChanged": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "in-app"],
-            "priority": "medium"
+            "channels": ["email", "sms", "inApp"],
+            "priority": "normal"
         },
         "company.allSuspended": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "in-app"],
+            "channels": ["email", "sms", "inApp"],
             "priority": "urgent"
         },
 
         // --- Shop Events ---
         "shop.created": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "normal"
         },
         "shop.updated": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "low"
         },
         "shop.deleted": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app"],
+            "channels": ["email", "inApp"],
             "priority": "high"
         },
         "shop.statusChanged": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app"],
+            "channels": ["email", "inApp"],
             "priority": "low"
         },
 
         // --- Product & Inventory Events ---
         "product.created": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "low"
         },
         "product.updated": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "low"
         },
         "product.deleted": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "normal"
         },
         "inventory.low_stock": {
             "service": "Notification-Service",
-            "channels": ["email", "push", "in-app"],
+            "channels": ["email", "push", "inApp"],
             "priority": "high"
         },
         "inventory.low.stock": {
             "service": "Notification-Service",
-            "channels": ["email", "push", "in-app"],
+            "channels": ["email", "push", "inApp"],
             "priority": "high"
         },
         "inventory.out_of_stock": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "push", "in-app"],
+            "channels": ["email", "sms", "push", "inApp"],
             "priority": "urgent"
         },
         "inventory.out.of.stock": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "push", "in-app"],
+            "channels": ["email", "sms", "push", "inApp"],
             "priority": "urgent"
         },
         // Legacy mapping support
@@ -105,98 +105,98 @@ module.exports = {
         // Actual events emitted by inventory-service
         "inventory.product.low_stock": {
             "service": "Notification-Service",
-            "channels": ["email", "push", "in-app"],
+            "channels": ["email", "push", "inApp"],
             "priority": "high"
         },
         "inventory.product.out_of_stock": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "push", "in-app"],
+            "channels": ["email", "sms", "push", "inApp"],
             "priority": "urgent"
         },
 
         // --- Sale Events ---
         "sales.created": { // Legacy support
             "service": "Notification-Service",
-            "channels": ["sms", "push", "in-app"],
+            "channels": ["sms", "push", "inApp"],
             "priority": "high"
         },
         "sale.created": {
             "service": "Notification-Service",
-            "channels": ["sms", "push", "in-app", "email"],
+            "channels": ["sms", "push", "inApp", "email"],
             "priority": "high"
         },
         "sale.completed": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "normal"
         },
         "sale.updated": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "low"
         },
         "sale.cancelled": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app"],
+            "channels": ["email", "inApp"],
             "priority": "high"
         },
         "sale.deleted": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app"],
+            "channels": ["email", "inApp"],
             "priority": "high"
         },
         "sale.refunded": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "in-app"],
-            "priority": "medium"
+            "channels": ["email", "sms", "inApp"],
+            "priority": "normal"
         },
         "sale.return.created": {
             "service": "Notification-Service",
-            "channels": ["email", "push", "in-app"],
+            "channels": ["email", "push", "inApp"],
             "priority": "high"
         },
         "sales.refunded": { // Legacy support
             "service": "Notification-Service",
             "channels": ["email", "sms"],
-            "priority": "medium"
+            "priority": "normal"
         },
 
         // --- Payment Events ---
         "payment.success": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app", "push"],
+            "channels": ["email", "inApp", "push"],
             "priority": "high"
         },
         "payment.failed": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "push", "in-app"],
+            "channels": ["email", "sms", "push", "inApp"],
             "priority": "urgent"
         },
         "payment.refunded": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app"],
-            "priority": "medium"
+            "channels": ["email", "inApp"],
+            "priority": "normal"
         },
         "subscription.expiring": {
             "service": "Notification-Service",
-            "channels": ["email", "push", "in-app"],
+            "channels": ["email", "push", "inApp"],
             "priority": "high"
         },
         "subscription.expired": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "push", "in-app"],
+            "channels": ["email", "sms", "push", "inApp"],
             "priority": "urgent"
         },
 
         // --- Auth Events ---
         "user.created": {
             "service": "Notification-Service",
-            "channels": ["email", "in-app"],
+            "channels": ["email", "inApp"],
             "priority": "high"
         },
         "user.verified": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "normal"
         },
         "user.password.reset": {
@@ -218,38 +218,54 @@ module.exports = {
         // --- Debt Events ---
         "debt.created": {
             "service": "Notification-Service",
-            "channels": ["in-app", "push"],
+            "channels": ["inApp", "push"],
             "priority": "normal"
         },
         "debt.repayment.created": {
             "service": "Notification-Service",
-            "channels": ["in-app", "push"],
+            "channels": ["inApp", "push"],
             "priority": "normal"
         },
         "debt.fully_paid": {
             "service": "Notification-Service",
-            "channels": ["in-app", "email"],
-            "priority": "medium"
+            "channels": ["inApp", "email"],
+            "priority": "normal"
+        },
+        "debt.marked.paid": {
+            "service": "Notification-Service",
+            "channels": ["inApp", "email", "sms"],
+            "priority": "high"
         },
         "debt.status.updated": {
             "service": "Notification-Service",
-            "channels": ["in-app"],
+            "channels": ["inApp"],
             "priority": "low"
         },
         "debt.overdue": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "push", "in-app"],
+            "channels": ["email", "sms", "push", "inApp"],
             "priority": "urgent"
+        },
+        "debt.cancelled": {
+            "service": "Notification-Service",
+            "channels": ["email", "inApp"],
+            "priority": "normal"
         },
         "debt.reminder.upcoming": {
             "service": "Notification-Service",
-            "channels": ["email", "push", "in-app"],
-            "priority": "medium"
+            "channels": ["email", "push", "inApp"],
+            "priority": "normal"
         },
         "debt.reminder.overdue": {
             "service": "Notification-Service",
-            "channels": ["email", "sms", "push", "in-app"],
+            "channels": ["email", "sms", "push", "inApp"],
             "priority": "high"
+        },
+        // --- System Events ---
+        "notification.broadcast": {
+            "service": "Notification-Service",
+            "channels": ["email", "push", "inApp"],
+            "priority": "normal"
         }
     }
 };

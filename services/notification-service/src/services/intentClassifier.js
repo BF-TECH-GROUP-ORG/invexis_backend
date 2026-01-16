@@ -23,6 +23,7 @@ class IntentClassifier {
             'sale.completed': NOTIFICATION_INTENTS.OPERATIONAL,
             'inventory.low_stock': NOTIFICATION_INTENTS.OPERATIONAL,
             'inventory.product.low_stock': NOTIFICATION_INTENTS.OPERATIONAL,
+            'inventory.stock.updated': NOTIFICATION_INTENTS.OPERATIONAL,
 
             // Financial - money, payments, debt
             'payment.success': NOTIFICATION_INTENTS.FINANCIAL,
@@ -33,6 +34,10 @@ class IntentClassifier {
             'debt.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.repaid': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.fully.paid': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.repayment.created': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.fully_paid': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.marked.paid': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.cancelled': NOTIFICATION_INTENTS.FINANCIAL,
             'subscription.expiring': NOTIFICATION_INTENTS.FINANCIAL,
 
             // Risk/Security - suspension, failure, anomalies
@@ -67,35 +72,35 @@ class IntentClassifier {
         // Channel matrix: Intent → Role → Channels
         this.channelMatrix = {
             [NOTIFICATION_INTENTS.OPERATIONAL]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['in-app'],
-                [AUTH_ROLES.WORKER]: ['in-app'],
-                [AUTH_ROLES.SUPER_ADMIN]: ['in-app']
+                [AUTH_ROLES.COMPANY_ADMIN]: ['inApp', 'email', 'push'],
+                [AUTH_ROLES.WORKER]: ['inApp', 'push'],
+                [AUTH_ROLES.SUPER_ADMIN]: ['inApp']
             },
 
             [NOTIFICATION_INTENTS.FINANCIAL]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.WORKER]: ['in-app'],
-                [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app']
+                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp'],
+                [AUTH_ROLES.WORKER]: ['inApp'],
+                [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp']
             },
 
             [NOTIFICATION_INTENTS.RISK_SECURITY]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app', 'sms'],
-                [AUTH_ROLES.WORKER]: ['email', 'in-app'],
-                [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.CUSTOMER]: ['email', 'in-app']
+                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp', 'sms'],
+                [AUTH_ROLES.WORKER]: ['email', 'inApp'],
+                [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp'],
+                [AUTH_ROLES.CUSTOMER]: ['email', 'inApp']
             },
 
             [NOTIFICATION_INTENTS.ACCOUNTABILITY]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.WORKER]: ['in-app'],
-                [AUTH_ROLES.SUPER_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.CUSTOMER]: ['email', 'in-app'],
-                'AFFECTED_USER': ['email', 'in-app', 'sms']
+                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp'],
+                [AUTH_ROLES.WORKER]: ['inApp'],
+                [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp'],
+                [AUTH_ROLES.CUSTOMER]: ['email', 'inApp'],
+                'AFFECTED_USER': ['email', 'inApp', 'sms']
             },
 
             [NOTIFICATION_INTENTS.STRATEGIC_INSIGHT]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'in-app'],
-                [AUTH_ROLES.SUPER_ADMIN]: ['in-app']
+                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp'],
+                [AUTH_ROLES.SUPER_ADMIN]: ['inApp']
             }
         };
     }
@@ -120,7 +125,7 @@ class IntentClassifier {
      * @returns {string[]} - Array of channel names
      */
     getChannelsForIntent(intent, role) {
-        const channels = this.channelMatrix[intent]?.[role] || ['in-app'];
+        const channels = this.channelMatrix[intent]?.[role] || ['inApp'];
 
         logger.debug(`📡 Channels for ${INTENT_DISPLAY_NAMES[intent]} + ${role}: ${channels.join(', ')}`);
 
@@ -144,6 +149,10 @@ class IntentClassifier {
      * @returns {boolean}
      */
     shouldNotify(eventType) {
+        // Exclude internal notification service events to prevent circular processing
+        if (eventType && eventType.startsWith('notification.')) {
+            return false;
+        }
         return this.intentMap.hasOwnProperty(eventType);
     }
 }

@@ -16,42 +16,29 @@ module.exports = async function handleSaleEvent(event, routingKey) {
 
     logger.info(`💰 Processing sale event: ${type}`, data);
 
-    // Generate event ID for deduplication
-    const traceId = data.traceId || data.trace_id;
-    const fallbackId = data.saleId || data.id || '';
-    const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
+    switch (type) {
+      case "sale.created":
+        await handleSaleCreated(data);
+        break;
 
-    // Process event with automatic deduplication
-    const result = await processEventOnce(
-      eventId,
-      type,
-      async () => {
-        switch (type) {
-          case "sale.created":
-            await handleSaleCreated(data);
-            break;
+      case "sale.return.created":
+        await handleSaleReturnCreated(data);
+        break;
 
-          case "sale.completed":
-            await handleSaleCompleted(data);
-            break;
+      case "sale.completed":
+        await handleSaleCompleted(data);
+        break;
 
-          case "sale.cancelled":
-            await handleSaleCancelled(data);
-            break;
+      case "sale.cancelled":
+        await handleSaleCancelled(data);
+        break;
 
-          case "sale.refunded":
-            await handleSaleRefunded(data);
-            break;
+      case "sale.refunded":
+        await handleSaleRefunded(data);
+        break;
 
-          default:
-            logger.warn(`⚠️ Unhandled sale event type: ${type}`);
-        }
-      },
-      { eventType: type, timestamp: new Date(), saleId: data.saleId }
-    );
-
-    if (result.duplicate) {
-      logger.info(`🔄 Skipped duplicate sale event: ${type}`, { eventId });
+      default:
+        logger.warn(`⚠️ Unhandled sale event type: ${type}`);
     }
   } catch (error) {
     logger.error(`❌ Error handling sale event: ${error.message}`);
@@ -63,49 +50,40 @@ module.exports = async function handleSaleEvent(event, routingKey) {
  * Handle sale creation
  */
 async function handleSaleCreated(data) {
-  const { saleId, companyId, totalAmount, soldBy, customerEmail, customerPhone } = data;
+  const { saleId, companyId, totalAmount, customerEmail, customer, phone } = data || {};
+  const { cleanValue, cleanAmount } = require("../../utils/dataSanitizer");
+
+  // Robust extraction
+  const safeAmount = cleanAmount(totalAmount || data.amount, 0);
+  const safeCustomerName = cleanValue(customer?.name || data.customerName, "Guest");
+  const customerPhone = data.customerPhone || phone || customer?.phone || customer?.phoneNumber;
 
   if (!saleId || !companyId) {
     logger.warn("⚠️ Sale created event missing required fields");
     return;
   }
 
-  // Validate that we have a recipient (soldBy field)
-  if (!soldBy) {
-    logger.warn(`⚠️ Sale ${saleId} missing soldBy field, cannot dispatch notification`);
-    return;
-  }
-
   try {
-    logger.info(`💰 New sale created: #${saleId} (${totalAmount})`);
+    logger.info(`💰 New sale created: #${saleId} (${safeAmount})`);
 
-    const { dispatchEvent } = require("../../services/dispatcher");
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-    // Determine channels based on available contact info
-    const channels = {
-      email: !!customerEmail,
-      push: true,
-      inApp: true,
-      sms: !!customerPhone
-    };
-
-    if (!customerPhone) {
-      logger.warn(`⚠️ No phone number for sale ${saleId}, SMS skipped`);
-    }
-
-    await dispatchEvent({
+    // 1. Notify Company Staff (Broadcast for History/Real-time)
+    await dispatchBroadcastEvent({
       event: "sale.created",
       data: {
-        email: customerEmail,
-        phone: customerPhone,
         saleId,
-        totalAmount,
+        totalAmount: safeAmount,
+        customerName: safeCustomerName,
+        customerEmail,
+        phone: customerPhone,
         ...data,
       },
-      recipients: [soldBy],
       companyId,
-      templateName: "sale_created",
-      channels
+      templateName: "sale.created",
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin", "worker"]
     });
 
     logger.info(`✅ Sale creation notification dispatched for sale ${saleId}`);
@@ -116,13 +94,51 @@ async function handleSaleCreated(data) {
 }
 
 /**
+ * Handle sale return
+ */
+async function handleSaleReturnCreated(data) {
+  const { saleId, companyId, refundAmount, amount, customer, reason } = data || {};
+  const { cleanValue, cleanAmount } = require("../../utils/dataSanitizer");
+
+  const safeAmount = cleanAmount(refundAmount || amount, 0);
+  const safeCustomerName = cleanValue(customer?.name || data.customerName, "Customer");
+
+  if (!saleId || !companyId) {
+    logger.warn("⚠️ sale.return.created missing required fields");
+    return;
+  }
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "sale.return.created",
+      data: {
+        saleId,
+        refundAmount: safeAmount,
+        customerName: safeCustomerName,
+        reason: reason || "No reason provided",
+        ...data
+      },
+      companyId,
+      templateName: "sale.return.created",
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin", "worker"]
+    });
+
+    logger.info(`✅ Sale return notification dispatched for sale ${saleId}`);
+  } catch (error) {
+    logger.error(`❌ Error creating sale return notification:`, error.message);
+  }
+}
+
+/**
  * Handle sale completion
  */
 async function handleSaleCompleted(data) {
   const { saleId, companyId, amount } = data;
-
   logger.info(`✅ Sale completed: #${saleId} (${amount})`);
-  // Could send receipt/confirmation notification
 }
 
 /**
@@ -130,9 +146,7 @@ async function handleSaleCompleted(data) {
  */
 async function handleSaleCancelled(data) {
   const { saleId, companyId, reason } = data;
-
   logger.info(`❌ Sale cancelled: #${saleId} - ${reason}`);
-  // Could send cancellation notification
 }
 
 /**
@@ -140,8 +154,6 @@ async function handleSaleCancelled(data) {
  */
 async function handleSaleRefunded(data) {
   const { saleId, companyId, amount } = data;
-
   logger.info(`💸 Sale refunded: #${saleId} (${amount})`);
-  // Could send refund confirmation notification
 }
 

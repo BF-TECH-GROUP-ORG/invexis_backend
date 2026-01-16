@@ -60,7 +60,7 @@ const smsTemplates = {
      * @param {string} payload.amount - Sale amount
      * @param {string} payload.companyName - Company name
      */
-    sale_created: (payload) => {
+    "sale.created": (payload) => {
         const { saleId, amount, companyName } = payload;
         return `Sale #${saleId} confirmed! Amount: ${amount}. Thanks for your business! - ${companyName}`;
     },
@@ -119,9 +119,77 @@ const smsTemplates = {
      * @param {string} payload.status - New status
      * @param {string} payload.amount - Debt amount
      */
-    debt_status_updated: (payload) => {
+    "debt.status.updated": (payload) => {
         const { debtId, status, amount } = payload;
         return `Debt ${debtId} status updated to: ${status}. Amount: ${amount}`;
+    },
+
+    /**
+     * Debt created notification for customer
+     * @param {object} payload
+     * @param {string} payload.debtId - Debt ID
+     * @param {string} payload.amount - Debt amount
+     * @param {string} payload.totalDebt - Total debt amount
+     * @param {string} payload.dueDate - Due date
+     * @param {string} payload.companyName - Company name
+     */
+    "debt.created": (payload) => {
+        const { debtId, amount, totalAmount, totalDebt, dueDate, companyName } = payload;
+        const debtAmount = amount || totalAmount || totalDebt || '0 RWF';
+        return `${companyName}: Debt #${debtId} recorded for ${debtAmount}. Due: ${dueDate}. Contact us to settle.`;
+    },
+
+    /**
+     * Debt repayment received notification
+     * @param {object} payload
+     * @param {string} payload.debtId - Debt ID
+     * @param {string} payload.amountPaid - Amount paid
+     * @param {string} payload.remainingBalance - Remaining balance
+     * @param {string} payload.companyName - Company name
+     */
+    "debt.payment.received": (payload) => {
+        const { debtId, amount, remainingBalance, companyName } = payload;
+        const paid = amount || '0 RWF';
+        const balance = remainingBalance || '0 RWF';
+        return `${companyName}: Payment received for debt #${debtId} - ${paid} paid. Balance: ${balance}`;
+    },
+
+    /**
+     * Debt fully paid notification
+     * @param {object} payload
+     * @param {string} payload.debtId - Debt ID
+     * @param {string} payload.totalAmount - Total amount paid
+     * @param {string} payload.companyName - Company name
+     */
+    "debt.fully.paid": (payload) => {
+        const { debtId, amount, totalAmount, companyName } = payload;
+        const debtAmount = amount || totalAmount || '0 RWF';
+        return `${companyName}: Debt #${debtId} fully paid! Total: ${debtAmount}. Thank you!`;
+    },
+
+    /**
+     * Debt cancelled notification
+     * @param {object} payload
+     * @param {string} payload.debtId - Debt ID
+     * @param {string} payload.reason - Reason for cancellation
+     * @param {string} payload.companyName - Company name
+     */
+    "debt.cancelled": (payload) => {
+        const { debtId, reason, companyName } = payload;
+        return `${companyName}: Debt #${debtId} has been cancelled (${reason}). Contact us for details.`;
+    },
+
+    /**
+     * Debt overdue reminder
+     * @param {object} payload
+     * @param {string} payload.debtId - Debt ID
+     * @param {string} payload.amount - Outstanding amount
+     * @param {string} payload.daysOverdue - Days overdue
+     * @param {string} payload.companyName - Company name
+     */
+    "debt.overdue": (payload) => {
+        const { debtId, amount, daysOverdue, companyName } = payload;
+        return `${companyName}: ⚠️ Debt #${debtId} is ${daysOverdue} days overdue! Amount due: ${amount}. Pay now to avoid penalties.`;
     },
 
     /**

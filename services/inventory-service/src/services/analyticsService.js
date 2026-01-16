@@ -65,7 +65,7 @@ class AnalyticsService {
             // 1. Meta Information
             const meta = {
                 companyId,
-                currency: 'USD', // TODO: Fetch from Company settings
+                currency: 'RWF', // Rwandan Francs
                 generatedAt: new Date().toISOString(),
                 dateRange: {
                     from: new Date(startDate).toISOString(),

@@ -84,8 +84,44 @@ const smsCircuitBreaker = createSmsCircuitBreaker(sendSMSCore);
 const sendSMS = async (notification, phoneNumber, userId, companyId) => {
   // Validate phone number
   if (!phoneNumber) {
-    logger.error('❌ Cannot send SMS: phone number is missing');
+    logger.warn('⚠️ Cannot send SMS: phone number is missing');
     return { success: false, error: 'Phone number is required' };
+  }
+
+  // Debug: Log raw phone number and character codes
+  logger.debug(`Raw phone number: "${phoneNumber}"`);
+  logger.debug(`Char codes: ${Array.from(phoneNumber).map(c => c.charCodeAt(0)).join(',')}`);
+
+  // Normalize: remove all non-digits except leading +
+  const originalPhone = phoneNumber;
+  phoneNumber = phoneNumber.replace(/[^\d+]/g, '');
+
+  // Handle local Rwanda format (07... -> +2507...)
+  if (phoneNumber.startsWith('0') && phoneNumber.length === 10) {
+    phoneNumber = '+250' + phoneNumber.substring(1);
+  } else if (!phoneNumber.startsWith('+') && phoneNumber.length === 9) {
+    phoneNumber = '+250' + phoneNumber;
+  }
+
+  // Basic E.164 validation
+  if (!/^\+[1-9]\d{7,14}$/.test(phoneNumber)) {
+    logger.warn(`⚠️ Invalid phone number format: ${phoneNumber} (original: ${originalPhone})`);
+    return { success: false, error: `Invalid phone number format: ${phoneNumber}` };
+  }
+
+  // Rwanda specific checks
+  if (phoneNumber.startsWith('+250')) {
+    const afterPrefix = phoneNumber.substring(4);
+    // Rwandan mobile numbers usually start with 7
+    if (afterPrefix.startsWith('5')) {
+      logger.warn(`⚠️ Rwandan phone number ${phoneNumber} starts with '5', which is likely invalid for mobile. Did you mean 7?`);
+    }
+
+    if (phoneNumber.length !== 13) {
+      const actualAfter = phoneNumber.length - 4;
+      logger.warn(`⚠️ Rwandan phone number ${phoneNumber} has invalid length (${actualAfter} digits after +250, expected 9). If you have 10 digits, please check for a typo.`);
+      // We still try to send it, but Twilio will likely fail with 21211 if it's too long/short
+    }
   }
 
   // Create delivery log
@@ -142,7 +178,7 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
         new Date(Date.now() + 300000) // Retry after 5 minutes
       );
       logger.warn(`⚠️ SMS circuit breaker open for company ${companyId}`);
-      return { success: false, circuitBreakerOpen: true };
+      return { success: false, circuitBreakerOpen: true, error: 'SMS circuit breaker is open (service potentially down or misconfigured)' };
     }
   } catch (error) {
     const log = await DeliveryLog.findById(deliveryLog._id);
@@ -154,8 +190,9 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
       nextRetryAt
     );
 
-    logger.error(`❌ Failed to send SMS to ${phoneNumber}:`, error.message);
-    return { success: false, error: error.message, logId: deliveryLog._id };
+    const errorMessage = error.message || (error.error && error.error.message) || 'Unknown SMS error';
+    logger.error(`❌ Failed to send SMS to ${phoneNumber}:`, errorMessage);
+    return { success: false, error: errorMessage, logId: deliveryLog._id };
   }
 };
 

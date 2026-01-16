@@ -8986,3 +8986,1093 @@
 {"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 01:20:14"}
 {"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 01:20:14"}
 {"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 01:20:14"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 01:27:19"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 01:27:20"}
+{"level":"info","message":"Parsed and merged productData field","timestamp":"2026-01-15 01:27:52"}
+{"level":"info","message":"Request body after normalization: categoryId=69602e6b508251e3abc93a11, name=Eu itaque aspernatur, hasImages=true, hasVideos=false","timestamp":"2026-01-15 01:27:52"}
+{"level":"info","message":"Parsed and merged productData field","timestamp":"2026-01-15 01:27:54"}
+{"level":"info","message":"Request body after normalization: categoryId=69602e6b508251e3abc93a11, name=Eu itaque aspernatur, hasImages=true, hasVideos=false","timestamp":"2026-01-15 01:27:54"}
+{"level":"info","message":"Parsed and merged productData field","timestamp":"2026-01-15 01:27:56"}
+{"level":"info","message":"Request body after normalization: categoryId=69602e6b508251e3abc93a11, name=Eu itaque aspernatur, hasImages=true, hasVideos=false","timestamp":"2026-01-15 01:27:56"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 01:29:19"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 01:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (14/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (11/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 01:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 01:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (11/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 01:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 01:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (14/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 01:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 01:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 01:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 01:30:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":60,"timestamp":"2026-01-15 01:45:35"}
+{"eventId":"15512e8c-7d73-4f72-ab33-ddccac55a759","level":"info","message":"💰 Processing sales event: sale.created","saleId":60,"timestamp":"2026-01-15 01:45:35"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"69681826abce922b267d54cf","productName":"Officia dolorem quo","quantity":10,"total":920,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 60 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-15 01:45:35","traceId":"15512e8c-7d73-4f72-ab33-ddccac55a759"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 69681826abce922b267d54cf","previousStock":11,"productId":"69681826abce922b267d54cf","saleId":60,"saleQty":10,"timestamp":"2026-01-15 01:45:35","trackQuantity":true}
+{"changeQty":-10,"expectedNewStock":1,"level":"info","message":"📝 Creating StockChange for sale 60","previousStock":11,"productId":"69681826abce922b267d54cf","timestamp":"2026-01-15 01:45:35"}
+{"changeQty":-10,"level":"info","message":"✅ Stock deducted for product 69681826abce922b267d54cf: 11 → 1 (sale 60)","newStock":1,"previousStock":11,"productId":"69681826abce922b267d54cf","productName":"Officia dolorem quo","quantitySold":10,"saleId":60,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"69681826abce922b267d54da","timestamp":"2026-01-15 01:45:35"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"69681826abce922b267d54cf","productName":"Officia dolorem quo","timestamp":"2026-01-15 01:45:35"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 01:45:35"}
+{"eventId":"15512e8c-7d73-4f72-ab33-ddccac55a759","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 01:45:35"}
+{"level":"error","message":"Transfer failed for product 69681826abce922b267d54cf: Insufficient stock. Available: 1","timestamp":"2026-01-15 01:45:38"}
+{"level":"info","message":"✅ Bulk intra-company transfer completed: 0/1 successful, 1 failed","timestamp":"2026-01-15 01:45:38"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":61,"timestamp":"2026-01-15 01:55:11"}
+{"eventId":"ac30087c-34f1-4d07-ba49-1d670972f77f","level":"info","message":"💰 Processing sales event: sale.created","saleId":61,"timestamp":"2026-01-15 01:55:11"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 61 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 01:55:11","traceId":"ac30087c-34f1-4d07-ba49-1d670972f77f"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":14,"productId":"6960304a508251e3abc93a8a","saleId":61,"saleQty":1,"timestamp":"2026-01-15 01:55:11","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":13,"level":"info","message":"📝 Creating StockChange for sale 61","previousStock":14,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 01:55:11"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 14 → 13 (sale 61)","newStock":13,"previousStock":14,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":61,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 01:55:11"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 01:55:11"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 01:55:11"}
+{"eventId":"ac30087c-34f1-4d07-ba49-1d670972f77f","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 01:55:11"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 10:13:08"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 10:13:08"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 10:13:08"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 10:13:08"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 10:13:08"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 10:13:08"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 10:13:09"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 10:13:09"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 10:13:09"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 10:13:09"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 10:15:44"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 10:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (13/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 10:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 10:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 10:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 10:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (13/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 10:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 10:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 10:30:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":62,"timestamp":"2026-01-15 10:32:56"}
+{"eventId":"33da44df-a4bf-4bda-8e45-6bb9d155ee75","level":"info","message":"💰 Processing sales event: sale.created","saleId":62,"timestamp":"2026-01-15 10:32:56"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 62 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 10:32:56","traceId":"33da44df-a4bf-4bda-8e45-6bb9d155ee75"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":13,"productId":"6960304a508251e3abc93a8a","saleId":62,"saleQty":1,"timestamp":"2026-01-15 10:32:56","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":12,"level":"info","message":"📝 Creating StockChange for sale 62","previousStock":13,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 10:32:56"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 13 → 12 (sale 62)","newStock":12,"previousStock":13,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":62,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 10:32:56"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 10:32:56"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 10:32:56"}
+{"eventId":"33da44df-a4bf-4bda-8e45-6bb9d155ee75","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 10:32:56"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":63,"timestamp":"2026-01-15 10:47:52"}
+{"eventId":"f060d6e0-dc43-4a20-996a-0207e2070f23","level":"info","message":"💰 Processing sales event: sale.created","saleId":63,"timestamp":"2026-01-15 10:47:52"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 63 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 10:47:52","traceId":"f060d6e0-dc43-4a20-996a-0207e2070f23"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":12,"productId":"6960304a508251e3abc93a8a","saleId":63,"saleQty":1,"timestamp":"2026-01-15 10:47:52","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":11,"level":"info","message":"📝 Creating StockChange for sale 63","previousStock":12,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 10:47:52"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 12 → 11 (sale 63)","newStock":11,"previousStock":12,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":63,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 10:47:52"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 10:47:52"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 10:47:52"}
+{"eventId":"f060d6e0-dc43-4a20-996a-0207e2070f23","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 10:47:52"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":64,"timestamp":"2026-01-15 10:58:00"}
+{"eventId":"70394492-06f6-4ec0-86e0-19fdb99b943b","level":"info","message":"💰 Processing sales event: sale.created","saleId":64,"timestamp":"2026-01-15 10:58:00"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 64 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 10:58:00","traceId":"70394492-06f6-4ec0-86e0-19fdb99b943b"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":11,"productId":"6960304a508251e3abc93a8a","saleId":64,"saleQty":1,"timestamp":"2026-01-15 10:58:00","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":10,"level":"info","message":"📝 Creating StockChange for sale 64","previousStock":11,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 10:58:00"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 11 → 10 (sale 64)","newStock":10,"previousStock":11,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":64,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 10:58:01"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 10:58:01"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 10:58:01"}
+{"eventId":"70394492-06f6-4ec0-86e0-19fdb99b943b","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 10:58:01"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 11:00:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 11:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 11:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 11:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 11:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 11:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 11:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 11:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 11:30:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":65,"timestamp":"2026-01-15 11:46:43"}
+{"eventId":"079bc210-7dcc-4d18-9c7f-f7f1920c2fa7","level":"info","message":"💰 Processing sales event: sale.created","saleId":65,"timestamp":"2026-01-15 11:46:43"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":5,"total":460,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 65 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 11:46:43","traceId":"079bc210-7dcc-4d18-9c7f-f7f1920c2fa7"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":10,"productId":"6960304a508251e3abc93a8a","saleId":65,"saleQty":5,"timestamp":"2026-01-15 11:46:43","trackQuantity":true}
+{"changeQty":-5,"expectedNewStock":5,"level":"info","message":"📝 Creating StockChange for sale 65","previousStock":10,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 11:46:43"}
+{"changeQty":-5,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 10 → 5 (sale 65)","newStock":5,"previousStock":10,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":5,"saleId":65,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 11:46:44"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 11:46:44"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 11:46:44"}
+{"eventId":"079bc210-7dcc-4d18-9c7f-f7f1920c2fa7","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 11:46:44"}
+{"eventType":"sale.return.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.return.created","routingKey":"sale.return.created","saleId":65,"timestamp":"2026-01-15 11:51:26"}
+{"eventId":"59f69f35-66d2-4215-ac05-8895cfd225c6","level":"info","message":"💰 Processing sales event: sale.return.created","saleId":65,"timestamp":"2026-01-15 11:51:26"}
+{"level":"warn","message":"⚠️ Unhandled sales event type: sale.return.created","timestamp":"2026-01-15 11:51:26"}
+{"eventId":"59f69f35-66d2-4215-ac05-8895cfd225c6","level":"info","message":"✅ Successfully processed sales event: sale.return.created","timestamp":"2026-01-15 11:51:26"}
+{"eventType":"sale.return.restore_stock","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.return.restore_stock","routingKey":"sale.return.restore_stock","saleId":65,"timestamp":"2026-01-15 11:51:26"}
+{"eventId":"dd741e54-1b99-4f4b-b0a9-1c375ac110a1","level":"info","message":"💰 Processing sales event: sale.return.restore_stock","saleId":65,"timestamp":"2026-01-15 11:51:26"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","itemsCount":1,"level":"info","message":"📦 [sale.return.restore_stock] Restoring stock for return 12","saleId":65,"shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 11:51:26","traceId":"dd741e54-1b99-4f4b-b0a9-1c375ac110a1"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"↩️ [sale.return.fully_returned] Processing return 12 for sale 65","timestamp":"2026-01-15 11:51:26","traceId":"dd741e54-1b99-4f4b-b0a9-1c375ac110a1"}
+{"level":"info","message":"➕ Stock restored for returned product 6960304a508251e3abc93a8a: 5 → 7 (return 12)","productName":"Officia dolorem quo","quantity":2,"returnId":12,"saleId":65,"timestamp":"2026-01-15 11:51:26"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 11:51:26"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 11:51:26"}
+{"eventId":"dd741e54-1b99-4f4b-b0a9-1c375ac110a1","level":"info","message":"✅ Successfully processed sales event: sale.return.restore_stock","timestamp":"2026-01-15 11:51:26"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 12:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 12:00:00"}
+{"eventType":"sale.return.restore_stock","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.return.restore_stock","routingKey":"sale.return.restore_stock","saleId":65,"timestamp":"2026-01-15 12:15:02"}
+{"eventId":"6faa40c1-d098-4900-9d13-833c310e6747","level":"info","message":"💰 Processing sales event: sale.return.restore_stock","saleId":65,"timestamp":"2026-01-15 12:15:02"}
+{"eventType":"sale.return.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.return.created","routingKey":"sale.return.created","saleId":65,"timestamp":"2026-01-15 12:15:02"}
+{"eventId":"d18cffe7-f49b-410c-9c67-e2dbcca3fec5","level":"info","message":"💰 Processing sales event: sale.return.created","saleId":65,"timestamp":"2026-01-15 12:15:02"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","itemsCount":1,"level":"info","message":"📦 [sale.return.restore_stock] Restoring stock for return 13","saleId":65,"shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 12:15:02","traceId":"6faa40c1-d098-4900-9d13-833c310e6747"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"↩️ [sale.return.fully_returned] Processing return 13 for sale 65","timestamp":"2026-01-15 12:15:02","traceId":"6faa40c1-d098-4900-9d13-833c310e6747"}
+{"level":"warn","message":"⚠️ Unhandled sales event type: sale.return.created","timestamp":"2026-01-15 12:15:02"}
+{"eventId":"d18cffe7-f49b-410c-9c67-e2dbcca3fec5","level":"info","message":"✅ Successfully processed sales event: sale.return.created","timestamp":"2026-01-15 12:15:02"}
+{"level":"info","message":"➕ Stock restored for returned product 6960304a508251e3abc93a8a: 7 → 8 (return 13)","productName":"Officia dolorem quo","quantity":1,"returnId":13,"saleId":65,"timestamp":"2026-01-15 12:15:02"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 12:15:02"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 12:15:02"}
+{"eventId":"6faa40c1-d098-4900-9d13-833c310e6747","level":"info","message":"✅ Successfully processed sales event: sale.return.restore_stock","timestamp":"2026-01-15 12:15:02"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":66,"timestamp":"2026-01-15 12:17:33"}
+{"eventId":"f79e499d-7a9a-425d-ab1a-e93d52ecb861","level":"info","message":"💰 Processing sales event: sale.created","saleId":66,"timestamp":"2026-01-15 12:17:33"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 66 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 12:17:33","traceId":"f79e499d-7a9a-425d-ab1a-e93d52ecb861"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":8,"productId":"6960304a508251e3abc93a8a","saleId":66,"saleQty":1,"timestamp":"2026-01-15 12:17:33","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":7,"level":"info","message":"📝 Creating StockChange for sale 66","previousStock":8,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 12:17:33"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 8 → 7 (sale 66)","newStock":7,"previousStock":8,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":66,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 12:17:33"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 12:17:33"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 12:17:33"}
+{"eventId":"f79e499d-7a9a-425d-ab1a-e93d52ecb861","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 12:17:33"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 12:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 12:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 12:30:01"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 12:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 12:30:01"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 12:30:02"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 12:30:02"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 12:30:02"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 12:30:02"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":67,"timestamp":"2026-01-15 12:48:58"}
+{"eventId":"b81afd07-f49b-4293-8a28-ab9a0de28bc7","level":"info","message":"💰 Processing sales event: sale.created","saleId":67,"timestamp":"2026-01-15 12:48:58"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 67 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 12:48:58","traceId":"b81afd07-f49b-4293-8a28-ab9a0de28bc7"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":7,"productId":"6960304a508251e3abc93a8a","saleId":67,"saleQty":1,"timestamp":"2026-01-15 12:48:59","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":6,"level":"info","message":"📝 Creating StockChange for sale 67","previousStock":7,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 12:48:59"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 7 → 6 (sale 67)","newStock":6,"previousStock":7,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":67,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 12:48:59"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 12:48:59"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 12:48:59"}
+{"eventId":"b81afd07-f49b-4293-8a28-ab9a0de28bc7","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 12:48:59"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 13:16:39"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 13:19:47"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 13:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (6/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 13:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 13:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 13:30:01"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 13:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 13:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 13:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 13:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 13:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 13:30:01"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 13:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (6/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 13:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 13:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 13:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 13:30:01"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (6/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 14:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 14:00:01"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (6/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 14:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 14:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 14:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 14:00:01"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":68,"timestamp":"2026-01-15 14:24:13"}
+{"eventId":"7c062b92-f07e-4ca3-b2bc-0e8eca58828b","level":"info","message":"💰 Processing sales event: sale.created","saleId":68,"timestamp":"2026-01-15 14:24:13"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 68 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 14:24:13","traceId":"7c062b92-f07e-4ca3-b2bc-0e8eca58828b"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":6,"productId":"6960304a508251e3abc93a8a","saleId":68,"saleQty":1,"timestamp":"2026-01-15 14:24:13","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":5,"level":"info","message":"📝 Creating StockChange for sale 68","previousStock":6,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 14:24:13"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 6 → 5 (sale 68)","newStock":5,"previousStock":6,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":68,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 14:24:13"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 14:24:13"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 14:24:13"}
+{"eventId":"7c062b92-f07e-4ca3-b2bc-0e8eca58828b","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 14:24:13"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 14:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (5/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 14:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 14:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 14:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 14:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (5/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 14:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 14:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 14:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 14:30:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (5/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (5/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 15:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 15:00:00"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 15:12:24"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 15:12:35"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 15:13:31"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 15:13:35"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 15:13:36"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 15:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (5/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 15:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 15:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 15:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 15:30:01"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 15:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (5/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 15:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 15:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 15:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 15:30:01"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 15:32:24"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 15:32:24"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":69,"timestamp":"2026-01-15 15:57:24"}
+{"eventId":"13b90860-1d8b-4d5f-a3bc-e471e095ed68","level":"info","message":"💰 Processing sales event: sale.created","saleId":69,"timestamp":"2026-01-15 15:57:24"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 69 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 15:57:24","traceId":"13b90860-1d8b-4d5f-a3bc-e471e095ed68"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":5,"productId":"6960304a508251e3abc93a8a","saleId":69,"saleQty":1,"timestamp":"2026-01-15 15:57:24","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":4,"level":"info","message":"📝 Creating StockChange for sale 69","previousStock":5,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 15:57:24"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 5 → 4 (sale 69)","newStock":4,"previousStock":5,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":69,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 15:57:24"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 15:57:24"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 15:57:24"}
+{"eventId":"13b90860-1d8b-4d5f-a3bc-e471e095ed68","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 15:57:24"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (4/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (4/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 16:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 16:00:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":70,"timestamp":"2026-01-15 16:11:01"}
+{"eventId":"c31a4c36-043f-4852-a702-48825881c23d","level":"info","message":"💰 Processing sales event: sale.created","saleId":70,"timestamp":"2026-01-15 16:11:01"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 70 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 16:11:01","traceId":"c31a4c36-043f-4852-a702-48825881c23d"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":4,"productId":"6960304a508251e3abc93a8a","saleId":70,"saleQty":1,"timestamp":"2026-01-15 16:11:01","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":3,"level":"info","message":"📝 Creating StockChange for sale 70","previousStock":4,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 16:11:01"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 4 → 3 (sale 70)","newStock":3,"previousStock":4,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":70,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 16:11:01"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 16:11:01"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 16:11:01"}
+{"eventId":"c31a4c36-043f-4852-a702-48825881c23d","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 16:11:01"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":71,"timestamp":"2026-01-15 16:22:40"}
+{"eventId":"9b76437b-eeb7-4816-aa5f-efeb667e8454","level":"info","message":"💰 Processing sales event: sale.created","saleId":71,"timestamp":"2026-01-15 16:22:40"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 71 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 16:22:40","traceId":"9b76437b-eeb7-4816-aa5f-efeb667e8454"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":3,"productId":"6960304a508251e3abc93a8a","saleId":71,"saleQty":1,"timestamp":"2026-01-15 16:22:40","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":2,"level":"info","message":"📝 Creating StockChange for sale 71","previousStock":3,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 16:22:40"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 3 → 2 (sale 71)","newStock":2,"previousStock":3,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":71,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 16:22:40"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 16:22:40"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 16:22:40"}
+{"eventId":"9b76437b-eeb7-4816-aa5f-efeb667e8454","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 16:22:40"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 16:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (2/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 16:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 16:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 16:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 16:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (2/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 16:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 16:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 16:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 16:30:00"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 17:03:25"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 17:03:26"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 17:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (2/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 17:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 17:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 17:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 17:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (2/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 17:30:00"}
+{"level":"error","message":"Failed to emit low_stock event: Publishers not initialized","timestamp":"2026-01-15 17:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 17:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 17:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 17:30:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":72,"timestamp":"2026-01-15 17:35:17"}
+{"eventId":"f4cc2b0a-fb26-4241-a0a9-be470ae8f0a0","level":"info","message":"💰 Processing sales event: sale.created","saleId":72,"timestamp":"2026-01-15 17:35:17"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":73,"timestamp":"2026-01-15 17:35:17"}
+{"eventId":"741c1a9b-7aa8-4e6b-bd2a-8fc134b45728","level":"info","message":"💰 Processing sales event: sale.created","saleId":73,"timestamp":"2026-01-15 17:35:17"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":74,"timestamp":"2026-01-15 17:35:17"}
+{"eventId":"e306fe06-bbdc-4342-992d-43c6b283c47c","level":"info","message":"💰 Processing sales event: sale.created","saleId":74,"timestamp":"2026-01-15 17:35:17"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 73 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 17:35:17","traceId":"741c1a9b-7aa8-4e6b-bd2a-8fc134b45728"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 72 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 17:35:17","traceId":"f4cc2b0a-fb26-4241-a0a9-be470ae8f0a0"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 74 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 17:35:17","traceId":"e306fe06-bbdc-4342-992d-43c6b283c47c"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":2,"productId":"6960304a508251e3abc93a8a","saleId":73,"saleQty":1,"timestamp":"2026-01-15 17:35:18","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":1,"level":"info","message":"📝 Creating StockChange for sale 73","previousStock":2,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 17:35:18"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":2,"productId":"6960304a508251e3abc93a8a","saleId":74,"saleQty":1,"timestamp":"2026-01-15 17:35:18","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":1,"level":"info","message":"📝 Creating StockChange for sale 74","previousStock":2,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 17:35:18"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6960304a508251e3abc93a8a","previousStock":2,"productId":"6960304a508251e3abc93a8a","saleId":72,"saleQty":1,"timestamp":"2026-01-15 17:35:18","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":1,"level":"info","message":"📝 Creating StockChange for sale 72","previousStock":2,"productId":"6960304a508251e3abc93a8a","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-01-15 17:35:18"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-01-15 17:35:18"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 2 → 1 (sale 73)","newStock":1,"previousStock":2,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":73,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 17:35:18"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 17:35:18"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 17:35:18"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 2 → 1 (sale 72)","newStock":1,"previousStock":2,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":72,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 17:35:18"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 17:35:18"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 17:35:18"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6960304a508251e3abc93a8a: 2 → 1 (sale 74)","newStock":1,"previousStock":2,"productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","quantitySold":1,"saleId":74,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6960304a508251e3abc93a95","timestamp":"2026-01-15 17:35:18"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6960304a508251e3abc93a8a","productName":"Officia dolorem quo","timestamp":"2026-01-15 17:35:18"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 17:35:18"}
+{"eventId":"f4cc2b0a-fb26-4241-a0a9-be470ae8f0a0","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 17:35:18"}
+{"eventId":"741c1a9b-7aa8-4e6b-bd2a-8fc134b45728","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 17:35:18"}
+{"eventId":"e306fe06-bbdc-4342-992d-43c6b283c47c","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 17:35:18"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":75,"timestamp":"2026-01-15 17:38:19"}
+{"eventId":"7bbb13fa-99ce-48b5-bce2-03f776f1034c","level":"info","message":"💰 Processing sales event: sale.created","saleId":75,"timestamp":"2026-01-15 17:38:19"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"696821d9aeefae605491a544","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 75 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-15 17:38:19","traceId":"7bbb13fa-99ce-48b5-bce2-03f776f1034c"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 696821d9aeefae605491a544","previousStock":10,"productId":"696821d9aeefae605491a544","saleId":75,"saleQty":1,"timestamp":"2026-01-15 17:38:19","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":9,"level":"info","message":"📝 Creating StockChange for sale 75","previousStock":10,"productId":"696821d9aeefae605491a544","timestamp":"2026-01-15 17:38:19"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 696821d9aeefae605491a544: 10 → 9 (sale 75)","newStock":9,"previousStock":10,"productId":"696821d9aeefae605491a544","productName":"Officia dolorem quo","quantitySold":1,"saleId":75,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"696821d9aeefae605491a54f","timestamp":"2026-01-15 17:38:19"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"696821d9aeefae605491a544","productName":"Officia dolorem quo","timestamp":"2026-01-15 17:38:19"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 17:38:19"}
+{"eventId":"7bbb13fa-99ce-48b5-bce2-03f776f1034c","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 17:38:19"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":76,"timestamp":"2026-01-15 17:50:39"}
+{"eventId":"bc927d34-b13a-4ce4-8051-e4fa64c87b3e","level":"info","message":"💰 Processing sales event: sale.created","saleId":76,"timestamp":"2026-01-15 17:50:39"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"69683f5478ae755d642810ba","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 76 with 1 items","shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 17:50:39","traceId":"bc927d34-b13a-4ce4-8051-e4fa64c87b3e"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 69683f5478ae755d642810ba","previousStock":10,"productId":"69683f5478ae755d642810ba","saleId":76,"saleQty":1,"timestamp":"2026-01-15 17:50:39","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":9,"level":"info","message":"📝 Creating StockChange for sale 76","previousStock":10,"productId":"69683f5478ae755d642810ba","timestamp":"2026-01-15 17:50:39"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 69683f5478ae755d642810ba: 10 → 9 (sale 76)","newStock":9,"previousStock":10,"productId":"69683f5478ae755d642810ba","productName":"Officia dolorem quo","quantitySold":1,"saleId":76,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"69683f5478ae755d642810c5","timestamp":"2026-01-15 17:50:39"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"69683f5478ae755d642810ba","productName":"Officia dolorem quo","timestamp":"2026-01-15 17:50:39"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 17:50:39"}
+{"eventId":"bc927d34-b13a-4ce4-8051-e4fa64c87b3e","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 17:50:39"}
+{"eventType":"sale.return.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.return.created","routingKey":"sale.return.created","saleId":76,"timestamp":"2026-01-15 17:55:51"}
+{"eventId":"bc5b0ba0-582f-4811-bfa4-df6d2e03843d","level":"info","message":"💰 Processing sales event: sale.return.created","saleId":76,"timestamp":"2026-01-15 17:55:51"}
+{"level":"warn","message":"⚠️ Unhandled sales event type: sale.return.created","timestamp":"2026-01-15 17:55:51"}
+{"eventType":"sale.return.restore_stock","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.return.restore_stock","routingKey":"sale.return.restore_stock","saleId":76,"timestamp":"2026-01-15 17:55:51"}
+{"eventId":"88337d7d-7cc9-4949-ac7e-ec20844a61df","level":"info","message":"💰 Processing sales event: sale.return.restore_stock","saleId":76,"timestamp":"2026-01-15 17:55:51"}
+{"eventId":"bc5b0ba0-582f-4811-bfa4-df6d2e03843d","level":"info","message":"✅ Successfully processed sales event: sale.return.created","timestamp":"2026-01-15 17:55:51"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","itemsCount":1,"level":"info","message":"📦 [sale.return.restore_stock] Restoring stock for return 14","saleId":76,"shopId":"39cf5aad-6a0f-4be8-90ba-675930d4b927","timestamp":"2026-01-15 17:55:52","traceId":"88337d7d-7cc9-4949-ac7e-ec20844a61df"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"↩️ [sale.return.fully_returned] Processing return 14 for sale 76","timestamp":"2026-01-15 17:55:52","traceId":"88337d7d-7cc9-4949-ac7e-ec20844a61df"}
+{"level":"info","message":"➕ Stock restored for returned product 69683f5478ae755d642810ba: 9 → 10 (return 14)","productName":"Officia dolorem quo","quantity":1,"returnId":14,"saleId":76,"timestamp":"2026-01-15 17:55:52"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"69683f5478ae755d642810ba","productName":"Officia dolorem quo","timestamp":"2026-01-15 17:55:52"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 17:55:52"}
+{"eventId":"88337d7d-7cc9-4949-ac7e-ec20844a61df","level":"info","message":"✅ Successfully processed sales event: sale.return.restore_stock","timestamp":"2026-01-15 17:55:52"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 18:00:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 19:09:35"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:09:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 19:09:36"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 19:46:15"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:46:17"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:46:18"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:46:18"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:46:18"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:46:18"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:46:18"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:46:19"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 19:46:19"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:46:19"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:46:19"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:46:19"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:46:19"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 19:46:19"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 19:46:19"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 19:46:19"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:46:19"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 19:46:19"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 19:46:19"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 19:46:19"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 20:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 20:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 20:00:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":77,"timestamp":"2026-01-15 20:03:47"}
+{"eventId":"4d90005d-81ca-44db-9ef4-ad3d03870696","level":"info","message":"💰 Processing sales event: sale.created","saleId":77,"timestamp":"2026-01-15 20:03:47"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 77 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-15 20:03:47","traceId":"4d90005d-81ca-44db-9ef4-ad3d03870696"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6968214daeefae605491a4dc","previousStock":35,"productId":"6968214daeefae605491a4dc","saleId":77,"saleQty":1,"timestamp":"2026-01-15 20:03:47","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":34,"level":"info","message":"📝 Creating StockChange for sale 77","previousStock":35,"productId":"6968214daeefae605491a4dc","timestamp":"2026-01-15 20:03:47"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6968214daeefae605491a4dc: 35 → 34 (sale 77)","newStock":34,"previousStock":35,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantitySold":1,"saleId":77,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6968214daeefae605491a4e7","timestamp":"2026-01-15 20:03:47"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","timestamp":"2026-01-15 20:03:47"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 20:03:47"}
+{"eventId":"4d90005d-81ca-44db-9ef4-ad3d03870696","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 20:03:47"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 20:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 20:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 20:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 20:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 20:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 20:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 20:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 20:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 20:30:01"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 21:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 21:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 21:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 21:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 21:00:01"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 21:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 21:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 21:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 21:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 21:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 21:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 21:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 21:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 21:30:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 22:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 22:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 22:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 22:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 22:00:01"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":78,"timestamp":"2026-01-15 22:14:07"}
+{"eventId":"c37dc5fb-42b0-4d24-9202-bb29910eaac5","level":"info","message":"💰 Processing sales event: sale.created","saleId":78,"timestamp":"2026-01-15 22:14:07"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 78 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-15 22:14:07","traceId":"c37dc5fb-42b0-4d24-9202-bb29910eaac5"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6968214daeefae605491a4dc","previousStock":34,"productId":"6968214daeefae605491a4dc","saleId":78,"saleQty":1,"timestamp":"2026-01-15 22:14:07","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":33,"level":"info","message":"📝 Creating StockChange for sale 78","previousStock":34,"productId":"6968214daeefae605491a4dc","timestamp":"2026-01-15 22:14:07"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6968214daeefae605491a4dc: 34 → 33 (sale 78)","newStock":33,"previousStock":34,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantitySold":1,"saleId":78,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6968214daeefae605491a4e7","timestamp":"2026-01-15 22:14:07"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","timestamp":"2026-01-15 22:14:07"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 22:14:07"}
+{"eventId":"c37dc5fb-42b0-4d24-9202-bb29910eaac5","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 22:14:07"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 22:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 22:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 22:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 22:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 22:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 22:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 22:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 22:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 22:30:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":79,"timestamp":"2026-01-15 22:30:03"}
+{"eventId":"d50e9deb-23b6-4229-84a0-c8dc50dca170","level":"info","message":"💰 Processing sales event: sale.created","saleId":79,"timestamp":"2026-01-15 22:30:03"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 79 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-15 22:30:03","traceId":"d50e9deb-23b6-4229-84a0-c8dc50dca170"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6968214daeefae605491a4dc","previousStock":33,"productId":"6968214daeefae605491a4dc","saleId":79,"saleQty":1,"timestamp":"2026-01-15 22:30:03","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":32,"level":"info","message":"📝 Creating StockChange for sale 79","previousStock":33,"productId":"6968214daeefae605491a4dc","timestamp":"2026-01-15 22:30:03"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6968214daeefae605491a4dc: 33 → 32 (sale 79)","newStock":32,"previousStock":33,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantitySold":1,"saleId":79,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6968214daeefae605491a4e7","timestamp":"2026-01-15 22:30:03"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","timestamp":"2026-01-15 22:30:03"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 22:30:03"}
+{"eventId":"d50e9deb-23b6-4229-84a0-c8dc50dca170","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 22:30:03"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":80,"timestamp":"2026-01-15 22:48:46"}
+{"eventId":"9394edff-5001-4b83-a4ff-a1e1fd1be319","level":"info","message":"💰 Processing sales event: sale.created","saleId":80,"timestamp":"2026-01-15 22:48:46"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 80 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-15 22:48:46","traceId":"9394edff-5001-4b83-a4ff-a1e1fd1be319"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6968214daeefae605491a4dc","previousStock":32,"productId":"6968214daeefae605491a4dc","saleId":80,"saleQty":1,"timestamp":"2026-01-15 22:48:46","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":31,"level":"info","message":"📝 Creating StockChange for sale 80","previousStock":32,"productId":"6968214daeefae605491a4dc","timestamp":"2026-01-15 22:48:46"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6968214daeefae605491a4dc: 32 → 31 (sale 80)","newStock":31,"previousStock":32,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantitySold":1,"saleId":80,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6968214daeefae605491a4e7","timestamp":"2026-01-15 22:48:46"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","timestamp":"2026-01-15 22:48:46"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 22:48:46"}
+{"eventId":"9394edff-5001-4b83-a4ff-a1e1fd1be319","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 22:48:46"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"📊 Running daily summary generation...","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 23:00:00"}
+{"level":"error","message":"Failed to generate daily summary: Alert must be linked to a product, category, or order for this type","timestamp":"2026-01-15 23:00:00"}
+{"level":"error","message":"Error generating daily summary for company 46e5d562-34f2-4892-a83a-c9cf55b60006: Alert must be linked to a product, category, or order for this type","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Daily summaries completed. Generated 0 summaries.","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 23:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 23:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 23:00:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":81,"timestamp":"2026-01-15 23:03:29"}
+{"eventId":"6e88ffda-eb6a-4756-84b2-657189d6b7f9","level":"info","message":"💰 Processing sales event: sale.created","saleId":81,"timestamp":"2026-01-15 23:03:29"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 81 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-15 23:03:29","traceId":"6e88ffda-eb6a-4756-84b2-657189d6b7f9"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6968214daeefae605491a4dc","previousStock":31,"productId":"6968214daeefae605491a4dc","saleId":81,"saleQty":1,"timestamp":"2026-01-15 23:03:29","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":30,"level":"info","message":"📝 Creating StockChange for sale 81","previousStock":31,"productId":"6968214daeefae605491a4dc","timestamp":"2026-01-15 23:03:29"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6968214daeefae605491a4dc: 31 → 30 (sale 81)","newStock":30,"previousStock":31,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantitySold":1,"saleId":81,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6968214daeefae605491a4e7","timestamp":"2026-01-15 23:03:29"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","timestamp":"2026-01-15 23:03:29"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 23:03:29"}
+{"eventId":"6e88ffda-eb6a-4756-84b2-657189d6b7f9","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 23:03:29"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":82,"timestamp":"2026-01-15 23:14:22"}
+{"eventId":"45aeafc2-4d14-40a4-be5a-ada3cc4a2b62","level":"info","message":"💰 Processing sales event: sale.created","saleId":82,"timestamp":"2026-01-15 23:14:22"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 82 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-15 23:14:22","traceId":"45aeafc2-4d14-40a4-be5a-ada3cc4a2b62"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6968214daeefae605491a4dc","previousStock":30,"productId":"6968214daeefae605491a4dc","saleId":82,"saleQty":1,"timestamp":"2026-01-15 23:14:23","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":29,"level":"info","message":"📝 Creating StockChange for sale 82","previousStock":30,"productId":"6968214daeefae605491a4dc","timestamp":"2026-01-15 23:14:23"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6968214daeefae605491a4dc: 30 → 29 (sale 82)","newStock":29,"previousStock":30,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantitySold":1,"saleId":82,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6968214daeefae605491a4e7","timestamp":"2026-01-15 23:14:24"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","timestamp":"2026-01-15 23:14:24"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-15 23:14:24"}
+{"eventId":"45aeafc2-4d14-40a4-be5a-ada3cc4a2b62","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-15 23:14:24"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-15 23:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 23:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-15 23:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-15 23:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-15 23:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 23:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-15 23:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-15 23:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-15 23:30:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 00:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-16 00:00:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-16 00:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 00:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-16 00:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 00:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-16 00:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 00:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 00:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-16 00:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-16 00:30:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":83,"timestamp":"2026-01-16 00:55:20"}
+{"eventId":"c63b34ac-53fd-4a97-9cbc-af89a246dbd4","level":"info","message":"💰 Processing sales event: sale.created","saleId":83,"timestamp":"2026-01-16 00:55:20"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 83 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-16 00:55:20","traceId":"c63b34ac-53fd-4a97-9cbc-af89a246dbd4"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6968214daeefae605491a4dc","previousStock":29,"productId":"6968214daeefae605491a4dc","saleId":83,"saleQty":1,"timestamp":"2026-01-16 00:55:20","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":28,"level":"info","message":"📝 Creating StockChange for sale 83","previousStock":29,"productId":"6968214daeefae605491a4dc","timestamp":"2026-01-16 00:55:20"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6968214daeefae605491a4dc: 29 → 28 (sale 83)","newStock":28,"previousStock":29,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantitySold":1,"saleId":83,"soldBy":"695e452eaa7d9d91f7fe426c","stockRecordId":"6968214daeefae605491a4e7","timestamp":"2026-01-16 00:55:20"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","timestamp":"2026-01-16 00:55:20"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-16 00:55:20"}
+{"eventId":"c63b34ac-53fd-4a97-9cbc-af89a246dbd4","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-16 00:55:20"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (9/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 4","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 01:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 2","timestamp":"2026-01-16 01:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 12 alerts.","timestamp":"2026-01-16 01:00:00"}
+{"eventType":"sale.created","hasData":true,"hasPayload":false,"itemsCount":1,"level":"info","message":"📥 Received sales event: sale.created","routingKey":"sale.created","saleId":84,"timestamp":"2026-01-16 01:08:38"}
+{"eventId":"04686fe7-4b55-4724-a8fe-5a0eca250157","level":"info","message":"💰 Processing sales event: sale.created","saleId":84,"timestamp":"2026-01-16 01:08:38"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","items":[{"category":"Uncategorized","costPrice":52,"discount":0,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantity":1,"total":92,"unitPrice":92}],"level":"info","message":"💰 [INVENTORY DEBUG] [sale.created] Processing sale 84 with 1 items","shopId":"15aec3c3-3726-4605-8d98-eba6b1f64e30","timestamp":"2026-01-16 01:08:38","traceId":"04686fe7-4b55-4724-a8fe-5a0eca250157"}
+{"allowBackorder":true,"level":"info","message":"📦 Processing stock deduction for product 6968214daeefae605491a4dc","previousStock":28,"productId":"6968214daeefae605491a4dc","saleId":84,"saleQty":1,"timestamp":"2026-01-16 01:08:38","trackQuantity":true}
+{"changeQty":-1,"expectedNewStock":27,"level":"info","message":"📝 Creating StockChange for sale 84","previousStock":28,"productId":"6968214daeefae605491a4dc","timestamp":"2026-01-16 01:08:38"}
+{"changeQty":-1,"level":"info","message":"✅ Stock deducted for product 6968214daeefae605491a4dc: 28 → 27 (sale 84)","newStock":27,"previousStock":28,"productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","quantitySold":1,"saleId":84,"soldBy":"6968cf2859bcecb5940867dc","stockRecordId":"6968214daeefae605491a4e7","timestamp":"2026-01-16 01:08:38"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.product.updated","productId":"6968214daeefae605491a4dc","productName":"Officia dolorem quo","timestamp":"2026-01-16 01:08:38"}
+{"companyId":"46e5d562-34f2-4892-a83a-c9cf55b60006","level":"info","message":"📤 [PRODUCT EVENT] Published: inventory.stock.updated","timestamp":"2026-01-16 01:08:38"}
+{"eventId":"04686fe7-4b55-4724-a8fe-5a0eca250157","level":"info","message":"✅ Successfully processed sales event: sale.created","timestamp":"2026-01-16 01:08:38"}

@@ -41,8 +41,13 @@ templateSchema.index({ name: 1, type: 1 }, { unique: true });
 templateSchema.index({ isActive: 1 });
 
 // Static method to find templates by name for all channels
-templateSchema.statics.findByNameAndChannels = async function(templateName, channels) {
-    const enabledChannels = Object.keys(channels).filter(channel => channels[channel]);
+templateSchema.statics.findByNameAndChannels = async function (templateName, channels) {
+    let enabledChannels = [];
+    if (Array.isArray(channels)) {
+        enabledChannels = channels;
+    } else if (typeof channels === 'object' && channels !== null) {
+        enabledChannels = Object.keys(channels).filter(channel => channels[channel]);
+    }
 
     return this.find({
         name: templateName,
@@ -52,8 +57,14 @@ templateSchema.statics.findByNameAndChannels = async function(templateName, chan
 };
 
 // Static method to validate template exists for channels
-templateSchema.statics.validateTemplatesExist = async function(templateName, channels) {
-    const enabledChannels = Object.keys(channels).filter(channel => channels[channel]);
+templateSchema.statics.validateTemplatesExist = async function (templateName, channels) {
+    let enabledChannels = [];
+    if (Array.isArray(channels)) {
+        enabledChannels = channels;
+    } else if (typeof channels === 'object' && channels !== null) {
+        enabledChannels = Object.keys(channels).filter(channel => channels[channel]);
+    }
+
     const existingTemplates = await this.find({
         name: templateName,
         type: { $in: enabledChannels },
@@ -71,7 +82,7 @@ templateSchema.statics.validateTemplatesExist = async function(templateName, cha
 };
 
 // Instance method to validate template content
-templateSchema.methods.validateContent = function() {
+templateSchema.methods.validateContent = function () {
     const errors = [];
 
     if (this.type === 'email' && !this.subject) {

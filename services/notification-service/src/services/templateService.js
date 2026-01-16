@@ -22,13 +22,13 @@ Handlebars.registerHelper('formatDate', function (date, format) {
   return d.toISOString();
 });
 
-Handlebars.registerHelper('formatCurrency', function (amount, currency) {
+Handlebars.registerHelper('formatCurrency', function (amount) {
   if (typeof amount !== 'number') return amount;
-  const currencyCode = (typeof currency === 'string') ? currency : 'USD';
+  // Always use RWF (Rwandan Francs) - no currency code needed, just format the number
   return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currencyCode
-  }).format(amount);
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount) + ' RWF';
 });
 
 Handlebars.registerHelper('truncate', function (str, length = 50) {
@@ -243,7 +243,7 @@ const compilePushTemplate = (template, payload, hbsTemplate) => {
  */
 const compileInAppTemplate = (template, payload, hbsTemplate) => {
   const body = hbsTemplate(payload);
-  const title = payload.title || template.subject || "Notification";
+  const title = template.subject ? Handlebars.compile(template.subject)(payload) : (payload.title || "Notification");
 
   return {
     title,

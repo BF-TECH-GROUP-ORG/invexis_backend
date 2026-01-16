@@ -45,12 +45,7 @@ const INVOICE_STATUS = {
 };
 
 const CURRENCY = {
-    XAF: 'XAF',  // Central African CFA franc
-    USD: 'USD',
-    EUR: 'EUR',
-    UGX: 'UGX',  // Ugandan Shilling
-    KES: 'KES', // Kenyan Shilling
-    RWF: 'RWF'// Rwandan Franc
+    RWF: 'RWF'  // Rwandan Francs (primary currency)
 };
 
 const PAYMENT_TYPE = {

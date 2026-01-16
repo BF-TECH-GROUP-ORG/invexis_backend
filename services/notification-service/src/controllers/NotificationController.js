@@ -39,24 +39,33 @@ exports.getNotifications = async (req, res) => {
             return res.json({ success: true, data: JSON.parse(cachedDecorated), source: 'cache' });
         }
 
-        // Build query
-        const query = { userId }; // Directly targeted notifications
-
-        // Advanced targeting: If scope is NOT personal, logic might be complex (not in this simple controller yet)
-        // Schema definition: "scope: 'personal', 'department', 'company'..."
-        // If we want to fetch "All notifications for this user", we might need $or logic:
-        // { $or: [ { userId: userId }, { companyId: "...", scopes: "company" } ] }
-        // BUT current Notification model seems to copy distinct notification documents per user? 
-        // "userId: { type: mongoose.Schema.Types.ObjectId, index: true }" suggests direct targeting.
-        // Let's assume the Event Consumer expands broad alerts into individual user notifications OR the query needs to be smarter.
-        // For now, matching the existing route logic: simple { userId }.
-
-        if (companyId) query.companyId = companyId;
-        if (shopId) query.shopId = shopId;
-        if (role) query.roles = role;
+        // Build query to include personal, company-wide, and department-wide notifications
+        const currentRole = role || req.user.role;
+        const query = {
+            $or: [
+                { userId: userId }, // Directly targeted
+                {
+                    companyId: companyId || req.user.companyId,
+                    scope: 'company',
+                    roles: { $in: [currentRole] }
+                },
+                {
+                    companyId: companyId || req.user.companyId,
+                    scope: 'department',
+                    roles: { $in: [currentRole] },
+                    // Admins see all departments, workers only see their own
+                    ...(currentRole !== 'company_admin' ? { departmentId: req.user.departmentId } : {})
+                }
+            ]
+        };
 
         if (unreadOnly === 'true') {
             query.readBy = { $ne: userId };
+        }
+
+        // Apply filters to the $or branches if they were specified globally
+        if (shopId) {
+            query.$or.forEach(branch => branch.shopId = shopId);
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -97,16 +106,33 @@ exports.markAsRead = async (req, res) => {
             return res.status(400).json({ success: false, message: "User context not found" });
         }
 
+        const eligibilityQuery = {
+            $or: [
+                { userId: userId },
+                {
+                    companyId: req.user.companyId,
+                    scope: 'company',
+                    roles: { $in: [req.user.role] }
+                },
+                {
+                    companyId: req.user.companyId,
+                    scope: 'department',
+                    roles: { $in: [req.user.role] },
+                    departmentId: req.user.departmentId
+                }
+            ]
+        };
+
         let result;
         if (all) {
-            // Mark all for this user
+            // Mark all eligible for this user
             result = await Notification.updateMany(
-                { userId, readBy: { $ne: userId } },
+                { ...eligibilityQuery, readBy: { $ne: userId } },
                 { $addToSet: { readBy: userId } }
             );
         } else if (Array.isArray(notificationIds) && notificationIds.length > 0) {
             result = await Notification.updateMany(
-                { _id: { $in: notificationIds }, userId }, // Verify ownership
+                { ...eligibilityQuery, _id: { $in: notificationIds } },
                 { $addToSet: { readBy: userId } }
             );
         } else {

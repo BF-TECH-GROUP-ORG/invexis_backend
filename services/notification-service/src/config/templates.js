@@ -108,51 +108,7 @@ const templates = {
         }
     },
 
-    sale_created: {
-        email: {
-            subject: 'Sale #{{saleId}} Confirmed',
-            content: `
-    < h2 > Sale Confirmed — #{ { saleId } }</h2 >
-        <p>Hello,</p>
-        <p>A new sale has been successfully created.</p>
-        
-        <div style="margin: 20px 0; padding: 15px; background-color: #f9f9f9; border-radius: 5px;">
-          <p><strong>Sale ID:</strong> #{{saleId}}</p>
-          <p><strong>Amount:</strong> {{formatCurrency amount}}</p>
-          <p><strong>Date:</strong> {{formatDate createdAt}}</p>
-        </div>
-        
-        <p>Thank you for your business!</p>
-        <p>— The {{companyName}} Team</p>
-`,
-            metadata: {
-                priority: 'normal'
-            }
-        },
-        sms: {
-            content: 'Sale #{{saleId}} confirmed! Amount: {{amount}}. Thanks for your business!',
-            metadata: {
-                maxLength: 160
-            }
-        },
-        push: {
-            content: JSON.stringify({
-                title: 'Sale #{{saleId}} Confirmed',
-                body: 'New sale created for {{amount}}',
-                data: {
-                    action: 'open_sale',
-                    saleId: '{{saleId}}'
-                }
-            }),
-            metadata: {
-                sound: 'default'
-            }
-        },
-        inApp: {
-            subject: 'Sale #{{saleId}} Created',
-            content: 'New sale #{{saleId}} created for {{amount}}'
-        }
-    },
+
 
     order_notification: {
         email: {
@@ -213,7 +169,7 @@ const templates = {
         }
     },
 
-    sale_return: {
+    "sale.return.created": {
         email: {
             subject: 'Return Initiated for Sale #{{saleId}}',
             content: `
@@ -221,8 +177,8 @@ const templates = {
                 <p>Hello,</p>
                 <p>A return has been initiated for sale #{{saleId}}.</p>
                 <div style="margin: 20px 0; padding: 15px; background-color: #fce4e4; border-radius: 5px;">
-                  <p><strong>Reason:</strong> {{reason}}</p>
-                  <p><strong>Refund Amount:</strong> {{formatCurrency refundAmount}}</p>
+                   {{#if reason}}<p><strong>Reason:</strong> {{reason}}</p>{{/if}}
+                   <p><strong>Refund Amount:</strong> {{formatCurrency refundAmount}}</p>
                 </div>
                 <p>— The {{companyName}} Team</p>
             `,
@@ -407,40 +363,7 @@ const templates = {
     },
 
     // --- DEBTS ---
-    debt_created: {
-        sms: {
-            content: 'Hello {{customerName}}, you have a new debt of {{formatCurrency amount}} at {{companyName}} for {{items}}. Total due: {{formatCurrency totalDebt}}. Please pay soon.',
-            metadata: { maxLength: 160 }
-        },
-        inApp: {
-            subject: 'New Debt Recorded',
-            content: 'New debt of **{{formatCurrency amount}}** recorded for customer **{{customerName}}** by {{staffName}}.'
-        },
-        push: {
-            content: JSON.stringify({
-                title: 'New Debt Recorded',
-                body: 'Debt of {{formatCurrency amount}} for {{customerName}}.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            })
-        }
-    },
-    debt_paid: {
-        sms: {
-            content: 'Thank you {{customerName}}! We received {{formatCurrency amount}}. Remaining balance: {{formatCurrency remainingBalance}}.',
-            metadata: { maxLength: 160 }
-        },
-        inApp: {
-            subject: 'Debt Payment Received',
-            content: 'Debt payment of **{{formatCurrency amount}}** received from **{{customerName}}**.'
-        },
-        push: {
-            content: JSON.stringify({
-                title: 'Debt Payment',
-                body: 'Received {{formatCurrency amount}} from {{customerName}}.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            })
-        }
-    },
+
 
     // --- PAYMENTS ---
     payment_received: {
@@ -491,6 +414,169 @@ const templates = {
         inApp: {
             subject: 'Subscription Expired',
             content: '🚨 Your subscription has expired. Please renew to restore services.'
+        }
+    },
+
+    // --- Sales Templates ---
+    // --- Sales Templates ---
+    "sale.created": {
+        email: {
+            subject: 'New Sale: {{saleId}}',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2>New Sale Created</h2>
+                    <p>A new sale has been recorded.</p>
+                    <p><strong>Sale ID:</strong> {{saleId}}</p>
+                    <p><strong>Amount:</strong> {{formatCurrency totalAmount}}</p>
+                    {{#if customerId}}<p><strong>Customer ID:</strong> {{customerId}}</p>{{/if}}
+                    <p><strong>Items:</strong> {{items.length}}</p>
+                </div>
+            `
+        },
+        sms: {
+            content: 'New Sale: {{formatCurrency totalAmount}} (ID: {{saleId}}) recorded.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'New Sale: {{formatCurrency totalAmount}}',
+                body: 'Sale {{saleId}} recorded successfully.',
+                data: { action: 'open_sale', saleId: '{{saleId}}' }
+            })
+        },
+        inApp: {
+            subject: 'New Sale: {{formatCurrency totalAmount}}',
+            content: 'Sale **{{saleId}}** for **{{formatCurrency totalAmount}}** has been created.'
+        }
+    },
+
+    // --- Debt Templates ---
+    "debt.created": {
+        email: {
+            subject: 'New Debt Recorded - {{companyName}}',
+            content: loadTemplate('debt_created.html'),
+            metadata: { priority: 'normal' }
+        },
+        sms: {
+            content: '{{companyName}}: Debt #{{debtId}} recorded for {{amount}}. Due: {{dueDate}}. Contact us to settle.',
+            metadata: { maxLength: 160 }
+        },
+        inApp: {
+            subject: 'New Debt Recorded',
+            content: 'New debt of **{{formatCurrency amount}}** recorded for **{{customerName}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'New Debt Recorded',
+                body: 'A debt of {{amount}} has been recorded at {{companyName}}. Due by {{dueDate}}.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            })
+        }
+    },
+
+
+
+    "debt.payment.received": {
+        email: {
+            subject: 'Payment Received - {{companyName}}',
+            content: loadTemplate('debt_paid.html'),
+            metadata: { priority: 'normal' }
+        },
+        sms: {
+            content: 'Thank you {{customerName}}! We received {{formatCurrency amount}}. Remaining balance: {{formatCurrency remainingBalance}}.',
+            metadata: { maxLength: 160 }
+        },
+        inApp: {
+            subject: 'Debt Payment Received',
+            content: 'Debt payment of **{{formatCurrency amount}}** received from **{{customerName}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Debt Payment',
+                body: 'Received {{formatCurrency amount}} from {{customerName}}.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            })
+        }
+    },
+    "debt.repayment.created": {
+        inApp: {
+            subject: 'Debt Repayment Recorded',
+            content: 'Debt repayment of **{{formatCurrency amount}}** recorded for **{{customerName}}**. New balance: **{{formatCurrency remainingBalance}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Debt Repayment',
+                body: '{{customerName}} paid {{formatCurrency amount}}. Balance: {{formatCurrency remainingBalance}}.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            })
+        }
+    },
+
+    "debt.fully.paid": {
+        email: {
+            subject: 'Debt Fully Paid: {{customerName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>Debt Cleared</h2>
+                    <p>The debt for {{customerName}} has been fully paid.</p>
+                    <p><strong>Amount Cleared:</strong> {{formatCurrency amount}}</p>
+                </div>
+            `
+        },
+        inApp: {
+            subject: 'Debt Cleared via Payment',
+            content: 'Debt for **{{customerName}}** has been fully paid.'
+        }
+    },
+
+    "debt.cancelled": {
+        email: {
+            subject: 'Debt Cancelled: {{customerName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>Debt Cancelled</h2>
+                    <p>The debt for {{customerName}} has been cancelled.</p>
+                    <p><strong>Amount:</strong> {{formatCurrency amount}}</p>
+                </div>
+            `
+        },
+        inApp: {
+            subject: 'Debt Cancelled',
+            content: 'Debt of **{{formatCurrency amount}}** for **{{customerName}}** has been cancelled.'
+        }
+    },
+
+    "debt.status.updated": {
+        inApp: {
+            subject: 'Debt Status Updated',
+            content: 'Debt status for **{{customerName}}** is now **{{status}}**.'
+        }
+    },
+
+    "debt.overdue": {
+        email: {
+            subject: 'Overdue Debt Reminder: {{customerName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>Debt Overdue Reminder</h2>
+                    <p>Dear {{customerName}},</p>
+                    <p>This is a reminder that your debt #{{debtId}} is overdue by {{daysOverdue}} days.</p>
+                    <p><strong>Amount Due:</strong> {{formatCurrency amount}}</p>
+                    <p>Please settle this payment as soon as possible.</p>
+                </div>
+            `,
+            metadata: { priority: 'high' }
+        },
+        inApp: {
+            subject: 'Debt Overdue',
+            content: '⚠️ Debt #{{debtId}} is overdue by {{daysOverdue}} days. Amount: {{formatCurrency amount}}.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Debt Overdue',
+                body: 'Your debt of {{formatCurrency amount}} is overdue. Please pay now.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            }),
+            metadata: { priority: 'high' }
         }
     }
 };

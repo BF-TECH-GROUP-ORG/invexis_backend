@@ -64,12 +64,16 @@ async function handlePaymentSuccess(data) {
 
     const { dispatchBroadcastEvent, dispatchEvent } = require("../../services/dispatcher");
 
+    // Robust extraction
+    const safeAmount = amount || data.totalAmount || data.paymentDetails?.amount || 0;
+    const safeCustomerName = customerName || data.customer?.name || data.email || "Customer";
+
     // 1. Notify Company Admin (Broadcast)
     await dispatchBroadcastEvent({
       event: "payment.success",
       data: {
-        amount,
-        customerName: customerName || "Customer",
+        amount: safeAmount,
+        customerName: safeCustomerName,
         paymentMethod: paymentMethod || "Unknown",
         paymentId,
         ...data,
@@ -78,7 +82,7 @@ async function handlePaymentSuccess(data) {
       templateName: "payment_received",
       channels: ["inApp", "push"],
       scope: "company",
-      roles: ["admin", "manager"]
+      roles: ["company_admin", "worker"]
     });
 
     // 2. Notify Customer (if phone/email provided and not internal transfer)
@@ -157,7 +161,7 @@ async function handleSubscriptionExpiring(data) {
       templateName: "subscription_expiring",
       channels: ["email", "inApp", "push"],
       scope: "company",
-      roles: ["admin"],
+      roles: ["company_admin"],
       priority: "high"
     });
 
@@ -186,7 +190,7 @@ async function handleSubscriptionExpired(data) {
       templateName: "subscription_expired",
       channels: ["email", "inApp", "sms"],
       scope: "company",
-      roles: ["admin"],
+      roles: ["company_admin"],
       priority: "high"
     });
 

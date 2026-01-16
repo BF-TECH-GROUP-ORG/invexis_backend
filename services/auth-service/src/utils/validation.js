@@ -119,7 +119,7 @@ const registerSchema = baseUserSchema.keys({
 // Login schema (unchanged)
 const loginSchema = Joi.object({
     identifier: Joi.string().trim().required().label('Email, Phone, or Username'),
-    password: Joi.string().min(8).required(),
+    password: Joi.string().min(6).required(),
     otp: Joi.string().trim().length(6).optional() // For 2FA
 });
 

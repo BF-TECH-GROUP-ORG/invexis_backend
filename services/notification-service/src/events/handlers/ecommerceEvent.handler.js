@@ -75,12 +75,10 @@ async function handleOrderCreated(data) {
         const { dispatchEvent } = require("../../services/dispatcher");
 
         // Determine channels
-        const channels = {
-            email: !!customerEmail,
-            push: true,
-            inApp: true,
-            sms: !!customerPhone
-        };
+        // Determine channels
+        const channels = ['push', 'inApp'];
+        if (customerEmail) channels.push('email');
+        if (customerPhone) channels.push('sms');
 
         await dispatchEvent({
             event: "order.created",

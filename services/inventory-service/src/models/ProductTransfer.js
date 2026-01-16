@@ -142,7 +142,7 @@ const ProductTransferSchema = new mongoose.Schema({
     actualValue: Number,
     currency: {
         type: String,
-        default: 'USD'
+        default: 'RWF'
     },
 
     // Notes & Communication

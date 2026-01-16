@@ -41,10 +41,29 @@ const upload = multer({
  * Middleware to handle flexible file uploads
  * Accepts both 'images' and 'videos' fields
  */
-const flexibleUpload = upload.fields([
+const uploadFields = upload.fields([
     { name: 'images', maxCount: 6 },
     { name: 'videos', maxCount: 2 }
 ]);
+
+/**
+ * Conditional upload middleware
+ * Only runs multer if Content-Type is multipart/form-data
+ * Skips multer for application/json requests
+ */
+const flexibleUpload = (req, res, next) => {
+    const contentType = req.headers['content-type'] || '';
+
+    // If it's multipart/form-data, use multer
+    if (contentType.includes('multipart/form-data')) {
+        logger.info('Detected multipart/form-data - using multer');
+        return uploadFields(req, res, next);
+    }
+
+    // If it's JSON, skip multer and continue
+    logger.info('Detected JSON request - skipping multer');
+    next();
+};
 
 /**
  * Middleware to normalize request body
@@ -52,6 +71,24 @@ const flexibleUpload = upload.fields([
  */
 const normalizeProductRequest = (req, res, next) => {
     try {
+        // CRITICAL: Handle productData field (frontend sends all data as stringified JSON in this field)
+        if (req.body.productData) {
+            try {
+                const productData = JSON.parse(req.body.productData);
+                // Merge productData into req.body
+                Object.assign(req.body, productData);
+                delete req.body.productData;
+                logger.info('Parsed and merged productData field');
+            } catch (e) {
+                logger.error('Failed to parse productData:', e.message);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid productData format. Must be valid JSON.',
+                    error: e.message
+                });
+            }
+        }
+
         // If files were uploaded via multipart
         if (req.files) {
             logger.info(`Processing multipart request with ${Object.keys(req.files).length} file field(s)`);
@@ -91,6 +128,14 @@ const normalizeProductRequest = (req, res, next) => {
             }
         }
 
+        if (typeof req.body.inventory === 'string') {
+            try {
+                req.body.inventory = JSON.parse(req.body.inventory);
+            } catch (e) {
+                logger.warn('Failed to parse inventory JSON:', e.message);
+            }
+        }
+
         if (typeof req.body.variations === 'string') {
             try {
                 req.body.variations = JSON.parse(req.body.variations);
@@ -107,10 +152,29 @@ const normalizeProductRequest = (req, res, next) => {
             }
         }
 
+        if (typeof req.body.specs === 'string') {
+            try {
+                req.body.specs = JSON.parse(req.body.specs);
+            } catch (e) {
+                logger.warn('Failed to parse specs JSON:', e.message);
+            }
+        }
+
+        if (typeof req.body.seo === 'string') {
+            try {
+                req.body.seo = JSON.parse(req.body.seo);
+            } catch (e) {
+                logger.warn('Failed to parse seo JSON:', e.message);
+            }
+        }
+
         // Handle array fields that might be sent as comma-separated strings
         if (typeof req.body.tags === 'string') {
             req.body.tags = req.body.tags.split(',').map(t => t.trim()).filter(Boolean);
         }
+
+        // Log final body structure for debugging
+        logger.info(`Request body after normalization: categoryId=${req.body.categoryId}, name=${req.body.name}, hasImages=${!!req.body.images}, hasVideos=${!!req.body.videos}`);
 
         next();
     } catch (error) {

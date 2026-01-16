@@ -1,0 +1,8 @@
+{
+    "title": "New Debt Recorded",
+    "body": "A debt of {{amount}} has been recorded at {{companyName}}. Due by {{dueDate}}.",
+    "data": {
+        "action": "open_debt",
+        "debtId": "{{debtId}}"
+    }
+}

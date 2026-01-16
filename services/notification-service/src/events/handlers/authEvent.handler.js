@@ -78,7 +78,7 @@ async function handleUserCreated(data) {
     }
 
     // Always enable In-App
-    channels.push('in-app');
+    channels.push('inApp');
 
     // SMS disabled by default unless explicitly enabled OR if password delivery is required
     // "Refining Password & SMS Delivery": ensure auto-generated password is sent via SMS
@@ -150,7 +150,7 @@ async function handleVerificationRequested(data) {
     const notifPrefs = userPrefs.notifications || {};
 
     // Precise channel selection for OTP
-    const channels = ['in-app']; // Always send real-time OTP
+    const channels = ['inApp']; // Always send real-time OTP
 
     // Email
     if ((type === 'email' || type === 'both') && !!email && (notifPrefs.email !== false)) {

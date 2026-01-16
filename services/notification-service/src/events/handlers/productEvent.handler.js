@@ -77,7 +77,7 @@ async function handleProductCreated(data) {
       templateName: "product_created",
       channels: ["inApp", "push"],
       scope: "company",
-      roles: ["admin", "manager"]
+      roles: ["company_admin", "worker"]
     });
 
     logger.info(`✅ Product creation notification broadcasted for product ${productId}`);
@@ -131,7 +131,7 @@ async function handleLowStock(data) {
       templateName: "inventory_low",
       channels: ["email", "push", "inApp"],
       scope: "company",
-      roles: ["admin", "manager"],
+      roles: ["company_admin", "worker"],
       priority: "high"
     });
 
@@ -169,7 +169,7 @@ async function handleOutOfStock(data) {
       templateName: "stock_out",
       channels: ["email", "push", "inApp"],
       scope: "company",
-      roles: ["admin", "manager"],
+      roles: ["company_admin", "worker"],
       priority: "high"
     });
 

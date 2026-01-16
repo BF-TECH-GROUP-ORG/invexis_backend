@@ -153,18 +153,7 @@ async function createDebt(payload) {
                     });
                 } catch (e) { }
             })(),
-            (async () => {
-                try {
-                    if (global && typeof global.rabbitmqPublish === 'function') {
-                        await global.rabbitmqPublish('debt.created', {
-                            debtId: saved._id,
-                            companyId,
-                            shopId,
-                            hashedCustomerId
-                        });
-                    }
-                } catch (e) { /* swallow */ }
-            })(),
+
             (async () => {
                 try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); } catch (e) { }
             })()
@@ -420,35 +409,10 @@ async function recordRepayment(payload) {
             (async () => {
                 try {
                     if (wasAutoPaid && debt.hashedCustomerId) {
-                        const notify = {
-                            type: 'CUSTOMER_DEBT_CLEARED',
-                            hashedCustomerId: debt.hashedCustomerId,
-                            debtId: debt._id,
-                            companyId,
-                            shopId: debt.shopId,
-                            paidAmount: amountPaid,
-                            status: 'PAID',
-                            timestamp: new Date()
-                        };
-                        await global.rabbitmqPublish('customer.debt.alert', notify);
-                    } else {
-                        await global.rabbitmqPublish('debt.status.updated', { debtId: debt._id, status: debt.status, companyId });
-                        // Notify other companies about repayment/progress (partial payment)
-                        if (debt.hashedCustomerId) {
-                            const notify = {
-                                type: 'CUSTOMER_DEBT_UPDATED',
-                                hashedCustomerId: debt.hashedCustomerId,
-                                debtId: debt._id,
-                                companyId,
-                                shopId: debt.shopId,
-                                totalAmount: debt.totalAmount,
-                                balance: debt.balance,
-                                status: debt.status,
-                                timestamp: new Date()
-                            };
-                            await global.rabbitmqPublish('customer.debt.alert', notify);
-                        }
+                        // Event handler already published debt.fully_paid - no need for duplicate alert
+                        console.log(`[DebtService] ✅ Debt fully paid - notification handled by event handler`);
                     }
+                    // For partial repayments, event handler handles debt.repayment.created notification
                 } catch (e) { }
             })(),
             (async () => {
@@ -888,11 +852,22 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
             (async () => { try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); if (debt.hashedCustomerId) await redis.del(`debt:lookup:${debt.hashedCustomerId}`); } catch (e) { } })(),
             (async () => {
                 try {
-                    if (global && typeof global.rabbitmqPublish === 'function') {
-                        await global.rabbitmqPublish('debt.fully_paid', { debtId: debt._id, companyId });
-                        await global.rabbitmqPublish('debt.status.updated', { debtId: debt._id, status: 'PAID', companyId });
-                    }
-                } catch (e) { }
+                    const debtEventHandler = require('../events/handlers/debtEvent.handler');
+                    await debtEventHandler.handleDebtMarkedAsPaid({
+                        debtId: debt._id,
+                        companyId,
+                        shopId: debt.shopId,
+                        hashedCustomerId: debt.hashedCustomerId,
+                        customer: debt.customer || null,
+                        totalAmount: debt.totalAmount,
+                        amountPaid: debt.amountPaidNow,
+                        repaymentId: repayment ? repayment._id : null,
+                        markedAt: new Date(),
+                        markedBy: createdBy,
+                        createdAt: new Date()
+                    });
+                    console.log(`[DebtService] 🚀 DEBT_MARKED_PAID event published to RabbitMQ for debt ${debt._id}`);
+                } catch (e) { console.error('[DebtService] Failed to publish DEBT_MARKED_PAID event:', e && e.message ? e.message : e); }
             })()
         ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
 
@@ -951,26 +926,47 @@ async function cancelDebt({ companyId, debtId, reason = null, performedBy }) {
             throw new Error(`Failed to cancel debt: ${e.message}`);
         }
 
-        // Fire-and-forget: enqueue events and adjust summaries (treat as repayment for summary adjustment)
+        // Fire-and-forget: publish event through proper handler + adjust summaries
         Promise.all([
-            (async () => { try { inMemoryStore.enqueueEvent({ eventType: 'DEBT_CANCELLED', payload: { debtId: savedDebt._id || debt._id, companyId, reason } }); } catch (e) { } })(),
-            (async () => { try { if (writeOffAmount > 0) inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onRepayment', data: { hashedCustomerId: debt.hashedCustomerId, amountPaid: writeOffAmount, companyId, debtId: debt._id, createdAt: new Date() } }); } catch (e) { } })(),
-            (async () => { try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); if (debt.hashedCustomerId) await redis.del(`debt:lookup:${debt.hashedCustomerId}`); } catch (e) { } })(),
+            // Publish DEBT_CANCELLED event through proper handler (includes event ID)
             (async () => {
                 try {
-                    if (global && typeof global.rabbitmqPublish === 'function') {
-                        await global.rabbitmqPublish('debt.cancelled', {
-                            debtId: savedDebt._id || debt._id,
-                            companyId,
+                    const cancelledPayload = {
+                        debtId: savedDebt._id || debt._id,
+                        companyId,
+                        shopId: debt.shopId,
+                        hashedCustomerId: debt.hashedCustomerId,
+                        customer: debt.customer || null,
+                        totalAmount: debt.totalAmount,
+                        balance: debt.balance,
+                        reason,
+                        cancelledBy: performedBy,
+                        cancelledAt: debt.cancelledAt,
+                        createdAt: debt.cancelledAt || new Date()
+                    };
+                    await debtEventHandler.handleDebtCancelled(cancelledPayload);
+                    console.log(`[DebtService] 🚀 DEBT_CANCELLED event published for debt ${savedDebt._id || debt._id}`);
+                } catch (e) { console.error('[DebtService] Failed to publish DEBT_CANCELLED event:', e && e.message ? e.message : e); }
+            })(),
+            // Persist event to database
+            (async () => { 
+                try { 
+                    inMemoryStore.enqueueEvent({ 
+                        eventType: 'DEBT_CANCELLED', 
+                        payload: { 
+                            debtId: savedDebt._id || debt._id, 
+                            companyId, 
                             reason,
                             hashedCustomerId: debt.hashedCustomerId,
-                            customer: debt.customer || null,
                             totalAmount: debt.totalAmount,
-                            balance: debt.balance
-                        });
-                    }
-                } catch (e) { }
-            })()
+                            balance: debt.balance,
+                            cancelledAt: new Date()
+                        } 
+                    }); 
+                } catch (e) { } 
+            })(),
+            (async () => { try { if (writeOffAmount > 0) inMemoryStore.enqueueSummary({ type: 'cross_company', op: 'onRepayment', data: { hashedCustomerId: debt.hashedCustomerId, amountPaid: writeOffAmount, companyId, debtId: debt._id, createdAt: new Date() } }); } catch (e) { } })(),
+            (async () => { try { const redis = getRedis(); if (redis && redis.del) await redis.del(`company:${companyId}:debts`); if (debt.hashedCustomerId) await redis.del(`debt:lookup:${debt.hashedCustomerId}`); } catch (e) { } })()
         ]).catch(err => console.warn('Background tasks failed:', err && err.message ? err.message : err));
 
         // Return DB-persisted debt with CANCELLED status

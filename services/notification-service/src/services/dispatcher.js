@@ -24,9 +24,14 @@ const dispatchEvent = async (eventPayload) => {
         logger.info(`Applied channel mapping for event ${event}: ${channels.join(', ')} (Priority: ${priority})`);
     }
 
+    // Normalize channels (in-app -> inApp)
+    if (channels) {
+        channels = channels.map(c => c === 'in-app' ? 'inApp' : c);
+    }
+
     // Fallback to default if still no channels
     if (!channels || channels.length === 0) {
-        channels = ['in-app']; // Default fallback
+        channels = ['inApp']; // Default fallback
     }
 
     // --- TIER ENFORCEMENT START ---
@@ -63,7 +68,12 @@ const dispatchEvent = async (eventPayload) => {
             // New template system
             templateName,
             payload,
-            channels,
+            channels: {
+                email: channels.includes('email'),
+                sms: channels.includes('sms'),
+                push: channels.includes('push'),
+                inApp: channels.includes('inApp')
+            },
             priority: priority || 'normal',
             compiledContent, // Store channel-specific compiled content
 
@@ -105,16 +115,23 @@ const dispatchBroadcastEvent = async (eventPayload) => {
         logger.info(`Applied channel mapping for broadcast event ${event}: ${channels.join(', ')} (Priority: ${priority})`);
     }
 
-    // Fallback to default if still no channels
-    if (!channels || channels.length === 0) {
-        channels = ['in-app']; // Default fallback
+    // Normalize channels (in-app -> inApp)
+    if (channels) {
+        channels = channels.map(c => c === 'in-app' ? 'inApp' : c);
     }
 
-    // Validate templates
+    // Fallback to default if still no channels
+    if (!channels || channels.length === 0) {
+        channels = ['inApp']; // Default fallback
+    }
+
+    // Validate templates (skipped - using local registry for now)
+    /*
     const templateValidation = await Template.validateTemplatesExist(templateName, channels);
     if (!templateValidation.isValid) {
         logger.warn(`Missing templates for ${templateName}:`, templateValidation.missingChannels);
     }
+    */
 
     // Compile templates
     const compiledContent = await compileTemplatesForChannels(templateName, payload, channels);
@@ -130,7 +147,12 @@ const dispatchBroadcastEvent = async (eventPayload) => {
         body: legacyContent.body || legacyContent.html || legacyContent.message || "You have a new notification.",
         templateName,
         payload,
-        channels,
+        channels: {
+            email: channels.includes('email'),
+            sms: channels.includes('sms'),
+            push: channels.includes('push'),
+            inApp: channels.includes('inApp')
+        },
         priority: priority || 'normal',
         compiledContent,
         companyId,
