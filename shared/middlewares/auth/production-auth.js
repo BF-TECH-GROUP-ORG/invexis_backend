@@ -104,6 +104,7 @@ async function fetchUserData(userId, accessToken) {
           isEmailVerified: userDoc.isEmailVerified,
           companies: userDoc.companies || [],
           shops: userDoc.shops || [],
+          assignedDepartments: userDoc.assignedDepartments || [],
           permissions: userDoc.permissions || []
         };
       }
@@ -175,6 +176,23 @@ function extractToken(req) {
  * Verifies JWT and loads user data
  */
 const authenticateToken = async (req, res, next) => {
+  // ✅ FAST PATH: Internal Service Communication Bypass
+  if (req.header('X-Internal-Request') === 'true') {
+    req.user = {
+      _id: '660000000000000000000000',
+      id: '660000000000000000000000',
+      role: 'super_admin',
+      email: 'system@invexis.internal',
+      firstName: 'System',
+      lastName: 'Internal',
+      companies: [],
+      shops: [],
+      assignedDepartments: ['management']
+    };
+    req.isInternal = true;
+    return next();
+  }
+
   try {
     const token = extractToken(req);
 
@@ -209,6 +227,7 @@ const authenticateToken = async (req, res, next) => {
         role: decoded.role,
         companies: decoded.companies || [],
         shops: decoded.shops || [],
+        assignedDepartments: decoded.assignedDepartments || [],
         firstName: 'Unknown',
         lastName: 'User'
       };
@@ -223,6 +242,7 @@ const authenticateToken = async (req, res, next) => {
     if (!req.user.role && decoded.role) req.user.role = decoded.role;
     if ((!req.user.companies || req.user.companies.length === 0) && decoded.companies) req.user.companies = decoded.companies;
     if ((!req.user.shops || req.user.shops.length === 0) && decoded.shops) req.user.shops = decoded.shops;
+    if ((!req.user.assignedDepartments || req.user.assignedDepartments.length === 0) && decoded.assignedDepartments) req.user.assignedDepartments = decoded.assignedDepartments;
     if (!req.user.email && decoded.email) req.user.email = decoded.email;
     if (!req.user._id && (decoded.sub || decoded.uid)) req.user._id = decoded.sub || decoded.uid;
 
@@ -256,6 +276,18 @@ const authenticateToken = async (req, res, next) => {
  * Optional authentication (for public endpoints with optional auth)
  */
 const optionalAuth = async (req, res, next) => {
+  // ✅ Internal Service Communication Bypass
+  if (req.header('X-Internal-Request') === 'true') {
+    req.user = {
+      _id: '660000000000000000000000',
+      id: '660000000000000000000000',
+      role: 'super_admin',
+      email: 'system@invexis.internal'
+    };
+    req.isInternal = true;
+    return next();
+  }
+
   const token = extractToken(req);
 
   if (!token) {
@@ -275,7 +307,8 @@ const optionalAuth = async (req, res, next) => {
           email: decoded.email,
           role: decoded.role,
           companies: decoded.companies || [],
-          shops: decoded.shops || []
+          shops: decoded.shops || [],
+          assignedDepartments: decoded.assignedDepartments || []
         };
       }
 
@@ -287,6 +320,7 @@ const optionalAuth = async (req, res, next) => {
         // Ensure critical fields available
         if (!req.user.role && decoded.role) req.user.role = decoded.role;
         if ((!req.user.companies || req.user.companies.length === 0) && decoded.companies) req.user.companies = decoded.companies;
+        if ((!req.user.assignedDepartments || req.user.assignedDepartments.length === 0) && decoded.assignedDepartments) req.user.assignedDepartments = decoded.assignedDepartments;
       }
     }
   } catch (error) {
@@ -301,6 +335,11 @@ const optionalAuth = async (req, res, next) => {
  */
 const requireRole = (...allowedRoles) => {
   return (req, res, next) => {
+    // ✅ Internal Service Bypass
+    if (req.isInternal || req.header('X-Internal-Request') === 'true') {
+      return next();
+    }
+
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -335,6 +374,11 @@ const requireRole = (...allowedRoles) => {
  * Company ownership validation
  */
 const requireCompanyAccess = (req, res, next) => {
+  // ✅ Internal Service Bypass
+  if (req.isInternal || req.header('X-Internal-Request') === 'true') {
+    return next();
+  }
+
   if (!req.user) {
     return res.status(401).json({
       success: false,
@@ -382,6 +426,11 @@ const requireCompanyAccess = (req, res, next) => {
  */
 const requirePermission = (...requiredPermissions) => {
   return (req, res, next) => {
+    // ✅ Internal Service Bypass
+    if (req.isInternal || req.header('X-Internal-Request') === 'true') {
+      return next();
+    }
+
     if (!req.user) {
       return res.status(401).json({
         success: false,

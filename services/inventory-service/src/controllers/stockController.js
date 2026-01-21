@@ -144,7 +144,16 @@ const stockIn = asyncHandler(async (req, res) => {
     await redis.del(`product:${product._id}`);
     await redis.del(`product:slug:${product.slug}`);
     await scanDel('products:*');
-    await publishProductEvent('inventory.product.updated', { productId: product._id, previous, current: totalAfter });
+    await publishProductEvent('inventory.stock.updated', {
+        productId: product._id,
+        productName: product.name,
+        companyId: product.companyId,
+        shopId: shopId || product.shopId,
+        previous,
+        current: totalAfter,
+        change: Number(quantity),
+        type: 'restock'
+    });
 
     // Trigger stock monitoring to check for low stock or backorder fulfillment
     try {
@@ -258,7 +267,16 @@ const stockOut = asyncHandler(async (req, res) => {
     await redis.del(`product:${product._id}`);
     await redis.del(`product:slug:${product.slug}`);
     await scanDel('products:*');
-    await publishProductEvent('inventory.product.updated', { productId: product._id, previous, current: totalAfter });
+    await publishProductEvent('inventory.stock.updated', {
+        productId: product._id,
+        productName: product.name,
+        companyId: product.companyId,
+        shopId: shopId || product.shopId,
+        previous,
+        current: totalAfter,
+        change: -Math.abs(Number(quantity)),
+        type: changeType === 'sale' ? 'sale' : 'removal'
+    });
 
     // Record stock change and trigger monitoring for low stock/out of stock
     try {
@@ -391,6 +409,17 @@ const bulkStockIn = asyncHandler(async (req, res) => {
     // Invalidate list caches
     await scanDel('products:*');
 
+    // Emit bulk event
+    await publishProductEvent('inventory.bulk.stock_in', {
+        companyId,
+        shopId,
+        userId,
+        items: results.successful,
+        failedCount: results.failed.length,
+        totalRequested: items.length,
+        timestamp: new Date().toISOString()
+    });
+
     res.status(200).json({
         success: true,
         message: `Bulk stock in completed. ${results.successful.length} successful, ${results.failed.length} failed`,
@@ -511,6 +540,17 @@ const bulkStockOut = asyncHandler(async (req, res) => {
 
     // Invalidate list caches
     await scanDel('products:*');
+
+    // Emit bulk event
+    await publishProductEvent('inventory.bulk.stock_out', {
+        companyId,
+        shopId,
+        userId,
+        items: results.successful,
+        failedCount: results.failed.length,
+        totalRequested: items.length,
+        timestamp: new Date().toISOString()
+    });
 
     res.status(200).json({
         success: true,

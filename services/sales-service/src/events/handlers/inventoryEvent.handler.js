@@ -97,6 +97,8 @@ async function handleStockChanged(data) {
       );
 
       // Find pending sales with this product
+      // We need to include 'KnownUser' through 'Sale' to get customer info
+      const { KnownUser } = require("../../models/index.model");
       const pendingSales = await SalesItem.findAll({
         where: { productId },
         include: [
@@ -104,7 +106,14 @@ async function handleStockChanged(data) {
             model: Sale,
             as: "sale",
             where: { status: "initiated" },
-            attributes: ["saleId", "companyId", "customerId"],
+            attributes: ["saleId", "companyId", "knownUserId"],
+            include: [
+              {
+                model: KnownUser,
+                as: "knownUser",
+                attributes: ["customerName", "customerPhone"]
+              }
+            ]
           },
         ],
       });
@@ -138,6 +147,7 @@ async function handleOutOfStock(data) {
     console.warn(`🚫 Product ${productId} is OUT OF STOCK`);
 
     // Find pending sales with this product
+    const { KnownUser } = require("../../models/index.model");
     const pendingSales = await SalesItem.findAll({
       where: { productId },
       include: [
@@ -145,7 +155,14 @@ async function handleOutOfStock(data) {
           model: Sale,
           as: "sale",
           where: { status: "initiated" },
-          attributes: ["saleId", "companyId", "customerId", "customerName"],
+          attributes: ["saleId", "companyId", "knownUserId"],
+          include: [
+            {
+              model: KnownUser,
+              as: "knownUser",
+              attributes: ["customerName", "customerPhone"]
+            }
+          ]
         },
       ],
     });
@@ -157,8 +174,9 @@ async function handleOutOfStock(data) {
 
       // Log affected sales for manual review
       pendingSales.forEach((item) => {
+        const name = item.sale?.knownUser?.customerName || "Unknown";
         console.warn(
-          `  - Sale ${item.sale.saleId} (Customer: ${item.sale.customerName})`
+          `  - Sale ${item.sale.saleId} (Customer: ${name})`
         );
       });
     }

@@ -9,6 +9,9 @@ console.log('\n╔════════════════════�
 console.log('║     SMS Template System Test (Standalone)         ║');
 console.log('╚════════════════════════════════════════════════════╝\n');
 
+// GET /auth/auth/users?role=worker&shops=39cf5aad-6a0f-4be8-90ba-675930d4b927&assignedDepartments=management 404 1.287 ms - 40
+
+
 // Test 1: List Available Templates
 console.log('📋 Test 1: Available SMS Templates');
 console.log('─'.repeat(50));

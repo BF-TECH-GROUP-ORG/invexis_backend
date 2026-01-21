@@ -13,6 +13,40 @@ jest.mock('jsonwebtoken', () => ({
   }),
 }));
 
+// Mock absolute project paths
+jest.mock('/app/shared/logger', () => ({
+  getLogger: jest.fn().mockReturnValue({
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    requestLogger: jest.fn().mockReturnValue((req, res, next) => next())
+  })
+}), { virtual: true });
+
+jest.mock('/app/shared/health', () => {
+  return jest.fn().mockImplementation(() => ({
+    setupRoutes: jest.fn((app) => {
+      app.get('/health', (req, res) => {
+        res.status(200).json({ status: 'ok', connectedClients: 0 });
+      });
+    })
+  }));
+}, { virtual: true });
+
+jest.mock('/app/shared/security', () => ({
+  SecurityManager: jest.fn().mockImplementation(() => ({
+    setupSecurity: jest.fn(),
+    apiKeyAuth: jest.fn().mockReturnValue((req, res, next) => next())
+  }))
+}), { virtual: true });
+
+jest.mock('/app/shared/errorHandler', () => ({
+  ErrorHandler: jest.fn().mockImplementation(() => ({
+    setupErrorHandlers: jest.fn()
+  }))
+}), { virtual: true });
+
 // Mock shared and cluster BEFORE requiring index
 jest.mock('../src/config/shared', () => ({
   redis: {
@@ -67,9 +101,7 @@ describe('WebSocket Service', () => {
   });
 
   afterAll(async () => {
-    await new Promise((resolve) => {
-      server.close(() => resolve());
-    });
+    await shutdown('TEST');
   });
 
   it('should respond to health check', async () => {

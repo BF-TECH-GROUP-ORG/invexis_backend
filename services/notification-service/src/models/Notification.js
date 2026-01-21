@@ -49,6 +49,7 @@ const notificationSchema = new mongoose.Schema({
     // Targeting
     userId: { type: mongoose.Schema.Types.ObjectId, index: true }, // For personal
     companyId: { type: String, required: true, index: true },
+    shopId: { type: String, index: true },
     departmentId: { type: String, index: true },
     roles: [{ type: String }],
     scope: {
@@ -97,6 +98,7 @@ const notificationSchema = new mongoose.Schema({
 // Indexes
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ companyId: 1, createdAt: -1 });
+notificationSchema.index({ shopId: 1, createdAt: -1 });
 notificationSchema.index({ departmentId: 1, createdAt: -1 });
 notificationSchema.index({ scope: 1, sendAt: 1 });
 notificationSchema.index({ status: 1, sendAt: 1 });

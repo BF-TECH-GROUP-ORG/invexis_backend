@@ -7,8 +7,8 @@ const { rabbitmq } = shared;
 // Helper to extract userId from various payload shapes
 const extractUserId = (content) => {
   if (!content) return null;
-  // Check root level first (new standard), then nested objects
-  return content.userId || content._id || content.user?._id || content.data?.userId || null;
+  const id = content.userId || content._id || content.user?._id || content.data?.userId || null;
+  return id ? id.toString() : null;
 };
 
 // Helper to emit to multiple targets

@@ -17,7 +17,7 @@ const RepaymentSchema = new mongoose.Schema({
     amountPaid: { type: Number, required: true },
     paymentMethod: {
         type: String,
-        enum: ["CASH", "MTN", "AIRTEL", "MPESA", "BANK_TRANSFER"],
+        enum: ["CASH", "MTN", "AIRTEL", "BANK_TRANSFER"],
         default: "CASH"
     },
     paymentReference: { type: String },
@@ -35,6 +35,7 @@ const RepaymentSchema = new mongoose.Schema({
         default: 'pending'
     },
 
+    invoiceUrl: { type: String, default: null },
 
     paidAt: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now }

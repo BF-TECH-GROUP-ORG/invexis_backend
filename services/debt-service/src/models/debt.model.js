@@ -18,7 +18,7 @@ const DebtSchema = new mongoose.Schema({
     hashedCustomerId: { type: String, required: false },
 
     // Sales / staff info
-    salesId: { type:String, default: null },
+    salesId: { type: String, default: null },
 
     items: [
         {
@@ -55,7 +55,7 @@ const DebtSchema = new mongoose.Schema({
         type: String, default: null
     },
     updatedBy: {
-type: String, default: null
+        type: String, default: null
     },
     cancelledAt: { type: Date },
     cancelReason: { type: String },
@@ -70,6 +70,9 @@ type: String, default: null
             balance: { type: Number }
         }
     ],
+
+    // Invoice link
+    invoiceUrl: { type: String, default: null },
 
     // Soft delete support
     isDeleted: { type: Boolean, default: false },

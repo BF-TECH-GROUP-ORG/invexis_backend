@@ -684,6 +684,30 @@ async function login(data, options = {}) {
         // ✅ Create session (Required for token)
         const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
 
+        // ✅ Handle FCM Device Token (if provided)
+        if (value.fcmToken) {
+            (async () => {
+                try {
+                    const deviceData = {
+                        fcmToken: value.fcmToken,
+                        deviceType: value.deviceType || 'web',
+                        deviceName: value.deviceName || options.device,
+                    };
+
+                    // Update user's primary FCM token (legacy/ref)
+                    if (user.fcmToken !== value.fcmToken) {
+                        await User.updateOne({ _id: user._id }, { $set: { fcmToken: value.fcmToken } });
+                    }
+
+                    // Emit event for notification-service (UserDevice model)
+                    const { publishUserEvent } = require('../events/producer');
+                    await publishUserEvent.deviceUpdated(user._id, deviceData);
+                } catch (err) {
+                    console.error('Failed to update FCM device info:', err.message);
+                }
+            })();
+        }
+
         // ✅ Fire-and-forget: Login History & User Update
         // We don't need to wait for these to return the response
         (async () => {
@@ -743,7 +767,8 @@ async function login(data, options = {}) {
                 role: user.role,
                 email: user.email,
                 companies: user.companies,
-                shops: user.shops
+                shops: user.shops,
+                assignedDepartments: user.assignedDepartments || []
             }),
             refreshToken: refreshToken,
             user: userResponse

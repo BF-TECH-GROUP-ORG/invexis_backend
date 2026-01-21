@@ -2259,9 +2259,26 @@ const transferStockBetweenShops = asyncHandler(async (req, res) => {
                 delCache(`product:${destinationProductId}`);
                 scanDel(`stock:${productId}:*`);
                 scanDel(`stock:${destinationProductId}:*`);
+                // Invalidate transfer history cache
+                scanDel(`company:transfers:${companyId}:*`);
             } catch (err) {
                 logger.error('Cache invalidation error after transfer:', err);
             }
+        });
+
+        // Emit transfer event
+        await publishProductEvent('inventory.transfer.created', {
+            companyId,
+            sourceShopId,
+            destinationShopId,
+            productId,
+            productName: sourceProduct.name,
+            productSku: sourceProduct.sku,
+            quantity: Number(quantity),
+            userId,
+            reason: reason || 'Individual transfer',
+            createdProductId: destinationProductId,
+            timestamp: new Date().toISOString()
         });
 
         res.json({
@@ -2636,6 +2653,9 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
                 scanDel(`company:products:${toCompanyId}:*`);
                 delCache(`product:${productId}`);
                 delCache(`product:${destinationProductId}`);
+                // Invalidate transfer history cache for both companies
+                scanDel(`company:transfers:${fromCompanyId}:*`);
+                scanDel(`company:transfers:${toCompanyId}:*`);
             } catch (err) {
                 logger.error('Cache invalidation error after cross-company transfer:', err);
             }
@@ -2668,6 +2688,22 @@ const transferProductCrossCompany = asyncHandler(async (req, res) => {
             } catch (err) {
                 logger.error('Background tasks for destination product failed:', err);
             }
+        });
+
+        // Emit transfer event
+        await publishProductEvent('inventory.transfer.cross', {
+            sourceCompanyId: fromCompanyId,
+            sourceShopId: fromShopId,
+            toCompanyId: toCompanyId,
+            toShopId: toShopId,
+            productId,
+            productName: sourceProduct.name,
+            productSku: sourceProduct.sku,
+            quantity: Number(transferQuantity),
+            userId,
+            reason: reason || 'Individual cross-company transfer',
+            createdProductId: destinationProductId,
+            timestamp: new Date().toISOString()
         });
 
         res.json({
@@ -2775,6 +2811,98 @@ const getProductTransferHistory = asyncHandler(async (req, res) => {
             totalTransfers: transfers.length
         }
     });
+});
+
+/**
+ * @desc    Get all transfers for a specific company (comprehensive history)
+ * @route   GET /api/v1/companies/:companyId/transfers
+ * @access  Private
+ */
+const getCompanyTransfers = asyncHandler(async (req, res) => {
+    const { companyId } = req.params;
+    const { page = 1, limit = 50, startDate, endDate, type, direction, status } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const safeLimit = Math.min(parseInt(limit) || 50, 200);
+
+    if (!companyId) return res.status(400).json({ success: false, message: 'companyId is required' });
+
+    // Build query
+    const query = {};
+
+    // Direction filtering
+    if (direction === 'inbound') {
+        query.destinationCompanyId = companyId;
+    } else if (direction === 'outbound') {
+        query.sourceCompanyId = companyId;
+    } else {
+        // Default: get both inbound and outbound
+        query.$or = [
+            { sourceCompanyId: companyId },
+            { destinationCompanyId: companyId }
+        ];
+    }
+
+    // Type filtering
+    if (type) {
+        query.transferType = type;
+    }
+
+    // Status filtering
+    if (status) {
+        query.status = status;
+    }
+
+    // Date filtering
+    if (startDate || endDate) {
+        query.initiatedAt = {};
+        if (startDate) query.initiatedAt.$gte = new Date(startDate);
+        if (endDate) {
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999);
+            query.initiatedAt.$lte = endDateObj;
+        }
+    }
+
+    // Cache Key
+    const cacheKey = `company:transfers:${companyId}:p:${page}:l:${limit}:t:${type || 'all'}:d:${direction || 'all'}:s:${status || 'all'}:sd:${startDate || 'none'}:ed:${endDate || 'none'}`;
+
+    try {
+        // Try Cache
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            return res.json({ success: true, ...cached });
+        }
+
+        const transfers = await ProductTransfer.find(query)
+            .sort({ initiatedAt: -1 })
+            .skip(skip)
+            .limit(safeLimit)
+            .lean();
+
+        const total = await ProductTransfer.countDocuments(query);
+
+        const result = {
+            data: transfers,
+            pagination: {
+                page: parseInt(page),
+                limit: safeLimit,
+                total,
+                pages: Math.ceil(total / safeLimit)
+            }
+        };
+
+        // Cache for 5 minutes (300 seconds)
+        setCache(cacheKey, result, 300).catch(err => logger.error('Failed to cache transfers', err));
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (err) {
+        logger.error('getCompanyTransfers error', err);
+        res.status(500).json({ success: false, message: 'Failed to fetch company transfers', error: err.message });
+    }
 });
 
 /**
@@ -3279,6 +3407,19 @@ const bulkTransferIntraCompany = asyncHandler(async (req, res) => {
         // Return success even if some items failed (partial success)
         const statusCode = failureCount > 0 ? 207 : 200;
 
+        // Emit bulk transfer event
+        await publishProductEvent('inventory.transfer.bulk.intra', {
+            companyId,
+            sourceShopId,
+            destinationShopId,
+            userId,
+            items: results.successful,
+            totalRequested: results.totalRequested,
+            successCount,
+            failureCount,
+            timestamp: new Date().toISOString()
+        });
+
         res.status(statusCode).json({
             success: successCount > 0,
             message: `Bulk transfer completed: ${successCount}/${results.totalRequested} successful${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
@@ -3608,6 +3749,20 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
         // Return success even if some items failed (partial success)
         const statusCode = failureCount > 0 ? 207 : 200;
 
+        // Emit bulk transfer event
+        await publishProductEvent('inventory.transfer.bulk.cross', {
+            sourceCompanyId,
+            sourceShopId,
+            toCompanyId,
+            toShopId,
+            userId,
+            items: results.successful,
+            totalRequested: results.totalRequested,
+            successCount,
+            failureCount,
+            timestamp: new Date().toISOString()
+        });
+
         res.status(statusCode).json({
             success: successCount > 0,
             message: `Bulk cross-company transfer completed: ${successCount}/${results.totalRequested} successful${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
@@ -3617,6 +3772,54 @@ const bulkTransferCrossCompany = asyncHandler(async (req, res) => {
     } catch (error) {
         logger.error('Bulk cross-company transfer error:', error);
         throw error;
+    }
+});
+
+// GET /api/v1/companies/:companyId/transfers/:transferId
+const getCompanyTransferById = asyncHandler(async (req, res) => {
+    const { companyId, transferId } = req.params;
+
+    if (!companyId ||!transferId) {
+        return res.status(400).json({ success: false, message: 'Invalid ID format' });
+    }
+
+    const cacheKey = `company:transfer:${transferId}`;
+
+    try {
+        // Try Cache
+        const cached = await getCache(cacheKey);
+        if (cached) {
+            // Ensure the cached transfer belongs to the requested company
+            if (cached.sourceCompanyId?.toString() !== companyId && cached.destinationCompanyId?.toString() !== companyId) {
+                return res.status(404).json({ success: false, message: 'Transfer not found for this company' });
+            }
+            return res.json({ success: true, data: cached });
+        }
+
+        const transfer = await ProductTransfer.findById(transferId).lean();
+
+        if (!transfer) {
+            return res.status(404).json({ success: false, message: 'Transfer not found' });
+        }
+
+        // Verify ownership
+        const isSource = transfer.sourceCompanyId?.toString() === companyId;
+        const isDest = transfer.destinationCompanyId?.toString() === companyId;
+
+        if (!isSource && !isDest) {
+            return res.status(404).json({ success: false, message: 'Transfer not found for this company' });
+        }
+
+        // Cache for 5 minutes
+        setCache(cacheKey, transfer, 300).catch(err => logger.error('Failed to cache single transfer', err));
+
+        res.json({ success: true, data: transfer });
+    } catch (error) {
+        logger.error('Error fetching single transfer:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching transfer details'
+        });
     }
 });
 
@@ -3659,6 +3862,8 @@ module.exports = {
     // Cross-Company
     transferProductCrossCompany,
     getProductTransferHistory,
+    getCompanyTransfers,
+    getCompanyTransferById,
     getTransferredProductCopies,
 
     // Bulk Transfers

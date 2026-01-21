@@ -44,15 +44,9 @@ const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth
 // Public routes
 router.get('/domain/:domain', getCompanyByDomain);
 
-// Internal request bypass (for subscription cache population from api-gateway)
-router.use((req, res, next) => {
-  if (req.header('X-Internal-Request') === 'true') {
-    // Skip authentication for internal requests
-    return next();
-  }
-  // Continue to authentication for external requests
-  authenticateToken(req, res, next);
-});
+// Apply authentication to all following routes
+// Note: authenticateToken handles X-Internal-Request bypass internally
+router.use(authenticateToken);
 
 // Protected routes (authenticated or internal)
 router.post('/', createCompany);

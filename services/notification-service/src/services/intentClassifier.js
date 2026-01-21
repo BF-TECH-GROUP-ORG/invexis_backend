@@ -32,12 +32,14 @@ class IntentClassifier {
             'sale.refunded': NOTIFICATION_INTENTS.FINANCIAL,
             'sale.return.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.created': NOTIFICATION_INTENTS.FINANCIAL,
-            'debt.repaid': NOTIFICATION_INTENTS.FINANCIAL,
-            'debt.fully.paid': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.repayment.created': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.repaid': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.fully_paid': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.fully.paid': NOTIFICATION_INTENTS.FINANCIAL, // Legacy support
+            'debt.payment.received': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.marked.paid': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.cancelled': NOTIFICATION_INTENTS.FINANCIAL,
+            'debt.reminder.upcoming': NOTIFICATION_INTENTS.FINANCIAL,
             'subscription.expiring': NOTIFICATION_INTENTS.FINANCIAL,
 
             // Risk/Security - suspension, failure, anomalies
@@ -58,12 +60,15 @@ class IntentClassifier {
             'audit.security.alert': NOTIFICATION_INTENTS.RISK_SECURITY,
             'audit.system.error': NOTIFICATION_INTENTS.RISK_SECURITY,
 
-            // Accountability - specific user must act
+            // ACCOUNTABILITY - specific user must act
             'company.created': NOTIFICATION_INTENTS.ACCOUNTABILITY,
             'user.created': NOTIFICATION_INTENTS.ACCOUNTABILITY,
             'user.password.reset': NOTIFICATION_INTENTS.ACCOUNTABILITY,
             'company.status.changed': NOTIFICATION_INTENTS.ACCOUNTABILITY,
             'company.tierChanged': NOTIFICATION_INTENTS.ACCOUNTABILITY,
+
+            // Document Events
+            'document.invoice.created': NOTIFICATION_INTENTS.FINANCIAL,
 
             // Strategic/Insight - trends, forecasts (future)
             // 'analytics.weeklyReport': NOTIFICATION_INTENTS.STRATEGIC_INSIGHT,
@@ -78,28 +83,30 @@ class IntentClassifier {
             },
 
             [NOTIFICATION_INTENTS.FINANCIAL]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp'],
-                [AUTH_ROLES.WORKER]: ['inApp'],
-                [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp']
+                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp', 'push'],
+                [AUTH_ROLES.WORKER]: ['inApp', 'push'],
+                [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp'],
+                'AFFECTED_USER': ['sms'] // Debtors (Customers) only get SMS
             },
 
             [NOTIFICATION_INTENTS.RISK_SECURITY]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp', 'sms'],
-                [AUTH_ROLES.WORKER]: ['email', 'inApp'],
+                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp', 'push', 'sms'],
+                [AUTH_ROLES.WORKER]: ['email', 'inApp', 'push'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp'],
-                [AUTH_ROLES.CUSTOMER]: ['email', 'inApp']
+                [AUTH_ROLES.CUSTOMER]: ['email', 'inApp'],
+                'AFFECTED_USER': ['sms'] // Overdue reminders for customers
             },
 
             [NOTIFICATION_INTENTS.ACCOUNTABILITY]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp'],
-                [AUTH_ROLES.WORKER]: ['inApp'],
+                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp', 'push'],
+                [AUTH_ROLES.WORKER]: ['inApp', 'push'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp'],
                 [AUTH_ROLES.CUSTOMER]: ['email', 'inApp'],
                 'AFFECTED_USER': ['email', 'inApp', 'sms']
             },
 
             [NOTIFICATION_INTENTS.STRATEGIC_INSIGHT]: {
-                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp'],
+                [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp', 'push'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['inApp']
             }
         };

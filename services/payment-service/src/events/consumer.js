@@ -5,9 +5,7 @@
 
 const { subscribe } = require('/app/shared/rabbitmq');
 const paymentService = require('../services/paymentService');
-const companyRepository = require('../repositories/companyRepository');
 const { getLogger } = require('/app/shared/logger');
-const { v4: uuidv4 } = require('uuid');
 
 const logger = getLogger('payment-consumer');
 
@@ -73,6 +71,7 @@ const handlePaymentRequested = async (rawContent, routingKey) => {
         }
 
         // Map event payload to payment service internal structure
+        // Map event payload to payment service internal structure
         const paymentData = {
             type: effectiveType,
             reference_id: referenceId,
@@ -81,15 +80,33 @@ const handlePaymentRequested = async (rawContent, routingKey) => {
             amount: effectiveAmount,
             currency: currency || 'RWF',
             method: effectiveMethod, // CARD | MOBILE_MONEY
-            gateway: content.gateway || 'mtn_momo', // Default to MTN MoMo, Stripe is disabled
+            // Map gateway: cash/bank_transfer -> manual, otherwise use provided gateway
+            gateway: (() => {
+                const rawGateway = content.gateway || content.paymentMethod || 'manual';
+                if (rawGateway === 'cash' || rawGateway === 'bank_transfer') {
+                    return 'manual';
+                }
+                return rawGateway;
+            })(),
             gateway_token: paymentToken, // pm_xxx for Stripe
             phoneNumber: phoneNumber, // ⚡ CRITICAL: Pass top-level phone for gateway
-            customer: {
-                name: initiatedBy?.name || null,
-                phone: phoneNumber || null
+            customer: content.customer || {
+                name: content.customerName || initiatedBy?.name || null,
+                phone: phoneNumber || null,
+                email: content.customerEmail || null
             },
+            description: content.description || `Payment for ${effectiveType} ${referenceId || 'transaction'}`,
+            seller_id: content.sellerId || initiatedBy?.userId || effectiveCompanyId,
+            line_items: content.lineItems || [],
             idempotency_key: idempotencyKey || `${source || 'service'}-${referenceId}`,
-            metadata: { source, originalEvent: content, initiatedBy }
+            metadata: {
+                source,
+                originalEvent: content,
+                initiatedBy,
+                saleId: content.saleId || content.metadata?.saleId, // CRITICAL: Extract saleId
+                debtId: content.debtId || content.metadata?.debtId, // CRITICAL: Extract debtId
+                knownUserId: content.metadata?.knownUserId
+            }
         };
 
         const initiateWithRetry = async (retryCount = 0) => {
@@ -127,118 +144,7 @@ const handlePaymentRequested = async (rawContent, routingKey) => {
     }
 };
 
-/**
- * Handle Company settings sync events
- */
-const handleCompanyEvent = async (rawContent, routingKey) => {
-    const content = unwrapEvent(rawContent);
-    logger.info(`Received company event: ${routingKey}`, { content });
-
-    try {
-        let {
-            id,
-            companyId,
-            name,
-            country,
-            payment_phones = [],
-            paymentProfile = {},
-            metadata = {},
-            updatedAt,
-            createdAt
-        } = content;
-
-        // ⚡ EDGE CASE: Handle stringified JSON fields from DB returning objects
-        const parseJson = (val, defaultVal) => {
-            if (typeof val === 'string') {
-                try { return JSON.parse(val); } catch (e) { return defaultVal; }
-            }
-            return val || defaultVal;
-        };
-
-        payment_phones = parseJson(payment_phones, []);
-        paymentProfile = parseJson(paymentProfile, {});
-        metadata = parseJson(metadata, {});
-
-        // ⚡ FIX: Only use companyId/id from the UNWRAPPED data 
-        // (Avoiding the envelope 'id' which is a timestamp-string)
-        const targetId = companyId || id;
-        const eventTime = updatedAt || createdAt || new Date().toISOString();
-
-        if (!targetId || targetId.length < 30) { // Naive UUID check
-            logger.warn('Company event missing valid targetId', { targetId, content });
-            return;
-        }
-
-        if (routingKey.endsWith('.deleted')) {
-            await companyRepository.deleteCompanySettings(targetId);
-            logger.info('Company settings deleted', { companyId: targetId });
-        } else {
-            // created or updated
-            // ⚡ EDGE CASE: Handle Out-of-Order Events
-            const existing = await companyRepository.getCompanySettings(targetId);
-            if (existing && existing.metadata && existing.metadata.event_time) {
-                if (new Date(eventTime) < new Date(existing.metadata.event_time)) {
-                    logger.info('Skipping stale company event (older timestamp)', {
-                        companyId: targetId,
-                        eventTime,
-                        existingTime: existing.metadata.event_time
-                    });
-                    return;
-                }
-            }
-
-            // Extract phones from payment_phones array
-            const clean = (p) => p ? p.replace(/[^0-9]/g, '') : null;
-            const mtnPhone = clean(payment_phones.find(p => (p.provider === 'MTN' || p.provider === 'MTN_MOMO') && (p.enabled || p.enabled === undefined))?.phoneNumber);
-            const airtelPhone = clean(payment_phones.find(p => (p.provider === 'Airtel' || p.provider === 'AIRTEL_MONEY') && (p.enabled || p.enabled === undefined))?.phoneNumber);
-            const mpesaPhone = null; // M-Pesa disabled in this setup
-
-            // Robust Stripe Connect ID extraction
-            const stripeAccountId = null; // Stripe disabled in this setup
-
-            // Extract company details for invoice generation
-            const company_name = name || content.data?.name;
-            const company_email = content.email || content.data?.email;
-            const company_phone = content.phone || content.data?.phone || content.contacts?.[0]?.phone;
-            // Address might be a string or object
-            let company_address = content.address || content.data?.address;
-            if (typeof company_address === 'object') company_address = JSON.stringify(company_address);
-
-            await companyRepository.upsertCompanySettings({
-                company_id: targetId,
-                momo_phone: mtnPhone,
-                airtel_phone: airtelPhone,
-                mpesa_phone: mpesaPhone,
-                stripe_account_id: stripeAccountId,
-                company_name,
-                company_email,
-                company_phone,
-                company_address,
-                metadata: {
-                    ...metadata,
-                    country: country,
-                    synced_at: new Date().toISOString(),
-                    event_time: eventTime
-                }
-            });
-
-            const eventType = routingKey.split('.').pop();
-            logger.info(`Company settings synchronized (${eventType})`, {
-                companyId: targetId,
-                momo_phone: mtnPhone,
-                airtel_phone: airtelPhone,
-                mpesa_phone: mpesaPhone,
-                stripe_account_id: stripeAccountId,
-                company_name
-            });
-        }
-    } catch (error) {
-        logger.error(`Failed to process company event: ${routingKey}`, {
-            error: error.message,
-            content
-        });
-    }
-};
+const internalServiceClient = require('../services/internalServiceClient');
 
 /**
  * Handle sale.created from sales-service
@@ -265,79 +171,68 @@ const handleSaleCreated = async (rawContent, routingKey) => {
             return;
         }
 
-        // 1. Fetch Company Settings for Header Data
-        const companySettings = await companyRepository.getCompanySettings(companyId);
-        if (!companySettings) {
-            logger.warn('Cannot generate Bill: Company settings not found', { companyId });
-            return;
-        }
+        const processSaleWithRetry = async (retryCount = 0) => {
+            try {
+                // 1. Fetch Company Settings from company-service
+                const companySettings = await internalServiceClient.getCompanySettings(companyId);
 
-        // 2. Create local Invoice record (Pending)
-        const invoiceRepo = require('../repositories/invoiceRepository');
-        let invoice = await invoiceRepo.getInvoiceByPaymentId(saleId); // Using saleId as reference if no payment yet
+                if (!companySettings) {
+                    if (retryCount < 3) {
+                        logger.warn(`Company settings not found yet for sale ${saleId}, retrying in 2 seconds... (Attempt ${retryCount + 1}/3)`, { companyId });
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        return processSaleWithRetry(retryCount + 1);
+                    }
+                    logger.error('Cannot generate Bill: Company settings not found after retries', { companyId, saleId });
+                    return;
+                }
 
-        if (!invoice) {
-            const invoiceService = require('../services/invoiceService');
-            invoice = await invoiceService.generateInvoice({
-                payment_id: null, // No payment yet
-                order_id: saleId,
-                seller_id: null, // Will be filled later or use companyId
-                company_id: companyId,
-                amount: totalAmount,
-                currency: content.currency || 'XAF',
-                description: `Invoice for Sale #${saleId}`,
-                status: 'pending',
-                customer: {
-                    name: customerName,
-                    phone: customerPhone
-                },
-                metadata: { saleId, shopId, isManual: true }
-            }, items);
-        }
+                // 2. Fetch Shop Data (to show shop name on invoice)
+                const shopData = await internalServiceClient.getShopData(shopId);
+                const shopName = shopData?.name ? ` - ${shopData.name}` : '';
 
-        // 3. Request Document Generation (Status: PENDING)
-        const invoicePayload = {
-            invoiceData: {
-                invoiceId: invoice.invoice_id,
-                invoiceNumber: invoice.invoice_number,
-                issueDate: createdAt || new Date().toISOString(),
-                status: 'pending',
-                subTotal: totalAmount,
-                totalAmount: totalAmount,
-                currency: invoice.currency || 'XAF'
-            },
-            saleData: {
-                saleId: saleId,
-                customerName: customerName || 'Guest',
-                customerPhone: customerPhone || 'N/A'
-            },
-            companyData: {
-                name: companySettings.company_name || 'Business',
-                email: companySettings.company_email,
-                phone: companySettings.company_phone,
-                address: companySettings.company_address,
-                logoUrl: companySettings.metadata?.logo_url
-            },
-            items: items.length ? items.map(i => ({
-                productName: i.productName || `Product #${i.productId}`,
-                quantity: i.quantity,
-                unitPrice: i.unitPrice,
-                total: i.total || (i.quantity * i.unitPrice)
-            })) : [
-                { productName: 'General Sale', quantity: 1, unitPrice: totalAmount, total: totalAmount }
-            ],
-            context: {
-                saleId: saleId,
-                invoiceId: invoice.invoice_id
+                // 2. Create local Invoice record (Pending)
+                const invoiceRepo = require('../repositories/invoiceRepository');
+                let invoice = await invoiceRepo.getInvoiceBySaleId(saleId);
+
+                if (!invoice) {
+                    const invoiceService = require('../services/invoiceService');
+                    invoice = await invoiceService.generateInvoice({
+                        payment_id: null,
+                        order_id: saleId,
+                        seller_id: content.soldBy || companySettings.admin_id || companyId,
+                        company_id: companyId,
+                        companyData: {
+                            name: companySettings.company_name || 'Business',
+                            shopName: shopData?.name,
+                            email: companySettings.company_email,
+                        },
+                        shop_id: shopId,
+                        amount: totalAmount,
+                        currency: content.currency || 'XAF',
+                        description: `Invoice for Sale #${saleId}`,
+                        status: 'pending',
+                        customer: {
+                            name: customerName,
+                            phone: customerPhone
+                        },
+                        metadata: { saleId, shopId, isManual: true }
+                    }, items);
+                }
+
+                // 3. (REFINED) We NO LONGER request document generation here (Pending status)
+                // We only do it once payment is processed (Paid/Failed) to avoid double docs.
+                logger.info('Invoice record created for pending sale, skipping doc generation until payment', { saleId, invoiceId: invoice.invoice_id });
+
+            } catch (error) {
+                logger.error('Failed to handle sale.created retry', { error: error.message, content });
+                throw error; // Re-throw for parent catch
             }
         };
 
-        const { publishPaymentEvent } = require('../events/producer');
-        await publishPaymentEvent.invoiceRequested(invoicePayload);
-        logger.info('Bill (Pending Invoice) requested successfully', { saleId, invoiceId: invoice.invoice_id });
+        await processSaleWithRetry();
 
     } catch (error) {
-        logger.error('Failed to handle sale.created', { error: error.message, content });
+        logger.error('Critical failure in handleSaleCreated', { error: error.message, content });
     }
 };
 
@@ -375,13 +270,6 @@ const startConsumers = async () => {
             pattern: 'subscription.payment.requested'
         }, handlePaymentRequested);
 
-        // 4. Company lifecycle events (for syncing settings)
-        await subscribe({
-            queue: 'payment.company.sync.queue',
-            exchange: 'events_topic',
-            pattern: 'company.#' // capture company.created, company.updated, company.creation.success etc
-        }, handleCompanyEvent);
-
         // 5. Document Events (Invoice Generated)
         await subscribe({
             queue: 'payment.invoice_sync.queue',
@@ -406,60 +294,42 @@ const handleInvoiceCreated = async (rawContent, routingKey) => {
     try {
         const { url, context } = content;
 
-        // Context contains invoiceId (e.g. INV-123) but we assume the DB uses payment_id or needs a lookup
-        // Ideally we stored the 'invoiceId' in metadata or matching via payment_id.
-        // paymentService's handleSuccessfulPayment generates `invoiceId` as `INV-{paymentId}`. 
-        // Let's assume we can match it or better, context contains the paymentId if passsed through.
-
-        // Alternatively, update by invoice_id if we have it in the DB.
-        // Wait, paymentService uses `invoiceRequested` but doesn't CREATE the invoice in DB first?
-        // Let's check handleSuccessfulPayment again. It ONLY emits.
-        // Ah, so payment-service DOES NOT have an invoice record yet?
-        // If it doesn't, this event consumer must CREATE the record too, or UPDATE the payment with the PDF URL.
-
-        // Let's assume we want to update the PAYMENT record with the PDF URL for simplicity, 
-        // OR create the invoice record now that it's generated.
-        // But ideally, paymentService should have created a placeholder invoice first?
-        // Checking paymentService previously... it used to call `invoiceService.generateInvoice` which created DB record.
-        // We removed that. So now we rely on Document Service.
-        // But we need the invoice link in Payment Service DB for users to download.
-
-        // STRATEGY: Update the PAYMENT record's metadata with the invoice URL.
-        // The `context` from paymentService producer contained:
-        // saleId = payment.metadata.saleId
-        // And invoiceData.invoiceId = `INV-{paymentId}`.
-
-        // So we can find the PAYMENT by parsing the ID or using context.
-        // Let's look for payment with ID ~ invoiceId.replace('INV-', '')?
-        // Risk: Context might not match.
-
-        // BETTER: Payment Service SHOULD Create the invoice record locally BEFORE requesting PDF.
-        // I will fix `paymentService.js` to create the DB record first, then emit.
-        // Then this consumer updates that record.
-
-        // For now, I'll log it. I need to fix paymentService flow first to ensure DB record exists.
-
-        // Re-reading plan: "Refactor paymentService to emit event instead of local PDF generation".
-        // It didn't explicitly say "Stop creating DB record".
-        // Use `invoiceRepository` to update it.
-
-        // Assuming we fix paymentService to create the record:
-        if (context && context.paymentId) {
-            const invoice = await require('../repositories/invoiceRepository').getInvoiceByPaymentId(context.paymentId);
-            if (invoice) {
-                await require('../repositories/invoiceRepository').updateInvoiceStatus(invoice.invoice_id, {
-                    pdf_url: url
-                });
-                logger.info('Updated invoice PDF URL', { invoiceId: invoice.invoice_id, url });
-            }
-            // Also update payment metadata?
-            await require('../repositories/paymentRepository').updatePaymentStatus(context.paymentId, {
-                metadata: { invoice_url: url }
-            });
+        if (!context || !context.paymentId) {
+            logger.warn('Received document.invoice.created without paymentId in context', { content });
+            return;
         }
 
+        const { paymentId } = context;
+
+        // 1. Update Invoice Record
+        // We try to find the invoice by paymentId. 
+        // Note: The invoice should have been created during the payment process.
+        const invoiceRepository = require('../repositories/invoiceRepository');
+        const invoice = await invoiceRepository.getInvoiceByPaymentId(paymentId);
+
+        if (invoice) {
+            await invoiceRepository.updateInvoiceStatus(invoice.invoice_id, {
+                pdf_url: url
+            });
+            logger.info('Updated invoice PDF URL', { invoiceId: invoice.invoice_id, url });
+        } else {
+            logger.warn(`Invoice not found for paymentId: ${paymentId} during document sync`);
+        }
+
+        // 2. Update Payment Metadata
+        // Store the invoice URL in the payment metadata for easy access
+        const paymentRepository = require('../repositories/paymentRepository');
+        await paymentRepository.updatePaymentStatus(paymentId, {
+            metadata: { invoice_url: url }
+        });
+
+        logger.info('Updated payment metadata with invoice URL', { paymentId, url });
+
     } catch (error) {
-        logger.error('Failed to handle invoice created', error);
+        logger.error('Error handling document.invoice.created', {
+            error: error.message,
+            stack: error.stack
+        });
     }
 };
 

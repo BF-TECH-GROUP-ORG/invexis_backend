@@ -36,8 +36,16 @@ module.exports = async function handleAuthEvent(event, routingKey) {
         await handleUserDeleted(data);
         break;
 
+      case "auth.device.updated":
+        await handleDeviceUpdated(data);
+        break;
+
       case "verification.requested":
         await handleVerificationRequested(data);
+        break;
+
+      case "auth.session.refreshed":
+        // Ignore this event, it's just be noise
         break;
 
       default:
@@ -121,6 +129,24 @@ async function handleUserCreated(data) {
       channels
     });
 
+    // 2. Notify Company Admin (Broadcast)
+    if (companyId && companyId !== 'system') {
+      const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+      await dispatchBroadcastEvent({
+        event: "user.created",
+        data: {
+          userName: data.userName || data.firstName || "User",
+          performedByName: data.performedByName || "Admin",
+          ...data
+        },
+        companyId,
+        templateName: "user.created",
+        channels: ["inApp", "push"],
+        scope: "company",
+        roles: ["company_admin"]
+      });
+    }
+
     logger.info(`✅ User creation notification dispatched for user ${userId}`);
   } catch (error) {
     logger.error(`❌ Error creating user notification:`, error.message);
@@ -196,10 +222,30 @@ async function handleVerificationRequested(data) {
  * Handle user verification
  */
 async function handleUserVerified(data) {
-  const { userId, email } = data;
+  const { userId, email, companyId } = data;
 
   logger.info(`✅ User verified: ${email} (${userId})`);
-  // Could send verification confirmation notification
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+    if (companyId && companyId !== 'system') {
+      await dispatchBroadcastEvent({
+        event: "user.verified",
+        data: {
+          userId,
+          email,
+          ...data
+        },
+        companyId,
+        templateName: "user.verified",
+        channels: ["inApp", "push"],
+        scope: "company",
+        roles: ["company_admin"]
+      });
+    }
+  } catch (err) {
+    logger.error(`❌ Error in handleUserVerified:`, err.message);
+  }
 }
 
 /**
@@ -250,19 +296,94 @@ async function handlePasswordReset(data) {
  * Handle user suspension
  */
 async function handleUserSuspended(data) {
-  const { userId, companyId, reason } = data;
+  const { userId, companyId, reason, performedByName } = data;
 
   logger.warn(`⏸️ User suspended: ${userId} - ${reason}`);
-  // Could send suspension notification
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+    if (companyId && companyId !== 'system') {
+      await dispatchBroadcastEvent({
+        event: "user.suspended",
+        data: {
+          userId,
+          reason: reason || "No reason provided",
+          performedByName: performedByName || "Admin",
+          ...data
+        },
+        companyId,
+        templateName: "user.suspended",
+        channels: ["inApp", "push"],
+        scope: "company",
+        roles: ["company_admin"]
+      });
+    }
+  } catch (err) {
+    logger.error(`❌ Error in handleUserSuspended:`, err.message);
+  }
 }
 
 /**
  * Handle user deletion
  */
 async function handleUserDeleted(data) {
-  const { userId } = data;
+  const { userId, companyId, performedByName } = data;
 
   logger.info(`🗑️ User deleted: ${userId}`);
-  // Could clean up user notifications
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+    if (companyId && companyId !== 'system') {
+      await dispatchBroadcastEvent({
+        event: "user.deleted",
+        data: {
+          userId,
+          performedByName: performedByName || "Admin",
+          ...data
+        },
+        companyId,
+        templateName: "user.deleted",
+        channels: ["inApp", "push"],
+        scope: "company",
+        roles: ["company_admin"]
+      });
+    }
+  } catch (err) {
+    logger.error(`❌ Error in handleUserDeleted:`, err.message);
+  }
+}
+
+/**
+ * Handle user device updated (FCM tokens)
+ */
+async function handleDeviceUpdated(data) {
+  const { userId, fcmToken, deviceType, deviceName } = data;
+
+  if (!userId || !fcmToken) {
+    logger.warn("⚠️ Device updated event missing required fields");
+    return;
+  }
+
+  try {
+    const UserDevice = require("../../models/UserDevice");
+
+    // Upsert the device token
+    // Using fcmToken as the unique key to prevent duplicates
+    await UserDevice.findOneAndUpdate(
+      { fcmToken },
+      {
+        userId,
+        deviceType: deviceType || 'web',
+        deviceName: deviceName || 'Unknown',
+        isActive: true,
+        lastActiveAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
+    logger.info(`📱 Device registered/updated for user ${userId}: ${fcmToken.substring(0, 10)}...`);
+  } catch (error) {
+    logger.error(`❌ Error updating user device: ${error.message}`);
+  }
 }
 

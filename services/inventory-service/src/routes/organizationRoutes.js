@@ -36,6 +36,8 @@ const {
 
     // Transfer History
     getProductTransferHistory,
+    getCompanyTransfers,
+    getCompanyTransferById,
     getTransferredProductCopies,
 
     // Transfer Operations
@@ -296,6 +298,20 @@ router.post('/companies/:companyId/shops/:shopId/bulk-cross-company-transfer', a
  * @access  Private
  */
 router.get('/companies/:companyId/products/:productId/transfer-history', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), getProductTransferHistory);
+
+/**
+ * @route   GET /api/v1/companies/:companyId/transfers
+ * @desc    Get complete transfer history for a company (inbound & outbound)
+ * @access  Private
+ */
+router.get('/companies/:companyId/transfers', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), getCompanyTransfers);
+
+/**
+ * @route   GET /api/v1/companies/:companyId/transfers/:transferId
+ * @desc    Get detailed transfer information by ID
+ * @access  Private
+ */
+router.get('/companies/:companyId/transfers/:transferId', authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), getCompanyTransferById);
 
 /**
  * @route   GET /api/v1/companies/:companyId/products/:productId/transferred-copies

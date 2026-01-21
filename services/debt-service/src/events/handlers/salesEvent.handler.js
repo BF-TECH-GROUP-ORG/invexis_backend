@@ -117,7 +117,7 @@ async function handleSaleCreated(data) {
                 await existing.save();
                 logger.info(`🔄 Updated existing debt ${existing._id} with hashedCustomerId/customer info for sale ${saleId}`);
                 // Publish updated event so downstream systems know
-                try { await debtEvents.updated(existing, { updatedFields: ['hashedCustomerId','customer'] }); } catch (e) { /* non-critical */ }
+                try { await debtEvents.updated(existing, { updatedFields: ['hashedCustomerId', 'customer'] }); } catch (e) { /* non-critical */ }
             }
             return { success: true, debtId: existing._id };
         }
@@ -246,7 +246,7 @@ module.exports = async function handleSalesEvent(event) {
 
         const traceId = eventData.traceId || eventData.trace_id;
         const fallbackId = eventData.saleId || '';
-        const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
+        const eventId = traceId || `${type}:${fallbackId}`;
 
         logger.info(`💰 Processing sales event: ${type}`, { eventId });
 

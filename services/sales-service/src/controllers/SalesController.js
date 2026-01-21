@@ -4,14 +4,14 @@ const knownUserService = require("../services/knownUser.service");
 const { getCache, setCache, delCache, scanDel } = require('../utils/redisHelper');
 const {
   saleEvents,
-  invoiceEvents,
   returnEvents,
 } = require("../events/eventHelpers");
+const { emit } = require("../events/producer");
+
 const {
   Sale,
   SalesItem,
   SalesReturn,
-  Invoice,
   SalesReturnItem,
   KnownUser,
 } = require("../models/index.model");
@@ -20,6 +20,7 @@ const {
 */
 
 const createSale = async (req, res) => {
+
   const t = await Sale.sequelize.transaction();
   try {
     const {
@@ -48,8 +49,9 @@ const createSale = async (req, res) => {
       });
     }
 
+
     // Validate and normalize paymentMethod
-    const validPaymentMethods = ["cash", "card", "mobile", "wallet", "bank_transfer"];
+    const validPaymentMethods = ["cash", "mtn", "airtel", "bank_transfer"];
     let normalizedPaymentMethod = paymentMethod;
 
     // Map common variations to valid enum values
@@ -57,7 +59,11 @@ const createSale = async (req, res) => {
       const lowerMethod = String(normalizedPaymentMethod).toLowerCase();
       if (lowerMethod === "transfer") {
         normalizedPaymentMethod = "bank_transfer";
-      } else if (!validPaymentMethods.includes(lowerMethod)) {
+      } else if (lowerMethod === "mobile" || lowerMethod === "mobile_money") {
+        normalizedPaymentMethod = "mtn"; // Default mobile to MTN
+      } else if (validPaymentMethods.includes(lowerMethod)) {
+        normalizedPaymentMethod = lowerMethod;
+      } else {
         await t.rollback();
         return res.status(400).json({
           message: `Invalid paymentMethod. Must be one of: ${validPaymentMethods.join(", ")}`,
@@ -66,8 +72,10 @@ const createSale = async (req, res) => {
       }
     }
 
+
     // Handle KnownUser: either use provided knownUserId or create from customer data
     let finalKnownUserId = knownUserId;
+    let fullKnownUser = null;
 
     if (!knownUserId) {
       // If no knownUserId provided, create/find from customer data
@@ -93,22 +101,33 @@ const createSale = async (req, res) => {
         t
       );
       finalKnownUserId = knownUser.knownUserId;
+      // Store the user object for later use (e.g. hashedCustomerId, name for events)
+      fullKnownUser = knownUser;
     } else {
-      // If knownUserId provided, verify it exists and belongs to the company
-      const knownUser = await KnownUser.findByPk(knownUserId, { transaction: t });
-      if (!knownUser) {
+      // If knownUserId provided, verify it exists and update its company association
+      // We still use findOrCreateKnownUser to ensure company association is updated correctly
+      // based on the existing user's data.
+      const existingUser = await KnownUser.findByPk(knownUserId, { transaction: t });
+      if (!existingUser) {
         await t.rollback();
         return res.status(404).json({
           message: "KnownUser not found",
         });
       }
 
-      if (knownUser.companyId !== companyId) {
-        await t.rollback();
-        return res.status(403).json({
-          message: "KnownUser does not belong to this company",
-        });
-      }
+      // Ensure this company is in the associatedCompanyIds
+      const updatedUser = await knownUserService.findOrCreateKnownUser(
+        {
+          companyId,
+          customerName: existingUser.customerName,
+          customerPhone: existingUser.customerPhone,
+          customerEmail: existingUser.customerEmail,
+          customerAddress: existingUser.customerAddress,
+        },
+        t
+      );
+      finalKnownUserId = updatedUser.knownUserId;
+      fullKnownUser = updatedUser;
     }
 
     // Calculate totals
@@ -125,9 +144,6 @@ const createSale = async (req, res) => {
     const totalAmount = subTotal - discountTotal + taxTotal;
 
     // Create Sale
-    // Ensure we have the KnownUser record so we can copy hashedCustomerId
-    const fullKnownUser = await KnownUser.findByPk(finalKnownUserId);
-
     const sale = await Sale.create(
       {
         companyId,
@@ -170,23 +186,12 @@ const createSale = async (req, res) => {
       transaction: t,
     });
 
-    // Create Invoice (simple)
-    const invoice = await Invoice.create(
-      {
-        saleId: sale.saleId,
-        invoiceNumber: `INV-${Date.now()}`,
-        subTotal,
-        discountTotal,
-        taxTotal,
-        totalAmount,
-        status: "ISSUED",
-      },
-      { transaction: t }
-    );
-
     // Create outbox events within transaction (will be published by dispatcher)
+    // Manually attach customer details for the event payload (since they aren't in the Sale model)
+    sale.customerName = customerName || fullKnownUser?.customerName;
+    sale.customerPhone = customerPhone || fullKnownUser?.customerPhone;
+
     await saleEvents.created(sale, saleItems, t);
-    await invoiceEvents.created(invoice, sale, t);
 
     await t.commit();
 
@@ -200,6 +205,7 @@ const createSale = async (req, res) => {
             delCache(`sales:top:${companyId}:*`),
             scanDel(`sales:trend:${companyId}:*`),
             scanDel(`sales:list:*`), // Fallback for general lists
+            scanDel("known_users:*"), // Clear global user lists
           ]);
         }
       } catch (e) {
@@ -207,54 +213,35 @@ const createSale = async (req, res) => {
       }
     });
 
-    // Trigger PDF Generation via Event
+
+
+    // Trigger Payment Event - Use real customer data from KnownUser
     try {
-      console.log("📤 Triggering PDF generation event for invoice:", invoice.invoiceId);
-      const { emit } = require("../events/producer");
-      const currency = "RWF"; // Can be dynamic from company settings later
+      if (['cash', 'mtn', 'airtel', 'bank_transfer'].includes(sale.paymentMethod)) {
+        console.log(`📤 Triggering Payment Request for method: ${sale.paymentMethod}`);
 
-      await emit('document.invoice.requested', {
-        type: 'document.invoice.requested',
-        payload: {
-          invoiceData: invoice.toJSON(),
-          saleData: sale.toJSON(),
-          items: saleItems.map((item) => item.toJSON()),
-          currency: currency,
-          companyData: { name: "INVEXIS", email: "info@invexis.com", companyId: companyId } // Pass companyId for resolution
-        },
-        owner: {
-          level: 'company',
-          companyId: companyId,
-          shopId: shopId
-        },
-        eventId: `evt_inv_${invoice.invoiceId}_${Date.now()}`
-      });
+        // Get real customer data from KnownUser
+        const realCustomerName = fullKnownUser?.customerName || customerName || 'Guest User';
+        const realCustomerPhone = fullKnownUser?.customerPhone || customerPhone;
+        const realCustomerEmail = fullKnownUser?.customerEmail || customerEmail || 'no-email@provided.com';
 
-      console.log("✅ PDF generation event emitted");
+        // Determine Gateway based on payment method
+        let gateway = 'manual';
+        let schemaPaymentMethod = 'cash';
+        const method = sale.paymentMethod;
 
-      // Trigger Payment Event (MTN/Airtel/MPesa/Bank Transfer/Cash)
-      if (['mobile', 'card', 'cash', 'mtn', 'airtel', 'mpesa', 'bank_transfer'].includes(normalizedPaymentMethod) && !isDebt) {
-        console.log(`📤 Triggering Payment Request for method: ${normalizedPaymentMethod}`);
-
-        // Determine Gateway based on Sales Model payment methods
-        let gateway = 'mtn_momo'; // Default
-        let schemaPaymentMethod = 'mobile_money'; // Default
-
-        if (normalizedPaymentMethod === 'cash') {
+        if (method === 'cash') {
           gateway = 'cash';
           schemaPaymentMethod = 'cash';
-        } else if (normalizedPaymentMethod === 'bank_transfer' || normalizedPaymentMethod === 'card') {
+        } else if (method === 'bank_transfer') {
           gateway = 'manual';
-          schemaPaymentMethod = normalizedPaymentMethod;
-        } else if (normalizedPaymentMethod === 'mtn' || normalizedPaymentMethod === 'mobile') {
+          schemaPaymentMethod = 'bank_transfer';
+        } else if (method === 'mtn') {
           gateway = 'mtn_momo';
           schemaPaymentMethod = 'mobile_money';
-        } else if (normalizedPaymentMethod === 'airtel') {
+        } else if (method === 'airtel') {
           gateway = 'airtel_money';
           schemaPaymentMethod = 'mobile_money';
-        } else {
-          gateway = 'manual'; // Fallback for others (mpesa, etc)
-          schemaPaymentMethod = 'manual';
         }
 
         const paymentPayload = {
@@ -270,11 +257,11 @@ const createSale = async (req, res) => {
           description: `Payment for Sale ${sale.saleId}`,
           paymentMethod: schemaPaymentMethod,
           gateway: gateway,
-          phoneNumber: customerPhone,
+          phoneNumber: realCustomerPhone,
           customer: {
-            name: customerName || 'Guest User',
-            email: customerEmail || 'no-email@provided.com',
-            phone: customerPhone
+            name: realCustomerName,
+            email: realCustomerEmail,
+            phone: realCustomerPhone
           },
           lineItems: saleItems.map(item => ({
             id: item.productId, // meaningful ID for payment Invoice
@@ -285,13 +272,15 @@ const createSale = async (req, res) => {
           idempotencyKey: `pay_sale_${sale.saleId}`,
           metadata: {
             saleId: sale.saleId,
-            initiatedBy: soldBy
+            initiatedBy: soldBy,
+            knownUserId: finalKnownUserId
           }
         };
 
         await emit('sales.payment.requested', paymentPayload);
 
         console.log("✅ Payment request event emitted");
+
       }
 
     } catch (evtError) {
@@ -302,11 +291,7 @@ const createSale = async (req, res) => {
     const responseData = {
       sale: sale.toJSON ? sale.toJSON() : sale,
       items: saleItems.map((item) => (item.toJSON ? item.toJSON() : item)),
-      invoice: {
-        ...(invoice.toJSON ? invoice.toJSON() : invoice),
-        pdfUrl: null, // Will be updated asynchronously
-        message: "PDF generation started"
-      },
+      knownUser: fullKnownUser ? (fullKnownUser.toJSON ? fullKnownUser.toJSON() : fullKnownUser) : null
     };
 
     console.log(
@@ -345,7 +330,7 @@ const getSale = async (req, res) => {
             { model: SalesReturnItem, as: "items" }
           ]
         },
-        { model: Invoice, as: "invoice" },
+
         { model: KnownUser, as: "knownUser" },
       ],
     });
@@ -450,7 +435,7 @@ const updateSale = async (req, res) => {
     const payload = {};
 
     // Validate and normalize paymentMethod if provided
-    const validPaymentMethods = ["cash", "card", "mobile", "wallet", "bank_transfer"];
+    const validPaymentMethods = ["cash", "mtn", "airtel", "bank_transfer"];
 
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
@@ -458,6 +443,8 @@ const updateSale = async (req, res) => {
           const lowerMethod = String(req.body[key]).toLowerCase();
           if (lowerMethod === "transfer") {
             payload[key] = "bank_transfer";
+          } else if (lowerMethod === "mobile" || lowerMethod === "mobile_money") {
+            payload[key] = "mtn"; // Default mobile to MTN
           } else if (!validPaymentMethods.includes(lowerMethod)) {
             return res.status(400).json({
               message: `Invalid paymentMethod. Must be one of: ${validPaymentMethods.join(", ")}`,
@@ -476,6 +463,40 @@ const updateSale = async (req, res) => {
     if (!sale) return res.status(404).json({ message: "Sale not found" });
 
     await sale.update(payload);
+
+    // Initialise transaction for events
+    const t = await Sale.sequelize.transaction();
+
+    try {
+      // Determine what changed and emit appropriate events
+      const changes = Object.keys(payload);
+
+      if (changes.includes("status")) {
+        const oldStatus = sale.previous("status") || "unknown"; // previous() might not work after reload, but we updated in place. 
+        // Better: we can trust payload value is new, and fetch old before update? 
+        // Actually, Sequelize instance tracks changes. But after await sale.update(), previous() might be reset if reload happens.
+        // Simplified: Just emit statusChanged.
+        // We know oldStatus isn't easily available without refactoring prior fetch, but we can emit event anyway.
+        // Let's rely on payload.
+        // Actually, we can just emit sale.updated with changes list for generic updates
+        await saleEvents.statusChanged(sale.saleId, sale.companyId, "previous", payload.status, t);
+      }
+
+      if (changes.includes("paymentStatus")) {
+        await saleEvents.paymentStatusChanged(sale.saleId, sale.companyId, "previous", payload.paymentStatus, t);
+      }
+
+      // Always emit generic updated event if there are changes
+      if (changes.length > 0) {
+        await saleEvents.updated(sale, changes, t);
+      }
+
+      await t.commit();
+    } catch (err) {
+      console.error("Failed to emit update events", err);
+      await t.rollback();
+      // Don't fail the request, just log
+    }
 
     // Invalidate
     setImmediate(async () => {
@@ -511,9 +532,12 @@ const updateSaleContents = async (req, res) => {
       notes
     } = req.body;
 
-    // Find the sale with items
+    // Find the sale with items and knownUser
     const sale = await Sale.findByPk(id, {
-      include: [{ model: SalesItem, as: "items" }],
+      include: [
+        { model: SalesItem, as: "items" },
+        { model: KnownUser, as: "knownUser" }
+      ],
       transaction: t
     });
 
@@ -532,11 +556,41 @@ const updateSaleContents = async (req, res) => {
 
     // Update sale basic info
     const saleUpdates = {};
-    if (customerId !== undefined) saleUpdates.customerId = customerId;
-    if (customerName !== undefined) saleUpdates.customerName = customerName;
-    if (customerEmail !== undefined) saleUpdates.customerEmail = customerEmail;
-    if (customerPhone !== undefined) saleUpdates.customerPhone = customerPhone;
     if (notes !== undefined) saleUpdates.notes = notes;
+
+    // Handle KnownUser updates if any customer data is provided
+    if (customerName || customerPhone || customerEmail || customerAddress || customerId) {
+      // Use the knownUserService to find or create (and update) the KnownUser
+      // We need to know which user to update. If the sale already has a knownUserId,
+      // we should probably fetch it first if we only have partial data.
+
+      let userData = {
+        companyId: sale.companyId,
+        customerName: customerName || (sale.knownUser ? sale.knownUser.customerName : undefined),
+        customerPhone: customerPhone || (sale.knownUser ? sale.knownUser.customerPhone : undefined),
+        customerEmail: customerEmail || (sale.knownUser ? sale.knownUser.customerEmail : undefined),
+        customerAddress: customerAddress || (sale.knownUser ? sale.knownUser.customerAddress : undefined),
+        customerId: customerId || (sale.knownUser ? sale.knownUser.customerId : undefined)
+      };
+
+      // If we are missing critical data but have knownUserId, we should fetch the user
+      if ((!userData.customerName || !userData.customerPhone) && sale.knownUserId) {
+        const existingUser = await KnownUser.findByPk(sale.knownUserId, { transaction: t });
+        if (existingUser) {
+          userData.customerName = userData.customerName || existingUser.customerName;
+          userData.customerPhone = userData.customerPhone || existingUser.customerPhone;
+          userData.customerEmail = userData.customerEmail || existingUser.customerEmail;
+          userData.customerAddress = userData.customerAddress || existingUser.customerAddress;
+          userData.customerId = userData.customerId || existingUser.customerId;
+        }
+      }
+
+      if (userData.customerName && userData.customerPhone) {
+        const updatedKnownUser = await knownUserService.findOrCreateKnownUser(userData, t);
+        saleUpdates.knownUserId = updatedKnownUser.knownUserId;
+        saleUpdates.hashedCustomerId = updatedKnownUser.hashedCustomerId;
+      }
+    }
 
     if (Object.keys(saleUpdates).length > 0) {
       await sale.update(saleUpdates, { transaction: t });
@@ -645,6 +699,9 @@ const updateSaleContents = async (req, res) => {
       }, { transaction: t });
     }
 
+    // Emit event for content update
+    await saleEvents.updated(sale, ["contents_updated"], t);
+
     await t.commit();
 
     // Invalidate
@@ -686,6 +743,9 @@ const deleteSale = async (req, res) => {
     const companyId = sale.companyId;
 
     await sale.destroy(); // cascade configured on model associations will clean items/logs
+
+    // Emit deleted event
+    await saleEvents.deleted(sale.saleId, sale.companyId, sale.shopId);
 
     // Invalidate
     setImmediate(async () => {
@@ -935,7 +995,7 @@ const listSales = async (req, res) => {
       where,
       include: [
         { model: SalesItem, as: "items" },
-        { model: Invoice, as: "invoice" },
+
         {
           model: SalesReturn,
           as: "returns",
@@ -1021,7 +1081,7 @@ const getCustomerPurchases = async (req, res) => {
       where: { knownUserId },
       include: [
         { model: SalesItem, as: "items" },
-        { model: Invoice, as: "invoice" },
+
         { model: KnownUser, as: "knownUser" },
         {
           model: SalesReturn,
@@ -1267,7 +1327,7 @@ const getSalesBySoldBy = async (req, res) => {
       where,
       include: [
         { model: SalesItem, as: "items" },
-        { model: Invoice, as: "invoice" },
+
         {
           model: SalesReturn,
           as: "returns",

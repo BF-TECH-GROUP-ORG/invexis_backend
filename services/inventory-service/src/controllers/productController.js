@@ -1380,7 +1380,16 @@ const updateInventory = asyncHandler(async (req, res) => {
   await delCache(`product:${id}`);
   await delCache(`product:slug:${product.slug}`);
   await scanDel('products:*');
-  await publishProductEvent('inventory.product.updated', { productId: product._id, variationId, oldQuantity, newQuantity: updatedVariation.stockQty });
+  await publishProductEvent('inventory.stock.updated', {
+    productId: product._id,
+    variationId,
+    oldQuantity,
+    newQuantity: updatedVariation.stockQty,
+    productName: product.name,
+    companyId: product.companyId,
+    shopId: product.shopId,
+    reason: reason || 'Manual update'
+  });
 
   res.status(200).json({
     success: true,

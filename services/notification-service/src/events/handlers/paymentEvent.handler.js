@@ -16,6 +16,7 @@ module.exports = async function handlePaymentEvent(event, routingKey) {
     logger.info(`💳 Processing payment event: ${type}`, data);
 
     switch (type) {
+      case "payment.succeeded": // Standardized event
       case "payment.success":
         await handlePaymentSuccess(data);
         break;
@@ -79,7 +80,7 @@ async function handlePaymentSuccess(data) {
         ...data,
       },
       companyId,
-      templateName: "payment_received",
+      templateName: "payment.success",
       channels: ["inApp", "push"],
       scope: "company",
       roles: ["company_admin", "worker"]
@@ -117,7 +118,7 @@ async function handlePaymentSuccess(data) {
  * Handle failed payment
  */
 async function handlePaymentFailed(data) {
-  const { paymentId, companyId, amount, userId, email, phone, reason } = data;
+  const { paymentId, companyId, amount, userId, email, phone, reason, customerName } = data;
 
   if (!paymentId || !companyId) {
     logger.warn("⚠️ Payment failed event missing required fields");
@@ -126,10 +127,30 @@ async function handlePaymentFailed(data) {
 
   try {
     logger.error(`❌ Payment failed: ${paymentId} - ${reason}`);
-    // Logic for failed payment notification...
+
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+    const { cleanAmount, cleanValue } = require("../../utils/dataSanitizer");
+
+    await dispatchBroadcastEvent({
+      event: "payment.failed",
+      data: {
+        paymentId,
+        amount: cleanAmount(amount, 0),
+        reason: reason || "Unknown failure",
+        customerName: cleanValue(customerName, "Customer"),
+        ...data
+      },
+      companyId,
+      templateName: "payment.failed",
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin"],
+      priority: "high"
+    });
+
+    logger.info(`✅ Payment failure notification broadcasted for payment ${paymentId}`);
   } catch (error) {
     logger.error(`❌ Error creating payment failed notification:`, error.message);
-    throw error;
   }
 }
 
@@ -137,8 +158,35 @@ async function handlePaymentFailed(data) {
  * Handle payment refund
  */
 async function handlePaymentRefunded(data) {
-  const { paymentId, companyId, amount } = data;
-  logger.info(`💸 Payment refunded: ${paymentId} (${amount})`);
+  const { paymentId, companyId, amount, refundAmount, customerName, performedByName } = data || {};
+  const { cleanAmount, cleanValue } = require("../../utils/dataSanitizer");
+
+  if (!paymentId || !companyId) return;
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+    const safeAmount = cleanAmount(refundAmount || amount, 0);
+
+    await dispatchBroadcastEvent({
+      event: "payment.refunded",
+      data: {
+        paymentId,
+        amount: safeAmount,
+        customerName: cleanValue(customerName, "Customer"),
+        performedByName: cleanValue(performedByName, "Staff"),
+        ...data
+      },
+      companyId,
+      templateName: "sale.return.created", // Map refund to return template for now
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin"]
+    });
+
+    logger.info(`✅ Payment refund notification broadcasted for payment ${paymentId}`);
+  } catch (error) {
+    logger.error(`❌ Error in handlePaymentRefunded:`, error.message);
+  }
 }
 
 /**
@@ -158,7 +206,7 @@ async function handleSubscriptionExpiring(data) {
         ...data
       },
       companyId,
-      templateName: "subscription_expiring",
+      templateName: "subscription.expiring",
       channels: ["email", "inApp", "push"],
       scope: "company",
       roles: ["company_admin"],
@@ -187,7 +235,7 @@ async function handleSubscriptionExpired(data) {
         ...data
       },
       companyId,
-      templateName: "subscription_expired",
+      templateName: "subscription.expired",
       channels: ["email", "inApp", "sms"],
       scope: "company",
       roles: ["company_admin"],

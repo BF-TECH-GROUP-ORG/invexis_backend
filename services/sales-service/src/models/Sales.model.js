@@ -37,7 +37,7 @@ const Sale = sequelize.define(
       defaultValue: "pending",
     },
     paymentMethod: {
-      type: DataTypes.ENUM("cash", "mtn", "airtel", "mpesa", "bank_transfer"),
+      type: DataTypes.ENUM("cash", "mtn", "airtel", "bank_transfer"),
     },
     paymentId: { type: DataTypes.BIGINT, defaultValue: 1 },
     // Hashed customer identifier copied from KnownUser for quick access / joins
@@ -54,6 +54,11 @@ const Sale = sequelize.define(
       allowNull: true,
       defaultValue: false,
       comment: "Indicates if this sale has any returns associated with it"
+    },
+    invoiceUrl: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "URL of the generated invoice PDF"
     },
   },
   {

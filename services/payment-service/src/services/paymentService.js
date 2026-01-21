@@ -2,6 +2,7 @@
 // Main payment service orchestrating all gateways and database operations
 
 require('dotenv').config();
+const internalServiceClient = require('./internalServiceClient');
 const paymentRepository = require('../repositories/paymentRepository');
 const transactionRepository = require('../repositories/transactionRepository');
 const invoiceService = require('./invoiceService');
@@ -9,7 +10,6 @@ const stripeGateway = require('./gateways/stripeGateway');
 const mtnMomoGateway = require('./gateways/mtnMomoGateway');
 const airtelMoneyGateway = require('./gateways/airtelMoneyGateway');
 const mpesaGateway = require('./gateways/mpesaGateway');
-const companyRepository = require('../repositories/companyRepository');
 const { publishPaymentEvent } = require('../events/producer');
 const { GATEWAY_TYPES, PAYMENT_STATUS, TRANSACTION_TYPE, TRANSACTION_STATUS, PAYMENT_TYPE } = require('../utils/constants');
 
@@ -54,12 +54,10 @@ class PaymentService {
             location
         } = data;
 
-        // 2. Validate gateway
         if (!Object.values(GATEWAY_TYPES).includes(gateway)) {
             throw new Error(`Unsupported gateway: ${gateway}`);
         }
 
-        // ⚡ EDGE CASE: Validate Amount
         if (!amount || amount <= 0) {
             throw new Error(`Invalid payment amount: ${amount}. Amount must be greater than zero.`);
         }
@@ -91,12 +89,10 @@ class PaymentService {
             const transaction = await transactionRepository.createTransaction({
                 payment_id: payment.payment_id,
                 seller_id,
-                seller_id,
                 company_id,
                 shop_id,
                 type: TRANSACTION_TYPE.CHARGE,
                 amount,
-                currency,
                 currency,
                 status: TRANSACTION_STATUS.PENDING,
                 metadata: { gateway, initial_request: true, shop_id }
@@ -109,37 +105,44 @@ class PaymentService {
                     throw new Error(`Company ID is required for payment type: ${type}`);
                 }
 
-                // Pre-initiation validation and logging for company
-                console.log(`[PaymentService] Initiating payment for company: ${company_id}`);
-                const settings = await companyRepository.getCompanySettings(company_id);
+                // ⚡ OPTIMIZATION: Skip company-service call for manual payments (Cash/Bank)
+                // as they don't require automated gateway credentials (phones/stripe ids)
+                if (gateway !== GATEWAY_TYPES.CASH && gateway !== GATEWAY_TYPES.MANUAL) {
+                    console.log(`[PaymentService] Initiating automated payment for company: ${company_id} via ${gateway}`);
+                    const settings = await internalServiceClient.getCompanySettings(company_id);
 
-                if (!settings) {
-                    console.error(`[PaymentService] FAILED: Company settings not found for ID: ${company_id}`);
-                    throw new Error(`Company not found for ID: ${company_id}`);
-                }
+                    if (!settings) {
+                        console.error(`[PaymentService] FAILED: Company settings not found for ID: ${company_id}`);
+                        throw new Error(`Company settings not available for automated payment.`);
+                    }
 
-                console.log(`[PaymentService] Found company settings for: ${settings.metadata?.company_name || company_id}`);
+                    payee = {
+                        momo_phone: settings.momo_phone,
+                        airtel_phone: settings.airtel_phone,
+                        mpesa_phone: settings.mpesa_phone,
+                        stripe_account_id: settings.stripe_account_id,
+                        name: metadata?.company_name || settings.company_name || 'Company'
+                    };
 
-                payee = {
-                    momo_phone: settings.momo_phone,
-                    airtel_phone: settings.airtel_phone,
-                    mpesa_phone: settings.mpesa_phone,
-                    stripe_account_id: settings.stripe_account_id,
-                    name: metadata?.company_name || 'Company'
-                };
-
-                // Validate that at least one payment method is available for the requested gateway
-                if (gateway === GATEWAY_TYPES.MTN_MOMO && !payee.momo_phone) {
-                    throw new Error(`Company ${payee.name} does not support MTN_MOMO payments`);
-                }
-                if (gateway === GATEWAY_TYPES.AIRTEL_MONEY && !payee.airtel_phone) {
-                    throw new Error(`Company ${payee.name} does not support AIRTEL_MONEY payments`);
-                }
-                if (gateway === GATEWAY_TYPES.MPESA && !payee.mpesa_phone) {
-                    throw new Error(`Company ${payee.name} does not support MPESA payments`);
-                }
-                if (gateway === GATEWAY_TYPES.STRIPE && !payee.stripe_account_id) {
-                    throw new Error(`Company ${payee.name} does not support STRIPE payments`);
+                    // Validate that at least one payment method is available for the requested gateway
+                    if (gateway === GATEWAY_TYPES.MTN_MOMO && !payee.momo_phone) {
+                        throw new Error(`Company ${payee.name} does not support MTN_MOMO payments`);
+                    }
+                    if (gateway === GATEWAY_TYPES.AIRTEL_MONEY && !payee.airtel_phone) {
+                        throw new Error(`Company ${payee.name} does not support AIRTEL_MONEY payments`);
+                    }
+                    if (gateway === GATEWAY_TYPES.MPESA && !payee.mpesa_phone) {
+                        throw new Error(`Company ${payee.name} does not support MPESA payments`);
+                    }
+                    if (gateway === GATEWAY_TYPES.STRIPE && !payee.stripe_account_id) {
+                        throw new Error(`Company ${payee.name} does not support STRIPE payments`);
+                    }
+                } else {
+                    // For Cash/Bank, we only need the name for logging/metadata
+                    payee = {
+                        name: metadata?.company_name || 'Company'
+                    };
+                    console.log(`[PaymentService] Initiating manual payment (${gateway}) for company: ${company_id}`);
                 }
 
             } else if ([PAYMENT_TYPE.SUBSCRIPTION, PAYMENT_TYPE.TIER].includes(type)) {
@@ -329,12 +332,10 @@ class PaymentService {
         }
     }
 
-    /**
-     * Get all company settings.
-     * @returns {Promise<Array>} List of all company settings.
-     */
     async getAllSettings() {
-        return await companyRepository.getAllSettings();
+        // This method might be obsolete now as we don't store settings locally
+        // But we keep the interface for compatibility if any other service calls it
+        return [];
     }
 
     /**
@@ -453,12 +454,21 @@ class PaymentService {
      */
     async handleSuccessfulPayment(payment) {
         try {
-            // Fetch company details for invoice header
-            const companySettings = await companyRepository.getCompanySettings(payment.company_id);
+            // Fetch company details for invoice header from company-service
+            const companySettings = await internalServiceClient.getCompanySettings(payment.company_id);
 
             // 1. UPDATE Invoice Record in DB (Status: paid)
             const invoiceRepo = require('../repositories/invoiceRepository');
-            let invoice = await invoiceRepo.getInvoiceByPaymentId(payment.id || payment.payment_id);
+            let invoice = await invoiceRepo.getInvoiceByPaymentId(payment.payment_id || payment.id);
+
+            // ⚡ CRITICAL: If not found by paymentId, try finding the "Bill" created during sale.created via saleId
+            if (!invoice) {
+                const saleId = payment.metadata?.saleId || payment.reference_id;
+                if (saleId) {
+                    console.log(`[PaymentService] Looking for existing invoice by saleId: ${saleId}`);
+                    invoice = await invoiceRepo.getInvoiceBySaleId(saleId);
+                }
+            }
 
             if (!invoice) {
                 console.warn(`[PaymentService] Warning: Invoice not found for payment ${payment.id}, creating simplified one.`);
@@ -473,8 +483,11 @@ class PaymentService {
                 }, payment.line_items || payment.metadata?.line_items || []);
             }
 
-            // Mark as PAID
-            await invoiceRepo.updateInvoiceStatus(invoice.invoice_id, { status: 'paid' });
+            // Mark as PAID and ensure payment_id is linked (important for link-back logic)
+            await invoiceRepo.updateInvoiceStatus(invoice.invoice_id, {
+                status: 'paid',
+                payment_id: payment.payment_id || payment.id
+            });
 
             // ⚡ UPDATE TRANSACTION STATUS (Audit Trail)
             const transactions = await transactionRepository.getTransactionsByPayment(payment.payment_id);
@@ -510,8 +523,13 @@ class PaymentService {
             } else {
                 // Scenario: Customer pays Company (Sale/Debt)
                 // Seller = The Company
+                const shopId = payment.shop_id || payment.metadata?.shopId;
+                const shopData = await internalServiceClient.getShopData(shopId);
+                const shopName = shopData?.name ? ` - ${shopData.name}` : '';
+
                 companyData = {
                     name: companySettings?.company_name || 'Invexis User',
+                    shopName: shopData?.name,
                     email: companySettings?.company_email,
                     phone: companySettings?.company_phone,
                     address: companySettings?.company_address,
@@ -520,9 +538,9 @@ class PaymentService {
                 // Buyer = The Customer
                 saleData = {
                     saleId: payment.metadata?.saleId || payment.reference_id,
-                    customerName: payment.metadata?.customer_name || payment.metadata?.initiatedBy?.name || 'Guest',
-                    customerPhone: payment.metadata?.customer_phone || payment.metadata?.phoneNumber,
-                    customerEmail: payment.metadata?.customer_email || payment.metadata?.email
+                    customerName: payment.customer?.name || payment.metadata?.customer_name || payment.metadata?.initiatedBy?.name || 'Guest',
+                    customerPhone: payment.customer?.phone || payment.metadata?.customer_phone || payment.metadata?.phoneNumber || payment.phoneNumber || 'N/A',
+                    customerEmail: payment.customer?.email || payment.metadata?.customer_email || payment.metadata?.email || 'N/A'
                 };
             }
 
@@ -534,6 +552,7 @@ class PaymentService {
                     issueDate: new Date().toISOString(),
                     dueDate: new Date().toISOString(),
                     status: 'paid',
+                    paymentMethod: payment.method || payment.gateway || 'cash',
                     subTotal: payment.amount,
                     totalAmount: payment.amount,
                     currency: payment.currency,
@@ -553,7 +572,20 @@ class PaymentService {
                 context: {
                     paymentId: payment.payment_id,
                     invoiceId: invoice.invoice_id
-                }
+                },
+                debtData: payment.type === 'DEBT' ? {
+                    totalDebtAmount: payment.metadata?.totalDebtAmount,
+                    balanceBeforeRepayment: payment.metadata?.balanceBeforeRepayment,
+                    amountPaidNow: payment.metadata?.amountPaidNow,
+                    remainingBalance: payment.metadata?.remainingBalance
+                } : null,
+                subscriptionData: (payment.type === 'SUBSCRIPTION' || payment.type === 'TIER') ? {
+                    planName: payment.metadata?.planName || payment.metadata?.tier_id || 'Premium Plan',
+                    billingCycle: payment.metadata?.billingCycle || 'Monthly',
+                    validUntil: payment.metadata?.validUntil || payment.metadata?.next_billing_date
+                } : null,
+                currency: payment.currency,
+                companyId: payment.company_id // ⚡ Critical for producer to extract owner
             };
 
             // 4. Publish event to trigger PDF generation
@@ -585,7 +617,8 @@ class PaymentService {
 
                 // 2. We STILL want to generate the invoice PDF showing failure (Audit requirement)
                 // Reuse logic from success but with failed status
-                const companySettings = await companyRepository.getCompanySettings(payment.company_id);
+                // Use internal service to fetch company details
+                const companySettings = await internalServiceClient.getCompanySettings(payment.company_id);
 
                 let companyData, saleData;
                 // ... (Reuse role logic - simplified for brevity, assume similar structure)
@@ -593,7 +626,14 @@ class PaymentService {
                     companyData = { name: 'Invexis Platform', email: 'billing@invexis.com' }; // minimal defaults
                     saleData = { saleId: payment.reference_id, customerName: companySettings?.company_name || 'Valued Customer' };
                 } else {
-                    companyData = { name: companySettings?.company_name || 'Invexis User' };
+                    const shopId = payment.shop_id || payment.metadata?.shopId;
+                    const shopData = await internalServiceClient.getShopData(shopId);
+                    const shopName = shopData?.name ? ` - ${shopData.name}` : '';
+
+                    companyData = {
+                        name: companySettings?.company_name || 'Invexis User',
+                        shopName: shopData?.name
+                    };
                     saleData = { saleId: payment.metadata?.saleId || payment.reference_id, customerName: payment.metadata?.customer_name || 'Guest' };
                 }
 
@@ -615,7 +655,19 @@ class PaymentService {
                     context: {
                         paymentId: payment.payment_id,
                         invoiceId: invoice.invoice_id
-                    }
+                    },
+                    debtData: payment.type === 'DEBT' ? {
+                        totalDebtAmount: payment.metadata?.totalDebtAmount,
+                        balanceBeforeRepayment: payment.metadata?.balanceBeforeRepayment,
+                        amountPaidNow: payment.metadata?.amountPaidNow,
+                        remainingBalance: payment.metadata?.remainingBalance
+                    } : null,
+                    subscriptionData: (payment.type === 'SUBSCRIPTION' || payment.type === 'TIER') ? {
+                        planName: payment.metadata?.planName || payment.metadata?.tier_id || 'Premium Plan',
+                        billingCycle: payment.metadata?.billingCycle || 'Monthly',
+                        validUntil: payment.metadata?.validUntil || payment.metadata?.next_billing_date
+                    } : null,
+                    currency: payment.currency
                 };
 
                 // Trigger PDF generation for failed invoice

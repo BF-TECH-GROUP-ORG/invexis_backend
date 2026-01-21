@@ -105,7 +105,7 @@ const dispatchBroadcastEvent = async (eventPayload) => {
         return false;
     }
 
-    let { event, data: payload, companyId, templateName, channels, scope, departmentId, roles, priority } = eventPayload;
+    let { event, data: payload, companyId, shopId, templateName, channels, scope, departmentId, roles, priority } = eventPayload;
 
     // Apply event mapping if channels are not explicitly provided
     if ((!channels || channels.length === 0) && eventChannelMapping[event]) {
@@ -156,6 +156,7 @@ const dispatchBroadcastEvent = async (eventPayload) => {
         priority: priority || 'normal',
         compiledContent,
         companyId,
+        shopId,
         departmentId,
         roles,
         scope: scope || 'company',

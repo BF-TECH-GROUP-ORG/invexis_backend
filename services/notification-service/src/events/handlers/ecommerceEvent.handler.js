@@ -72,28 +72,21 @@ async function handleOrderCreated(data) {
     try {
         logger.info(`🛒 New order created: #${orderId} (${total})`);
 
-        const { dispatchEvent } = require("../../services/dispatcher");
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-        // Determine channels
-        // Determine channels
-        const channels = ['push', 'inApp'];
-        if (customerEmail) channels.push('email');
-        if (customerPhone) channels.push('sms');
-
-        await dispatchEvent({
+        await dispatchBroadcastEvent({
             event: "order.created",
             data: {
-                email: customerEmail,
-                phone: customerPhone,
                 ...data,
             },
-            recipients: [data.userId], // Assuming userId is in payload
             companyId,
-            templateName: "order_created",
-            channels
+            templateName: "order.notification",
+            channels: ['push', 'inApp', 'email'],
+            scope: "company",
+            roles: ["company_admin", "worker"]
         });
 
-        logger.info(`✅ Order creation notification dispatched for order ${orderId}`);
+        logger.info(`✅ Order creation notification broadcasted for order ${orderId}`);
     } catch (error) {
         logger.error(`❌ Error creating order notification:`, error.message);
         throw error;
@@ -104,10 +97,28 @@ async function handleOrderCreated(data) {
  * Handle order shipped
  */
 async function handleOrderShipped(data) {
-    const { orderId, companyId, trackingNumber } = data;
+    const { orderId, companyId, trackingNumber, customerEmail } = data;
+    if (!orderId || !companyId) return;
 
     logger.info(`🚚 Order shipped: #${orderId} (Tracking: ${trackingNumber})`);
-    // Dispatch notification logic here
+
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+        await dispatchBroadcastEvent({
+            event: "order.shipped",
+            data: {
+                ...data
+            },
+            companyId,
+            templateName: "order.notification",
+            channels: ['push', 'inApp'],
+            scope: "company",
+            roles: ["company_admin", "worker"]
+        });
+    } catch (err) {
+        logger.error(`❌ Error in handleOrderShipped:`, err.message);
+    }
 }
 
 /**
@@ -115,7 +126,25 @@ async function handleOrderShipped(data) {
  */
 async function handleOrderDelivered(data) {
     const { orderId, companyId } = data;
+    if (!orderId || !companyId) return;
 
     logger.info(`📦 Order delivered: #${orderId}`);
-    // Dispatch notification logic here
+
+    try {
+        const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+        await dispatchBroadcastEvent({
+            event: "order.delivered",
+            data: {
+                ...data
+            },
+            companyId,
+            templateName: "order.notification",
+            channels: ['push', 'inApp'],
+            scope: "company",
+            roles: ["company_admin", "worker"]
+        });
+    } catch (err) {
+        logger.error(`❌ Error in handleOrderDelivered:`, err.message);
+    }
 }

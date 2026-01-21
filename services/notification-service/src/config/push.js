@@ -6,7 +6,7 @@ const logger = require("../utils/logger");
 // Use the service account JSON file
 const serviceAccountPath = path.join(
   __dirname,
-  "../../invexis-b7713-firebase-adminsdk-fbsvc-82c17263cc.json"
+  "../../invexis-94bf5-firebase-adminsdk-fbsvc-2e1e699c1a.json"
 );
 
 if (!admin.apps.length) {

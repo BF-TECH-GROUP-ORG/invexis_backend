@@ -369,11 +369,11 @@ async function handleDebtReminder(type, data) {
         const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
         // Map dynamic reminder keys to base event keys for channel mapping
-        let baseEvent = "debt.reminder.upcoming";
-        if (type.includes("overdue")) {
-            baseEvent = "debt.reminder.overdue";
-        }
+        const isOverdue = type.includes("overdue");
+        const baseEvent = isOverdue ? "debt.reminder.overdue" : "debt.reminder.upcoming";
+        const reminderTemplate = isOverdue ? "debt.reminder.overdue" : "debt.reminder.upcoming";
 
+        // 1. Admin/Staff Notification (Broadcast)
         await dispatchBroadcastEvent({
             event: baseEvent,
             data: {
@@ -381,28 +381,26 @@ async function handleDebtReminder(type, data) {
                 companyId,
                 daysUntilDue,
                 overdueDays,
-                totalAmount,
                 amount,
                 customerName: customer?.name || "Customer",
                 reminderType: type,
                 ...data
             },
             companyId,
-            templateName: "debt.created", // Should be a reminder template, reuse created for now or add specific
+            templateName: reminderTemplate,
             scope: "company",
             roles: ["company_admin", "worker"]
         });
 
-        // Customer SMS reminder (upcoming or overdue)
-        const isOverdue = baseEvent === "debt.reminder.overdue";
+        // 2. Customer SMS reminder
         await sendCustomerSms({
             event: isOverdue ? "debt.reminder.overdue.customer" : "debt.reminder.upcoming.customer",
-            templateName: "debt.created", // Should be a reminder template, reuse created for now or add specific
+            templateName: reminderTemplate,
             companyId,
             phone: customerPhone,
             payload: {
-                amount: amount,
-                invoiceId: debtId,
+                amount,
+                debtId,
                 dueDate: (dueDate && new Date(dueDate).toLocaleDateString()) || "",
                 customerName: customer?.name || "Customer",
                 overdueDays: overdueDays || 0,

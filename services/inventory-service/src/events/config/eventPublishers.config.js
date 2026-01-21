@@ -96,5 +96,35 @@ module.exports = {
     exchange: 'events_topic',
     routingKey: 'inventory.backorder.fulfilled',
     description: 'Published when backorder stock is available'
+  },
+  'inventory.bulk.stock_in': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.bulk.stock_in',
+    description: 'Published when a bulk restock is completed'
+  },
+  'inventory.bulk.stock_out': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.bulk.stock_out',
+    description: 'Published when a bulk stock removal is completed'
+  },
+  'inventory.transfer.created': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.transfer.created',
+    description: 'Published when stock is transferred between shops'
+  },
+  'inventory.transfer.cross': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.transfer.cross',
+    description: 'Published when stock is transferred across companies'
+  },
+  'inventory.transfer.bulk.intra': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.transfer.bulk.intra',
+    description: 'Published when a bulk intra-company transfer is completed'
+  },
+  'inventory.transfer.bulk.cross': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.transfer.bulk.cross',
+    description: 'Published when a bulk cross-company transfer is completed'
   }
 };

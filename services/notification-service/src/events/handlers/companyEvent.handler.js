@@ -172,7 +172,7 @@ async function handleCompanyOnboardingReady(data) {
       },
       recipients: [adminId],
       companyId,
-      templateName: "stripe_onboarding",
+      templateName: "stripe.onboarding",
       channels: ["email", "inApp"]
     });
 

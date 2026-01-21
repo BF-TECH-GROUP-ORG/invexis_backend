@@ -195,9 +195,6 @@ const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscriptio
 app.use("/sales", authenticateToken, checkSubscriptionStatus(), salesRouter);
 
 
-// Serve PDF files statically
-app.use("/invoices/pdf", express.static("storage/invoices"));
-
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -219,38 +216,20 @@ app.use((err, req, res, next) => {
   });
 });
 
+
 // Initialize database
 const initializeDatabase = async () => {
   try {
     await sequelize.authenticate();
     console.log("✅ Database connection established");
 
-    // Only create tables if they don't exist, don't alter them
-    await sequelize.sync({ force: false, alter: false });
+    // Load models to ensure they are registered with Sequelize
+    require("./models/index.model");
 
-    // Manually add the unique constraint if it doesn't exist
-    try {
-      const [results] = await sequelize.query(`
-        SELECT COUNT(*) as index_count 
-        FROM information_schema.STATISTICS 
-        WHERE table_schema = DATABASE() 
-        AND table_name = 'invoices' 
-        AND index_name = 'invoices_invoiceNumber'
-      `);
-
-      if (results[0].index_count === 0) {
-        console.log("Adding unique index on invoiceNumber...");
-        await sequelize.query(`
-          CREATE UNIQUE INDEX invoices_invoiceNumber 
-          ON invoices(invoiceNumber)
-        `);
-      }
-    } catch (indexError) {
-      console.warn("⚠️ Could not ensure invoiceNumber index:", indexError.message);
-      // Continue running even if index creation fails
-    }
-
-    console.log("✅ Database models synchronized");
+    // Note: Auto-sync disabled due to MySQL 64 key limit on known_users table
+    // Use manual migrations for schema changes instead
+    // await sequelize.sync({ alter: true });
+    console.log("🏁 Database ready (Manual migrations required for schema changes)");
   } catch (error) {
     console.error("❌ Failed to connect to database:", error);
     process.exit(1);

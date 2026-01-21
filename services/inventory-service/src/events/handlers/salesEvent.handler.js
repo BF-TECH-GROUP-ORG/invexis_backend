@@ -789,7 +789,7 @@ module.exports = async function handleSalesEvent(event, routingKey) {
     // Generate event ID for deduplication
     const traceId = eventData.traceId || eventData.trace_id;
     const fallbackId = eventData.saleId || eventData.orderId || eventData.returnId || eventData.id || '';
-    const eventId = traceId || `${type}:${fallbackId}:${Date.now()}`;
+    const eventId = traceId || `${type}:${fallbackId}`;
 
     logger.info(`💰 Processing sales event: ${type}`, { eventId, saleId: eventData.saleId });
 

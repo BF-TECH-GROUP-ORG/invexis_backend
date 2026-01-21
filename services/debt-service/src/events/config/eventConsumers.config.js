@@ -22,11 +22,14 @@ module.exports = [
         queue: "debt_payment_events",
         exchange: "events_topic",
         pattern: "payment.#",
+        additionalPatterns: ["document.#"],
         handler: require("../handlers/paymentEvent.handler"),
         events: [
             "payment.processed",
+            "payment.succeeded",
             "payment.failed",
-            "payment.refunded"
+            "payment.refunded",
+            "document.invoice.created"
         ]
     }
 ];

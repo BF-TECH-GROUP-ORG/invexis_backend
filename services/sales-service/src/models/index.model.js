@@ -1,9 +1,9 @@
 const Sale = require("./Sales.model");
 const SalesItem = require("./SalesItem.model");
 const SalesReturn = require("./Salesreturn.model");
-const Invoice = require("./Invoice.model");
 const SalesReturnItem = require("./salesReturnItem.model");
 const KnownUser = require("./KnownUser.model");
+const ProcessedEvent = require("./ProcessedEvent.model");
 
 // Associations
 
@@ -35,17 +35,7 @@ Sale.hasMany(SalesReturn, {
 });
 SalesReturn.belongsTo(Sale, { foreignKey: "saleId", as: "sale" });
 
-// Sale-Invoice associations
-Sale.hasOne(Invoice, {
-  foreignKey: "saleId",
-  as: "invoice",
-  onDelete: "CASCADE",
-});
 
-Invoice.belongsTo(Sale, {
-  foreignKey: "saleId",
-  as: "sale",
-});
 
 // SalesReturn-SalesReturnItem associations
 SalesReturn.hasMany(SalesReturnItem, {
@@ -59,4 +49,4 @@ SalesReturnItem.belongsTo(SalesReturn, {
   as: "return",
 });
 
-module.exports = { Sale, SalesItem, SalesReturn, Invoice, SalesReturnItem, KnownUser };
+module.exports = { Sale, SalesItem, SalesReturn, SalesReturnItem, KnownUser, ProcessedEvent };

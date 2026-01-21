@@ -1,0 +1,13 @@
+{
+    "title": "Debt Overdue Reminder",
+    "body": "Friendly reminder: Debt #{{debtId}} for {{amount}} RWF was due on {{dueDate}}. Please settle it soon.",
+    "data": {
+        "type": "debt_overdue",
+        "debtId": "{{debtId}}",
+        "amount": "{{amount}}",
+        "priority": "high",
+        "action": "view_debt"
+    },
+    "sound": "default",
+    "priority": "high"
+}

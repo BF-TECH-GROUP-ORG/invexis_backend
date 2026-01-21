@@ -213,12 +213,22 @@ async function handlePaymentRefunded(data) {
  * Main handler function - routes to specific handlers
  */
 async function handlePaymentEvent(event, routingKey) {
-    const { type, data } = event;
+    // Standardize event structure: Support both wrapped {type, data} and direct formats
+    let type = event.type || event.event || routingKey;
+    let data = event.data;
 
-    // Support both routingKey and event.type
-    const eventType = type || routingKey;
+    // If it's a direct format (no data wrapper), use the event itself as data
+    if (!data && type) {
+        data = event;
+    }
 
-    switch (eventType) {
+    // Still no data? Skip.
+    if (!data) {
+        console.log(`⚠️ Received invalid event, skipping`, event);
+        return { success: false };
+    }
+
+    switch (type) {
         case 'payment.processed':
         case 'payment.succeeded':
             return await handlePaymentProcessed(data);
@@ -226,9 +236,41 @@ async function handlePaymentEvent(event, routingKey) {
             return await handlePaymentFailed(data);
         case 'payment.refunded':
             return await handlePaymentRefunded(data);
+        case 'document.invoice.created':
+            return await handleInvoiceCreated(data);
         default:
-            console.warn(`⚠️ Unknown payment event: ${eventType}`);
+            console.warn(`⚠️ Unknown payment event: ${type}`);
             return { success: false };
+    }
+}
+
+/**
+ * Handle document.invoice.created - Link invoice URL to Debt and Repayment
+ */
+async function handleInvoiceCreated(data) {
+    const { url, context } = data;
+    const { debtId, repaymentId } = context || {};
+
+    if (!url || (!debtId && !repaymentId)) {
+        console.warn('⚠️ Received document.invoice.created with insufficient data:', data);
+        return;
+    }
+
+    try {
+        // 1. Update Debt if debtId is present
+        if (debtId) {
+            await Debt.findByIdAndUpdate(debtId, { invoiceUrl: url });
+            console.log(`📄 Linked invoice PDF to Debt ${debtId}`);
+        }
+
+        // 2. Update Repayment if repaymentId is present (for debt repayments)
+        if (repaymentId) {
+            const Repayment = require('../../models/repayment.model');
+            await Repayment.findByIdAndUpdate(repaymentId, { invoiceUrl: url });
+            console.log(`📄 Linked invoice PDF to Repayment ${repaymentId}`);
+        }
+    } catch (error) {
+        console.error('❌ Error linking invoice URL in debt-service:', error.message);
     }
 }
 

@@ -122,7 +122,8 @@ async function refreshTokens(refreshToken) {
         role: user.role,
         email: user.email,
         companies: user.companies,
-        shops: user.shops
+        shops: user.shops,
+        assignedDepartments: user.assignedDepartments || []
     });
     const newRefreshToken = signRefresh({
         sid: session._id.toString(),

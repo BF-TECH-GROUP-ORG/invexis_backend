@@ -127,6 +127,28 @@ const publishUserEvent = {
         } catch (error) {
             console.error('❌ Failed to publish user.suspendedAll event:', error.message);
         }
+    },
+
+    /**
+     * User device updated event (for FCM push notifications)
+     */
+    async deviceUpdated(userId, deviceData) {
+        try {
+            const eventData = {
+                type: 'auth.device.updated',
+                data: {
+                    userId: userId.toString(),
+                    ...deviceData,
+                    updatedAt: new Date().toISOString()
+                }
+            };
+
+            console.log(`🚀 [DEBUG-AUTH] Publishing auth.device.updated for user ${userId}`);
+            await publish(exchanges.topic, 'auth.device.updated', eventData);
+            console.log(`✅ [DEBUG-AUTH] Successfully published auth.device.updated for user ${userId}`);
+        } catch (error) {
+            console.error('❌ Failed to publish auth.device.updated event:', error.message);
+        }
     }
 };
 

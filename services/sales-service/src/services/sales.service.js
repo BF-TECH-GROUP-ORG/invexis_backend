@@ -3,7 +3,6 @@
 const sequelize = require("../config/db");
 const Sale = require("../models/Sales.model");
 const SalesItem = require("../models/SalesItem.model");
-const Invoice = require("../models/Invoice.model");
 const { OutboxService } = require("../models/Outbox.model");
 const { v4: uuidv4 } = require("uuid");
 
@@ -272,62 +271,7 @@ class SalesService {
     }
   }
 
-  /**
-   * Generate invoice for a sale (atomic + outbox-safe)
-   * @param {number} saleId - Sale ID
-   * @param {object} invoiceData - Invoice data
-   */
-  static async generateInvoice(saleId, invoiceData = {}) {
-    const transaction = await sequelize.transaction();
 
-    try {
-      // 1. Find the sale
-      const sale = await Sale.findByPk(saleId, { transaction });
-      if (!sale) {
-        throw new Error("Sale not found");
-      }
-
-      // 2. Create invoice
-      const invoice = await Invoice.create(
-        {
-          saleId: sale.saleId,
-          invoiceNumber: invoiceData.invoiceNumber || `INV-${Date.now()}`,
-          totalAmount: sale.totalAmount,
-          status: "pending",
-          ...invoiceData,
-        },
-        { transaction }
-      );
-
-      // 3. Record outbox event
-      await OutboxService.create(
-        {
-          type: "invoice.created",
-          exchange: "events_topic",
-          routingKey: "invoice.created",
-          payload: {
-            invoiceId: invoice.invoiceId,
-            saleId: sale.saleId,
-            invoiceNumber: invoice.invoiceNumber,
-            totalAmount: invoice.totalAmount,
-            createdAt: new Date().toISOString(),
-            traceId: uuidv4(),
-          },
-        },
-        transaction
-      );
-
-      // 4. Commit transaction
-      await transaction.commit();
-
-      console.log(`✅ Invoice ${invoice.invoiceNumber} generated successfully`);
-      return invoice;
-    } catch (error) {
-      await transaction.rollback();
-      console.error("❌ Error generating invoice:", error.message);
-      throw error;
-    }
-  }
 }
 
 module.exports = SalesService

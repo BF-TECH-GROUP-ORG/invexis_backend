@@ -15,7 +15,6 @@ class InvoiceService {
             const invoiceData = {
                 payment_id: paymentData.payment_id,
                 seller_id: paymentData.seller_id,
-                seller_id: paymentData.seller_id,
                 company_id: paymentData.company_id,
                 shop_id: paymentData.shop_id,
                 amount_due: paymentData.amount,
@@ -24,6 +23,7 @@ class InvoiceService {
                 customer: paymentData.customer || {},
                 line_items: paymentData.lineItems || [],
                 metadata: {
+                    ...(paymentData.metadata || {}),
                     payment_method: paymentData.method,
                     gateway: paymentData.gateway,
                     description: paymentData.description,

@@ -7,7 +7,8 @@ const { SecurityManager } = require("/app/shared/security");
 const { ErrorHandler } = require("/app/shared/errorHandler");
 
 const app = express();
-app.set('trust proxy', true);
+// Trust proxy (required for rate limiting behind Traefik/Docker)
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8008;
 const SERVICE_NAME = 'notification-service';
 

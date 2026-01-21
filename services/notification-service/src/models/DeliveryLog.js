@@ -17,7 +17,7 @@ const deliveryLogSchema = new mongoose.Schema(
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      required: false,
       index: true,
     },
     companyId: {
@@ -45,7 +45,6 @@ const deliveryLogSchema = new mongoose.Schema(
     },
     providerId: {
       type: String, // External provider's message ID
-      index: true,
     },
     recipient: {
       type: String, // Email address, phone number, FCM token, or userId

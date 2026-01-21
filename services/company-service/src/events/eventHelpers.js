@@ -29,10 +29,6 @@ const companyEvents = {
           domain: company.domain,
           country: company.country,
           tier: company.tier,
-          paymentProfile: company.payment_profile,
-          payment_phones: company.payment_phones, // Important for payment-service sync
-          subscription: company.subscription,
-          fees: company.fees,
           compliance: company.compliance,
           createdAt: new Date().toISOString(),
           traceId: uuidv4(),
@@ -58,10 +54,6 @@ const companyEvents = {
           domain: company.domain,
           country: company.country,
           tier: company.tier,
-          paymentProfile: company.payment_profile,
-          payment_phones: company.payment_phones, // Sync payment phones
-          subscription: company.subscription,
-          fees: company.fees,
           compliance: company.compliance,
           updatedAt: new Date().toISOString(),
           traceId: uuidv4(),
@@ -122,8 +114,6 @@ const companyEvents = {
         payload: {
           companyId: company.id,
           name: company.name,
-          paymentProfile: company.payment_profile,
-          payment_phones: company.payment_phones,
           timestamp: new Date().toISOString(),
           traceId: uuidv4(),
         },

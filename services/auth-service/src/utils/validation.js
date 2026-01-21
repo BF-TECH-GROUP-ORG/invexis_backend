@@ -120,7 +120,10 @@ const registerSchema = baseUserSchema.keys({
 const loginSchema = Joi.object({
     identifier: Joi.string().trim().required().label('Email, Phone, or Username'),
     password: Joi.string().min(6).required(),
-    otp: Joi.string().trim().length(6).optional() // For 2FA
+    otp: Joi.string().trim().length(6).optional(), // For 2FA
+    fcmToken: Joi.string().optional(),
+    deviceType: Joi.string().valid('android', 'ios', 'web').optional(),
+    deviceName: Joi.string().optional()
 });
 
 // Update profile (partial, strings)

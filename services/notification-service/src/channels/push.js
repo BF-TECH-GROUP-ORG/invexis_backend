@@ -8,6 +8,35 @@ const { createPushCircuitBreaker } = require("../utils/circuitBreaker");
 /**
  * Core push notification sending function (wrapped by circuit breaker)
  */
+/**
+ * Sanitize payload for FCM (must be flat object with string values)
+ */
+const sanitizePayload = (payload) => {
+  if (!payload) return {};
+
+  const clean = {};
+
+  const processValue = (key, value) => {
+    if (value === null || value === undefined) return;
+
+    if (typeof value === 'object' && !(value instanceof Date)) {
+      // Flatten nested objects
+      Object.entries(value).forEach(([subKey, subValue]) => {
+        processValue(`${key}_${subKey}`, subValue);
+      });
+    } else {
+      // Convert to string
+      clean[key] = String(value);
+    }
+  };
+
+  Object.entries(payload).forEach(([key, value]) => {
+    processValue(key, value);
+  });
+
+  return clean;
+};
+
 const sendPushCore = async (notification, fcmToken, userId, companyId) => {
   const startTime = Date.now();
 
@@ -19,16 +48,19 @@ const sendPushCore = async (notification, fcmToken, userId, companyId) => {
 
     if (pushContent) {
       // Use compiled push template content
+      // Sanitize and flatten data payload
+      const sanitizedData = sanitizePayload({
+        notificationId: notification._id.toString(),
+        ...(pushContent.data || {}),
+        ...notification.payload
+      });
+
       messagePayload = {
         notification: {
           title: pushContent.title,
           body: pushContent.body,
         },
-        data: {
-          notificationId: notification._id.toString(),
-          ...(pushContent.data || {}),
-          ...notification.payload, // Merge with original payload
-        },
+        data: sanitizedData,
         token: fcmToken,
       };
 
@@ -66,15 +98,17 @@ const sendPushCore = async (notification, fcmToken, userId, companyId) => {
       }
     } else {
       // Fallback to legacy fields
+      const sanitizedData = sanitizePayload({
+        notificationId: notification._id.toString(),
+        ...notification.payload,
+      });
+
       messagePayload = {
         notification: {
           title: notification.title,
           body: notification.body,
         },
-        data: {
-          notificationId: notification._id.toString(),
-          ...notification.payload,
-        },
+        data: sanitizedData,
         token: fcmToken,
       };
       logger.warn(`No push template found for notification ${notification._id}, using legacy fields`);
@@ -99,8 +133,29 @@ const sendPushCore = async (notification, fcmToken, userId, companyId) => {
     };
   } catch (error) {
     const responseTime = Date.now() - startTime;
-    logger.error("❌ Push send error:", error);
 
+    // Check for known "user" errors that shouldn't trip the circuit breaker
+    const errorCode = error.code || error.errorInfo?.code;
+    const ignoreBreakerErrors = [
+      'messaging/invalid-registration-token',
+      'messaging/registration-token-not-registered',
+      'messaging/invalid-argument'
+    ];
+
+    if (errorCode && ignoreBreakerErrors.includes(errorCode)) {
+      logger.warn(`⚠️ Push failed due to invalid token (Breaker safe): ${fcmToken.substring(0, 10)}... - ${errorCode}`);
+      return {
+        success: false,
+        providerId: null,
+        responseTime,
+        recipient: fcmToken,
+        error: errorCode,
+        isUserError: true // Flag to indicate this isn't a system failure
+      };
+    }
+
+    // Real system errors
+    logger.error("❌ Push send error:", error);
     throw {
       success: false,
       error,

@@ -17,6 +17,7 @@ const notificationEventSchema = Joi.object({
         })
     ).optional(),
     scope: Joi.string().optional(),
+    shopId: Joi.string().optional(),
     departmentId: Joi.string().optional(),
     roles: Joi.array().items(Joi.string()).optional(),
     priority: Joi.string().optional()

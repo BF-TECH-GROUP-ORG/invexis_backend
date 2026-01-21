@@ -41,31 +41,45 @@ exports.getNotifications = async (req, res) => {
 
         // Build query to include personal, company-wide, and department-wide notifications
         const currentRole = role || req.user.role;
+        const userAssignedDepts = req.user.assignedDepartments || [];
+        const isManagementOrAdmin = currentRole === 'company_admin' || userAssignedDepts.includes('management');
+        const userCompanyId = companyId || req.user.companyId || (req.user.companies && req.user.companies[0]);
+
         const query = {
+            companyId: userCompanyId,
             $or: [
-                { userId: userId }, // Directly targeted
+                { userId: userId }, // Directly targeted (personal)
                 {
-                    companyId: companyId || req.user.companyId,
                     scope: 'company',
                     roles: { $in: [currentRole] }
                 },
                 {
-                    companyId: companyId || req.user.companyId,
                     scope: 'department',
-                    roles: { $in: [currentRole] },
-                    // Admins see all departments, workers only see their own
-                    ...(currentRole !== 'company_admin' ? { departmentId: req.user.departmentId } : {})
+                    // Oversight: Admins and Management workers see all departments.
+                    // Others only see departments they are assigned to.
+                    ...(isManagementOrAdmin ? {} : { departmentId: { $in: userAssignedDepts } })
+                },
+                {
+                    scope: 'admin',
+                    roles: { $in: [currentRole] }
                 }
             ]
         };
+
+        // Hierarchy Enforcement for Workers:
+        // Only management department workers (or admins) see "company" scope by default for sensitive events.
+        // However, we'll keep it broad for now unless it's specifically for 'management' dept.
 
         if (unreadOnly === 'true') {
             query.readBy = { $ne: userId };
         }
 
-        // Apply filters to the $or branches if they were specified globally
-        if (shopId) {
-            query.$or.forEach(branch => branch.shopId = shopId);
+        // Apply shop filtering:
+        // If shopId is explicitly provided (and not "all"), filter all results to that shop.
+        // If shopId is "all", it means the user wants company-wide history.
+        if (shopId && shopId !== 'all') {
+            // Apply shopId to all branches of the $or query
+            query.$or = query.$or.map(branch => ({ ...branch, shopId }));
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);

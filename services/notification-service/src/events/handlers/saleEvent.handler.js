@@ -137,23 +137,101 @@ async function handleSaleReturnCreated(data) {
  * Handle sale completion
  */
 async function handleSaleCompleted(data) {
-  const { saleId, companyId, amount } = data;
-  logger.info(`✅ Sale completed: #${saleId} (${amount})`);
+  const { saleId, companyId, totalAmount, amount, performedByName } = data || {};
+  const { cleanAmount, cleanValue } = require("../../utils/dataSanitizer");
+
+  if (!saleId || !companyId) return;
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+    const safeAmount = cleanAmount(totalAmount || amount, 0);
+
+    await dispatchBroadcastEvent({
+      event: "sale.completed",
+      data: {
+        saleId,
+        totalAmount: safeAmount,
+        performedByName: cleanValue(performedByName, "Staff"),
+        ...data
+      },
+      companyId,
+      templateName: "sale.created", // Reuse creation template or use dot-notation
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin", "worker"]
+    });
+
+    logger.info(`✅ Sale completion notification broadcasted: #${saleId}`);
+  } catch (error) {
+    logger.error(`❌ Error in handleSaleCompleted:`, error.message);
+  }
 }
 
 /**
  * Handle sale cancellation
  */
 async function handleSaleCancelled(data) {
-  const { saleId, companyId, reason } = data;
-  logger.info(`❌ Sale cancelled: #${saleId} - ${reason}`);
+  const { saleId, companyId, reason, totalAmount, amount, performedByName } = data || {};
+  const { cleanAmount, cleanValue } = require("../../utils/dataSanitizer");
+
+  if (!saleId || !companyId) return;
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "sale.cancelled",
+      data: {
+        saleId,
+        totalAmount: cleanAmount(totalAmount || amount, 0),
+        reason: reason || "No reason provided",
+        performedByName: cleanValue(performedByName, "Staff"),
+        ...data
+      },
+      companyId,
+      templateName: "sale.cancelled",
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin", "worker"]
+    });
+
+    logger.info(`✅ Sale cancellation notification broadcasted: #${saleId}`);
+  } catch (error) {
+    logger.error(`❌ Error in handleSaleCancelled:`, error.message);
+  }
 }
 
 /**
  * Handle sale refund
  */
 async function handleSaleRefunded(data) {
-  const { saleId, companyId, amount } = data;
-  logger.info(`💸 Sale refunded: #${saleId} (${amount})`);
+  const { saleId, companyId, amount, refundAmount, performedByName } = data || {};
+  const { cleanAmount, cleanValue } = require("../../utils/dataSanitizer");
+
+  if (!saleId || !companyId) return;
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+    const safeAmount = cleanAmount(refundAmount || amount, 0);
+
+    await dispatchBroadcastEvent({
+      event: "sale.return.created", // Map refund to return template
+      data: {
+        saleId,
+        refundAmount: safeAmount,
+        performedByName: cleanValue(performedByName, "Staff"),
+        ...data
+      },
+      companyId,
+      templateName: "sale.return.created",
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin", "worker"]
+    });
+
+    logger.info(`✅ Sale refund notification broadcasted: #${saleId}`);
+  } catch (error) {
+    logger.error(`❌ Error in handleSaleRefunded:`, error.message);
+  }
 }
 

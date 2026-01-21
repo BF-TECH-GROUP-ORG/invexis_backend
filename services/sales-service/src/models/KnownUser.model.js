@@ -10,9 +10,12 @@ const KnownUser = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
-    companyId: {
-      type: DataTypes.UUID,
+    // Removed companyId - now system-wide
+    associatedCompanyIds: {
+      type: DataTypes.JSON,
+      defaultValue: [],
       allowNull: false,
+      comment: "Array of company UUIDs this user has interacted with",
     },
     customerId: {
       type: DataTypes.BIGINT,
@@ -27,12 +30,14 @@ const KnownUser = sequelize.define(
     customerPhone: {
       type: DataTypes.STRING(20),
       allowNull: false,
-      comment: "Customer phone - mandatory",
+      unique: true, // System-wide unique phone
+      comment: "Customer phone - unique system-wide",
     },
     customerEmail: {
       type: DataTypes.STRING(255),
       allowNull: true,
-      comment: "Customer email - optional",
+      unique: true, // System-wide unique email (if provided)
+      comment: "Customer email - optional but unique system-wide",
     },
     customerAddress: {
       type: DataTypes.TEXT,
@@ -58,25 +63,16 @@ const KnownUser = sequelize.define(
     timestamps: true,
     indexes: [
       {
-        fields: ["companyId"],
-        name: "idx_known_users_company_id",
-      },
-      {
         fields: ["customerId"],
         name: "idx_known_users_customer_id",
       },
       {
-        fields: ["companyId", "customerPhone"],
-        name: "idx_known_users_company_phone",
-        unique: true,
-        comment: "Unique phone per company to avoid duplicity",
+        fields: ["customerPhone"],
+        name: "idx_known_users_phone",
       },
       {
-        fields: ["companyId", "customerEmail"],
-        name: "idx_known_users_company_email",
-        // Note: Not unique because email is optional (can be NULL)
-        // Multiple NULL emails are allowed per company
-        comment: "Index for email lookups per company",
+        fields: ["customerEmail"],
+        name: "idx_known_users_email",
       },
     ],
   }

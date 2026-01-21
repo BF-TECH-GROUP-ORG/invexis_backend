@@ -209,7 +209,8 @@ const googleCallback = async (req, res, next) => {
             role: req.user.role,
             email: req.user.email,
             companies: req.user.companies,
-            shops: req.user.shops
+            shops: req.user.shops,
+            assignedDepartments: req.user.assignedDepartments || []
         });
 
         // Update user session
@@ -730,20 +731,27 @@ const updateFcmToken = async (req, res, next) => {
             return res.status(401).json({ ok: false, message: 'Authentication required' });
         }
 
-        const { fcmToken } = req.body;
+        const { fcmToken, deviceType, deviceName } = req.body;
 
         if (!fcmToken) {
             return res.status(400).json({ ok: false, message: 'FCM token is required' });
         }
 
         const User = require('../models/User.models');
-        const user = await User.findByIdAndUpdate(
-            req.user._id,
-            { fcmToken },
-            { new: true, select: 'fcmToken' }
+        await User.updateOne(
+            { _id: req.user._id },
+            { $set: { fcmToken } }
         );
 
-        res.json({ ok: true, message: 'FCM token updated successfully', fcmToken: user.fcmToken });
+        // Emit event for notification-service
+        const { publishUserEvent } = require('../events/producer');
+        await publishUserEvent.deviceUpdated(req.user._id, {
+            fcmToken,
+            deviceType: deviceType || 'web',
+            deviceName: deviceName || req.get('User-Agent') || 'Unknown'
+        });
+
+        res.json({ ok: true, message: 'Device token registered successfully', fcmToken });
     } catch (err) {
         next(err);
     }

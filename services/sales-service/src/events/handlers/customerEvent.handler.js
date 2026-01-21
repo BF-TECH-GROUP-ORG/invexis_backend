@@ -68,60 +68,79 @@ async function handleCustomerCreated(data) {
 }
 
 /**
- * Handle customer update - update sales records
+ * Handle customer update - update KnownUser records
  */
 async function handleCustomerUpdated(data) {
-  const { customerId, customerName, customerPhone } = data;
+  const { customerId, customerName, customerPhone, customerEmail } = data;
 
-  if (!customerId) {
-    console.warn("⚠️ Customer updated event missing customerId");
+  if (!customerId && !customerPhone) {
+    console.warn("⚠️ Customer updated event missing identifying info (customerId or phone)");
     return;
   }
 
   try {
-    // Update customer info in sales records
-    const [updated] = await Sale.update(
+    const { KnownUser } = require("../../models/index.model");
+    const redisHelper = require("../../utils/redisHelper");
+    const { Op } = require("sequelize");
+
+    // Update KnownUser globally
+    const [updated] = await KnownUser.update(
       {
         customerName,
         customerPhone,
+        customerEmail,
       },
-      { where: { customerId } }
+      {
+        where: {
+          [Op.or]: [
+            customerId ? { customerId } : null,
+            customerPhone ? { customerPhone } : null
+          ].filter(Boolean)
+        }
+      }
     );
 
     if (updated) {
-      console.log(
-        `✅ Updated customer ${customerId} info in ${updated} sales records`
-      );
+      console.log(`✅ Updated KnownUser(s) for customer ${customerId || customerPhone}`);
+      await redisHelper.scanDel("known_users:*");
     }
   } catch (error) {
-    console.error(`❌ Error updating customer ${customerId}:`, error.message);
+    console.error(`❌ Error updating KnownUser:`, error.message);
     throw error;
   }
 }
 
 /**
- * Handle customer deletion - preserve historical data
+ * Handle customer deletion - deactive KnownUser record
  */
 async function handleCustomerDeleted(data) {
-  const { customerId } = data;
+  const { customerId, customerPhone } = data;
 
-  if (!customerId) {
-    console.warn("⚠️ Customer deleted event missing customerId");
+  if (!customerId && !customerPhone) {
+    console.warn("⚠️ Customer deleted event missing identifying info");
     return;
   }
 
   try {
-    console.log(`👤 Customer ${customerId} has been deleted`);
+    const { KnownUser } = require("../../models/index.model");
+    const redisHelper = require("../../utils/redisHelper");
+    const { Op } = require("sequelize");
 
-    // Find all sales for this customer
-    const customerSales = await Sale.findAll({
-      where: { customerId },
-      attributes: ["saleId", "status"],
-    });
+    console.log(`👤 Customer ${customerId || customerPhone} deleted - deactivating KnownUser`);
 
-    console.log(
-      `📝 Historical sales for customer ${customerId} retained (${customerSales.length} sales)`
+    await KnownUser.update(
+      { isActive: false },
+      {
+        where: {
+          [Op.or]: [
+            customerId ? { customerId } : null,
+            customerPhone ? { customerPhone } : null
+          ].filter(Boolean)
+        }
+      }
     );
+
+    await redisHelper.scanDel("known_users:*");
   } catch (error) {
     console.error(`❌ Error handling customer deletion:`, error.message);
     throw error;
@@ -132,37 +151,29 @@ async function handleCustomerDeleted(data) {
  * Handle customer status change
  */
 async function handleCustomerStatusChanged(data) {
-  const { customerId, oldStatus, newStatus } = data;
-
-  if (!customerId) {
-    console.warn("⚠️ Customer status changed event missing customerId");
-    return;
-  }
+  const { customerId, customerPhone, newStatus } = data;
 
   try {
-    console.log(
-      `👤 Customer ${customerId} status: ${oldStatus} → ${newStatus}`
-    );
+    const { KnownUser } = require("../../models/index.model");
+    const redisHelper = require("../../utils/redisHelper");
+    const { Op } = require("sequelize");
 
-    if (newStatus === "blocked" || newStatus === "suspended") {
-      console.warn(`⚠️ Customer ${customerId} is now ${newStatus}`);
+    console.log(`👤 Customer status changed to ${newStatus}`);
 
-      // Find pending sales for this customer
-      const pendingSales = await Sale.findAll({
-        where: { customerId, status: "initiated" },
-        attributes: ["saleId"],
-      });
-
-      if (pendingSales.length > 0) {
-        console.warn(
-          `⚠️ ${pendingSales.length} pending sales for ${newStatus} customer`
-        );
-      }
-    } else if (newStatus === "active") {
-      console.log(`✅ Customer ${customerId} is now ACTIVE`);
+    if (newStatus === "blocked" || newStatus === "suspended" || newStatus === "inactive") {
+      await KnownUser.update(
+        { isActive: false },
+        {
+          where: {
+            [Op.or]: [
+              customerId ? { customerId } : null,
+              customerPhone ? { customerPhone } : null
+            ].filter(Boolean)
+          }
+        }
+      );
+      await redisHelper.scanDel("known_users:*");
     }
-
-    console.log(`✅ Customer status change recorded`);
   } catch (error) {
     console.error(`❌ Error handling customer status change:`, error.message);
     throw error;
@@ -173,27 +184,29 @@ async function handleCustomerStatusChanged(data) {
  * Handle customer address update
  */
 async function handleCustomerAddressUpdated(data) {
-  const { customerId, newAddress } = data;
-
-  if (!customerId) {
-    console.warn("⚠️ Customer address updated event missing customerId");
-    return;
-  }
+  const { customerId, customerPhone, newAddress } = data;
 
   try {
-    console.log(`📍 Customer ${customerId} address updated`);
+    const { KnownUser } = require("../../models/index.model");
+    const redisHelper = require("../../utils/redisHelper");
+    const { Op } = require("sequelize");
 
-    // Update address in sales records if needed
     if (newAddress) {
-      const [updated] = await Sale.update(
+      const [updated] = await KnownUser.update(
         { customerAddress: newAddress },
-        { where: { customerId } }
+        {
+          where: {
+            [Op.or]: [
+              customerId ? { customerId } : null,
+              customerPhone ? { customerPhone } : null
+            ].filter(Boolean)
+          }
+        }
       );
 
       if (updated) {
-        console.log(
-          `✅ Updated address for customer ${customerId} in ${updated} sales records`
-        );
+        console.log(`✅ Updated address for customer ${customerId || customerPhone}`);
+        await redisHelper.scanDel("known_users:*");
       }
     }
   } catch (error) {
@@ -206,26 +219,28 @@ async function handleCustomerAddressUpdated(data) {
  * Handle customer contact update
  */
 async function handleCustomerContactUpdated(data) {
-  const { customerId, customerPhone } = data;
-
-  if (!customerId) {
-    console.warn("⚠️ Customer contact updated event missing customerId");
-    return;
-  }
+  const { customerId, customerPhone, newPhone } = data;
 
   try {
-    console.log(`📞 Customer ${customerId} contact updated`);
+    const { KnownUser } = require("../../models/index.model");
+    const redisHelper = require("../../utils/redisHelper");
+    const { Op } = require("sequelize");
 
-    // Update contact info in sales records
-    const [updated] = await Sale.update(
-      { customerPhone },
-      { where: { customerId } }
+    const [updated] = await KnownUser.update(
+      { customerPhone: newPhone || customerPhone },
+      {
+        where: {
+          [Op.or]: [
+            customerId ? { customerId } : null,
+            customerPhone ? { customerPhone } : null
+          ].filter(Boolean)
+        }
+      }
     );
 
     if (updated) {
-      console.log(
-        `✅ Updated contact for customer ${customerId} in ${updated} sales records`
-      );
+      console.log(`✅ Updated contact for customer ${customerId || customerPhone}`);
+      await redisHelper.scanDel("known_users:*");
     }
   } catch (error) {
     console.error(`❌ Error handling customer contact update:`, error.message);

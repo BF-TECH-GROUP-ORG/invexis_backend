@@ -68,6 +68,44 @@ const publishPaymentEvent = {
     },
 
     /**
+     * Payment succeeded
+     * @param {Object} payment - The payment object
+     */
+    async succeeded(payment) {
+        try {
+            const eventData = {
+                type: 'payment.succeeded',
+                data: {
+                    paymentId: payment.id || payment.payment_id,
+                    paymentType: payment.type,
+                    referenceId: payment.reference_id,
+                    saleId: payment.metadata?.saleId, // CRITICAL: for sales-service matching
+                    debtId: payment.metadata?.debtId, // CRITICAL: for debt-service matching
+                    companyId: payment.company_id,
+                    shopId: payment.shop_id,
+                    amount: payment.amount,
+                    currency: payment.currency,
+                    paymentMethod: payment.method,
+                    paidAt: new Date().toISOString(),
+                    invoiceId: payment.invoice_id,
+                    invoiceNumber: payment.invoice_number,
+                    metadata: payment.metadata,
+                    // Fields for Notification Service compatibility:
+                    customerName: payment.customer?.name || payment.metadata?.customer_name,
+                    email: payment.customer?.email || payment.metadata?.email,
+                    phone: payment.customer?.phone || payment.phoneNumber || payment.metadata?.phone
+                },
+                source: 'payment-service'
+            };
+
+            await publish(exchanges.topic, 'payment.succeeded', eventData);
+            console.log(`✅ Published payment.succeeded event for ${payment.id || payment.payment_id} (saleId: ${payment.metadata?.saleId}, debtId: ${payment.metadata?.debtId})`);
+        } catch (error) {
+            console.error('❌ Failed to publish payment.succeeded event:', error.message);
+        }
+    },
+
+    /**
      * Request report generation
      * @param {Object} payload - Report data payload
      */
@@ -94,12 +132,14 @@ const publishPaymentEvent = {
         try {
             const eventData = {
                 type: 'document.invoice.requested',
-                data: payload,
+                payload: payload, // Renamed from data to payload to match document-service handler
+                owner: { companyId: payload.companyId }, // Derive owner from payload
+                eventId: `evt_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
                 source: 'payment-service'
             };
 
             await publish(exchanges.topic, 'document.invoice.requested', eventData);
-            console.log(`✅ Published document.invoice.requested event for invoice ${payload.invoiceData.invoiceNumber}`);
+            console.log(`✅ Published document.invoice.requested event for invoice ${payload.invoiceData?.invoiceNumber}`);
         } catch (error) {
             console.error('❌ Failed to publish document.invoice.requested event:', error.message);
         }

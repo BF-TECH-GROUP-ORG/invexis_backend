@@ -11,7 +11,7 @@ const notificationQueue = new Queue('notification delivery', {
     }
 });
 
-notificationQueue.process('deliver',async (job) => {
+notificationQueue.process('deliver', async (job) => {
     // Worker logic in queue/workers.js
     const { deliverNotification } = require('../queue/workers');
     return deliverNotification(job.data);

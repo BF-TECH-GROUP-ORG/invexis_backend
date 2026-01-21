@@ -12,7 +12,7 @@ router.use(checkSubscriptionStatus());
 router.post("/", shopController.createShop);
 router.get("/", shopController.getShops);
 router.get("/search", shopController.searchShops);
-router.get("/:id", shopController.getShopById);
+router.get("/:id", shopController.getShopById)
 router.patch("/:id", shopController.updateShop);
 router.patch("/:id/status", shopController.changeShopStatus);
 router.delete("/:id", shopController.deleteShop);

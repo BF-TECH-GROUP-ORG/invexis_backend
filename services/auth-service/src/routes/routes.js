@@ -13,7 +13,7 @@ const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth
 
 // Health check
 router.get('/', (req, res) => {
-    res.json({ 
+    res.json({
         message: "Invexis Auth Service",
         service: "auth-service",
         version: "2.0.0",
@@ -157,6 +157,7 @@ router.delete('/sessions/:sessionId', authenticateToken, authCtrl.revokeSession)
 // User Profile (Production middleware)
 router.get('/me', authenticateToken, authCtrl.getMe); // Updated to use getMe method
 router.put('/profile', authenticateToken, authCtrl.updateProfile);
+router.post('/devices', authenticateToken, authCtrl.updateFcmToken);
 router.delete('/account', authenticateToken, authCtrl.deleteAccount);
 
 // Email Management (Production middleware)
@@ -187,17 +188,19 @@ router.post('/verify/:userId', authenticateToken, requireRole('super_admin'), au
 // Company Admin Management (must be registered before param routes to avoid param collisions)
 router.get('/users/company-admins/:companyId', authenticateToken, requireRole('super_admin'), adminCtrl.getCompanyAdmins);
 router.get('/users/company-admins', authenticateToken, requireRole('super_admin'), adminCtrl.getAllCompanyAdmins);
-router.get('/users', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.getUsers);
-router.post('/users', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.createUser);
-router.put('/users/:id', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.updateUser);
-router.delete('/users/:id', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.deleteUser);
-router.get('/users/:id', authenticateToken, requireRole('super_admin' , 'company_admin'), authCtrl.getUserById);
+router.get('/users', authenticateToken, requireRole('super_admin', 'company_admin'), authCtrl.getUsers);
+router.post('/users', authenticateToken, requireRole('super_admin', 'company_admin'), authCtrl.createUser);
+router.put('/users/:id', authenticateToken, requireRole('super_admin', 'company_admin'), authCtrl.updateUser);
+router.delete('/users/:id', authenticateToken, requireRole('super_admin', 'company_admin'), authCtrl.deleteUser);
+router.get('/users/:id', authenticateToken, requireRole('super_admin', 'company_admin'), authCtrl.getUserById);
+// Alias for singular /user/:id
+router.get('/user/:id', authenticateToken, requireRole('super_admin', 'company_admin'), authCtrl.getUserById);
 
 // Company Admin Management (Admin routes)
 // (routes moved above to avoid matching by the generic '/users/:id' param route)
 
 // Company Worker Management
-router.get('/company/:companyId/workers', authenticateToken, requireRole('company_admin', 'super_admin','worker'), authCtrl.getCompanyWorkers);
+router.get('/company/:companyId/workers', authenticateToken, requireRole('company_admin', 'super_admin', 'worker'), authCtrl.getCompanyWorkers);
 
 router.delete('/company/:companyId/workers/:workerId', authenticateToken, requireRole('company_admin', 'super_admin'), authCtrl.deleteWorkerFromCompany);
 
@@ -206,6 +209,6 @@ router.post('/users/bulk', authenticateToken, requireRole('super_admin'), authCt
 router.post('/users/:id/unlock', authenticateToken, requireRole('super_admin'), authCtrl.unlockAccount);
 
 // Compliance Management (Admin routes)
-router.get('/consents/compliance', authenticateToken, requireRole('company_admin','super_admin'), authCtrl.checkConsentCompliance);
+router.get('/consents/compliance', authenticateToken, requireRole('company_admin', 'super_admin'), authCtrl.checkConsentCompliance);
 
 module.exports = router;

@@ -40,17 +40,7 @@ module.exports = [
       },
     ],
   },
-  {
-    name: "Invoice Events",
-    exchange: exchanges.topic,
-    events: [
-      { key: "invoice.created", description: "Invoice generated for sale" },
-      { key: "invoice.sent", description: "Invoice sent to customer" },
-      { key: "invoice.paid", description: "Invoice marked as paid" },
-      { key: "invoice.overdue", description: "Invoice is overdue" },
-      { key: "invoice.canceled", description: "Invoice was canceled" },
-    ],
-  },
+
   {
     name: "Sales Return Events",
     exchange: exchanges.topic,
@@ -76,11 +66,5 @@ module.exports = [
       { key: "sale.item.removed", description: "Item removed from sale" },
     ],
   },
-  {
-    name: "Document Request Events",
-    exchange: exchanges.topic,
-    events: [
-      { key: "document.invoice.requested", description: "Request invoice PDF generation" },
-    ],
-  },
+
 ];

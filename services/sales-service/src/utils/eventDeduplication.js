@@ -4,7 +4,7 @@
  * Implements TTL-based cleanup for processed events
  */
 
-const { ProcessedEvent } = require('../models/index.model');
+const ProcessedEvent = require('../models/ProcessedEvent.model');
 const logger = console;
 
 /**

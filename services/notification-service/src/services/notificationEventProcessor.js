@@ -12,6 +12,7 @@ const recipientResolver = require('./recipientResolver');
 const intentClassifier = require('./intentClassifier');
 const logger = require('../utils/logger');
 const { cleanValue, cleanAmount, extractField } = require('../utils/dataSanitizer');
+const enrichmentService = require('./enrichmentService'); // New enrichment service
 
 const notificationQueue = require('../config/queue');
 
@@ -134,7 +135,7 @@ class NotificationEventProcessor {
                         eventId,
                         source,
                         emittedAt,
-                        userId,
+                        userId: userId === 'external' ? null : userId,
                         role,
                         intent,
                         channels,
@@ -225,14 +226,61 @@ class NotificationEventProcessor {
         // Common fields across all events
         const extracted = {
             companyId,
-            shopId: data.shopId || data.shop_id,
-            userId: data.userId || data.adminId || data.id,
+            shopId: data.shopId || data.shop_id || data.context?.shopId || data.owner?.shopId,
+            userId: data.userId || data.adminId || data.id || data.context?.userId || data.owner?.userId,
             ...data
         };
+
+        // --- ENRICHMENT STEP ---
+        // Dynamically fetch names if IDs exist but names are missing
+        if (extracted.shopId && !extracted.shopName) {
+            extracted.shopName = await enrichmentService.getShopName(extracted.shopId);
+        }
+        if (extracted.userId && !extracted.userName) {
+            extracted.userName = await enrichmentService.getUserName(extracted.userId);
+        }
+
+        // Enrich specific fields for transfers
+        if (extracted.sourceShopId && !extracted.sourceShopName) {
+            extracted.sourceShopName = await enrichmentService.getShopName(extracted.sourceShopId);
+        }
+        if (extracted.destinationShopId && !extracted.destinationShopName) {
+            extracted.destinationShopName = await enrichmentService.getShopName(extracted.destinationShopId);
+        }
+        if (extracted.toShopId && !extracted.destinationShopName) {
+            extracted.destinationShopName = await enrichmentService.getShopName(extracted.toShopId);
+        }
+
+        // Enrich performer if available
+        if (data.performedBy) {
+            const performerId = typeof data.performedBy === 'object' ? data.performedBy.userId : data.performedBy;
+            extracted.performedByName = await enrichmentService.getUserName(performerId);
+        } else if (extracted.userId && extracted.userName) {
+            // Fallback: if main user is the actor
+            extracted.performedByName = extracted.userName;
+        }
 
         // Event-specific extractions
         switch (eventType) {
             case 'user.created':
+                let friendlyDepartments = 'General';
+                if (data.assignedDepartments && Array.isArray(data.assignedDepartments)) {
+                    // Try to format nicely e.g. "Inventory, Sales"
+                    friendlyDepartments = data.assignedDepartments
+                        .map(d => d.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())) // "inventory_manager" -> "Inventory Manager"
+                        .join(', ');
+                }
+
+                // Ensure Company Name is present
+                if (!extracted.companyName && extracted.companyId) {
+                    extracted.companyName = await enrichmentService.getCompanyName(extracted.companyId);
+                }
+
+                // Ensure Shop Name is present if shopId exists
+                if (!extracted.shopName && extracted.shopId) {
+                    extracted.shopName = await enrichmentService.getShopName(extracted.shopId);
+                }
+
                 return {
                     ...extracted,
                     email: data.email,
@@ -240,7 +288,9 @@ class NotificationEventProcessor {
                     userName: data.firstName || data.name || 'User',
                     password: data.password || data.generatedPassword, // Critical for welcome email
                     role: data.role,
-                    companyName: data.companyName || 'Invexis'
+                    companyName: extracted.companyName || 'Invexis',
+                    shopName: extracted.shopName || 'Main Office',
+                    departments: friendlyDepartments
                 };
 
             case 'company.created':
@@ -251,6 +301,18 @@ class NotificationEventProcessor {
                     adminId: data.adminId || data.userId,
                     email: data.email,
                     phone: data.phone
+                };
+
+            case 'shop.created':
+            case 'shop.updated':
+            case 'shop.deleted':
+            case 'shop.statusChanged':
+                return {
+                    ...extracted,
+                    id: cleanValue(data.shopId || data.id, 'unknown'),
+                    name: cleanValue(data.name, 'Shop'),
+                    status: cleanValue(data.status, 'Active'),
+                    adminId: data.adminId || data.managerId
                 };
 
             case 'sale.created':
@@ -274,17 +336,61 @@ class NotificationEventProcessor {
                 return {
                     ...extracted,
                     productId: data.productId,
-                    productName: data.productName || data.name,
-                    sku: data.sku,
-                    currentStock: data.currentStock || data.stock,
-                    threshold: data.threshold,
-                    percentageOfThreshold: data.percentageOfThreshold,
-                    suggestedReorderQty: data.suggestedReorderQty,
-                    priority: data.priority
+                    productName: cleanValue(data.productName || data.name, 'Product'),
+                    sku: cleanValue(data.sku, ''),
+                    currentStock: cleanAmount(data.currentStock || data.stock, 0),
+                    threshold: cleanAmount(data.threshold, 0),
+                    percentageOfThreshold: cleanAmount(data.percentageOfThreshold, 0),
+                    suggestedReorderQty: cleanAmount(data.suggestedReorderQty, 0),
+                    priority: cleanValue(data.priority, 'normal'),
+                    shopId: data.shopId || data.sourceShopId || data.toShopId
+                };
+
+            case 'inventory.product.created':
+            case 'inventory.product.updated':
+            case 'inventory.product.deleted':
+                return {
+                    ...extracted,
+                    productId: data.productId || data._id,
+                    productName: cleanValue(data.productName || data.name, 'Product'),
+                    sku: cleanValue(data.sku, ''),
+                    userName: cleanValue(data.userName || data.createdByName, 'Staff')
+                };
+
+            case 'inventory.stock.updated':
+                return {
+                    ...extracted,
+                    productId: data.productId,
+                    productName: cleanValue(data.productName, 'Product'),
+                    current: cleanAmount(data.current, 0),
+                    previous: cleanAmount(data.previous, 0),
+                    change: cleanAmount(data.change, 0),
+                    type: cleanValue(data.type, 'update'),
+                    reason: cleanValue(data.reason, 'Stock update')
+                };
+
+            case 'inventory.transfer.created':
+            case 'inventory.transfer.cross':
+            case 'inventory.transfer.bulk.intra':
+            case 'inventory.transfer.bulk.cross':
+            case 'inventory.transfer.bulk.cross.sent':
+            case 'inventory.transfer.bulk.cross.received':
+                return {
+                    ...extracted,
+                    productId: data.productId,
+                    productName: cleanValue(data.productName || data.name, 'Product'),
+                    quantity: cleanAmount(data.quantity || data.transferQuantity, 0),
+                    sourceShopId: data.sourceShopId || data.fromShopId,
+                    destinationShopId: data.destinationShopId || data.toShopId,
+                    shopId: data.shopId || data.sourceShopId || data.toShopId || data.fromShopId,
+                    reason: cleanValue(data.reason, 'Standard Transfer'),
+                    priority: 'normal'
                 };
 
             case 'debt.overdue':
             case 'debt.reminder.overdue':
+            case 'debt.reminder.upcoming':
+            case 'debt.reminder.manual':
             case 'debt.created':
             case 'debt.repayment.created':
             case 'debt.fully_paid':
@@ -299,6 +405,10 @@ class NotificationEventProcessor {
                     remainingBalance: cleanAmount(data.remainingBalance || data.remainingAmount || data.debtStatus?.newBalance || data.debtDetails?.balance || data.newBalance, 0),
                     paidAmount: cleanAmount(data.paidAmount || data.amountPaid || data.paymentDetails?.amountPaid || data.debtDetails?.amountPaidNow, 0),
                     customerName: cleanValue(data.customerName || data.customer?.name, 'Customer'),
+                    // Critical for AFFECTED_USER resolution
+                    email: data.customerEmail || data.customer?.email,
+                    phone: data.customerPhone || data.customer?.phone,
+
                     dueDate: data.dueDate || data.debtDetails?.dueDate,
                     status: cleanValue(data.status || data.debtStatus?.newStatus, 'PENDING'),
                     notes: data.notes
@@ -427,11 +537,18 @@ class NotificationEventProcessor {
      * Get template name from event type
      */
     getTemplateName(eventType) {
+        // Debt - use dot notation to match templates.js
+        if (eventType.startsWith('debt.reminder.upcoming')) return 'debt.reminder.upcoming';
+        if (eventType.startsWith('debt.reminder.overdue')) return 'debt.reminder.overdue';
+
         const mapping = {
             'user.created': 'welcome', // Default to welcome (will be refined in createNotification)
             'company.created': 'welcome',
-            'company.suspended': 'company_suspended',
-            'shop.created': 'shop_created',
+            'company.suspended': 'company.suspended',
+            'shop.created': 'shop.created',
+            'shop.updated': 'shop.updated',
+            'shop.deleted': 'shop.deleted',
+            'shop.statusChanged': 'shop.status_updated',
 
             // Sales - direct mapping to keys in templates.js
             'sale.created': 'sale.created',
@@ -441,13 +558,20 @@ class NotificationEventProcessor {
             'sale.return.created': 'sale.return.created',
 
             // Inventory
-            'inventory.low_stock': 'low_stock_alert',
-            'inventory.product.low_stock': 'low_stock_alert',
-            'inventory.out_of_stock': 'out_of_stock_alert',
-            'inventory.product.out_of_stock': 'out_of_stock_alert',
-            'inventory.stock.updated': 'low_stock_alert',
+            'inventory.low_stock': 'inventory.low_stock',
+            'inventory.product.low_stock': 'inventory.low_stock',
+            'inventory.out_of_stock': 'inventory.out_of_stock',
+            'inventory.product.out_of_stock': 'inventory.out_of_stock',
+            'inventory.stock.updated': 'inventory.stock.updated',
 
-            // Debt - use dot notation to match templates.js
+            'inventory.transfer.created': 'inventory.transfer.created',
+            'inventory.transfer.completed': 'inventory.transfer.completed',
+
+            'inventory.product.created': 'product.created',
+            'inventory.product.updated': 'product.updated',
+            'inventory.product.deleted': 'product.deleted',
+
+            // Debt - direct mapping for exact matches
             'debt.overdue': 'debt.overdue',
             'debt.created': 'debt.created',
             'debt.repayment.created': 'debt.repayment.created',
@@ -457,23 +581,24 @@ class NotificationEventProcessor {
             'debt.deleted': 'debt.cancelled',
 
             // Products
-            'product.created': 'product_created',
-            'product.updated': 'product_created', // Reuse or add specific
-            'product.deleted': 'product_created',
+            'product.created': 'product.created',
+            'product.updated': 'product.updated',
+            'product.deleted': 'product.deleted',
 
-            'debt.repaid': 'debt.repayment.created', // Map legacy event name
-            'debt.fully.paid': 'debt.fully_paid',   // Map legacy event name
+            'debt.repaid': 'debt.repayment.created', // Map legacy
+            'debt.fully.paid': 'debt.fully_paid',   // Map legacy
             'debt.marked.paid': 'debt.payment.received',
             'debt.payment.received': 'debt.payment.received',
-            'debt.reminder.upcoming': 'debt.created',
-            'debt.reminder.overdue': 'debt.overdue',
 
             // Payments
-            'payment.success': 'payment_success',
-            'payment.processed': 'payment_success',
-            'payment.failed': 'payment_failed',
-            'subscription.expiring': 'subscription_expiring',
-            'subscription.expired': 'subscription_expired'
+            'payment.success': 'payment.success',
+            'payment.processed': 'payment.success',
+            'payment.failed': 'payment.failed',
+            'subscription.expiring': 'subscription.expiring',
+            'subscription.expired': 'subscription.expired',
+
+            // Documents
+            'document.invoice.created': 'payment.success'
         };
 
         return mapping[eventType] || 'generic_notification';

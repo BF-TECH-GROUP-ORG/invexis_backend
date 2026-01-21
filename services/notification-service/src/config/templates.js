@@ -28,65 +28,74 @@ const loadTemplate = (filename) => {
 };
 
 const templates = {
-    welcome: {
+    "welcome": {
         email: {
-            subject: 'Welcome to {{companyName}}!',
-            content: loadTemplate('welcome.html'),
-            metadata: {
-                priority: 'normal'
-            }
+            subject: 'Welcome to {{companyName}} - Your Account is Ready',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                    <h2>Welcome to {{companyName}}!</h2>
+                    <p>Hello {{userName}},</p>
+                    <p>Your account has been successfully created. You have been enrolled in <strong>{{shopName}}</strong>.</p>
+                    {{#if departments}}<p><strong>Assigned Department(s):</strong> {{departments}}</p>{{/if}}
+                    
+                    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                        <p style="margin: 0;"><strong>Username:</strong> {{email}}</p>
+                        <p style="margin: 10px 0 0 0;"><strong>Password:</strong> {{password}}</p>
+                    </div>
+
+                    <p>Please login immediately and change your password.</p>
+                    
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="{{dashboardUrl}}/login" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Login to Dashboard</a>
+                    </div>
+                </div>
+            `,
+            metadata: { priority: 'high' }
         },
         sms: {
-            content: 'Welcome to {{companyName}}, {{userName}}! Your temporary password is: {{password}}',
-            metadata: {
-                maxLength: 160
-            }
+            content: 'Welcome to {{companyName}}, {{userName}}! Your temp password is: {{password}}. Enrolled in {{shopName}}.',
+            metadata: { maxLength: 160 }
         },
         push: {
             content: JSON.stringify({
                 title: 'Welcome to {{companyName}}!',
                 body: 'Hi {{userName}}, tap to complete your setup',
-                data: {
-                    action: 'open_welcome',
-                    url: '{{actionUrl}}'
-                }
+                data: { action: 'open_welcome', url: '{{actionUrl}}' }
             }),
-            metadata: {
-                sound: 'default'
-            }
+            metadata: { sound: 'default' }
         },
         inApp: {
             subject: 'Welcome to {{companyName}}!',
-            content: 'Hi {{userName}}, welcome to {{companyName}}! Click here to complete your setup.'
+            content: 'Hi {{userName}}, welcome to {{companyName}}! You are enrolled in **{{shopName}}**.'
         }
     },
 
-    welcome_manual: {
+    "welcome_manual": {
         email: {
             subject: 'Welcome to {{companyName}}!',
-            content: loadTemplate('welcome.html'), // Reuse HTML, but ensure it handles empty password gracefully (Logic added to HTML)
-            metadata: {
-                priority: 'normal'
-            }
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                    <h2>Welcome to {{companyName}}!</h2>
+                    <p>Hello {{userName}},</p>
+                    <p>Your account has been created. You have been enrolled in <strong>{{shopName}}</strong>.</p>
+                    {{#if departments}}<p><strong>Assigned Department(s):</strong> {{departments}}</p>{{/if}}
+                    <p>We are excited to have you on board.</p>
+                    <a href="{{dashboardUrl}}/login">Login to Dashboard</a>
+                </div>
+            `,
+            metadata: { priority: 'normal' }
         },
         sms: {
-            content: 'Welcome to {{companyName}}, {{userName}}! We are excited to have you on board.',
-            metadata: {
-                maxLength: 160
-            }
+            content: 'Welcome to {{companyName}}, {{userName}}! Enrolled in {{shopName}}.',
+            metadata: { maxLength: 160 }
         },
         push: {
             content: JSON.stringify({
                 title: 'Welcome to {{companyName}}!',
                 body: 'Hi {{userName}}, welcome aboard!',
-                data: {
-                    action: 'open_welcome',
-                    url: '{{actionUrl}}'
-                }
+                data: { action: 'open_welcome', url: '{{actionUrl}}' }
             }),
-            metadata: {
-                sound: 'default'
-            }
+            metadata: { sound: 'default' }
         },
         inApp: {
             subject: 'Welcome to {{companyName}}!',
@@ -94,7 +103,7 @@ const templates = {
         }
     },
 
-    stripe_onboarding: {
+    "stripe.onboarding": {
         email: {
             subject: 'Action Required: Complete your Payment Setup for {{companyName}}',
             content: loadTemplate('stripe_onboarding.html'),
@@ -110,7 +119,7 @@ const templates = {
 
 
 
-    order_notification: {
+    "order.notification": {
         email: {
             subject: 'Order {{orderId}} confirmed',
             content: `
@@ -197,8 +206,77 @@ const templates = {
         }
     },
 
+    // --- SHOP NOTIFICATIONS ---
+    // --- SHOP NOTIFICATIONS ---
+    "shop.created": {
+        email: {
+            subject: 'New Shop Created: {{name}}',
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>New Shop Created</h2>
+                    <p>Shop <strong>{{name}}</strong> has been successfully created.</p>
+                </div>
+            `,
+            metadata: { priority: 'normal' }
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'New Shop Created',
+                body: 'Shop "{{name}}" is ready.',
+                data: { action: 'open_shop', shopId: '{{id}}' }
+            })
+        },
+        inApp: {
+            subject: 'New Shop Created',
+            content: 'Shop **{{name}}** has been created.'
+        }
+    },
+
+    "shop.updated": {
+        inApp: {
+            subject: 'Shop Updated',
+            content: 'Shop **{{name}}** details have been updated.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Shop Updated',
+                body: 'Details for shop "{{name}}" were updated.',
+                data: { action: 'open_shop', shopId: '{{id}}' }
+            })
+        }
+    },
+
+    "shop.deleted": {
+        inApp: {
+            subject: 'Shop Deleted',
+            content: 'Shop **{{name}}** has been deleted.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Shop Deleted',
+                body: 'Shop "{{name}}" was removed.',
+                data: { action: 'open_dashboard' }
+            })
+        }
+    },
+
+    "shop.status_updated": {
+        inApp: {
+            subject: 'Shop Status Updated',
+            content: 'Shop **{{name}}** is now **{{status}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Shop Status Changed',
+                body: 'Shop "{{name}}" is now {{status}}.',
+                data: { action: 'open_shop', shopId: '{{id}}' }
+            })
+        }
+    },
+
+
     // --- PRODUCT & INVENTORY ---
-    product_created: {
+    "product.created": {
         inApp: {
             subject: 'New Product Added',
             content: 'New product **{{productName}}** added by {{userName}}.'
@@ -212,8 +290,36 @@ const templates = {
         }
     },
 
+    "product.updated": {
+        inApp: {
+            subject: 'Product Updated',
+            content: 'Details for product **{{productName}}** were updated.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Product Updated',
+                body: '{{productName}} details have been updated.',
+                data: { action: 'open_product', productId: '{{productId}}' }
+            })
+        }
+    },
+
+    "product.deleted": {
+        inApp: {
+            subject: 'Product Deleted',
+            content: 'Product **{{productName}}** was deleted by {{userName}}.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Product Deleted',
+                body: '{{productName}} was removed from inventory.',
+                data: { action: 'open_inventory' }
+            })
+        }
+    },
+
     // Low Stock Alert Template
-    low_stock_alert: {
+    "inventory.low_stock": {
         email: {
             subject: '⚠️ Low Stock Alert: {{productName}}',
             content: `
@@ -270,7 +376,7 @@ const templates = {
     },
 
     // Out of Stock Alert Template
-    out_of_stock_alert: {
+    "inventory.out_of_stock": {
         email: {
             subject: '🚨 URGENT: {{productName}} is Out of Stock',
             content: `
@@ -323,39 +429,46 @@ const templates = {
     },
 
     // Legacy templates (kept for backward compatibility)
-    inventory_low: {
+    "inventory.low_stock": {
         email: {
             subject: 'Low Stock Alert: {{productName}}',
-            content: `<p>⚠️ <strong>Low Stock Alert</strong></p><p>Product <strong>{{productName}}</strong> is running low. Current quantity: <strong>{{quantity}}</strong>.</p><p>Please restock soon to avoid stockouts.</p>`,
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>Low Stock Warning</h2>
+                    <p>Product <strong>{{productName}}</strong> is running low at <strong>{{shopName}}</strong>.</p>
+                    <p><strong>Current Stock:</strong> {{currentStock}}</p>
+                    <p><strong>Reorder Level:</strong> {{reorderLevel}}</p>
+                    <a href="{{dashboardUrl}}/inventory/restock?productId={{productId}}&shopId={{shopId}}">Restock Now</a>
+                </div>
+            `,
             metadata: { priority: 'high' }
-        },
-        inApp: {
-            subject: 'Low Stock Alert',
-            content: '⚠️ Low stock: **{{productName}}** is down to {{quantity}} units.'
         },
         push: {
             content: JSON.stringify({
                 title: 'Low Stock Alert',
-                body: '{{productName}} is low ({{quantity}} left).',
-                data: { action: 'open_inventory', productId: '{{productId}}' }
-            }),
-            metadata: { priority: 'high' }
+                body: '{{productName}} is running low at {{shopName}} ({{currentStock}} remaining).',
+                data: { action: 'open_restock', productId: '{{productId}}' }
+            })
+        },
+        inApp: {
+            subject: 'Low Stock Alert',
+            content: 'Product **{{productName}}** is running low at **{{shopName}}** (**{{currentStock}}** remaining).'
         }
     },
-    stock_out: {
+    "inventory.out_of_stock": {
         email: {
-            subject: 'STOCK OUT: {{productName}}',
-            content: `<p>🚨 <strong>STOCK OUT ALERT</strong></p><p>Product <strong>{{productName}}</strong> is now out of stock!</p>`,
+            subject: 'STOCK OUT: {{productName}} - {{shopName}}',
+            content: `<p>🚨 <strong>STOCK OUT ALERT</strong></p><p>Product <strong>{{productName}}</strong> is now out of stock at <strong>{{shopName}}</strong>!</p>`,
             metadata: { priority: 'high' }
         },
         inApp: {
             subject: 'Stock Out Alert',
-            content: '🚨 Stock out: **{{productName}}** is now out of stock!'
+            content: '🚨 Stock out: **{{productName}}** is now out of stock at **{{shopName}}**!'
         },
         push: {
             content: JSON.stringify({
                 title: 'Stock Out',
-                body: '🚨 {{productName}} is out of stock!',
+                body: '🚨 {{productName}} is out of stock at {{shopName}}!',
                 data: { action: 'open_inventory', productId: '{{productId}}' }
             }),
             metadata: { priority: 'high' }
@@ -366,22 +479,54 @@ const templates = {
 
 
     // --- PAYMENTS ---
-    payment_received: {
+    "payment.success": {
         inApp: {
             subject: 'Payment Received',
-            content: 'Payment of **{{formatCurrency amount}}** received from **{{customerName}}** ({{paymentMethod}}).'
+            content: 'Payment of **{{formatCurrency amount}}** received from **{{customerName}}** ({{paymentMethod}}). {{#if url}}[Download Invoice]({{url}}){{/if}}'
         },
         push: {
             content: JSON.stringify({
                 title: 'Payment Received',
                 body: 'Received {{formatCurrency amount}} via {{paymentMethod}}',
-                data: { action: 'open_payment', paymentId: '{{paymentId}}' }
+                data: {
+                    action: 'open_payment',
+                    paymentId: '{{paymentId}}',
+                    invoiceUrl: '{{url}}'
+                }
             })
+        }
+    },
+    "payment.failed": {
+        inApp: {
+            subject: 'Payment Failed',
+            content: 'Payment of **{{formatCurrency amount}}** from **{{customerName}}** failed. Reason: {{reason}}.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Payment Failed',
+                body: 'Payment of {{formatCurrency amount}} failed: {{reason}}',
+                data: { action: 'open_payment', paymentId: '{{paymentId}}' }
+            }),
+            metadata: { priority: 'high' }
+        },
+        email: {
+            subject: 'Payment Failed - {{companyName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #dc3545;">Payment Failed</h2>
+                    <p>We were unable to process a payment for your company.</p>
+                    <div style="background-color: #f8d7da; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                        <p><strong>Amount:</strong> {{formatCurrency amount}}</p>
+                        <p><strong>Reason:</strong> {{reason}}</p>
+                    </div>
+                    <p>Please check your payment settings to avoid service interruption.</p>
+                </div>
+            `
         }
     },
 
     // --- SUBSCRIPTIONS ---
-    subscription_expiring: {
+    "subscription.expiring": {
         email: {
             subject: 'Action Required: Your Subscription is Expiring Soon',
             content: `<p>Hello,</p><p>Your subscription for {{companyName}} will expire on {{formatDate expiryDate 'long'}}.</p><p>Please renew now to avoid service interruption.</p>`,
@@ -399,7 +544,7 @@ const templates = {
             metadata: { priority: 'high' }
         }
     },
-    subscription_expired: {
+    "subscription.expired": {
         email: {
             subject: 'Service Suspended: Subscription Expired',
             content: `<p>Hello,</p><p>Your subscription has expired. Access to premium features has been suspended.</p><p>Please renew immediately to restore access.</p>`,
@@ -416,40 +561,171 @@ const templates = {
             content: '🚨 Your subscription has expired. Please renew to restore services.'
         }
     },
+    "company.suspended": {
+        inApp: {
+            subject: 'Company Suspended',
+            content: 'Your company account has been suspended. Please contact support for assistance.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Account Suspended',
+                body: 'Your company access has been suspended.',
+                data: { action: 'contact_support' }
+            }),
+            metadata: { priority: 'high' }
+        },
+        email: {
+            subject: 'Urgent: Company Account Suspended',
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2 style="color: #dc3545;">Account Suspended</h2>
+                    <p>Access to your company **{{companyName}}** has been suspended by an administrator.</p>
+                    <p>Reason: {{reason}}</p>
+                    <p>If you believe this is an error, please contact our support team immediately.</p>
+                </div>
+            `
+        }
+    },
 
     // --- Sales Templates ---
     // --- Sales Templates ---
     "sale.created": {
         email: {
-            subject: 'New Sale: {{saleId}}',
+            subject: 'New Sale: {{saleId}} at {{shopName}}',
             content: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2>New Sale Created</h2>
-                    <p>A new sale has been recorded.</p>
+                    <p>A new sale has been recorded at <strong>{{shopName}}</strong>.</p>
                     <p><strong>Sale ID:</strong> {{saleId}}</p>
                     <p><strong>Amount:</strong> {{formatCurrency totalAmount}}</p>
                     {{#if customerId}}<p><strong>Customer ID:</strong> {{customerId}}</p>{{/if}}
                     <p><strong>Items:</strong> {{items.length}}</p>
+                    {{#if performedByName}}<p><strong>Processed by:</strong> {{performedByName}}</p>{{/if}}
                 </div>
             `
         },
         sms: {
-            content: 'New Sale: {{formatCurrency totalAmount}} (ID: {{saleId}}) recorded.'
+            content: 'New Sale at {{shopName}}: {{formatCurrency totalAmount}} (ID: {{saleId}}). Processed by {{performedByName}}.'
         },
         push: {
             content: JSON.stringify({
                 title: 'New Sale: {{formatCurrency totalAmount}}',
-                body: 'Sale {{saleId}} recorded successfully.',
+                body: 'Sale {{saleId}} recorded at {{shopName}} by {{performedByName}}.',
                 data: { action: 'open_sale', saleId: '{{saleId}}' }
             })
         },
         inApp: {
             subject: 'New Sale: {{formatCurrency totalAmount}}',
-            content: 'Sale **{{saleId}}** for **{{formatCurrency totalAmount}}** has been created.'
+            content: 'Sale **{{saleId}}** for **{{formatCurrency totalAmount}}** created at **{{shopName}}** by **{{performedByName}}**.'
+        }
+    },
+
+    "sale.updated": {
+        inApp: {
+            subject: 'Sale Updated',
+            content: 'Sale **{{saleId}}** at **{{shopName}}** was updated by **{{performedByName}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Sale Updated',
+                body: 'Sale {{saleId}} updated at {{shopName}} by {{performedByName}}.',
+                data: { action: 'open_sale', saleId: '{{saleId}}' }
+            })
+        }
+    },
+
+    "sale.deleted": {
+        inApp: {
+            subject: 'Sale Deleted',
+            content: 'Sale **{{saleId}}** at **{{shopName}}** was deleted by **{{performedByName}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Sale Deleted',
+                body: 'Sale {{saleId}} removed from {{shopName}} by {{performedByName}}.',
+                data: { action: 'open_dashboard' }
+            })
+        }
+    },
+
+    "sale.cancelled": {
+        email: {
+            subject: 'Sale Cancelled: {{saleId}}',
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>Sale Cancelled</h2>
+                    <p>Sale #{{saleId}} at <strong>{{shopName}}</strong> has been cancelled by <strong>{{performedByName}}</strong>.</p>
+                    {{#if reason}}<p><strong>Reason:</strong> {{reason}}</p>{{/if}}
+                    <p><strong>Amount:</strong> {{formatCurrency totalAmount}}</p>
+                </div>
+            `,
+            metadata: { priority: 'normal' }
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Sale Cancelled',
+                body: 'Sale {{saleId}} at {{shopName}} cancelled by {{performedByName}}.',
+                data: { action: 'open_sale', saleId: '{{saleId}}' }
+            })
+        },
+        inApp: {
+            subject: 'Sale Cancelled',
+            content: 'Sale **{{saleId}}** at **{{shopName}}** cancelled by **{{performedByName}}**.'
         }
     },
 
     // --- Debt Templates ---
+    "debt.reminder.upcoming": {
+        email: {
+            subject: 'Reminder: Scheduled Payment Due Soon',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #0056b3;">Upcoming Payment Reminder</h2>
+                    <p>Hello {{customerName}},</p>
+                    <p>This is a gentle reminder that a payment of <strong>{{formatCurrency amount}}</strong> for debt #{{debtId}} is due on <strong>{{dueDate}}</strong>.</p>
+                    <p>Please ensure payment is made by the due date to avoid any tracking issues.</p>
+                    <p><strong>Total Remaining Balance:</strong> {{formatCurrency remainingBalance}}</p>
+                    <p>Thank you for your business!</p>
+                    <p>— {{shopName}}</p>
+                </div>
+            `,
+            metadata: { priority: 'normal' }
+        },
+        sms: {
+            content: 'Hello {{customerName}}, reminder from {{shopName}}: Payment of {{formatCurrency amount}} for Debt #{{debtId}} is due on {{dueDate}}.',
+            metadata: { maxLength: 160 }
+        },
+        inApp: {
+            subject: 'Upcoming Debt Payment',
+            content: 'Reminder: Payment of **{{formatCurrency amount}}** for **{{customerName}}** at **{{shopName}}** is due on **{{dueDate}}**.'
+        }
+    },
+
+    "debt.reminder.overdue": {
+        email: {
+            subject: 'Action Required: Payment Overdue - {{shopName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #dc3545;">Payment Overdue Notice</h2>
+                    <p>Hello {{customerName}},</p>
+                    <p>We noticed that the payment of <strong>{{formatCurrency amount}}</strong> for debt #{{debtId}} was due on <strong>{{dueDate}}</strong> and is now overdue.</p>
+                    <p>Please arrange for payment as soon as possible.</p>
+                    <p><strong>Total Outstanding Balance:</strong> {{formatCurrency remainingBalance}}</p>
+                    <p>If you have already made this payment, please disregard this notice.</p>
+                    <p>— {{shopName}}</p>
+                </div>
+            `,
+            metadata: { priority: 'high' }
+        },
+        sms: {
+            content: 'URGENT: {{customerName}}, payment of {{formatCurrency amount}} to {{shopName}} was due on {{dueDate}}. Please pay immediately.',
+            metadata: { maxLength: 160 }
+        },
+        inApp: {
+            subject: 'Debt Payment Overdue',
+            content: '⚠️ Overdue: Payment of **{{formatCurrency amount}}** for **{{customerName}}** at **{{shopName}}** was due on **{{dueDate}}**.'
+        }
+    },
     "debt.created": {
         email: {
             subject: 'New Debt Recorded - {{companyName}}',
@@ -457,23 +733,21 @@ const templates = {
             metadata: { priority: 'normal' }
         },
         sms: {
-            content: '{{companyName}}: Debt #{{debtId}} recorded for {{amount}}. Due: {{dueDate}}. Contact us to settle.',
+            content: 'Hello {{customerName}}, a debt of {{formatCurrency amount}} was recorded for you at {{shopName}}. Due: {{dueDate}}.',
             metadata: { maxLength: 160 }
         },
         inApp: {
             subject: 'New Debt Recorded',
-            content: 'New debt of **{{formatCurrency amount}}** recorded for **{{customerName}}**.'
+            content: 'New debt of **{{formatCurrency amount}}** recorded for **{{customerName}}** at **{{shopName}}** by **{{performedByName}}**.'
         },
         push: {
             content: JSON.stringify({
                 title: 'New Debt Recorded',
-                body: 'A debt of {{amount}} has been recorded at {{companyName}}. Due by {{dueDate}}.',
+                body: 'Debt of {{amount}} recorded at {{shopName}} by {{performedByName}}.',
                 data: { action: 'open_debt', debtId: '{{debtId}}' }
             })
         }
     },
-
-
 
     "debt.payment.received": {
         email: {
@@ -482,25 +756,29 @@ const templates = {
             metadata: { priority: 'normal' }
         },
         sms: {
-            content: 'Thank you {{customerName}}! We received {{formatCurrency amount}}. Remaining balance: {{formatCurrency remainingBalance}}.',
+            content: 'Thank you {{customerName}}! We received {{formatCurrency amount}} at {{shopName}}. Remaining: {{formatCurrency remainingBalance}}.',
             metadata: { maxLength: 160 }
         },
         inApp: {
             subject: 'Debt Payment Received',
-            content: 'Debt payment of **{{formatCurrency amount}}** received from **{{customerName}}**.'
+            content: 'Debt payment of **{{formatCurrency amount}}** received from **{{customerName}}** at **{{shopName}}** (recorded by **{{performedByName}}**).'
         },
         push: {
             content: JSON.stringify({
                 title: 'Debt Payment',
-                body: 'Received {{formatCurrency amount}} from {{customerName}}.',
+                body: 'Received {{formatCurrency amount}} from {{customerName}} at {{shopName}}.',
                 data: { action: 'open_debt', debtId: '{{debtId}}' }
             })
         }
     },
     "debt.repayment.created": {
+        sms: {
+            content: 'Payment Received: You paid {{formatCurrency amount}} for Debt #{{debtId}} at {{shopName}}. Remaining balance: {{formatCurrency remainingBalance}}.',
+            metadata: { maxLength: 160 }
+        },
         inApp: {
             subject: 'Debt Repayment Recorded',
-            content: 'Debt repayment of **{{formatCurrency amount}}** recorded for **{{customerName}}**. New balance: **{{formatCurrency remainingBalance}}**.'
+            content: 'Debt repayment of **{{formatCurrency amount}}** recorded for **{{customerName}}** at **{{shopName}}** by **{{performedByName}}**. New balance: **{{formatCurrency remainingBalance}}**.'
         },
         push: {
             content: JSON.stringify({
@@ -511,55 +789,98 @@ const templates = {
         }
     },
 
-    "debt.fully.paid": {
+    "debt.fully_paid": {
+        sms: {
+            content: 'Congratulations {{customerName}}, your debt #{{debtId}} at {{shopName}} has been fully paid. Thank you!',
+            metadata: { maxLength: 160 }
+        },
         email: {
             subject: 'Debt Fully Paid: {{customerName}}',
             content: `
                 <div style="font-family: Arial, sans-serif;">
                     <h2>Debt Cleared</h2>
-                    <p>The debt for {{customerName}} has been fully paid.</p>
+                    <p>The debt for {{customerName}} at {{shopName}} has been fully paid.</p>
                     <p><strong>Amount Cleared:</strong> {{formatCurrency amount}}</p>
                 </div>
             `
         },
         inApp: {
             subject: 'Debt Cleared via Payment',
-            content: 'Debt for **{{customerName}}** has been fully paid.'
+            content: 'Debt for **{{customerName}}** at **{{shopName}}** has been fully paid.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Debt Fully Paid',
+                body: 'The debt for {{customerName}} at {{shopName}} has been cleared.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            })
+        }
+    },
+    "debt.fully.paid": { // Legacy support mapping
+        sms: {
+            content: 'Congratulations {{customerName}}, your debt #{{debtId}} at {{shopName}} has been fully paid. Thank you!',
+            metadata: { maxLength: 160 }
+        },
+        inApp: {
+            subject: 'Debt Cleared via Payment',
+            content: 'Debt for **{{customerName}}** at **{{shopName}}** has been fully paid.'
         }
     },
 
     "debt.cancelled": {
+        sms: {
+            content: 'Notice: Your debt #{{debtId}} for {{formatCurrency amount}} at {{shopName}} has been cancelled/written off.',
+            metadata: { maxLength: 160 }
+        },
         email: {
             subject: 'Debt Cancelled: {{customerName}}',
             content: `
                 <div style="font-family: Arial, sans-serif;">
                     <h2>Debt Cancelled</h2>
-                    <p>The debt for {{customerName}} has been cancelled.</p>
+                    <p>The debt for {{customerName}} at {{shopName}} has been cancelled.</p>
                     <p><strong>Amount:</strong> {{formatCurrency amount}}</p>
                 </div>
             `
         },
         inApp: {
             subject: 'Debt Cancelled',
-            content: 'Debt of **{{formatCurrency amount}}** for **{{customerName}}** has been cancelled.'
+            content: 'Debt of **{{formatCurrency amount}}** for **{{customerName}}** at **{{shopName}}** has been cancelled.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Debt Cancelled',
+                body: 'Debt of {{formatCurrency amount}} for {{customerName}} at {{shopName}} was cancelled.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            })
         }
     },
 
     "debt.status.updated": {
         inApp: {
             subject: 'Debt Status Updated',
-            content: 'Debt status for **{{customerName}}** is now **{{status}}**.'
+            content: 'Debt status for **{{customerName}}** at **{{shopName}}** is now **{{status}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Debt Status Changed',
+                body: 'Debt for {{customerName}} at {{shopName}} is now {{status}}.',
+                data: { action: 'open_debt', debtId: '{{debtId}}' }
+            })
         }
     },
 
     "debt.overdue": {
+        sms: {
+            content: 'URGENT: {{customerName}}, your debt #{{debtId}} at {{shopName}} is overdue by {{daysOverdue}} days. Total Due: {{formatCurrency amount}}.',
+            metadata: { maxLength: 160 }
+        },
         email: {
-            subject: 'Overdue Debt Reminder: {{customerName}}',
+            subject: 'Overdue Debt Reminder: {{customerName}} at {{shopName}}',
             content: `
                 <div style="font-family: Arial, sans-serif;">
                     <h2>Debt Overdue Reminder</h2>
                     <p>Dear {{customerName}},</p>
-                    <p>This is a reminder that your debt #{{debtId}} is overdue by {{daysOverdue}} days.</p>
+                    <p>This is a reminder that your debt #{{debtId}} at <strong>{{shopName}}</strong> is overdue by {{daysOverdue}} days.</p>
                     <p><strong>Amount Due:</strong> {{formatCurrency amount}}</p>
                     <p>Please settle this payment as soon as possible.</p>
                 </div>
@@ -568,15 +889,152 @@ const templates = {
         },
         inApp: {
             subject: 'Debt Overdue',
-            content: '⚠️ Debt #{{debtId}} is overdue by {{daysOverdue}} days. Amount: {{formatCurrency amount}}.'
+            content: '⚠️ Debt #{{debtId}} for **{{customerName}}** at **{{shopName}}** is overdue by {{daysOverdue}} days. Amount: {{formatCurrency amount}}.'
         },
         push: {
             content: JSON.stringify({
                 title: 'Debt Overdue',
-                body: 'Your debt of {{formatCurrency amount}} is overdue. Please pay now.',
+                body: 'Your debt of {{formatCurrency amount}} at {{shopName}} is overdue. Please pay now.',
                 data: { action: 'open_debt', debtId: '{{debtId}}' }
             }),
             metadata: { priority: 'high' }
+        }
+    },
+    "inventory.stock.updated": {
+        inApp: {
+            subject: 'Stock Updated: {{productName}}',
+            content: 'Stock for **{{productName}}** at **{{shopName}}** updated by **{{performedByName}}**. New quantity: **{{newQuantity}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Stock Update',
+                body: 'Stock for {{productName}} at {{shopName}} updated to {{newQuantity}} by {{performedByName}}.',
+                data: { action: 'open_product', productId: '{{productId}}' }
+            })
+        }
+    },
+
+    "inventory.bulk.stock_in": {
+        inApp: {
+            subject: 'Bulk Stock In Completed',
+            content: 'Successfully restocked **{{successCount}}** products. Total requested: **{{totalRequested}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Bulk Restock Success',
+                body: '{{successCount}} products were restocked successfully.',
+                data: { action: 'open_stock_history' }
+            })
+        }
+    },
+
+    "inventory.bulk.stock_out": {
+        inApp: {
+            subject: 'Bulk Stock Removal Completed',
+            content: 'Successfully removed stock for **{{successCount}}** products. Total requested: **{{totalRequested}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Bulk Removal Success',
+                body: '{{successCount}} products were updated.',
+                data: { action: 'open_stock_history' }
+            })
+        }
+    },
+
+    "inventory.transfer.created": {
+        email: {
+            subject: 'Transfer Initiated: {{productName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>Transfer Initiated</h2>
+                    <p>Transfer of <strong>{{quantity}}</strong> x <strong>{{productName}}</strong> has been initiated.</p>
+                    <p><strong>From:</strong> {{sourceShopName}}</p>
+                    <p><strong>To:</strong> {{destinationShopName}}</p>
+                    {{#if performedByName}}<p><strong>Initiated by:</strong> {{performedByName}}</p>{{/if}}
+                </div>
+            `
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Transfer Initiated',
+                body: 'Transfer of {{quantity}} {{productName}} from {{sourceShopName}} to {{destinationShopName}} started by {{performedByName}}.',
+                data: { action: 'open_transfer', transferId: '{{transferId}}' }
+            })
+        },
+        inApp: {
+            subject: 'Transfer Initiated',
+            content: 'Transfer of **{{quantity}}** x **{{productName}}** from **{{sourceShopName}}** to **{{destinationShopName}}** initiated by **{{performedByName}}**.'
+        }
+    },
+
+    "inventory.transfer.completed": {
+        inApp: {
+            subject: 'Transfer Completed',
+            content: 'Transfer of **{{quantity}}** x **{{productName}}** to **{{destinationShopName}}** has been completed (received by **{{performedByName}}**).'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Transfer Completed',
+                body: 'Transfer of {{quantity}} {{productName}} to {{destinationShopName}} completed.',
+                data: { action: 'open_transfer', transferId: '{{transferId}}' }
+            })
+        }
+    },
+
+    "inventory.transfer.bulk.intra": {
+        inApp: {
+            subject: 'Bulk Intra-Company Transfer',
+            content: 'Successfully transferred **{{count}}** products from **{{sourceShopName}}** to **{{destinationShopName}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Bulk Transfer Success',
+                body: '{{count}} products transferred from {{sourceShopName}} to {{destinationShopName}}.',
+                data: { action: 'open_transfers' }
+            })
+        }
+    },
+
+    "inventory.transfer.bulk.cross.sent": {
+        inApp: {
+            subject: 'Bulk Cross-Company Transfer Sent',
+            content: 'Sent **{{count}}** products to company **{{targetCompanyId}}**.'
+        }
+    },
+
+    "inventory.transfer.bulk.cross.received": {
+        inApp: {
+            subject: 'Bulk Cross-Company Transfer Received',
+            content: 'Received **{{count}}** products from company **{{sourceCompanyId}}**.'
+        }
+    },
+
+    "inventory.transfer.cross.sent": {
+        inApp: {
+            subject: 'Transfer Sent: {{productName}}',
+            content: 'Sent **{{quantity}}** units of **{{productName}}** to company **{{targetCompanyId}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Transfer Sent',
+                body: '{{quantity}} units of {{productName}} sent to {{targetCompanyId}}.',
+                data: { action: 'open_transfers' }
+            })
+        }
+    },
+
+    "inventory.transfer.cross.received": {
+        inApp: {
+            subject: 'Transfer Received: {{productName}}',
+            content: 'Received **{{quantity}}** units of **{{productName}}** from company **{{sourceCompanyId}}**.'
+        },
+        push: {
+            content: JSON.stringify({
+                title: 'Transfer Received',
+                body: 'Received {{quantity}} units of {{productName}} from {{sourceCompanyId}}.',
+                data: { action: 'open_transfers' }
+            })
         }
     }
 };

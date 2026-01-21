@@ -169,29 +169,22 @@ const saleEvents = {
       trx
     );
   },
-};
 
-/**
- * Invoice event helpers - Create outbox records for invoice-related events
- */
-const invoiceEvents = {
   /**
-   * Create outbox event for invoice creation
+   * Create outbox event for generic sale update
    */
-  async created(invoice, sale, trx = null) {
+  async updated(sale, changes = [], trx = null) {
     return await Outbox.create(
       {
-        type: "invoice.created",
+        type: "sale.updated",
         exchange: "events_topic",
-        routingKey: "invoice.created",
+        routingKey: "sale.updated",
         payload: {
-          invoiceId: invoice.invoiceId,
-          saleId: invoice.saleId,
+          saleId: sale.saleId,
           companyId: sale.companyId,
-          invoiceNumber: invoice.invoiceNumber,
-          totalAmount: invoice.totalAmount,
-          status: invoice.status,
-          createdAt: new Date().toISOString(),
+          shopId: sale.shopId,
+          changes, // Array of changed fields
+          updatedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
       },
@@ -200,41 +193,19 @@ const invoiceEvents = {
   },
 
   /**
-   * Create outbox event for invoice payment
+   * Create outbox event for sale deletion
    */
-  async paid(invoiceId, saleId, companyId, trx = null) {
+  async deleted(saleId, companyId, shopId, trx = null) {
     return await Outbox.create(
       {
-        type: "invoice.paid",
+        type: "sale.deleted",
         exchange: "events_topic",
-        routingKey: "invoice.paid",
+        routingKey: "sale.deleted",
         payload: {
-          invoiceId,
           saleId,
           companyId,
-          paidAt: new Date().toISOString(),
-          traceId: uuidv4(),
-        },
-      },
-      trx
-    );
-  },
-
-  /**
-   * Create outbox event for invoice cancellation
-   */
-  async cancelled(invoiceId, saleId, companyId, reason = "", trx = null) {
-    return await Outbox.create(
-      {
-        type: "invoice.cancelled",
-        exchange: "events_topic",
-        routingKey: "invoice.cancelled",
-        payload: {
-          invoiceId,
-          saleId,
-          companyId,
-          reason,
-          canceledAt: new Date().toISOString(),
+          shopId,
+          deletedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },
       },
@@ -242,6 +213,8 @@ const invoiceEvents = {
     );
   },
 };
+
+
 
 /**
  * Sales return event helpers - Create outbox records for return-related events
@@ -374,6 +347,5 @@ const returnEvents = {
 
 module.exports = {
   saleEvents,
-  invoiceEvents,
   returnEvents,
 };

@@ -78,52 +78,93 @@ const deliverNotification = async ({ notificationId }) => {
 
   // Push
   if (notification.channels.push && prefs.push) {
-    // 1. Get tokens from DB
-    const UserDevice = require("../models/UserDevice");
-    let devices = [];
+    // 1. Resolve recipients for Push (handles both personal and broadcast)
+    let pushRecipients = [];
     if (userId) {
-      devices = await UserDevice.find({ userId, isActive: true });
+      pushRecipients = [userId];
+    } else if (notification.scope !== 'personal' && notification.companyId) {
+      const recipientResolver = require("../services/recipientResolver");
+      try {
+        const rolesMapping = await recipientResolver.resolveByRole(notification.templateName, {
+          companyId: notification.companyId,
+          shopId: notification.shopId,
+          departmentId: notification.departmentId,
+          roles: notification.roles
+        });
+        // Flatten all user IDs from all roles
+        pushRecipients = [...new Set(Object.values(rolesMapping).flat())];
+        logger.debug(`📢 Resolved ${pushRecipients.length} recipients for broadcast Push`);
+      } catch (err) {
+        logger.error(`❌ Failed to resolve recipients for broadcast Push: ${err.message}`);
+      }
     }
 
-    // 2. Get tokens from payload (legacy/manual override)
-    const payloadTokens = notification.payload.fcmToken
-      ? (Array.isArray(notification.payload.fcmToken) ? notification.payload.fcmToken : [notification.payload.fcmToken])
-      : [];
+    if (pushRecipients.length > 0) {
+      // 2. Get tokens from DB for all recipients
+      const UserDevice = require("../models/UserDevice");
+      const devices = await UserDevice.find({
+        userId: { $in: pushRecipients },
+        isActive: true
+      });
 
-    // 3. Merge unique tokens
-    const dbTokens = devices.map(d => d.fcmToken);
-    const allTokens = [...new Set([...payloadTokens, ...dbTokens])];
+      // 3. Get tokens from payload (legacy/manual override)
+      const payloadTokens = notification.payload.fcmToken
+        ? (Array.isArray(notification.payload.fcmToken) ? notification.payload.fcmToken : [notification.payload.fcmToken])
+        : [];
 
-    if (allTokens.length > 0) {
-      logger.debug(`📱 Sending push to ${allTokens.length} device(s) for user ${userId}`);
+      // 4. Merge unique tokens, prefer DB user info
+      const tokenMap = new Map();
 
-      for (const token of allTokens) {
-        // Avoid sending to invalid/empty tokens
-        if (!token) continue;
+      // Add DB tokens (have userId)
+      devices.forEach(d => {
+        tokenMap.set(d.fcmToken, { token: d.fcmToken, userId: d.userId });
+      });
 
-        const result = await sendPush(
-          notification,
-          token,
-          userId,
-          companyId
-        );
-
-        // Check for invalid token errors and cleanup
-        if (!result.success && result.error) {
-          const errCode = result.error.code || result.error.errorInfo?.code;
-          if (errCode === 'messaging/registration-token-not-registered' ||
-            errCode === 'messaging/invalid-argument' ||
-            result.error.message?.includes('Entity was not found')) {
-            await UserDevice.deleteOne({ fcmToken: token });
-            logger.info(`🗑️ Removed invalid FCM token: ${token}`);
-          }
+      // Add payload tokens (might not have userId, use main notification userId)
+      payloadTokens.forEach(t => {
+        if (!tokenMap.has(t)) {
+          // For payload tokens, we use the main userId if available, or null
+          tokenMap.set(t, { token: t, userId: userId });
         }
+      });
 
-        results.push({ channel: "push", ...result });
-        if (result.success) successes++;
+      const allTargets = Array.from(tokenMap.values());
+
+      if (allTargets.length > 0) {
+        logger.debug(`📱 Sending push to ${allTargets.length} device(s) for ${pushRecipients.length} users`);
+
+        for (const target of allTargets) {
+          const { token, userId: targetUserId } = target;
+
+          // Avoid sending to invalid/empty tokens
+          if (!token) continue;
+
+          const result = await sendPush(
+            notification,
+            token,
+            targetUserId, // Use the specific user ID for this token if available
+            companyId
+          );
+
+          // Check for invalid token errors and cleanup
+          if (!result.success && result.error) {
+            const errCode = result.error.code || result.error.errorInfo?.code;
+            if (errCode === 'messaging/registration-token-not-registered' ||
+              errCode === 'messaging/invalid-argument' ||
+              result.error.message?.includes('Entity was not found')) {
+              await UserDevice.deleteOne({ fcmToken: token });
+              logger.info(`🗑️ Removed invalid FCM token: ${token}`);
+            }
+          }
+
+          results.push({ channel: "push", ...result });
+          if (result.success) successes++;
+        }
+      } else {
+        logger.debug(`📭 No push tokens found for recipients`);
       }
     } else {
-      logger.debug(`📭 No push tokens found for user ${userId}`);
+      logger.debug(`📭 No recipients resolved for Push`);
     }
   }
 

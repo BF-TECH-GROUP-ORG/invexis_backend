@@ -11,9 +11,16 @@ const { ErrorHandler } = require('/app/shared/errorHandler');
 const app = express();
 app.set('trust proxy', true);
 const server = http.createServer(app);
-const PORT = process.env.PORT || 9002;
 const SERVICE_NAME = 'websocket-service';
+const {
+  initializeHandlers,
+  handleJoin,
+  handleLeave,
+  handleCustomEvents,
+  cleanup: cleanupHandlers
+} = require('./events/handlers');
 
+// Initialize production modules
 // Initialize production modules
 const logger = getLogger(SERVICE_NAME);
 const healthChecker = new HealthChecker(SERVICE_NAME, {
@@ -23,6 +30,8 @@ const healthChecker = new HealthChecker(SERVICE_NAME, {
 });
 const security = new SecurityManager(SERVICE_NAME);
 const errorHandler = new ErrorHandler(SERVICE_NAME);
+
+const { initAdapter } = require('./config/adapter');
 
 // Socket.IO setup
 const io = socketIo(server, {
@@ -34,6 +43,12 @@ const io = socketIo(server, {
   pingTimeout: 60000,
   pingInterval: 25000
 });
+
+// Initialize Redis adapter for cluster coordination
+initAdapter(io);
+
+// Initialize event handlers
+initializeHandlers(io);
 
 // Request parsing
 app.use(express.json({ limit: '10mb' }));
@@ -72,24 +87,34 @@ app.get('/stats', (req, res) => {
 const activeConnections = new Map();
 
 // Middleware for Handshake Authentication
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-  const userId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
+  // userId can be extracted from token, but we allow it as a hint for debugging
+  const hintedUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
 
-  if (token && userId) {
-    // Verify JWT token here (mocking verification for now, replace with actual)
-    // const user = await security.verifyToken(token);
+  if (token) {
+    try {
+      const jwt = require('jsonwebtoken');
+      const secret = process.env.JWT_SECRET || 'sdjnjkdjafd8a79d7fa76yuadsjbjahsgtd76y3498hnjf//dkjsfa';
+      const decoded = jwt.verify(token, secret);
 
-    socket.userId = userId;
-    socket.authenticated = true;
+      socket.userId = decoded.userId || decoded.id || hintedUserId;
+      socket.user = decoded;
+      socket.authenticated = true;
 
-    // Auto-join user room
-    socket.join(`user:${userId}`);
+      // Auto-join user room
+      socket.join(`user:${socket.userId}`);
 
-    logger.info('Socket authenticated via Handshake', {
-      socketId: socket.id,
-      userId: userId
-    });
+      logger.info('Socket authenticated via Handshake', {
+        socketId: socket.id,
+        userId: socket.userId
+      });
+      return next();
+    } catch (err) {
+      logger.warn('Socket handshake authentication failed', { error: err.message });
+      // We don't block the connection yet, but we mark as unauthenticated
+      socket.authenticated = false;
+    }
   }
   next();
 });
@@ -110,62 +135,47 @@ io.on('connection', (socket) => {
     userAgent: socket.handshake.headers['user-agent']
   });
 
-  // Authentication (if token is provided)
+  // Authentication (if token is provided after connection)
   socket.on('authenticate', (data) => {
     try {
-      const { token, userId } = data;
+      const { token } = data;
 
-      if (token && userId) {
-        // Verify JWT token here
-        socket.userId = userId;
+      if (token) {
+        const jwt = require('jsonwebtoken');
+        const secret = process.env.JWT_SECRET || 'sdjnjkdjafd8a79d7fa76yuadsjbjahsgtd76y3498hnjf//dkjsfa';
+        const decoded = jwt.verify(token, secret);
+
+        socket.userId = decoded.userId || decoded.id || data.userId;
+        socket.user = decoded;
         socket.authenticated = true;
 
         // Join user-specific room
-        socket.join(`user:${userId}`);
+        socket.join(`user:${socket.userId}`);
 
-        logger.info('Socket authenticated', {
+        logger.info('Socket authenticated via Event', {
           socketId: socket.id,
-          userId: userId
+          userId: socket.userId
         });
 
-        socket.emit('authenticated', { success: true, userId });
+        socket.emit('authenticated', { ok: true, userId: socket.userId });
       } else {
-        socket.emit('authentication_error', { error: 'Missing token or userId' });
+        socket.emit('authenticated', { ok: false, message: 'Token required' });
       }
-    } catch (error) {
-      logger.error('Authentication error', {
-        socketId: socket.id,
-        error: error.message
-      });
-      socket.emit('authentication_error', { error: 'Authentication failed' });
+    } catch (err) {
+      logger.warn('Socket authentication event failed', { error: err.message });
+      socket.emit('authenticated', { ok: false, message: 'Invalid token' });
     }
   });
 
-  // Join room
-  socket.on('join_room', (roomId) => {
-    if (roomId) {
-      socket.join(roomId);
-      logger.info('Socket joined room', {
-        socketId: socket.id,
-        roomId: roomId,
-        userId: socket.userId
-      });
-      socket.emit('room_joined', { roomId });
-    }
-  });
+  // Join user-specific room automatically
+  if (socket.userId) {
+    socket.join(`user:${socket.userId}`);
+  }
 
-  // Leave room
-  socket.on('leave_room', (roomId) => {
-    if (roomId) {
-      socket.leave(roomId);
-      logger.info('Socket left room', {
-        socketId: socket.id,
-        roomId: roomId,
-        userId: socket.userId
-      });
-      socket.emit('room_left', { roomId });
-    }
-  });
+  // Use modular handlers
+  handleJoin(socket);
+  handleLeave(socket);
+  handleCustomEvents(socket);
 
   // Handle custom events
   socket.on('notification', (data) => {
@@ -177,7 +187,7 @@ io.on('connection', (socket) => {
 
     // Broadcast to authenticated users
     if (socket.authenticated && data.recipient) {
-      io.to(`user-${data.recipient}`).emit('notification', {
+      io.to(`user:${data.recipient}`).emit('notification', {
         ...data,
         timestamp: new Date().toISOString(),
         from: socket.userId
@@ -266,6 +276,7 @@ io.on('connection', (socket) => {
   });
 });
 
+
 // HTTP API for broadcasting
 app.post('/broadcast', security.apiKeyAuth(), (req, res) => {
   try {
@@ -311,7 +322,7 @@ app.post('/notify-user', security.apiKeyAuth(), (req, res) => {
       });
     }
 
-    io.to(`user-${userId}`).emit('notification', {
+    io.to(`user:${userId}`).emit('notification', {
       ...notification,
       timestamp: new Date().toISOString()
     });
@@ -334,54 +345,92 @@ app.post('/notify-user', security.apiKeyAuth(), (req, res) => {
 // Error handling
 errorHandler.setupErrorHandlers(app);
 
-// Start server
-server.listen(PORT, () => {
-  logger.info('WebSocket Service started successfully', {
-    port: PORT,
-    environment: process.env.NODE_ENV || 'development',
-    nodeVersion: process.version,
-    pid: process.pid
-  });
+// Start Worker function
+const startWorker = async () => {
+  const PORT = process.env.PORT || 9002;
+  return new Promise((resolve) => {
+    server.listen(PORT, () => {
+      logger.info('WebSocket Service started successfully', {
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development',
+        nodeVersion: process.version,
+        pid: process.pid
+      });
 
-  console.log(`🔌 WebSocket Service running on port ${PORT}`);
+      console.log(`🔌 WebSocket Service running on port ${PORT}`);
 
-  // Start RabbitMQ Consumer
-  // Delayed slightly to ensure server is fully ready
-  setTimeout(() => {
-    const { startRealtimeConsumer } = require('./consumers/realtime');
-    startRealtimeConsumer(io).catch(err => {
-      logger.error('Failed to start realtime consumer:', err);
+      // Start RabbitMQ Consumer
+      // Delayed slightly to ensure server is fully ready
+      global.consumerTimeout = setTimeout(() => {
+        const { startRealtimeConsumer } = require('./consumers/realtime');
+        startRealtimeConsumer(io).catch(err => {
+          logger.error('Failed to start realtime consumer:', err);
+        });
+      }, 1000);
+      resolve();
     });
-  }, 1000);
-});
+  });
+};
 
 // Graceful shutdown
 const shutdown = async (signal) => {
   logger.info(`Received ${signal}, starting graceful shutdown`);
 
+  // Clear consumer timeout if it hasn't run yet
+  if (global.consumerTimeout) {
+    clearTimeout(global.consumerTimeout);
+  }
+
   // Close all socket connections
-  io.close(() => {
+  if (io) {
+    io.close();
     logger.info('Socket.IO server closed');
-  });
+  }
 
-  server.close(async (err) => {
-    if (err) {
-      logger.error('Error closing server', { error: err.message });
-      process.exit(1);
+  return new Promise((resolve) => {
+    server.close(async (err) => {
+      if (err) {
+        logger.error('Error closing server', { error: err.message });
+      }
+
+      // Close shared dependencies
+      const shared = require('./config/shared');
+      if (shared.rabbitmq && shared.rabbitmq.close) {
+        try { await shared.rabbitmq.close(); } catch (e) { }
+      }
+      if (shared.redis && shared.redis.close) {
+        try { await shared.redis.close(); } catch (e) { }
+      }
+
+      logger.info('WebSocket Service shutdown completed');
+      if (signal !== 'TEST') {
+        process.exit(0);
+      }
+      resolve();
+    });
+
+    if (signal !== 'TEST') {
+      setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 30000);
     }
-
-    logger.info('WebSocket Service shutdown completed');
-    process.exit(0);
   });
-
-  setTimeout(() => {
-    logger.error('Forced shutdown after timeout');
-    process.exit(1);
-  }, 30000);
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Export for testing
+module.exports = { app, server, io, startWorker, shutdown };
+
+// Auto-start if not required as a module
+if (require.main === module) {
+  startWorker().catch(err => {
+    logger.error('Failed to start worker:', err);
+    process.exit(1);
+  });
+}
 
 // Error handling
 process.on('unhandledRejection', (reason, promise) => {

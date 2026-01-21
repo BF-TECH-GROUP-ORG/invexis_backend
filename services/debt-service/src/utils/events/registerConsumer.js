@@ -11,24 +11,38 @@ const registerConsumers = async (consumerConfigs) => {
 
   for (const config of consumerConfigs) {
     try {
-      await subscribe(
-        {
-          queue: config.queue,
-          exchange: config.exchange,
-          pattern: config.pattern,
-        },
-        async (event, routingKey) => {
-          console.log(`📥 [${config.name}] Received: ${routingKey}`);
-          try {
-            console.log(`🔍 About to call handler for ${config.name}`, JSON.stringify(event, null, 2));
-            await config.handler(event, routingKey);
-            console.log(`✅ Handler completed for ${config.name}`);
-          } catch (handlerError) {
-            console.error(`❌ Handler error for ${config.name}:`, handlerError);
-            throw handlerError;
+      const patterns = [config.pattern, ...(config.additionalPatterns || [])];
+
+      for (const pattern of patterns) {
+        await subscribe(
+          {
+            queue: config.queue,
+            exchange: config.exchange,
+            pattern: pattern,
+          },
+          async (event, routingKey) => {
+            console.log(`📥 [${config.name}] Received: ${routingKey}`);
+            try {
+              // Standardize event structure: Support both wrapped {type, data} and direct formats
+              let eventToProcess = event;
+              if (event.data && (event.type || event.event)) {
+                eventToProcess = event.data;
+                // Attach type if it's in the envelope
+                if (!eventToProcess.type) {
+                  eventToProcess.type = event.type || event.event;
+                }
+              }
+
+              console.log(`🔍 Processing event for ${config.name}`, JSON.stringify(eventToProcess, null, 2));
+              await config.handler(eventToProcess, routingKey);
+              console.log(`✅ Handler completed for ${config.name}`);
+            } catch (handlerError) {
+              console.error(`❌ Handler error for ${config.name}:`, handlerError);
+              throw handlerError;
+            }
           }
-        }
-      );
+        );
+      }
 
       console.log(`✅ Registered consumer: ${config.name} (${config.pattern})`);
     } catch (error) {

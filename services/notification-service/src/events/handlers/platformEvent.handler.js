@@ -28,37 +28,48 @@ module.exports = async function handlePlatformEvent(event, routingKey) {
 
         logger.info(`📥 [${source || 'unknown'}] Received event: ${type || routingKey}`);
 
+        let handled = false;
+
         // Route to domain-specific handlers based on event type
         if (type && type.startsWith('debt.')) {
             await debtEventHandler(event, routingKey);
+            handled = true;
         }
 
         if (type && type.startsWith('sale.')) {
             await saleEventHandler(event, routingKey);
+            handled = true;
         }
 
         if (type && type.startsWith('payment.')) {
             await paymentEventHandler(event, routingKey);
+            handled = true;
         }
 
         if (type && type.startsWith('auth.')) {
             await authEventHandler(event, routingKey);
+            handled = true;
         }
 
         if (type && type.startsWith('shop.')) {
             await shopEventHandler(event, routingKey);
+            handled = true;
         }
 
         if (type && type.startsWith('company.')) {
             await companyEventHandler(event, routingKey);
+            handled = true;
         }
 
-        if (type && type.startsWith('product.')) {
+        if (type && (type.startsWith('product.') || type.startsWith('inventory.'))) {
             await productEventHandler(event, routingKey);
+            handled = true;
         }
 
-        // Fallback to generic processor for unmapped event types
-        await notificationProcessor.processEvent(event, routingKey);
+        // Fallback to generic processor ONLY for unmapped event types
+        if (!handled) {
+            await notificationProcessor.processEvent(event, routingKey);
+        }
 
     } catch (error) {
         logger.error(`❌ Error handling platform event:`, {

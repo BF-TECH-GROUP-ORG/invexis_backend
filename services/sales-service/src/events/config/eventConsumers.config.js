@@ -7,7 +7,6 @@
 const { exchanges } = require("/app/shared/rabbitmq");
 const handleInventoryEvent = require("../handlers/inventoryEvent.handler");
 const handleInventoryReturnEvent = require("../handlers/inventoryReturnEvent.handler");
-const handleDocumentEvent = require("../handlers/document.handler");
 const handlePaymentEvent = require("../handlers/paymentEvent.handler");
 const handleShopEvent = require("../handlers/shopEvent.handler");
 const handleCustomerEvent = require("../handlers/customerEvent.handler");
@@ -22,13 +21,14 @@ module.exports = [
     description: "Handles product and stock events from inventory-service",
   },
   {
-    name: "paymentEvents",
+    name: "paymentAndDocumentEvents",
     queue: "sales_payment_events_queue",
     exchange: exchanges.topic,
     pattern: "payment.#",
+    additionalPatterns: ["document.invoice.created"],
     handler: handlePaymentEvent,
     description:
-      "Handles payment completion and failure events from payment-service",
+      "Handles payment and document completion events",
   },
   {
     name: "shopEvents",
@@ -54,14 +54,6 @@ module.exports = [
     handler: handleInventoryReturnEvent,
     description:
       "Handles inventory return confirmation events from inventory-service",
-  },
-  {
-    name: "documentEvents",
-    queue: "sales_document_events_queue",
-    exchange: exchanges.topic,
-    pattern: "document.#",
-    handler: handleDocumentEvent,
-    description: "Handles document creation events from document-service",
   },
 ];
 

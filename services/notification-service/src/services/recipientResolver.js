@@ -1,36 +1,15 @@
 const axios = require('axios');
-const jwt = require('jsonwebtoken'); // Added jsonwebtoken
 const { AUTH_ROLES, DEPARTMENTS, ROLE_DISPLAY_NAMES, DEPARTMENT_DISPLAY_NAMES } = require('../constants/roles');
 const logger = require('../utils/logger');
 
 class RecipientResolver {
     constructor() {
-        this.authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:3001';
-        this.jwtSecret = process.env.JWT_ACCESS_SECRET; // Shared secret for internal JWT
+        // Ensure base URL doesn't have trailing slash or duplicate path if possible
+        const rawAuthUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:8001';
+        this.authServiceUrl = rawAuthUrl.replace(/\/$/, '').replace(/\/auth$/, ''); // Strip trailing slash and /auth if present
+
         this.cache = new Map(); // Simple in-memory cache
         this.cacheTTL = 5 * 60 * 1000; // 5 minutes
-    }
-
-    /**
-     * Generate a short-lived system token for service-to-service auth
-     */
-    getSystemToken() {
-        if (!this.jwtSecret) {
-            logger.warn('⚠️ JWT_ACCESS_SECRET not defined in Notification Service');
-            return null;
-        }
-
-        return jwt.sign(
-            {
-                sub: '660000000000000000000000', // Valid ObjectId format for 'notification-service'
-                displayName: 'Notification Service',
-                role: 'super_admin', // Elevate privileges for internal lookups
-                iss: 'invexis-auth',
-                aud: 'invexis-apps'
-            },
-            this.jwtSecret,
-            { expiresIn: '1m' }
-        );
     }
 
     /**
@@ -107,6 +86,14 @@ class RecipientResolver {
         // Special case: AFFECTED_USER (the user directly involved in the event)
         if (role === 'AFFECTED_USER') {
             const id = affectedUserId || userId || adminId;
+
+            // If no registered user found, but it's a debt event with a phone number, 
+            // return 'external' to trigger the external notification flow.
+            if (!id && eventType && eventType.startsWith('debt.') && (context.phone || context.customerPhone)) {
+                logger.debug(`👤 External recipient identified for ${eventType}`);
+                return ['external'];
+            }
+
             return id ? [id] : [];
         }
 
@@ -154,10 +141,9 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
-            const token = this.getSystemToken();
-            const response = await axios.get(`${this.authServiceUrl}/users`, {
+            const response = await axios.get(`${this.authServiceUrl}/auth/users`, {
                 params: { role: AUTH_ROLES.SUPER_ADMIN },
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                headers: { 'X-Internal-Request': 'true' },
                 timeout: 5000
             });
 
@@ -168,7 +154,8 @@ class RecipientResolver {
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
-            logger.error('Failed to fetch super admins:', error.message);
+            const errorMsg = error.response?.data?.error || error.message;
+            logger.error('Failed to fetch super admins:', errorMsg);
             return [];
         }
     }
@@ -184,13 +171,12 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
-            const token = this.getSystemToken();
-            const response = await axios.get(`${this.authServiceUrl}/users`, {
+            const response = await axios.get(`${this.authServiceUrl}/auth/users`, {
                 params: {
                     role: AUTH_ROLES.COMPANY_ADMIN,
                     companies: companyId
                 },
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                headers: { 'X-Internal-Request': 'true' },
                 timeout: 5000
             });
 
@@ -200,7 +186,8 @@ class RecipientResolver {
             this.setCache(cacheKey, userIds);
             return userIds;
         } catch (error) {
-            logger.error(`Failed to fetch company admins for ${companyId}:`, error.message);
+            const errorMsg = error.response?.data?.error || error.message;
+            logger.error(`Failed to fetch company admins for ${companyId}:`, errorMsg);
             return [];
         }
     }
@@ -220,7 +207,6 @@ class RecipientResolver {
         if (cached) return cached;
 
         try {
-            const token = this.getSystemToken();
             const params = { role: AUTH_ROLES.WORKER };
             if (shopId) params.shops = shopId;
             else if (companyId) params.companies = companyId;
@@ -228,14 +214,14 @@ class RecipientResolver {
             if (department) params.assignedDepartments = department;
 
             logger.debug(`🔍 Querying auth-service for workers:`, {
-                url: `${this.authServiceUrl}/users`,
+                url: `${this.authServiceUrl}/auth/users`,
                 params,
                 department
             });
 
-            const response = await axios.get(`${this.authServiceUrl}/users`, {
+            const response = await axios.get(`${this.authServiceUrl}/auth/users`, {
                 params,
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                headers: { 'X-Internal-Request': 'true' },
                 timeout: 5000
             });
 
@@ -286,7 +272,7 @@ class RecipientResolver {
                 ]
             },
             'shop.updated': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'shop.deleted': {
                 roles: [
@@ -295,18 +281,18 @@ class RecipientResolver {
                 ]
             },
             'shop.statusChanged': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
 
             // Inventory Events - Management department handles inventory
             'inventory.low_stock': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'inventory.low.stock': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'inventory.product.low_stock': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'product.created': {
                 roles: [
@@ -315,7 +301,7 @@ class RecipientResolver {
                 ]
             },
             'product.updated': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'product.deleted': {
                 roles: [
@@ -341,6 +327,33 @@ class RecipientResolver {
                     AUTH_ROLES.COMPANY_ADMIN
                 ]
             },
+            'inventory.stock.updated': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.bulk.stock_in': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.bulk.stock_out': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.transfer.created': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.transfer.bulk.intra': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.transfer.bulk.cross.sent': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.transfer.bulk.cross.received': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.transfer.cross.sent': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.transfer.cross.received': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
 
             // Sales Events - Both departments get notified
             'sale.created': {
@@ -360,10 +373,11 @@ class RecipientResolver {
             },
             'sale.updated': {
                 roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
             },
-            'sale.completed': { roles: [AUTH_ROLES.WORKER] },
+            'sale.completed': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.WORKER] },
             'sale.deleted': {
                 roles: [
                     AUTH_ROLES.COMPANY_ADMIN,
@@ -397,21 +411,23 @@ class RecipientResolver {
             'subscription.expired': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
 
             // Auth Events
-            'user.created': { roles: ['AFFECTED_USER'] },
-            'user.verified': { roles: ['AFFECTED_USER'] },
-            'user.password.reset': { roles: ['AFFECTED_USER'] },
+            'user.created': { roles: ['AFFECTED_USER', AUTH_ROLES.COMPANY_ADMIN] },
+            'user.verified': { roles: ['AFFECTED_USER', AUTH_ROLES.COMPANY_ADMIN] },
+            'user.password.reset': { roles: ['AFFECTED_USER', AUTH_ROLES.COMPANY_ADMIN] },
             'user.suspended': { roles: ['AFFECTED_USER', AUTH_ROLES.COMPANY_ADMIN] },
-            'user.deleted': { roles: ['AFFECTED_USER'] },
+            'user.deleted': { roles: ['AFFECTED_USER', AUTH_ROLES.COMPANY_ADMIN] },
 
             // Debt Events - Management department handles debt
             'debt.created': {
                 roles: [
+                    'AFFECTED_USER', // Target the Customer/Debtor
                     AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
             },
             'debt.repayment.created': {
                 roles: [
+                    'AFFECTED_USER', // Target the Customer/Debtor
                     AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
@@ -422,33 +438,46 @@ class RecipientResolver {
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
             },
-            'debt.fully_paid': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'debt.fully_paid': {
+                roles: [
+                    'AFFECTED_USER', // Target the Customer/Debtor
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
             'debt.marked.paid': {
                 roles: [
+                    'AFFECTED_USER', // Target the Customer/Debtor
                     AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
             },
             'debt.cancelled': {
                 roles: [
+                    'AFFECTED_USER', // Target the Customer/Debtor
                     AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
             },
             'debt.repaid': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'debt.status.updated': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'debt.payment.received': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
             },
             'debt.reminder.upcoming': {
-                roles: [{ role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+                roles: [
+                    'AFFECTED_USER', // Target the Debtor/Customer
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
             },
             'debt.reminder.overdue': {
                 roles: [
+                    'AFFECTED_USER', // Target the Debtor/Customer
                     AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
@@ -459,7 +488,7 @@ class RecipientResolver {
                 roles: [AUTH_ROLES.SUPER_ADMIN]
             },
             'audit.security.alert': {
-                roles: [AUTH_ROLES.SUPER_ADMIN]
+                roles: [AUTH_ROLES.SUPER_ADMIN, AUTH_ROLES.COMPANY_ADMIN]
             },
             'audit.system.error': {
                 roles: [AUTH_ROLES.SUPER_ADMIN]

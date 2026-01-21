@@ -49,6 +49,21 @@ class InvoiceRepository {
     }
 
     /**
+     * Get invoice by saleId (stored in metadata)
+     * @param {number|string} saleId - Sale ID
+     * @returns {Promise<Object|null>} Invoice record
+     */
+    async getInvoiceBySaleId(saleId) {
+        if (!saleId) return null;
+
+        const invoice = await db('invoices')
+            .whereRaw("metadata->>'saleId' = ?", [String(saleId)])
+            .first();
+
+        return invoice || null;
+    }
+
+    /**
      * Get invoice by invoice_id
      * @param {string} invoice_id - Invoice UUID
      * @returns {Promise<Object|null>} Invoice record
@@ -91,6 +106,10 @@ class InvoiceRepository {
             if (status === 'paid') {
                 updateData.paid_at = new Date();
             }
+        }
+
+        if (updates.payment_id) {
+            updateData.payment_id = updates.payment_id;
         }
 
         if (pdf_url) {

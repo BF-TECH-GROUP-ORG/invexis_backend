@@ -41,7 +41,8 @@ module.exports = async function handleShopEvent(event, routingKey) {
  * Handle shop creation
  */
 async function handleShopCreated(data) {
-  const { shopId, shopName, companyId, createdBy } = data;
+  const { shopId, shopName, companyId, createdBy, performedBy, performedByName } = data || {};
+  const { cleanValue } = require("../../utils/dataSanitizer");
 
   if (!shopId || !companyId) {
     logger.warn("⚠️ Shop created event missing required fields");
@@ -51,19 +52,24 @@ async function handleShopCreated(data) {
   try {
     logger.info(`🏪 New shop created: ${shopName} (${shopId})`);
 
-    const notification = await Notification.create({
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "shop.created",
+      data: {
+        id: shopId,
+        name: cleanValue(shopName, "Shop"),
+        performedByName: cleanValue(performedByName, "Staff"),
+        ...data
+      },
       companyId,
-      userId: createdBy,
-      type: "shop_created",
-      title: "New Shop Created",
-      body: `Shop "${shopName}" has been created successfully.`,
+      templateName: "shop.created",
+      channels: ["inApp", "push"],
       scope: "company",
-      channels: { inApp: true },
-      payload: data,
+      roles: ["company_admin", "worker"]
     });
 
-    await notificationQueue.add("deliver", { notificationId: notification._id });
-    logger.info(`✅ Shop creation notification queued for shop ${shopId}`);
+    logger.info(`✅ Shop creation notification broadcasted for shop ${shopId}`);
   } catch (error) {
     logger.error(`❌ Error creating shop notification:`, error.message);
     throw error;
@@ -74,19 +80,65 @@ async function handleShopCreated(data) {
  * Handle shop update
  */
 async function handleShopUpdated(data) {
-  const { shopId, shopName } = data;
+  const { shopId, shopName, companyId, performedByName } = data || {};
+  const { cleanValue } = require("../../utils/dataSanitizer");
 
-  logger.info(`📝 Shop updated: ${shopName} (${shopId})`);
-  // Could send notification about shop update
+  if (!shopId || !companyId) return;
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "shop.updated",
+      data: {
+        id: shopId,
+        name: cleanValue(shopName, "Shop"),
+        performedByName: cleanValue(performedByName, "Staff"),
+        ...data
+      },
+      companyId,
+      templateName: "shop.updated",
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin", "worker"]
+    });
+
+    logger.info(`✅ Shop update notification broadcasted for shop ${shopId}`);
+  } catch (error) {
+    logger.error(`❌ Error in handleShopUpdated:`, error.message);
+  }
 }
 
 /**
  * Handle shop deletion
  */
 async function handleShopDeleted(data) {
-  const { shopId, shopName } = data;
+  const { shopId, shopName, companyId, performedByName } = data || {};
+  const { cleanValue } = require("../../utils/dataSanitizer");
 
-  logger.info(`🗑️ Shop deleted: ${shopName} (${shopId})`);
-  // Could send notification about shop deletion
+  if (!shopId || !companyId) return;
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "shop.deleted",
+      data: {
+        id: shopId,
+        name: cleanValue(shopName, "Shop"),
+        performedByName: cleanValue(performedByName, "Staff"),
+        ...data
+      },
+      companyId,
+      templateName: "shop.deleted",
+      channels: ["inApp", "push"],
+      scope: "company",
+      roles: ["company_admin", "worker"]
+    });
+
+    logger.info(`✅ Shop deletion notification broadcasted for shop ${shopId}`);
+  } catch (error) {
+    logger.error(`❌ Error in handleShopDeleted:`, error.message);
+  }
 }
 

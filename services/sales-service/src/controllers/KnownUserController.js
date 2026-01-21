@@ -1,8 +1,20 @@
 const knownUserService = require("../services/knownUser.service");
+const redisHelper = require("../utils/redisHelper");
 
 /**
- * Create a new KnownUser
- * Validates that name, phone, and email are unique per company
+ * Cache invalidation helper for KnownUsers
+ */
+const invalidateUserCache = async () => {
+  try {
+    await redisHelper.scanDel("known_users:*");
+    console.log("🧹 Invalidated KnownUser Redis cache");
+  } catch (err) {
+    console.error("❌ Failed to invalidate user cache:", err);
+  }
+};
+
+/**
+ * Create a new KnownUser (System-Wide)
  */
 const createKnownUser = async (req, res) => {
   try {
@@ -15,11 +27,9 @@ const createKnownUser = async (req, res) => {
       customerAddress,
     } = req.body;
 
-    // Validate required fields
     if (!customerName || !customerPhone) {
       return res.status(400).json({
-        message:
-          "Missing required fields: customerName, customerPhone",
+        message: "Missing required fields: customerName, customerPhone",
       });
     }
 
@@ -32,24 +42,25 @@ const createKnownUser = async (req, res) => {
       customerAddress,
     });
 
+    await invalidateUserCache();
+
     return res.status(201).json({
+      success: true,
       message: "KnownUser created successfully",
       data: knownUser,
     });
   } catch (error) {
     console.error("createKnownUser error:", error);
-    // Check if it's a duplicate error (unique constraint violation)
-    if (
-      error.message.includes("Unique") ||
-      error.message.includes("unique")
-    ) {
-      return res.status(409).json({
-        message:
-          "A customer with this phone or email already exists for this company",
-        error: error.message,
-      });
-    }
-    return res.status(500).json({ error: error.message });
+    const [code, msg] = error.message.includes(":")
+      ? error.message.split(":").map(s => s.trim())
+      : ["SYSTEM_ERROR", error.message];
+
+    const statusCode = code === "VALIDATION_ERROR" ? 400 : code === "CONFLICT_ERROR" ? 409 : 500;
+    return res.status(statusCode).json({
+      success: false,
+      error: code,
+      message: msg
+    });
   }
 };
 
@@ -62,38 +73,118 @@ const getKnownUser = async (req, res) => {
 
     const knownUser = await knownUserService.getKnownUserById(id);
     if (!knownUser) {
-      return res.status(404).json({ message: "KnownUser not found" });
+      return res.status(404).json({
+        success: false,
+        error: "NOT_FOUND",
+        message: "KnownUser not found"
+      });
     }
 
-    return res.json(knownUser);
+    return res.json({
+      success: true,
+      data: knownUser
+    });
   } catch (error) {
     console.error("getKnownUser error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: "DATABASE_ERROR",
+      message: error.message
+    });
   }
 };
 
 /**
- * List all KnownUsers for a company
+ * List KnownUsers (filtered by company or all)
  */
 const listKnownUsers = async (req, res) => {
   try {
-    const { companyId } = req.query;
-    const { limit = 10, offset = 0, isActive = "true" } = req.query;
+    const { companyId, limit = 10, offset = 0, isActive = "true" } = req.query;
+    const L = parseInt(limit);
+    const O = parseInt(offset);
+    const A = isActive === "true";
 
-    if (!companyId) {
-      return res.status(400).json({ message: "companyId is required" });
+    // Redis Cache Key
+    const cacheKey = `known_users:list:comp=${companyId || 'all'}:L=${L}:O=${O}:A=${A}`;
+    const cachedData = await redisHelper.getCache(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
     }
 
-    const knownUsers = await knownUserService.listKnownUsers(companyId, {
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      isActive: isActive === "true",
+    const result = await knownUserService.listKnownUsers(companyId, {
+      limit: L,
+      offset: O,
+      isActive: A,
     });
 
-    return res.json(knownUsers);
+    const response = {
+      success: true,
+      data: result.users,
+      pagination: {
+        totalCount: result.totalCount,
+        totalPages: Math.ceil(result.totalCount / L),
+        currentPage: Math.floor(O / L) + 1,
+        limit: L,
+        offset: O
+      }
+    };
+
+    await redisHelper.setCache(cacheKey, response, 3600);
+    return res.json(response);
   } catch (error) {
     console.error("listKnownUsers error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: "DATABASE_ERROR",
+      message: error.message
+    });
+  }
+};
+
+/**
+ * Get all KnownUsers in the system
+ */
+const getAllUsers = async (req, res) => {
+  try {
+    const { limit = 50, offset = 0, isActive = "true" } = req.query;
+    const L = parseInt(limit);
+    const O = parseInt(offset);
+    const A = isActive === "true";
+
+    // Redis Cache Key
+    const cacheKey = `known_users:all:L=${L}:O=${O}:A=${A}`;
+    const cachedData = await redisHelper.getCache(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
+    const result = await knownUserService.getAllKnownUsers({
+      limit: L,
+      offset: O,
+      isActive: A,
+    });
+
+    const response = {
+      success: true,
+      data: result.users,
+      pagination: {
+        totalCount: result.totalCount,
+        totalPages: Math.ceil(result.totalCount / L),
+        currentPage: Math.floor(O / L) + 1,
+        limit: L,
+        offset: O
+      }
+    };
+
+    await redisHelper.setCache(cacheKey, response, 3600);
+    return res.json(response);
+  } catch (error) {
+    console.error("getAllUsers error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "DATABASE_ERROR",
+      message: error.message
+    });
   }
 };
 
@@ -119,30 +210,32 @@ const updateKnownUser = async (req, res) => {
     }
 
     if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({ message: "No valid fields to update" });
+      return res.status(400).json({
+        success: false,
+        error: "VALIDATION_ERROR",
+        message: "No valid fields to update"
+      });
     }
 
     const knownUser = await knownUserService.updateKnownUser(id, updateData);
+    await invalidateUserCache();
     return res.json({
+      success: true,
       message: "KnownUser updated successfully",
       data: knownUser,
     });
   } catch (error) {
     console.error("updateKnownUser error:", error);
-    if (error.message.includes("not found")) {
-      return res.status(404).json({ message: error.message });
-    }
-    if (
-      error.message.includes("Unique") ||
-      error.message.includes("unique")
-    ) {
-      return res.status(409).json({
-        message:
-          "A customer with this phone or email already exists for this company",
-        error: error.message,
-      });
-    }
-    return res.status(500).json({ error: error.message });
+    const [code, msg] = error.message.includes(":")
+      ? error.message.split(":").map(s => s.trim())
+      : ["SYSTEM_ERROR", error.message];
+
+    const statusCode = code === "VALIDATION_ERROR" ? 400 : code === "NOT_FOUND" ? 404 : code === "CONFLICT_ERROR" ? 409 : 500;
+    return res.status(statusCode).json({
+      success: false,
+      error: code,
+      message: msg
+    });
   }
 };
 
@@ -154,16 +247,24 @@ const deactivateKnownUser = async (req, res) => {
     const { id } = req.params;
 
     const knownUser = await knownUserService.deactivateKnownUser(id);
+    await invalidateUserCache();
     return res.json({
+      success: true,
       message: "KnownUser deactivated successfully",
       data: knownUser,
     });
   } catch (error) {
     console.error("deactivateKnownUser error:", error);
-    if (error.message.includes("not found")) {
-      return res.status(404).json({ message: error.message });
-    }
-    return res.status(500).json({ error: error.message });
+    const [code, msg] = error.message.includes(":")
+      ? error.message.split(":").map(s => s.trim())
+      : ["SYSTEM_ERROR", error.message];
+
+    const statusCode = code === "VALIDATION_ERROR" ? 400 : code === "NOT_FOUND" ? 404 : 500;
+    return res.status(statusCode).json({
+      success: false,
+      error: code,
+      message: msg
+    });
   }
 };
 
@@ -174,28 +275,39 @@ const searchKnownUsers = async (req, res) => {
   try {
     const { companyId, phone, email } = req.query;
 
-    if (!companyId) {
-      return res.status(400).json({ message: "companyId is required" });
-    }
-
     if (!phone && !email) {
-      return res
-        .status(400)
-        .json({ message: "At least phone or email is required" });
+      return res.status(400).json({
+        success: false,
+        error: "VALIDATION_ERROR",
+        message: "At least phone or email is required"
+      });
     }
 
     const { KnownUser } = require("../models/index.model");
-    const { Op } = require("sequelize");
+    const { Op, fn, col } = require("sequelize");
 
-    const where = { companyId, isActive: true };
+    const where = { isActive: true };
     if (phone) where.customerPhone = phone;
     if (email) where.customerEmail = email;
 
+    if (companyId) {
+      where[Op.and] = [
+        fn('JSON_CONTAINS', col('associatedCompanyIds'), JSON.stringify(companyId))
+      ];
+    }
+
     const knownUsers = await KnownUser.findAll({ where });
-    return res.json(knownUsers);
+    return res.json({
+      success: true,
+      data: knownUsers
+    });
   } catch (error) {
     console.error("searchKnownUsers error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: "DATABASE_ERROR",
+      message: error.message
+    });
   }
 };
 
@@ -203,6 +315,7 @@ module.exports = {
   createKnownUser,
   getKnownUser,
   listKnownUsers,
+  getAllUsers,
   updateKnownUser,
   deactivateKnownUser,
   searchKnownUsers,

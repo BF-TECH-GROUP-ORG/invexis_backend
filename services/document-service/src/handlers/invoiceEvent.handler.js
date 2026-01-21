@@ -28,7 +28,7 @@ const handleInvoiceRequest = async (event) => {
 
     const pdfStream = InvoiceGenerator.generate(payload);
 
-    const companyId = owner.companyId || 'unknown';
+    const companyId = owner.companyId && owner.companyId !== 'unknown' ? owner.companyId : (payload.companyId || 'unknown');
     const saleId = payload.saleData.saleId || 'unknown';
     const publicId = `invoice_${payload.invoiceData.invoiceNumber}_${Date.now()}`;
     const folder = `invexis/companies/${companyId}/sales/${saleId}/invoices`;
@@ -56,13 +56,15 @@ const handleInvoiceRequest = async (event) => {
         // Emit result so Sales service can update the sales record
         await rabbitmq.publish('events_topic', 'document.invoice.created', {
             type: 'document.invoice.created',
-            documentId: docId,
-            url: result.secure_url,
-            owner: owner,
-            context: {
-                ...payload.context, // Pass through parent context (contains paymentId)
-                invoiceId: payload.invoiceData.invoiceId,
-                saleId: payload.saleData.saleId
+            data: {
+                documentId: docId,
+                url: result.secure_url,
+                owner: owner,
+                context: {
+                    ...payload.context,
+                    invoiceId: payload.invoiceData.invoiceId,
+                    saleId: payload.saleData.saleId
+                }
             }
         });
         logger.info(`Invoice generated and uploaded: ${docId}`);
