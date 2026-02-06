@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 const ReturnMetric = sequelize.define(
     "ReturnMetric",
@@ -34,8 +35,10 @@ const ReturnMetric = sequelize.define(
             allowNull: false,
         },
         refundAmount: {
-            type: DataTypes.DECIMAL(10, 2),
+            type: DataTypes.BIGINT,
             allowNull: false,
+            get() { return Money.toMajor(this.getDataValue('refundAmount')); },
+            set(value) { this.setDataValue('refundAmount', Money.toMinor(value)); }
         },
         reason: {
             type: DataTypes.STRING,

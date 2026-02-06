@@ -29,16 +29,6 @@ module.exports = [
         ]
     },
     {
-        name: "reports",
-        queue: "document_report_requests",
-        exchange: "events_topic",
-        pattern: "report.export_requested",
-        handler: require("../../handlers/reportEvent.handler"),
-        events: [
-            "report.export_requested"
-        ]
-    },
-    {
         name: "invoices",
         queue: "document_invoice_requests",
         exchange: "events_topic",
@@ -46,6 +36,16 @@ module.exports = [
         handler: require("../../handlers/invoiceEvent.handler"),
         events: [
             "document.invoice.requested"
+        ]
+    },
+    {
+        name: "reports",
+        queue: "document_report_requests",
+        exchange: "events_topic",
+        pattern: "document.report.requested",
+        handler: require("../../handlers/reportEvent.handler"),
+        events: [
+            "document.report.requested"
         ]
     }
 ];

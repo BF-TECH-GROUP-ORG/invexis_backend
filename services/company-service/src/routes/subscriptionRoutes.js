@@ -4,6 +4,8 @@ const {
   getSubscriptionByCompany,
   updateSubscription,
   renewSubscription,
+  initiateSubscriptionPayment,
+  manualUnlock,
   deactivateSubscription,
   checkSubscriptionStatus,
   getSubscriptionFeatures,
@@ -13,16 +15,19 @@ const {
   getUpgradeSuggestions,
   getSubscriptionSummary,
 } = require("../controllers/subscriptionController");
+const { authenticateToken, requireRole } = require("/app/shared/middlewares/auth/production-auth");
 
 const router = express.Router();
 
 // Subscription management
-router.post("/", createSubscription);
-router.get("/company/:companyId", getSubscriptionByCompany);
-router.get("/company/:companyId/status", checkSubscriptionStatus);
-router.put("/company/:companyId", updateSubscription);
-router.post("/company/:companyId/renew", renewSubscription);
-router.patch("/company/:companyId/deactivate", deactivateSubscription);
+router.post("/", authenticateToken, requireRole(["super_admin"]), createSubscription);
+router.get("/company/:companyId", authenticateToken, getSubscriptionByCompany);
+router.get("/company/:companyId/status", authenticateToken, checkSubscriptionStatus);
+router.put("/company/:companyId", authenticateToken, requireRole(["super_admin"]), updateSubscription);
+router.post("/company/:companyId/renew", authenticateToken, requireRole(["super_admin", "company_admin"]), renewSubscription);
+router.post("/company/:companyId/initiate-payment", authenticateToken, requireRole(["super_admin", "company_admin"]), initiateSubscriptionPayment);
+router.post("/company/:companyId/manual-unlock", authenticateToken, requireRole(["super_admin"]), manualUnlock);
+router.patch("/company/:companyId/deactivate", authenticateToken, requireRole(["super_admin"]), deactivateSubscription);
 
 // Subscription features
 router.get("/company/:companyId/features", getSubscriptionFeatures);

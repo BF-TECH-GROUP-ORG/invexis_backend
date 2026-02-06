@@ -1,46 +1,49 @@
 require('dotenv').config();
-const app = require('./app');
-const logger = require('./config/logger');
-const mongoose = require('mongoose');
-const { startConsumer } = require('./services/consumerService');
-const redis = require('/app/shared/redis.js');
-const rabbitmq = require('/app/shared/rabbitmq.js');
+const express = require('express');
+const cors = require('cors');
+const connectDB = require('./config/database');
+const apiRoutes = require('./routes/api');
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(require('compression')()); // GZIP Compression for ultra-fast large JSON responses
+
+const { initRabbitMQ } = require('./config/rabbitmq');
+const registerConsumers = require('./events/consumer');
+
+// Database Connection
+connectDB();
+
+// Initialize Event Bus & Scheduled Worker
+const startBackgroundWorkers = async () => {
+    try {
+        await initRabbitMQ(); // Connect
+        await registerConsumers(); // Subscribe
+
+        const scheduledReportWorker = require('./workers/scheduledReportWorker');
+        scheduledReportWorker.start();
+        console.log("✅ Background Workers Initialized");
+    } catch (err) {
+        console.error("❌ Background Worker initialization failed:", err);
+    }
+};
+startBackgroundWorkers();
+
+// Routes
+const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
+
+app.use('/report', authenticateToken, checkSubscriptionStatus(), apiRoutes);
+
+// Health Check
+app.get('/health', (req, res) => res.json({ status: 'OK', service: 'Report Service' }));
 
 const PORT = process.env.PORT || 9003;
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI)
-    .then(async () => {
-        logger.info('Connected to MongoDB')
-        console.log(process.env.MONGO_URI)
-        // Initialize Redis
-        await redis.connect();
-        logger.info('✅ Redis connected');
-
-        // Initialize RabbitMQ
-        await rabbitmq.connect();
-        logger.info('✅ RabbitMQ connected');
-
-        // Start Event Consumer
-        await startConsumer();
-
-        // Start server
-        const server = app.listen(PORT, () => {
-            logger.info(`Report Service running on port ${PORT}`);
-        });
-
-        // Graceful shutdown
-        process.on('SIGTERM', () => {
-            logger.info('SIGTERM received, shutting down gracefully');
-            server.close(() => {
-                logger.info('Process terminated');
-                mongoose.connection.close(false, () => {
-                    process.exit(0);
-                });
-            });
-        });
-    })
-    .catch((err) => {
-        logger.error('Failed to connect to MongoDB', err);
-        process.exit(1);
-    });
+app.listen(PORT, () => {
+    console.log(`🚀 Report Service running on port ${PORT}`);
+    console.log(`📊 Mode: Event-Driven Data Warehouse`);
+});

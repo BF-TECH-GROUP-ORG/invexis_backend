@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 const CustomerMetric = sequelize.define(
     "CustomerMetric",
@@ -22,9 +23,11 @@ const CustomerMetric = sequelize.define(
             allowNull: false,
         },
         value: {
-            type: DataTypes.DECIMAL(12, 2), // Positive for revenue/debt, negative for returns/payments
+            type: DataTypes.BIGINT, // Positive for revenue/debt, negative for returns/payments
             allowNull: false,
             defaultValue: 0,
+            get() { return Money.toMajor(this.getDataValue('value')); },
+            set(value) { this.setDataValue('value', Money.toMinor(value)); }
         },
         metadata: {
             type: DataTypes.JSONB,

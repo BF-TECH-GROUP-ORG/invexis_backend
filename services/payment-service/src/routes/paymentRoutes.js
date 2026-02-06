@@ -59,7 +59,9 @@ router.post('/webhooks/airtel', webhookController.handleAirtelWebhook.bind(webho
 // M-Pesa webhook
 router.post('/webhooks/mpesa', webhookController.handleMpesaWebhook.bind(webhookController));
 
+
 // ==================== Transaction Routes ====================
+
 // Get seller transactions
 router.get('/transactions/seller/:seller_id', transactionController.getSellerTransactions.bind(transactionController));
 
@@ -77,7 +79,9 @@ router.get('/reports/platform/top-companies', reportingController.getPlatformTop
 // Dashboard Charts (User/Admin)
 router.get('/reports/charts/dashboard', reportingController.getDashboardCharts.bind(reportingController));
 
+
 // ==================== Invoice Routes ====================
+
 // Get invoice by ID
 router.get('/invoices/:invoice_id', invoiceController.getInvoice.bind(invoiceController));
 
@@ -93,7 +97,9 @@ router.get('/invoices/shop/:shop_id', invoiceController.getShopInvoices.bind(inv
 // Download invoice PDF
 router.get('/invoices/:invoice_id/pdf', invoiceController.downloadInvoicePDF.bind(invoiceController));
 
+
 // ==================== Reporting Routes ====================
+
 // Get seller monthly totals
 router.get('/reports/seller/:seller_id/monthly', reportingController.getSellerMonthlyTotals.bind(reportingController));
 
@@ -117,9 +123,6 @@ router.get('/reports/shop/:shop_id/analytics', reportingController.getShopAnalyt
 
 // Get company analytics
 router.get('/reports/company/:company_id/analytics', reportingController.getCompanyAnalytics.bind(reportingController));
-
-// Get top products
-router.get('/reports/top-products', reportingController.getTopProducts.bind(reportingController));
 
 // Get payout history
 router.get('/reports/payouts', reportingController.getPayoutHistory.bind(reportingController));

@@ -125,54 +125,64 @@ class SubscriptionService {
   }
 
   /**
+   * Smart Subscription Guard:
+   * 1. Alert 2 days before expiry
+   * 2. Lock 3 days after expiry (Grace Period)
+   */
+  static async runSmartSubscriptionChecks() {
+    try {
+      console.log("🕒 [SubscriptionService] Running Smart Subscription Checks...");
+
+      // 1. Proactive Alerts (2 days before)
+      const expiringSoon = await Subscription.getExpiringSoon(2);
+      for (const sub of expiringSoon) {
+        await this._emitAlertEvent(sub, "subscription.expiring.soon", "Your subscription ends in 2 days. Please renew to avoid service interruption.");
+      }
+
+      // 2. Grace Period Locks (3 days after)
+      const graceExpired = await Subscription.getGracePeriodExpired(3);
+      for (const sub of graceExpired) {
+        await this.deactivate(sub.company_id, "system_grace_period_expired");
+        console.log(`🔒 [SubscriptionService] Company ${sub.company_id} locked after 3-day grace period.`);
+      }
+
+      console.log(`✅ [SubscriptionService] Smart Checks Done: Alerts(${expiringSoon.length}), Locks(${graceExpired.length})`);
+    } catch (error) {
+      console.error("❌ [SubscriptionService] Smart Check Error:", error.message);
+    }
+  }
+
+  /**
+   * Internal helper to emit alert events
+   */
+  static async _emitAlertEvent(sub, type, message) {
+    const company = await Company.findCompanyById(sub.company_id);
+    await db.transaction(async (trx) => {
+      await Outbox.create({
+        type,
+        exchange: "events_topic",
+        routingKey: type,
+        payload: {
+          companyId: sub.company_id,
+          companyName: company?.name,
+          adminEmail: company?.email,
+          adminPhone: company?.phone,
+          message,
+          endDate: sub.end_date,
+          traceId: uuidv4(),
+        },
+      }, trx);
+    });
+    console.log(`📧 [SubscriptionService] Alert (${type}) queued for company ${sub.company_id}`);
+  }
+
+  /**
    * Process all subscriptions due for auto-renewal (Pivoted to Suspend & Notify for MVP)
    */
   static async processDueRenewals() {
-    try {
-      const due = await Subscription.getDueRenewals();
-      console.log(`🔄 [SubscriptionService] Found ${due.length} subscriptions due for manual renewal check`);
-
-      for (const sub of due) {
-        console.log(`⚠️ [SubscriptionService] Subscription expired for company: ${sub.company_id}. Suspending...`);
-
-        // Transactional write: Deactivate Subscription + Suspend Company + Notify
-        await db.transaction(async (trx) => {
-          // 1. Deactivate subscription
-          await Subscription.update(sub.company_id, {
-            is_active: false,
-            last_billing_status: 'expired',
-            last_billing_attempt: new Date(),
-            updatedAt: new Date()
-          }, trx);
-
-          // 2. Suspend company
-          await Company.changeCompanyStatus(sub.company_id, 'suspended', 'system', trx);
-
-          // 3. Emit subscription.expired event for notifications (Email + SMS)
-          const company = await Company.findCompanyById(sub.company_id);
-          
-          await Outbox.create({
-            type: "subscription.expired",
-            exchange: "events_topic",
-            routingKey: "subscription.expired",
-            payload: {
-              companyId: sub.company_id,
-              companyName: company?.name || 'Your Company',
-              tier: sub.tier,
-              endDate: sub.end_date,
-              adminId: company?.company_admin_id,
-              adminEmail: company?.email,
-              adminPhone: company?.phone,
-              traceId: uuidv4(),
-            },
-          }, trx);
-        });
-
-        console.log(`✅ [SubscriptionService] Company ${sub.company_id} suspended and expiration event emitted.`);
-      }
-    } catch (error) {
-      console.error("❌ [SubscriptionService] Error processing expiries:", error.message);
-    }
+    // Keep this for standard expiration checks if needed, 
+    // but the Smart Checks cover the specific 2-day/3-day windows.
+    await this.runSmartSubscriptionChecks();
   }
 }
 

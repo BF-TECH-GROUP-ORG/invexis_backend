@@ -64,7 +64,12 @@ async function handleOrderCreated(data) {
                 previous: oldQuantity,
                 reason: `Ecommerce Order ${orderId}`,
                 userId: 'ecommerce-service',
-                meta: { orderId }
+                meta: {
+                    orderId,
+                    productName: product.name,
+                    categoryId: product.categoryId,
+                    unitCost: product.pricingId?.cost || 0
+                }
             });
 
             await stockChange.save();
@@ -182,7 +187,13 @@ async function handleOrderCancelled(data) {
                 previous: oldQuantity,
                 reason: `Ecommerce Order ${orderId} Cancelled`,
                 userId: 'ecommerce-service',
-                meta: { orderId, reason }
+                meta: {
+                    orderId,
+                    reason,
+                    productName: product.name,
+                    categoryId: product.categoryId,
+                    unitCost: product.pricingId?.cost || 0
+                }
             });
 
             await stockChange.save();

@@ -69,8 +69,10 @@ class InvoiceRepository {
      * @returns {Promise<Object|null>} Invoice record
      */
     async getInvoiceById(invoice_id) {
-        const invoice = await db('invoices')
-            .where({ invoice_id })
+        const invoice = await db('invoices as i')
+            .leftJoin('payments as p', 'i.payment_id', 'p.payment_id')
+            .select('i.*', 'p.method as payment_method', 'p.gateway', 'p.reference_id as p_reference')
+            .where('i.invoice_id', invoice_id)
             .first();
 
         return invoice || null;
@@ -137,14 +139,16 @@ class InvoiceRepository {
     async getInvoicesBySeller(seller_id, options = {}) {
         const { limit = 50, offset = 0, status } = options;
 
-        let query = db('invoices')
-            .where({ seller_id })
-            .orderBy('created_at', 'desc')
+        let query = db('invoices as i')
+            .leftJoin('payments as p', 'i.payment_id', 'p.payment_id')
+            .select('i.*', 'p.method as payment_method', 'p.gateway', 'p.reference_id as p_reference')
+            .where('i.seller_id', seller_id)
+            .orderBy('i.created_at', 'desc')
             .limit(limit)
             .offset(offset);
 
         if (status) {
-            query = query.where({ status });
+            query = query.where('i.status', status);
         }
 
         return await query;
@@ -159,14 +163,16 @@ class InvoiceRepository {
     async getInvoicesByCompany(company_id, options = {}) {
         const { limit = 50, offset = 0, status } = options;
 
-        let query = db('invoices')
-            .where({ company_id })
-            .orderBy('created_at', 'desc')
+        let query = db('invoices as i')
+            .leftJoin('payments as p', 'i.payment_id', 'p.payment_id')
+            .select('i.*', 'p.method as payment_method', 'p.gateway', 'p.reference_id as p_reference')
+            .where('i.company_id', company_id)
+            .orderBy('i.created_at', 'desc')
             .limit(limit)
             .offset(offset);
 
         if (status) {
-            query = query.where({ status });
+            query = query.where('i.status', status);
         }
 
         return await query;
@@ -181,14 +187,16 @@ class InvoiceRepository {
     async getInvoicesByShop(shop_id, options = {}) {
         const { limit = 50, offset = 0, status } = options;
 
-        let query = db('invoices')
-            .where({ shop_id })
-            .orderBy('created_at', 'desc')
+        let query = db('invoices as i')
+            .leftJoin('payments as p', 'i.payment_id', 'p.payment_id')
+            .select('i.*', 'p.method as payment_method', 'p.gateway', 'p.reference_id as p_reference')
+            .where('i.shop_id', shop_id)
+            .orderBy('i.created_at', 'desc')
             .limit(limit)
             .offset(offset);
 
         if (status) {
-            query = query.where({ status });
+            query = query.where('i.status', status);
         }
 
         return await query;

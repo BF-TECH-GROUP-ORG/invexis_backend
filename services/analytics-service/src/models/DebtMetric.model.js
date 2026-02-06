@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 /**
  * DebtMetric
@@ -39,16 +40,20 @@ const DebtMetric = sequelize.define("DebtMetric", {
         allowNull: false,
     },
     amount: {
-        type: DataTypes.DECIMAL(10, 2),
+        type: DataTypes.BIGINT,
         allowNull: false,
         defaultValue: 0,
-        comment: "Transactional amount (positive for debt created, negative for payment)"
+        comment: "Transactional amount (positive for debt created, negative for payment)",
+        get() { return Money.toMajor(this.getDataValue('amount')); },
+        set(value) { this.setDataValue('amount', Money.toMinor(value)); }
     },
     balance: {
-        type: DataTypes.DECIMAL(10, 2),
+        type: DataTypes.BIGINT,
         allowNull: false,
         defaultValue: 0,
-        comment: "Remaining balance after this transaction"
+        comment: "Remaining balance after this transaction",
+        get() { return Money.toMajor(this.getDataValue('balance')); },
+        set(value) { this.setDataValue('balance', Money.toMinor(value)); }
     },
     daysOverdue: {
         type: DataTypes.INTEGER,

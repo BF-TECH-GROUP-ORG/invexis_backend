@@ -112,7 +112,12 @@ const stockIn = asyncHandler(async (req, res) => {
         qty: Math.abs(Number(quantity)),
         previous: previous,
         reason: reason,
-        userId: userId || 'system'
+        userId: userId || 'system',
+        meta: {
+            productName: product.name,
+            categoryId: product.categoryId,
+            unitCost: product.pricingId?.cost || 0
+        }
     };
 
     try {
@@ -221,7 +226,12 @@ const stockOut = asyncHandler(async (req, res) => {
         qty: -Math.abs(Number(quantity)),
         previous: previous,
         reason: reason,
-        userId: userId || 'system'
+        userId: userId || 'system',
+        meta: {
+            productName: product.name,
+            categoryId: product.categoryId,
+            unitCost: product.pricingId?.cost || 0
+        }
     };
 
     try {
@@ -370,7 +380,12 @@ const bulkStockIn = asyncHandler(async (req, res) => {
                 qty: Math.abs(Number(quantity)),
                 previous: previous,
                 reason: reason,
-                userId: userId || 'system'
+                userId: userId || 'system',
+                meta: {
+                    productName: product.name,
+                    categoryId: product.categoryId,
+                    unitCost: product.pricingId?.cost || 0
+                }
             };
 
             try {
@@ -501,7 +516,12 @@ const bulkStockOut = asyncHandler(async (req, res) => {
                 qty: -Math.abs(Number(quantity)),
                 previous: previous,
                 reason: reason,
-                userId: userId || 'system'
+                userId: userId || 'system',
+                meta: {
+                    productName: product.name,
+                    categoryId: product.categoryId,
+                    unitCost: product.pricingId?.cost || 0
+                }
             };
 
             try {

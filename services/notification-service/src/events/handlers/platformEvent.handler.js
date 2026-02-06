@@ -14,6 +14,7 @@ const authEventHandler = require('./authEvent.handler');
 const shopEventHandler = require('./shopEvent.handler');
 const companyEventHandler = require('./companyEvent.handler');
 const productEventHandler = require('./productEvent.handler');
+const reportEventHandler = require('./reportEvent.handler');
 
 /**
  * Universal event handler that processes ANY event type
@@ -61,8 +62,18 @@ module.exports = async function handlePlatformEvent(event, routingKey) {
             handled = true;
         }
 
+        if (type && type.startsWith('subscription.')) {
+            await companyEventHandler(event, routingKey);
+            handled = true;
+        }
+
         if (type && (type.startsWith('product.') || type.startsWith('inventory.'))) {
             await productEventHandler(event, routingKey);
+            handled = true;
+        }
+
+        if (type && type.startsWith('document.')) {
+            await reportEventHandler(event, routingKey);
             handled = true;
         }
 

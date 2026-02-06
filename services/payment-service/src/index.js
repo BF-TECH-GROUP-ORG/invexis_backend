@@ -73,9 +73,6 @@ const server = app.listen(PORT, async () => {
     const subscriptionEngine = require('./services/subscriptionEngine');
     subscriptionEngine.start();
 
-    // Start Daily Revenue Reporting Cron
-    const { startRevenueCron } = require('./cron/revenueReport.cron');
-    startRevenueCron();
 
   } catch (err) {
     logger.error('Failed to start listeners/workers', { error: err.message });

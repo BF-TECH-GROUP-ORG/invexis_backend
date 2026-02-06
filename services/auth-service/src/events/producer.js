@@ -149,6 +149,28 @@ const publishUserEvent = {
         } catch (error) {
             console.error('❌ Failed to publish auth.device.updated event:', error.message);
         }
+    },
+
+    /**
+     * Security audit event
+     */
+    async security(action, userId, details = {}) {
+        try {
+            const eventData = {
+                type: `auth.security.${action}`,
+                data: {
+                    userId: userId ? userId.toString() : 'anonymous',
+                    action,
+                    ...details,
+                    timestamp: new Date().toISOString(),
+                }
+            };
+
+            await publish(exchanges.topic, `auth.security.${action}`, eventData);
+            console.log(`🛡️  Published security event: auth.security.${action}`);
+        } catch (error) {
+            console.error(`❌ Failed to publish security event [${action}]:`, error.message);
+        }
     }
 };
 

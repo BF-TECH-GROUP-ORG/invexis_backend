@@ -1,5 +1,6 @@
 // models/Promotion.js
 const mongoose = require("mongoose");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 const PromotionSchema = new mongoose.Schema(
     {
@@ -8,7 +9,12 @@ const PromotionSchema = new mongoose.Schema(
         name: { type: String, required: true },
         code: { type: String, unique: true, sparse: true },
         discountType: { type: String, enum: ["percentage", "fixed", "free_shipping"], required: true },
-        discountValue: { type: Number, required: true },
+        discountValue: {
+            type: Number,
+            required: true,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
+        },
         startAt: { type: Date, required: true },
         endAt: { type: Date, required: true },
         relatedProductIds: [{ type: String }],
@@ -17,7 +23,11 @@ const PromotionSchema = new mongoose.Schema(
         createdBy: { type: String },
         updatedBy: { type: String },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { getters: true },
+        toObject: { getters: true }
+    }
 );
 
 module.exports = mongoose.model("Promotion", PromotionSchema);

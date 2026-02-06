@@ -52,8 +52,10 @@ class TransactionRepository {
      * @returns {Promise<Object|null>} Transaction record
      */
     async getTransactionById(transaction_id) {
-        const transaction = await db('transactions')
-            .where({ transaction_id })
+        const transaction = await db('transactions as t')
+            .leftJoin('payments as p', 't.payment_id', 'p.payment_id')
+            .select('t.*', 'p.method as payment_method', 'p.gateway')
+            .where('t.transaction_id', transaction_id)
             .first();
 
         return transaction || null;
@@ -114,14 +116,16 @@ class TransactionRepository {
     async getTransactionsBySeller(seller_id, options = {}) {
         const { limit = 50, offset = 0, type, status } = options;
 
-        let query = db('transactions')
-            .where({ seller_id })
-            .orderBy('created_at', 'desc')
+        let query = db('transactions as t')
+            .leftJoin('payments as p', 't.payment_id', 'p.payment_id')
+            .select('t.*', 'p.method as payment_method', 'p.gateway')
+            .where('t.seller_id', seller_id)
+            .orderBy('t.created_at', 'desc')
             .limit(limit)
             .offset(offset);
 
-        if (type) query = query.where({ type });
-        if (status) query = query.where({ status });
+        if (type) query = query.where('t.type', type);
+        if (status) query = query.where('t.status', status);
 
         return await query;
     }
@@ -132,14 +136,16 @@ class TransactionRepository {
     async getTransactionsByCompany(company_id, options = {}) {
         const { limit = 50, offset = 0, type, status } = options;
 
-        let query = db('transactions')
-            .where({ company_id })
-            .orderBy('created_at', 'desc')
+        let query = db('transactions as t')
+            .leftJoin('payments as p', 't.payment_id', 'p.payment_id')
+            .select('t.*', 'p.method as payment_method', 'p.gateway')
+            .where('t.company_id', company_id)
+            .orderBy('t.created_at', 'desc')
             .limit(limit)
             .offset(offset);
 
-        if (type) query = query.where({ type });
-        if (status) query = query.where({ status });
+        if (type) query = query.where('t.type', type);
+        if (status) query = query.where('t.status', status);
 
         return await query;
     }
@@ -150,14 +156,16 @@ class TransactionRepository {
     async getTransactionsByShop(shop_id, options = {}) {
         const { limit = 50, offset = 0, type, status } = options;
 
-        let query = db('transactions')
-            .where({ shop_id })
-            .orderBy('created_at', 'desc')
+        let query = db('transactions as t')
+            .leftJoin('payments as p', 't.payment_id', 'p.payment_id')
+            .select('t.*', 'p.method as payment_method', 'p.gateway')
+            .where('t.shop_id', shop_id)
+            .orderBy('t.created_at', 'desc')
             .limit(limit)
             .offset(offset);
 
-        if (type) query = query.where({ type });
-        if (status) query = query.where({ status });
+        if (type) query = query.where('t.type', type);
+        if (status) query = query.where('t.status', status);
 
         return await query;
     }
@@ -190,9 +198,11 @@ class TransactionRepository {
 
         return await db('transactions')
             .select(groupBy)
-            .select(db.raw('SUM(amount) as total_revenue'))
-            .select(db.raw('COUNT(*) as transaction_count'))
-            .where('status', 'succeeded')
+            .select(db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as total_revenue', ['succeeded']))
+            .select(db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as failed_revenue', ['failed']))
+            .select(db.raw('COUNT(*) as total_count'))
+            .select(db.raw('COUNT(*) FILTER (WHERE status = ?) as successful_count', ['succeeded']))
+            .select(db.raw('COUNT(*) FILTER (WHERE status = ?) as failed_count', ['failed']))
             .whereRaw(`created_at >= NOW() - INTERVAL '${interval}'`)
             .groupBy(groupBy);
     }

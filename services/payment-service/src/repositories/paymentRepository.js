@@ -95,8 +95,10 @@ class PaymentRepository {
      * @returns {Promise<Object|null>} Payment record
      */
     async getPaymentById(payment_id) {
-        const payment = await db('payments')
-            .where({ payment_id })
+        const payment = await db('payments as p')
+            .leftJoin('invoices as i', 'p.payment_id', 'i.payment_id')
+            .select('p.*', 'i.invoice_id', 'i.pdf_url as invoice_url', 'i.status as invoice_status')
+            .where('p.payment_id', payment_id)
             .first();
 
         return payment || null;
@@ -143,16 +145,20 @@ class PaymentRepository {
     async getPaymentsBySeller(seller_id, options = {}) {
         const { limit = 50, offset = 0, status } = options;
 
-        let query = db('payments').where({ seller_id });
+        let query = db('payments as p')
+            .leftJoin('invoices as i', 'p.payment_id', 'i.payment_id')
+            .select('p.*', 'i.invoice_id', 'i.pdf_url as invoice_url', 'i.status as invoice_status')
+            .where('p.seller_id', seller_id);
+
         let countQuery = db('payments').where({ seller_id }).count('payment_id as total');
 
         if (status) {
-            query = query.where({ status });
+            query = query.where('p.status', status);
             countQuery = countQuery.where({ status });
         }
 
         const [data, [{ total }]] = await Promise.all([
-            query.orderBy('created_at', 'desc').limit(limit).offset(offset),
+            query.orderBy('p.created_at', 'desc').limit(limit).offset(offset),
             countQuery
         ]);
 
@@ -168,16 +174,20 @@ class PaymentRepository {
     async getPaymentsByCompany(company_id, options = {}) {
         const { limit = 50, offset = 0, status } = options;
 
-        let query = db('payments').where({ company_id });
+        let query = db('payments as p')
+            .leftJoin('invoices as i', 'p.payment_id', 'i.payment_id')
+            .select('p.*', 'i.invoice_id', 'i.pdf_url as invoice_url', 'i.status as invoice_status')
+            .where('p.company_id', company_id);
+
         let countQuery = db('payments').where({ company_id }).count('payment_id as total');
 
         if (status) {
-            query = query.where({ status });
+            query = query.where('p.status', status);
             countQuery = countQuery.where({ status });
         }
 
         const [data, [{ total }]] = await Promise.all([
-            query.orderBy('created_at', 'desc').limit(limit).offset(offset),
+            query.orderBy('p.created_at', 'desc').limit(limit).offset(offset),
             countQuery
         ]);
 
@@ -193,16 +203,20 @@ class PaymentRepository {
     async getPaymentsByShop(shop_id, options = {}) {
         const { limit = 50, offset = 0, status } = options;
 
-        let query = db('payments').where({ shop_id });
+        let query = db('payments as p')
+            .leftJoin('invoices as i', 'p.payment_id', 'i.payment_id')
+            .select('p.*', 'i.invoice_id', 'i.pdf_url as invoice_url', 'i.status as invoice_status')
+            .where('p.shop_id', shop_id);
+
         let countQuery = db('payments').where({ shop_id }).count('payment_id as total');
 
         if (status) {
-            query = query.where({ status });
+            query = query.where('p.status', status);
             countQuery = countQuery.where({ status });
         }
 
         const [data, [{ total }]] = await Promise.all([
-            query.orderBy('created_at', 'desc').limit(limit).offset(offset),
+            query.orderBy('p.created_at', 'desc').limit(limit).offset(offset),
             countQuery
         ]);
 

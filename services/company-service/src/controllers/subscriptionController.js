@@ -131,18 +131,218 @@ const updateSubscription = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Renew subscription
+ * @desc    Manual Unlock/Renew (Super Admin only - No payment service)
+ * @route   POST /api/subscriptions/company/:companyId/manual-unlock
+ * @access  Private (Super Admin)
+ */
+const manualUnlock = asyncHandler(async (req, res) => {
+  const { companyId } = req.params;
+  const { tier, amount, durationDays, reason, plan } = req.body;
+
+  if (!tier) {
+    res.status(400);
+    throw new Error("Tier is required for manual unlock");
+  }
+
+  const { TIER_FEATURES } = require("/app/shared/config/tierFeatures.config");
+  const config = TIER_FEATURES[tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()] || TIER_FEATURES.Basic;
+
+  // Smart Calculation: If no amount/days provided, use Plan logic
+  const selectedPlan = (plan || '1m').toLowerCase();
+  const months = parseInt(selectedPlan) || 1;
+  const calculatedDays = months * 30;
+  const calculatedAmount = config.pricing?.[selectedPlan] || (config.price * months);
+
+  const finalDuration = durationDays || calculatedDays;
+  const finalAmount = amount !== undefined ? amount : calculatedAmount;
+
+  const subscription = await Subscription.findByCompany(companyId);
+  if (!subscription) {
+    res.status(404);
+    throw new Error("Subscription not found");
+  }
+
+  // Renewal with transaction (Manual - No payment event)
+  const renewed = await db.transaction(async (trx) => {
+    const result = await Subscription.renew(
+      companyId,
+      tier.toLowerCase(),
+      finalAmount,
+      finalDuration,
+      trx
+    );
+
+    // Update company status directly
+    await Company.changeCompanyStatus(companyId, "active", req.user.userId, trx);
+    await Company.changeTier(companyId, tier.toLowerCase(), req.user.userId, trx);
+
+    // Record outbox event for sync
+    await subscriptionEvents.renewed(result, trx);
+
+    return result;
+  });
+
+  console.log(`✅ [ManualUnlock] Company ${companyId} unlocked by admin ${req.user.userId}. Reason: ${reason}`);
+
+  res.json({
+    success: true,
+    message: `Company subscription unlocked manually (${config.name}). Status set to active.`,
+    data: renewed,
+  });
+});
+
+/**
+ * @desc    Initiate Subscription Payment (Company Admin Trigger)
+ * @route   POST /api/subscriptions/company/:companyId/initiate-payment
+ * @access  Private (Company Admin or Super Admin)
+ */
+const initiateSubscriptionPayment = asyncHandler(async (req, res) => {
+  // Use companyId from body or params for maximum flexibility
+  const companyId = req.body.companyId || req.params.companyId;
+  const { tier, phone, paymentMethod, plan } = req.body; // plan: '1m', '3m', '6m', '12m'
+
+  if (!companyId) {
+    res.status(400);
+    throw new Error("companyId is required to initiate payment");
+  }
+
+  // Smart Security: Company admins can only pay for their own company
+  if (req.user.role === 'company_admin' && req.user.companyId !== companyId) {
+    console.warn(`🚨 [Security] Admin ${req.user.userId} attempted to pay for unauthorized company ${companyId}`);
+    res.status(403);
+    throw new Error("You are not authorized to initiate payments for this company");
+  }
+
+  if (!tier || !phone) {
+    res.status(400);
+    throw new Error("Tier and payment phone number are required to initiate payment");
+  }
+
+  const { TIER_FEATURES } = require("/app/shared/config/tierFeatures.config");
+  const config = TIER_FEATURES[tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()] || TIER_FEATURES.Basic;
+
+  // Calculate Amount and Duration professionally
+  const selectedPlan = (plan || '1m').toLowerCase();
+  const amount = config.pricing?.[selectedPlan] || config.price;
+  const months = parseInt(selectedPlan) || 1;
+  const durationDays = months * 30;
+
+  const subscription = await Subscription.findByCompany(companyId);
+  if (!subscription) {
+    res.status(404);
+    throw new Error("Subscription not found for this company");
+  }
+
+  const company = await Company.findCompanyById(companyId);
+  if (!company) {
+    res.status(404);
+    throw new Error("Company not found");
+  }
+
+  // Determine Gateway & Payment Method professionally
+  let gateway = 'mtn_momo';
+  let method = 'mobile_money';
+  const normalizedMethod = (paymentMethod || 'mtn').toLowerCase();
+
+  if (normalizedMethod === 'cash') {
+    gateway = 'manual';
+    method = 'cash';
+  } else if (normalizedMethod === 'bank' || normalizedMethod === 'bank_transfer') {
+    gateway = 'manual';
+    method = 'bank_transfer';
+  } else if (normalizedMethod === 'airtel') {
+    gateway = 'airtel_money';
+    method = 'mobile_money';
+  } else {
+    gateway = 'mtn_momo';
+    method = 'mobile_money';
+  }
+
+  // Phone is required for mobile money only
+  const isMobileMoney = gateway === 'mtn_momo' || gateway === 'airtel_money';
+  if (isMobileMoney && !phone) {
+    res.status(400);
+    throw new Error(`Phone number is required for ${gateway.replace('_', ' ').toUpperCase()} payments`);
+  }
+
+  const targetPhone = phone || company.phone;
+
+  const { emit } = require("../events/producer");
+  const payload = {
+    event: 'PAYMENT_REQUESTED',
+    source: 'company-service',
+    paymentType: 'SUBSCRIPTION',
+    referenceId: `SUB-DIRECT-${companyId}-${Date.now()}`,
+    companyId: companyId,
+    amount: amount,
+    currency: 'RWF',
+    description: `${config.name} (${amount} RWF) via ${method.replace('_', ' ').toUpperCase()}`,
+    paymentMethod: method,
+    gateway: gateway,
+    phoneNumber: isMobileMoney ? targetPhone : null,
+    idempotencyKey: `SUB-${tier.toLowerCase()}-${normalizedMethod}-${Date.now()}`,
+    customer: {
+      name: company.name,
+      email: company.email,
+      phone: targetPhone
+    },
+    lineItems: [{
+      id: `tier_${tier.toLowerCase()}`,
+      name: config.name,
+      qty: 1,
+      price: amount
+    }],
+    metadata: {
+      subscriptionId: subscription.id,
+      tier: tier.toLowerCase(),
+      durationDays: durationDays,
+      plan: selectedPlan
+    }
+  };
+
+  await emit('subscription.payment.requested', payload);
+
+  res.json({
+    success: true,
+    message: isMobileMoney
+      ? `Payment request for ${config.name} (${amount} RWF) triggered to ${targetPhone}`
+      : `${method.replace('_', ' ').toUpperCase()} payment for ${config.name} recorded`,
+    data: { amount, tier: config.name, phone: isMobileMoney ? targetPhone : null, gateway, method }
+  });
+});
+
+/**
+ * @desc    Renew subscription (Explicit Payment Trigger)
  * @route   POST /api/subscriptions/company/:companyId/renew
  * @access  Private (Company Admin or Super Admin)
  */
 const renewSubscription = asyncHandler(async (req, res) => {
-  const { companyId } = req.params;
-  const { tier, amount, durationDays, paymentMethod } = req.body;
+  const companyId = req.body.companyId || req.params.companyId;
+  const { tier, paymentMethod, phone, plan } = req.body; // plan: '1m', '3m', '6m', '12m'
 
-  if (!tier || !amount || !durationDays) {
+  if (!companyId) {
     res.status(400);
-    throw new Error("Tier, amount, and duration (in days) are required");
+    throw new Error("companyId is required for renewal");
   }
+
+  // Smart Security: Company admins can only renew their own company
+  if (req.user.role === 'company_admin' && req.user.companyId !== companyId) {
+    res.status(403);
+    throw new Error("You are not authorized to renew subscriptions for this company");
+  }
+
+  if (!tier) {
+    res.status(400);
+    throw new Error("Tier is required for renewal");
+  }
+
+  const { TIER_FEATURES } = require("/app/shared/config/tierFeatures.config");
+  const config = TIER_FEATURES[tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()] || TIER_FEATURES.Basic;
+
+  const selectedPlan = (plan || '1m').toLowerCase();
+  const amount = config.pricing?.[selectedPlan] || config.price;
+  const months = parseInt(selectedPlan) || 1;
+  const durationDays = months * 30;
 
   const subscription = await Subscription.findByCompany(companyId);
   if (!subscription) {
@@ -180,127 +380,69 @@ const renewSubscription = asyncHandler(async (req, res) => {
     const { emit } = require("../events/producer");
     const company = await Company.findCompanyById(companyId);
 
-    // Determine Gateway based on payment method
-    let gateway = 'mtn_momo'; // Default
-    let schemaPaymentMethod = 'mobile_money'; // Default
+    // Determine Gateway & Payment Method professionally
+    let gateway = 'mtn_momo';
+    let method = 'mobile_money';
     const normalizedMethod = (paymentMethod || 'mtn').toLowerCase();
 
-    if (normalizedMethod === 'bank_transfer' || normalizedMethod === 'card') {
+    if (normalizedMethod === 'cash') {
       gateway = 'manual';
-      schemaPaymentMethod = normalizedMethod;
-    } else if (normalizedMethod === 'mtn' || normalizedMethod === 'mobile') {
-      gateway = 'mtn_momo';
-      schemaPaymentMethod = 'mobile_money';
+      method = 'cash';
+    } else if (normalizedMethod === 'bank' || normalizedMethod === 'bank_transfer') {
+      gateway = 'manual';
+      method = 'bank_transfer';
     } else if (normalizedMethod === 'airtel') {
       gateway = 'airtel_money';
-      schemaPaymentMethod = 'mobile_money';
+      method = 'mobile_money';
     } else {
-      gateway = 'manual';
-      schemaPaymentMethod = 'manual';
+      gateway = 'mtn_momo';
+      method = 'mobile_money';
     }
 
-    // Helper to extract phone from payment_phones
-    const getPaymentPhone = (comp, providerKeys) => {
-      if (!comp?.payment_phones) return null;
-      // Parse if string
-      let phones = comp.payment_phones;
-      if (typeof phones === 'string') {
-        try { phones = JSON.parse(phones); } catch (e) { phones = []; }
-      }
-      if (!Array.isArray(phones)) return null;
-
-      // Find matching provider
-      const match = phones.find(p =>
-        providerKeys.includes(p.provider?.toUpperCase()) && p.enabled !== false
-      );
-      return match ? match.phoneNumber : null;
-    };
-
-    // Helper to get Stripe Payment Method ID
-    const getStripePaymentMethod = (sub, comp) => {
-      // 1. Check subscription specific method
-      if (sub.stripe_payment_method_id) return sub.stripe_payment_method_id;
-
-      // 2. Check company payment profile
-      if (comp?.payment_profile) {
-        let profile = comp.payment_profile;
-        if (typeof profile === 'string') {
-          try { profile = JSON.parse(profile); } catch (e) { profile = {}; }
-        }
-        if (profile.stripe && profile.stripe.paymentMethodId) {
-          return profile.stripe.paymentMethodId;
-        }
-      }
-      return null; // No saved method found
-    };
-
-    let targetPhone = subscription.momo_phone_number;
-    let paymentMethodId = null;
-
-    if (gateway === 'stripe') {
-      paymentMethodId = getStripePaymentMethod(subscription, company);
-      if (!paymentMethodId) {
-        console.warn(`⚠️ No Stripe payment method found for company ${companyId}`);
-        // Depending on logic, we might want to continue to let user enter card on checkout, 
-        // but if this is a backend-initiated charge it might fail without a method.
-        // For now, we proceed, payment service might handle "new card" flow or error.
-      }
-    } else {
-      // Phone logic for mobile money
-      if (!targetPhone) {
-        if (gateway === 'mtn_momo') targetPhone = getPaymentPhone(company, ['MTN', 'MTN_MOMO']);
-        else if (gateway === 'airtel_money') targetPhone = getPaymentPhone(company, ['AIRTEL', 'AIRTEL_MONEY']);
-        else if (gateway === 'mpesa') targetPhone = getPaymentPhone(company, ['MPESA']);
-      }
-      // Fallback to main company phone
-      if (!targetPhone) targetPhone = company?.phone;
-    }
+    const isMobileMoney = gateway === 'mtn_momo' || gateway === 'airtel_money';
+    const targetPhone = phone || company.phone;
 
     const payload = {
       event: 'PAYMENT_REQUESTED',
       source: 'company-service',
       paymentType: 'SUBSCRIPTION',
-      referenceId: `SUB-${companyId}-${Date.now()}`,
+      referenceId: renewed.id || `RENEW-${companyId}-${Date.now()}`,
       companyId: companyId,
-      // Use system UUID or fixed string if no user, but schema expects UUID. 
-      // For now 'system' is accepted by payment-service, but we should be consistent.
-      sellerId: req.user ? req.user.userId : 'system',
       amount: amount,
       currency: 'RWF',
-      description: `${tier.toUpperCase()} Tier Subscription - ${durationDays} days`,
-      paymentMethod: schemaPaymentMethod,
+      description: `${config.name} Renewal (${amount} RWF) via ${method.replace('_', ' ').toUpperCase()}`,
+      paymentMethod: method,
       gateway: gateway,
-      phoneNumber: targetPhone, // Will be null/undefined for Stripe, which is fine
+      phoneNumber: isMobileMoney ? targetPhone : null,
+      idempotencyKey: `RENEW-${tier.toLowerCase()}-${normalizedMethod}-${Date.now()}`,
       customer: {
-        name: company?.name || 'Company Admin', // Fixed: company.name not company_name
-        email: company?.email || 'admin@company.com',
-        phone: targetPhone || company?.phone
+        name: company.name,
+        email: company.email,
+        phone: targetPhone
       },
       lineItems: [{
-        id: `tier_${tier}`,
-        name: `${tier.toUpperCase()} Tier Subscription`,
+        id: `tier_${tier.toLowerCase()}`,
+        name: config.name,
         qty: 1,
         price: amount
       }],
-      idempotencyKey: `pay_sub_${companyId}_${Date.now()}`,
       metadata: {
         subscriptionId: renewed.id,
-        companyId: companyId,
-        tier: tier,
+        tier: tier.toLowerCase(),
         durationDays: durationDays,
-        initiatedBy: req.user ? req.user.userId : 'system',
-        stripePaymentMethodId: paymentMethodId // Pass this to payment service
+        plan: selectedPlan
       }
     };
 
     await emit('subscription.payment.requested', payload);
-    console.log(`📤 Triggered payment request for subscription renewal: ${companyId}`);
-  } catch (e) {
-    console.error("Failed to emit subscription payment event", e);
+    console.log(`✅ [RenewSubscription] Payment request (${amount} RWF) triggered to ${targetPhone}`);
+  } catch (err) {
+    console.warn('⚠️ [RenewSubscription] Payment request failed (non-blocking):', err.message);
   }
 
   res.json({
     success: true,
+    message: "Subscription renewed and payment initiated",
     data: renewed,
   });
 });
@@ -538,6 +680,8 @@ module.exports = {
   getSubscriptionByCompany,
   updateSubscription,
   renewSubscription,
+  manualUnlock,
+  initiateSubscriptionPayment,
   deactivateSubscription,
   checkSubscriptionStatus,
   getSubscriptionFeatures,

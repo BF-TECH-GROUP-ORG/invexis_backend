@@ -51,6 +51,8 @@ http:
         stsIncludeSubdomains: true
         stsSeconds: 31536000
         stsPreload: true
+        contentSecurityPolicy: "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=()"
         customRequestHeaders:
           X-Forwarded-Proto: "https"
         customResponseHeaders:
@@ -165,6 +167,7 @@ http:
         - "compression"
       tls:
         certResolver: "letsencrypt"
+        options: "strict"
 
     # WebSocket routing
     websocket:
@@ -175,6 +178,7 @@ http:
         - "rate-limit"
       tls:
         certResolver: "letsencrypt"
+        options: "strict"
 
     # Monitoring dashboards
     prometheus:
@@ -187,6 +191,7 @@ http:
         - "security-headers"
       tls:
         certResolver: "letsencrypt"
+        options: "strict"
 
     grafana:
       rule: "Host(`grafana.${DOMAIN:-localhost}`)"
@@ -196,6 +201,7 @@ http:
         - "compression"
       tls:
         certResolver: "letsencrypt"
+        options: "strict"
 
     kibana:
       rule: "Host(`kibana.${DOMAIN:-localhost}`)"
@@ -207,6 +213,7 @@ http:
         - "security-headers"
       tls:
         certResolver: "letsencrypt"
+        options: "strict"
 
     rabbitmq:
       rule: "Host(`rabbitmq.${DOMAIN:-localhost}`)"
@@ -218,6 +225,7 @@ http:
         - "security-headers"
       tls:
         certResolver: "letsencrypt"
+        options: "strict"
 
   # Service definitions for blue/green deployment
   services:
@@ -275,27 +283,28 @@ http:
           - url: "http://rabbitmq:15672"
 
 # TCP configuration for database access (if needed for external access)
-tcp:
-  routers:
-    postgres-external:
-      rule: "HostSNI(`*`)"
-      service: "postgres-external"
-      entryPoints:
-        - "postgres"
-
-    mysql-external:
-      rule: "HostSNI(`*`)"
-      service: "mysql-external"
-      entryPoints:
-        - "mysql"
-
-  services:
-    postgres-external:
-      loadBalancer:
-        servers:
-          - address: "company-postgres:5432"
-
-    mysql-external:
-      loadBalancer:
-        servers:
-          - address: "sales-mysql:3306"
+# TCP configuration for database access (DISABLED FOR PRODUCTION SECURITY)
+# tcp:
+#   routers:
+#     postgres-external:
+#       rule: "HostSNI(`*`)"
+#       service: "postgres-external"
+#       entryPoints:
+#         - "postgres"
+#
+#     mysql-external:
+#       rule: "HostSNI(`*`)"
+#       service: "mysql-external"
+#       entryPoints:
+#         - "mysql"
+#
+#   services:
+#     postgres-external:
+#       loadBalancer:
+#         servers:
+#           - address: "company-postgres:5432"
+#
+#     mysql-external:
+#       loadBalancer:
+#         servers:
+#           - address: "sales-mysql:3306"

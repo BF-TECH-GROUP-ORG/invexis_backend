@@ -1,6 +1,6 @@
-// models/Sales.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 const Sale = sequelize.define(
   "Sale",
@@ -28,10 +28,30 @@ const Sale = sequelize.define(
       ),
       defaultValue: "initiated",
     },
-    subTotal: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
-    discountTotal: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-    taxTotal: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-    totalAmount: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+    subTotal: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      get() { return Money.toMajor(this.getDataValue('subTotal')); },
+      set(value) { this.setDataValue('subTotal', Money.toMinor(value)); }
+    },
+    discountTotal: {
+      type: DataTypes.BIGINT,
+      defaultValue: 0,
+      get() { return Money.toMajor(this.getDataValue('discountTotal')); },
+      set(value) { this.setDataValue('discountTotal', Money.toMinor(value)); }
+    },
+    taxTotal: {
+      type: DataTypes.BIGINT,
+      defaultValue: 0,
+      get() { return Money.toMajor(this.getDataValue('taxTotal')); },
+      set(value) { this.setDataValue('taxTotal', Money.toMinor(value)); }
+    },
+    totalAmount: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      get() { return Money.toMajor(this.getDataValue('totalAmount')); },
+      set(value) { this.setDataValue('totalAmount', Money.toMinor(value)); }
+    },
     paymentStatus: {
       type: DataTypes.ENUM("pending", "paid", "failed", "refunded"),
       defaultValue: "pending",

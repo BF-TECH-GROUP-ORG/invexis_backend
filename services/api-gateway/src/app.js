@@ -187,8 +187,26 @@ app.set("trust proxy", 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware
+// Request logging & Edge Security (Header Scrubbing)
 app.use((req, res, next) => {
+  // Prevent spoofing of internal-only headers
+  const sensitiveHeaders = [
+    'x-internal-request',
+    'x-gateway-request',
+    'x-gateway-service',
+    'x-user-id',
+    'x-user-role',
+    'x-user-email',
+    'x-user-companies',
+    'x-user-shops',
+    'x-subscription-tier',
+    'x-subscription-active'
+  ];
+
+  sensitiveHeaders.forEach(header => {
+    delete req.headers[header];
+  });
+
   console.log(`📥 ${req.method} ${req.originalUrl} - ${req.ip}`);
   next();
 });

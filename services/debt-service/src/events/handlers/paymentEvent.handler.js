@@ -94,6 +94,24 @@ async function handlePaymentProcessed(data) {
 
                 await debt.save();
                 console.log(`✅ Payment ${paymentId} applied to debt ${debt._id}`);
+
+                // Emit debt.payment.received event for report-service synchronization
+                const { debtEvents } = require('../eventHelpers');
+                await debtEvents.paymentReceived(debt._id, {
+                    companyId: debt.companyId,
+                    shopId: debt.shopId,
+                    id: paymentId,
+                    amount: amount,
+                    paymentMethod: paymentMethod || 'ONLINE',
+                    remainingBalance: debt.balance,
+                    traceId: traceId
+                });
+
+                // Check if fully paid and emit settled event
+                if (debt.balance <= 0) {
+                    await debtEvents.settled(debt);
+                }
+
                 return { success: true, message: 'Payment processed' };
             }
         );

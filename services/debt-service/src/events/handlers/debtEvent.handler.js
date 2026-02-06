@@ -128,7 +128,8 @@ const handleDebtRepaid = async (payload) => {
             newBalance,
             newStatus,
             createdAt,
-            createdBy
+            createdBy,
+            salesId // ADDED
         } = payload;
 
         const enrichedEvent = {
@@ -139,6 +140,7 @@ const handleDebtRepaid = async (payload) => {
             repaymentId,
             companyId,
             shopId,
+            salesId,  // ADDED
             userId: createdBy?.id, // For "affected user" scoping
             amount: amountPaid, // Clear top-level amount
             paymentDetails: {

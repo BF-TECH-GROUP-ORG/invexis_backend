@@ -13,6 +13,12 @@ const TIER_FEATURES = {
     name: "Basic Tier",
     description: "Essential operational tools for small shops",
     price: 30000,
+    pricing: {
+      "1m": 30000,
+      "3m": 85000,   // Match handwritten: 30k -> 80k
+      "6m": 170000,  // Match handwritten: 180k -> 170k
+      "12m": 345000  // Match handwritten: 360k -> 340k
+    },
     billingCycle: "monthly",
     features: {
       // Company & Shops
@@ -103,6 +109,12 @@ const TIER_FEATURES = {
     name: "Mid Tier",
     description: "Scaling features for growing businesses",
     price: 40000,
+    pricing: {
+      "1m": 40000,
+      "3m": 110000,  // Match handwritten: 120k -> 110k
+      "6m": 235000,  // Match handwritten: 235k -> 230k
+      "12m": 460000  // Match handwritten: 480k -> 460k
+    },
     billingCycle: "monthly",
     features: {
       // Company & Shops
@@ -174,11 +186,13 @@ const TIER_FEATURES = {
       },
 
       // Debt management (Pro tier only)
+
       debt: {
         enabled: true, // Restricted to mid & Pro tier
       },
 
       // Analytics
+
       analytics: {
         enabled: true,
         basicSummary: true,
@@ -191,9 +205,17 @@ const TIER_FEATURES = {
     name: "Pro Tier",
     description: "Enterprise-grade digital commerce & logistics",
     price: 50000,
+    pricing: {
+      "1m": 50000,
+      "3m": 140000,  // Match handwritten: 150k -> 140k
+      "6m": 280000,  // Match handwritten: 300k -> 280k
+      "12m": 570000  // Match handwritten: 600k -> 570k
+    },
     billingCycle: "monthly",
     features: {
+
       // Company & Shops
+
       shops: {
         enabled: true,
         singleShop: false,
@@ -202,6 +224,7 @@ const TIER_FEATURES = {
       },
 
       // Staff
+
       staffManagement: {
         enabled: true,
         addStaff: true,
@@ -209,6 +232,7 @@ const TIER_FEATURES = {
       },
 
       // Inventory
+
       inventory: {
         enabled: true,
         stockInOut: true,
@@ -223,6 +247,7 @@ const TIER_FEATURES = {
       },
 
       // Payments
+
       payment: {
         enabled: true,
         internalTierUpgrade: true,
@@ -230,6 +255,7 @@ const TIER_FEATURES = {
       },
 
       // Notifications
+
       notifications: {
         enabled: true,
         inApp: true,
@@ -239,6 +265,7 @@ const TIER_FEATURES = {
       },
 
       // Customer Management
+
       customer: {
         enabled: true,
         profiles: true,
@@ -246,6 +273,7 @@ const TIER_FEATURES = {
       },
 
       // Ecommerce
+
       ecommerce: {
         enabled: true, // pro unlocks ecommerce
         browse: true,
@@ -254,6 +282,7 @@ const TIER_FEATURES = {
       },
 
       // Logistics
+
       delivery: {
         enabled: true,
         maps: true, // google maps routing
@@ -261,11 +290,13 @@ const TIER_FEATURES = {
       },
 
       // AR
+
       augmentedReality: {
         enabled: true, // AR optional future feature
       },
 
       // Debt management
+
       debt: {
         enabled: true,
         record: true,
@@ -274,6 +305,7 @@ const TIER_FEATURES = {
       },
 
       // Analytics
+
       analytics: {
         enabled: true,
         basicSummary: true,
@@ -288,6 +320,7 @@ const TIER_FEATURES = {
  * @param {string} tier
  * @returns {object}
  */
+
 function getTierConfig(tier) {
   // Normalize tier to Title Case (Basic, Mid, Pro)
   const normalizedTier = tier ? tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase() : 'Basic';
@@ -297,6 +330,7 @@ function getTierConfig(tier) {
 /**
  * Check if a feature is enabled
  */
+
 function isFeatureEnabled(tier, category, key) {
   const t = getTierConfig(tier);
   return t.features?.[category]?.[key] === true;
@@ -305,6 +339,7 @@ function isFeatureEnabled(tier, category, key) {
 /**
  * Get all enabled features
  */
+
 function getEnabledFeatures(tier) {
   return getTierConfig(tier).features;
 }

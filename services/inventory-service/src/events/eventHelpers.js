@@ -151,10 +151,15 @@ const stockEvents = {
         payload: {
           productId: product._id,
           companyId,
+          shopId: product.shopId,
           oldQuantity,
           newQuantity,
+          newStockLevel: newQuantity, // Alias for reports
           change: newQuantity - oldQuantity,
+          quantityChange: newQuantity - oldQuantity, // Alias for reports
           unitCost: product.costPrice || 0,
+          productName: product.name,
+          categoryId: product.categoryId,
           updatedAt: new Date().toISOString(),
           traceId: uuidv4()
         }

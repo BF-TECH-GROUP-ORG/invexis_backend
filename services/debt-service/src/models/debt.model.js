@@ -1,5 +1,5 @@
-// models/debt.model.js
 const mongoose = require('mongoose');
+const Money = require('/app/shared/utils/MoneyUtil');
 
 
 const DebtSchema = new mongoose.Schema({
@@ -25,15 +25,39 @@ const DebtSchema = new mongoose.Schema({
             itemId: { type: mongoose.Types.ObjectId, required: true },
             itemName: { type: String, required: true },
             quantity: { type: Number, required: true },
-            unitPrice: { type: Number, required: true },
-            totalPrice: { type: Number, required: true }
+            unitPrice: {
+                type: Number,
+                required: true,
+                get: v => Money.toMajor(v),
+                set: v => Money.toMinor(v)
+            },
+            totalPrice: {
+                type: Number,
+                required: true,
+                get: v => Money.toMajor(v),
+                set: v => Money.toMinor(v)
+            }
         }
     ],
 
-
-    totalAmount: { type: Number, required: true },
-    amountPaidNow: { type: Number, default: 0 },
-    balance: { type: Number, required: true },
+    totalAmount: {
+        type: Number,
+        required: true,
+        get: v => Money.toMajor(v),
+        set: v => Money.toMinor(v)
+    },
+    amountPaidNow: {
+        type: Number,
+        default: 0,
+        get: v => Money.toMajor(v),
+        set: v => Money.toMinor(v)
+    },
+    balance: {
+        type: Number,
+        required: true,
+        get: v => Money.toMajor(v),
+        set: v => Money.toMinor(v)
+    },
 
 
     status: {
@@ -67,7 +91,11 @@ const DebtSchema = new mongoose.Schema({
     balanceHistory: [
         {
             date: { type: Date, default: Date.now },
-            balance: { type: Number }
+            balance: {
+                type: Number,
+                get: v => Money.toMajor(v),
+                set: v => Money.toMinor(v)
+            }
         }
     ],
 
@@ -90,6 +118,10 @@ const DebtSchema = new mongoose.Schema({
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
+}, {
+    timestamps: true,
+    toJSON: { getters: true },
+    toObject: { getters: true }
 });
 
 // Indexes (remove inline index: true to avoid duplicates)

@@ -189,13 +189,22 @@ async function handleSaleCreated(data) {
         companyId: product.companyId,
         productId: product._id,
         name: product.name,
+        productName: product.name,
+        categoryId: product.categoryId,
         sku: product.sku
       });
       await publishProductEvent('inventory.stock.updated', {
         productId: product._id,
         companyId: product.companyId,
+        shopId: shopId || product.shopId,
         oldQuantity: previousStock,
-        newQuantity: newStock
+        newQuantity: newStock,
+        quantityChange: changeQty, // -ve for sale
+        type: 'SALE',
+        unitCost: item.costPrice || 0,
+        productName: product.name,
+        categoryId: product.categoryId,
+        traceId: traceId || data.traceId
       });
 
       // Emit out of stock event if needed
@@ -321,7 +330,10 @@ async function handleSaleCanceled(data) {
         userId: 'system',
         meta: {
           saleId: saleId,
-          cancellationReason: reason || null
+          cancellationReason: reason || null,
+          productName: product.name,
+          categoryId: product.categoryId,
+          unitCost: product.pricingId?.cost || 0
         }
         // 'new' will be calculated by pre-save hook
       });
@@ -349,13 +361,22 @@ async function handleSaleCanceled(data) {
         companyId: product.companyId,
         productId: product._id,
         name: product.name,
+        productName: product.name,
+        categoryId: product.categoryId,
         sku: product.sku
       });
       await publishProductEvent('inventory.stock.updated', {
         productId: product._id,
         companyId: product.companyId,
+        shopId: shopId || product.shopId,
         oldQuantity: previousStock,
-        newQuantity: newStock
+        newQuantity: newStock,
+        quantityChange: changeQty, // +ve for restore
+        type: 'RETURN',
+        unitCost: item.costPrice || 0,
+        productName: product.name,
+        categoryId: product.categoryId,
+        traceId: traceId || data.traceId
       });
 
       // Emit restocked event if stock was restored from zero
@@ -472,7 +493,10 @@ async function handleSaleReturnFullyReturned(data) {
         userId: 'system',
         meta: {
           returnId: returnId,
-          saleId: saleId
+          saleId: saleId,
+          productName: product.name,
+          categoryId: product.categoryId,
+          unitCost: product.pricingId?.cost || 0
         }
         // 'new' will be calculated by pre-save hook
       });
@@ -505,13 +529,22 @@ async function handleSaleReturnFullyReturned(data) {
         companyId: product.companyId,
         productId: product._id,
         name: product.name,
+        productName: product.name,
+        categoryId: product.categoryId,
         sku: product.sku
       });
       await publishProductEvent('inventory.stock.updated', {
         productId: product._id,
         companyId: product.companyId,
+        shopId: shopId || product.shopId,
         oldQuantity: previousStock,
-        newQuantity: newStock
+        newQuantity: newStock,
+        quantityChange: changeQty, // +ve for restore
+        type: 'RETURN',
+        unitCost: item.costPrice || 0, // Assuming cost is available or 0
+        productName: product.name,
+        categoryId: product.categoryId,
+        traceId: traceId || data.traceId
       });
 
       // Emit restocked event if stock was restored from zero

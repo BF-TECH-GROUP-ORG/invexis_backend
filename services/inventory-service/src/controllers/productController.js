@@ -548,7 +548,12 @@ const createProduct = asyncHandler(async (req, res) => {
           previous: 0,
           new: Math.abs(initialQty),
           reason: 'Initial stock on product creation',
-          userId: req.user?.id || 'system'
+          userId: req.user?.id || 'system',
+          meta: {
+            productName: product.name,
+            categoryId: product.categoryId,
+            unitCost: product.pricing?.cost || 0
+          }
         });
       } catch (e) {
         logger.warn('Failed to create initial StockChange:', e.message || e);

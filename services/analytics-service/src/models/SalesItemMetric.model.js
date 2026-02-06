@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 /**
  * SalesItemMetric
@@ -50,20 +51,28 @@ const SalesItemMetric = sequelize.define("SalesItemMetric", {
         defaultValue: 1,
     },
     unitPrice: {
-        type: DataTypes.DECIMAL(10, 2),
+        type: DataTypes.BIGINT,
         defaultValue: 0,
+        get() { return Money.toMajor(this.getDataValue('unitPrice')); },
+        set(value) { this.setDataValue('unitPrice', Money.toMinor(value)); }
     },
     totalAmount: { // quantity * unitPrice
-        type: DataTypes.DECIMAL(10, 2),
+        type: DataTypes.BIGINT,
         defaultValue: 0,
+        get() { return Money.toMajor(this.getDataValue('totalAmount')); },
+        set(value) { this.setDataValue('totalAmount', Money.toMinor(value)); }
     },
     costPrice: {
-        type: DataTypes.DECIMAL(10, 2),
+        type: DataTypes.BIGINT,
         defaultValue: 0,
+        get() { return Money.toMajor(this.getDataValue('costPrice')); },
+        set(value) { this.setDataValue('costPrice', Money.toMinor(value)); }
     },
     profit: {
-        type: DataTypes.DECIMAL(10, 2),
+        type: DataTypes.BIGINT,
         defaultValue: 0,
+        get() { return Money.toMajor(this.getDataValue('profit')); },
+        set(value) { this.setDataValue('profit', Money.toMinor(value)); }
     }
 }, {
     tableName: "sales_item_metrics",

@@ -379,15 +379,20 @@ class PaymentService {
             throw new Error('Payment not found');
         }
 
-        // If payment is already in final state, return it
+        // If payment is already in final state, return it with rich data
         if ([PAYMENT_STATUS.SUCCEEDED, PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED].includes(payment.status)) {
+            const invoiceRepo = require('../repositories/invoiceRepository');
+            const invoice = await invoiceRepo.getInvoiceByPaymentId(payment.payment_id);
+
             return {
-                payment_id: payment.payment_id,
-                status: payment.status,
-                amount: payment.amount,
-                currency: payment.currency,
-                gateway: payment.gateway,
-                processed_at: payment.processed_at
+                ...payment,
+                invoice: invoice ? {
+                    invoice_id: invoice.invoice_id,
+                    pdf_url: invoice.pdf_url,
+                    status: invoice.status,
+                    amount_due: invoice.amount_due,
+                    paid_at: invoice.paid_at
+                } : null
             };
         }
 
@@ -433,13 +438,20 @@ class PaymentService {
                 }
             }
 
+            // Fetch invoice info for the response
+            const invoiceRepo = require('../repositories/invoiceRepository');
+            const invoice = await invoiceRepo.getInvoiceByPaymentId(payment_id);
+
             return {
-                payment_id: payment.payment_id,
-                status: newStatus,
-                amount: payment.amount,
-                currency: payment.currency,
-                gateway: payment.gateway,
-                gateway_status: gatewayStatus
+                ...(await paymentRepository.getPaymentById(payment_id)),
+                gateway_status: gatewayStatus,
+                invoice: invoice ? {
+                    invoice_id: invoice.invoice_id,
+                    pdf_url: invoice.pdf_url,
+                    status: invoice.status,
+                    amount_due: invoice.amount_due,
+                    paid_at: invoice.paid_at
+                } : null
             };
 
         } catch (error) {

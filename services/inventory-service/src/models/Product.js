@@ -1,5 +1,6 @@
 // models/Product.js — FINAL LOCKED VERSION (POS + E-COMMERCE + SPECS + QR + VISIBILITY)
 const mongoose = require('mongoose');
+const Money = require('/app/shared/utils/MoneyUtil');
 const { Schema } = mongoose;
 
 /* -------------------------------------------------------------------------- */
@@ -9,20 +10,20 @@ const { Schema } = mongoose;
 const ProductSchema = new Schema({
   /* ------------------------------ Ownership ------------------------------ */
   companyId: { type: String, required: true, index: true },
-  shopId:    { type: String, required: true, index: true },
+  shopId: { type: String, required: true, index: true },
 
   /* ------------------------------ Core Info ------------------------------ */
-  name:             { type: String, required: true, trim: true, maxlength: 200, minlength: 2 },
-  slug:             { type: String, unique: true, lowercase: true, index: true, sparse: true },
-  description:      { type: String, required: true },
-  brand:            { type: String, required: true, trim: true, index: true },
-  manufacturer:     { type: String, trim: true },
-  tags:             [{ type: String, trim: true, lowercase: true }],
+  name: { type: String, required: true, trim: true, maxlength: 200, minlength: 2 },
+  slug: { type: String, unique: true, lowercase: true, index: true, sparse: true },
+  description: { type: String, required: true },
+  brand: { type: String, required: true, trim: true, index: true },
+  manufacturer: { type: String, trim: true },
+  tags: [{ type: String, trim: true, lowercase: true }],
 
-  supplierName:     { type: String, trim: true },
+  supplierName: { type: String, trim: true },
 
   /* ------------------------------ Category ------------------------------- */
-  categoryId:       { type: Schema.Types.ObjectId, ref: 'Category', required: true, index: true },
+  categoryId: { type: Schema.Types.ObjectId, ref: 'Category', required: true, index: true },
 
   /* ------------------------------ Condition & Availability -------------- */
   condition: {
@@ -51,65 +52,76 @@ const ProductSchema = new Schema({
   },
   featured: { type: Boolean, default: false, index: true }, // Changed from isFeatured to featured
   isFeatured: { type: Boolean, default: false, index: true }, // Keep for compatibility
-  sortOrder:  { type: Number, default: 0 },
+  sortOrder: { type: Number, default: 0 },
 
   /* ------------------------------ Media ---------------------------------- */
   images: [{
-    url:        { type: String, required: true, trim: true },
-    alt:        { type: String, trim: true },
-    isPrimary:  { type: Boolean, default: false },
-    sortOrder:  { type: Number, default: 0 }
+    url: { type: String, required: true, trim: true },
+    alt: { type: String, trim: true },
+    isPrimary: { type: Boolean, default: false },
+    sortOrder: { type: Number, default: 0 }
   }],
   videoUrls: [{ type: String, trim: true }],
 
   /* ------------------------------ SEO ------------------------------------ */
   seo: {
-    metaTitle:       { type: String, maxlength: 70 },
+    metaTitle: { type: String, maxlength: 70 },
     metaDescription: { type: String, maxlength: 160 },
-    keywords:        [String]
+    keywords: [String]
   },
 
   /* ------------------------------ Sales Metrics -------------------------- */
   sales: {
     totalSold: { type: Number, default: 0, min: 0 },
-    revenue:   { type: Number, default: 0, min: 0 }
+    revenue: {
+      type: Number,
+      default: 0,
+      min: 0,
+      get: v => Money.toMajor(v),
+      set: v => Money.toMinor(v)
+    }
   },
 
   /* ------------------------------ Links ---------------------------------- */
   pricingId: { type: Schema.Types.ObjectId, ref: 'ProductPricing', default: null, index: true },
-  specsId:   { type: Schema.Types.ObjectId, ref: 'ProductSpecs',   default: null },
+  specsId: { type: Schema.Types.ObjectId, ref: 'ProductSpecs', default: null },
 
   /* ------------------------------ PHYSICAL IDENTIFIERS ------------------- */
-  sku:       { type: String, unique: true, uppercase: true, sparse: true },
-  asin:      { type: String, unique: true, sparse: true, uppercase: true },
-  upc:       { type: String, unique: true, sparse: true },
-  ean:       { type: String, sparse: true },
+  sku: { type: String, unique: true, uppercase: true, sparse: true },
+  asin: { type: String, unique: true, sparse: true, uppercase: true },
+  upc: { type: String, unique: true, sparse: true },
+  ean: { type: String, sparse: true },
 
-  barcode:        { type: String, unique: true },
+  barcode: { type: String, unique: true },
   barcodePayload: { type: String },
-  barcodeUrl:     { type: String },
+  barcodeUrl: { type: String },
   barcodeCloudinaryId: { type: String }, // For deletion tracking
 
-  qrCode:         { type: String },
-  qrPayload:      { type: String },
-  qrCodeUrl:      { type: String },
+  qrCode: { type: String },
+  qrPayload: { type: String },
+  qrCodeUrl: { type: String },
   qrCloudinaryId: { type: String }, // For deletion tracking
 
-  scanId:         { type: String, unique: true },
+  scanId: { type: String, unique: true },
 
-  browseNodeId:   { type: String },
+  browseNodeId: { type: String },
 
   /* ------------------------------ Supply Chain --------------------------- */
-  costPrice:      { type: Number, min: 0 },
+  costPrice: {
+    type: Number,
+    min: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },
 
   /* ------------------------------ Soft Delete ----------------------------- */
-  isDeleted:  { type: Boolean, default: false, index: true },
-  deletedAt:  { type: Date, default: null },
-  deletedBy:  { type: String, default: null }
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null },
+  deletedBy: { type: String, default: null }
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: { virtuals: true, getters: true },
+  toObject: { virtuals: true, getters: true }
 });
 
 /* -------------------------------------------------------------------------- */

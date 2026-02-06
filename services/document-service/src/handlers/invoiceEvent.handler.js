@@ -20,8 +20,6 @@ const withRetry = async (fn, retries = 3, delay = 1000) => {
 
 const handleInvoiceRequest = async (event) => {
     const { payload, owner, eventId } = event;
-    const { invoiceGenerator } = require('../services/invoiceGenerator');
-    // Lazy require or top level? Standard is top level but cycle risk is low here.
     const InvoiceGenerator = require('../services/invoiceGenerator');
 
     logger.info(`Generating Invoice PDF for Invoice: ${payload.invoiceData.invoiceNumber}`);
@@ -30,18 +28,32 @@ const handleInvoiceRequest = async (event) => {
 
     const companyId = owner.companyId && owner.companyId !== 'unknown' ? owner.companyId : (payload.companyId || 'unknown');
     const saleId = payload.saleData.saleId || 'unknown';
-    const publicId = `invoice_${payload.invoiceData.invoiceNumber}_${Date.now()}`;
-    const folder = `invexis/companies/${companyId}/sales/${saleId}/invoices`;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+
+    // Detect domain (Debt vs Sale)
+    const isDebt = payload.debtData || payload.metadata?.type === 'DEBT';
+    const domain = isDebt ? 'Debt' : 'Sales';
+    const shopName = payload.companyData?.shopName || '';
+    const invoiceNumber = payload.invoiceData.invoiceNumber;
+
+    const publicId = `${domain.toLowerCase()}_${invoiceNumber}_${Date.now()}`;
+    const folder = `invexis/companies/${companyId}/documents/${year}/${month}/${domain}`;
 
     try {
         const result = await withRetry(() => uploadStream(pdfStream, folder, publicId, 'pdf'));
 
         const docId = crypto.randomUUID();
-        const doc = new SalesDocument({
+        const displayName = isDebt
+            ? `Payment Receipt - ${invoiceNumber}${shopName ? ` (${shopName})` : ''}`
+            : `Invoice - ${invoiceNumber}${shopName ? ` (${shopName})` : ''}`;
+
+        const baseDoc = {
             documentId: docId,
-            type: 'invoice',
-            category: 'invoice',
+            displayName: displayName,
             owner: owner,
+            period: { start: now, end: now },
             storage: {
                 provider: 'cloudinary',
                 url: result.secure_url,
@@ -49,11 +61,38 @@ const handleInvoiceRequest = async (event) => {
                 format: result.format,
                 size: result.bytes
             },
-            metadata: { sourceEventId: eventId, invoiceNumber: payload.invoiceData.invoiceNumber }
-        });
-        await doc.save();
+            metadata: {
+                sourceEventId: eventId,
+                invoiceNumber: invoiceNumber,
+                saleId: saleId,
+                shopName: shopName,
+                companyName: payload.companyData?.name
+            }
+        };
 
-        // Emit result so Sales service can update the sales record
+        if (isDebt) {
+            const DebtDocument = require('../models/DebtDocument');
+            const doc = new DebtDocument({
+                ...baseDoc,
+                type: 'payment_receipt',
+                reference: {
+                    invoiceNo: invoiceNumber,
+                    saleId: saleId,
+                    customerId: payload.saleData?.customerId || payload.metadata?.customerId
+                }
+            });
+            await doc.save();
+            logger.info(`Debt proof saved to DebtDocument: ${docId} [${displayName}]`);
+        } else {
+            const doc = new SalesDocument({
+                ...baseDoc,
+                type: 'invoice'
+            });
+            await doc.save();
+            logger.info(`Sale doc saved to SalesDocument: ${docId} [${displayName}]`);
+        }
+
+        // Emit result so Sales/Payment service can update the records
         await rabbitmq.publish('events_topic', 'document.invoice.created', {
             type: 'document.invoice.created',
             data: {

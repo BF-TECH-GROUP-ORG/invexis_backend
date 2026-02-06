@@ -60,6 +60,12 @@ class ReportingController {
             if (!shop_id) return errorResponse(res, 'Shop ID required', 400);
 
             const analytics = await reportingRepository.getAnalytics({ shop_id, start_date, end_date });
+
+            // Enrich with shop name
+            const internalServiceClient = require('../services/internalServiceClient');
+            const shopData = await internalServiceClient.getShopData(shop_id);
+            analytics.shop_name = shopData?.name || 'Unknown Shop';
+
             return successResponse(res, analytics, 'Shop analytics retrieved');
         } catch (error) {
             console.error('Get shop analytics error:', error);
@@ -79,6 +85,12 @@ class ReportingController {
             if (!company_id) return errorResponse(res, 'Company ID required', 400);
 
             const analytics = await reportingRepository.getAnalytics({ company_id, start_date, end_date });
+
+            // Enrich with company name
+            const internalServiceClient = require('../services/internalServiceClient');
+            const companyData = await internalServiceClient.getCompanySettings(company_id);
+            analytics.company_name = companyData?.company_name || 'Unknown Company';
+
             return successResponse(res, analytics, 'Company analytics retrieved');
         } catch (error) {
             console.error('Get company analytics error:', error);
@@ -100,19 +112,6 @@ class ReportingController {
         }
     }
 
-    /**
-     * Get top products
-     */
-    async getTopProducts(req, res) {
-        try {
-            const { seller_id, shop_id, company_id, limit } = req.query;
-            const products = await reportingRepository.getTopProducts({ seller_id, shop_id, company_id }, limit);
-            return successResponse(res, products, 'Top products retrieved');
-        } catch (error) {
-            console.error('Get top products error:', error);
-            return errorResponse(res, error.message, 500);
-        }
-    }
 
     /**
      * Get gateway performance
@@ -121,7 +120,26 @@ class ReportingController {
         try {
             const { start_date, end_date } = req.query;
             const performance = await reportingRepository.getGatewayPerformance({ start_date, end_date });
-            return successResponse(res, performance, 'Gateway performance retrieved');
+
+            // Enrich with human-readable names
+            const gatewayLabels = {
+                'mtn_momo': 'MTN MoMo',
+                'airtel_money': 'Airtel Money',
+                'mpesa': 'M-Pesa',
+                'stripe': 'Stripe (Cards)',
+                'manual': 'Cash/Bank Transfer',
+                'cash': 'Cash'
+            };
+
+            const enrichedPerformance = performance.map(item => ({
+                ...item,
+                label: gatewayLabels[item.gateway] || item.gateway.toUpperCase(),
+                success_rate: item.total_payments > 0
+                    ? ((item.successful_payments / item.total_payments) * 100).toFixed(2)
+                    : 0
+            }));
+
+            return successResponse(res, enrichedPerformance, 'Gateway performance retrieved');
         } catch (error) {
             console.error('Get gateway performance error:', error);
             return errorResponse(res, error.message, 500);
@@ -166,6 +184,17 @@ class ReportingController {
             const chartData = await reportingRepository.getChartData({
                 company_id, shop_id, seller_id, period
             });
+
+            // Enrichment
+            const internalServiceClient = require('../services/internalServiceClient');
+            if (shop_id) {
+                const shopData = await internalServiceClient.getShopData(shop_id);
+                chartData.entity_name = shopData?.name || 'Unknown Shop';
+            } else if (company_id) {
+                const companyData = await internalServiceClient.getCompanySettings(company_id);
+                chartData.entity_name = companyData?.company_name || 'Unknown Company';
+            }
+
             return successResponse(res, chartData, 'Dashboard charts retrieved');
         } catch (error) {
             console.error('Get dashboard charts error:', error);
@@ -236,6 +265,27 @@ class ReportingController {
             if (!company_id) return errorResponse(res, 'Company ID required', 400);
 
             const summary = await reportingRepository.getCompanyShopBreakdown(company_id, { start_date, end_date });
+
+            // Enrich with company name
+            const internalServiceClient = require('../services/internalServiceClient');
+            const companyData = await internalServiceClient.getCompanySettings(company_id);
+            summary.company_name = companyData?.company_name || 'Unknown Company';
+
+            // Enrich each shop with its name and success rate
+            if (summary.shops && summary.shops.length > 0) {
+                summary.shops = await Promise.all(summary.shops.map(async (shop) => {
+                    const shopDetails = await internalServiceClient.getShopData(shop.shop_id);
+                    const total = parseInt(shop.transaction_count);
+                    const success = parseInt(shop.successful_count);
+
+                    return {
+                        ...shop,
+                        shop_name: shopDetails?.name || 'Unknown Shop',
+                        success_rate: total > 0 ? ((success / total) * 100).toFixed(2) : 0
+                    };
+                }));
+            }
+
             return successResponse(res, summary, 'Revenue summary retrieved');
         } catch (error) {
             console.error('Get revenue summary error:', error);

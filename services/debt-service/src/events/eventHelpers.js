@@ -117,14 +117,14 @@ const debtEvents = {
     /**
      * Create outbox event for debt settled/paid in full
      */
-    async settled(debtId, session = null) {
+    async settled(debt, session = null) {
         return await Outbox.create(
             [{
                 type: 'debt.settled',
                 exchange: 'events_topic',
                 routingKey: 'debt.settled',
                 payload: {
-                    debtId,
+                    debtId: debt._id || debt.id,
                     companyId: debt.companyId,
                     shopId: debt.shopId,
                     settledAt: new Date().toISOString(),
@@ -138,14 +138,14 @@ const debtEvents = {
     /**
      * Create outbox event for debt overdue
      */
-    async overdue(debtId, daysOverdue, session = null) {
+    async overdue(debt, daysOverdue, session = null) {
         return await Outbox.create(
             [{
                 type: 'debt.overdue',
                 exchange: 'events_topic',
                 routingKey: 'debt.overdue',
                 payload: {
-                    debtId,
+                    debtId: debt._id || debt.id,
                     companyId: debt.companyId,
                     shopId: debt.shopId,
                     daysOverdue,

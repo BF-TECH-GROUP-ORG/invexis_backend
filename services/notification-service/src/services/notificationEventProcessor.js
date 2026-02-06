@@ -595,6 +595,7 @@ class NotificationEventProcessor {
             'payment.processed': 'payment.success',
             'payment.failed': 'payment.failed',
             'subscription.expiring': 'subscription.expiring',
+            'subscription.expiring.soon': 'subscription.expiring',
             'subscription.expired': 'subscription.expired',
 
             // Documents
@@ -631,7 +632,9 @@ class NotificationEventProcessor {
             'inventory.product.out_of_stock': '🚨 Out of Stock',
             'debt.overdue': '⏰ Payment Overdue',
             'payment.success': '✅ Payment Successful',
-            'payment.failed': '❌ Payment Failed'
+            'payment.failed': '❌ Payment Failed',
+            'subscription.expiring.soon': '⚠️ Subscription Expiring Soon',
+            'subscription.expired': '🚨 Subscription Expired'
         };
         return titles[eventType] || 'Notification';
     }
@@ -649,7 +652,9 @@ class NotificationEventProcessor {
             'inventory.product.low_stock': `${data.productName || 'Product'} is running low (${data.currentStock || 0} left, threshold: ${data.threshold || 0}).`,
             'inventory.out_of_stock': `${data.productName || 'Product'} is out of stock.`,
             'inventory.product.out_of_stock': `${data.productName || 'Product'} is out of stock.`,
-            'debt.overdue': `Payment of $${data.amount || 0} is overdue.`
+            'debt.overdue': `Payment of $${data.amount || 0} is overdue.`,
+            'subscription.expiring.soon': data.message || `Your subscription is expiring soon on ${data.endDate}.`,
+            'subscription.expired': `Your subscription has expired. Service has been suspended.`
         };
         return bodies[eventType] || 'You have a new notification.';
     }

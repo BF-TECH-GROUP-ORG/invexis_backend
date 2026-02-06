@@ -105,24 +105,6 @@ const publishPaymentEvent = {
         }
     },
 
-    /**
-     * Request report generation
-     * @param {Object} payload - Report data payload
-     */
-    async reportRequested(payload) {
-        try {
-            const eventData = {
-                type: payload.type || 'report.export_requested',
-                data: payload,
-                source: 'payment-service'
-            };
-
-            await publish(exchanges.topic, 'report.export_requested', eventData);
-            console.log(`✅ Published report.export_requested event for ${payload.recipient?.email}`);
-        } catch (error) {
-            console.error('❌ Failed to publish report.export_requested event:', error.message);
-        }
-    },
 
     /**
      * Request invoice generation

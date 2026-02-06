@@ -40,6 +40,14 @@ module.exports = async function handleCompanyEvent(event, routingKey) {
         await handleCompanyDeleted(data);
         break;
 
+      case "subscription.expiring.soon":
+      case "subscription.expired":
+        logger.info(`🔔 Subscription event received for processing: ${type}`);
+        // Routed via platformEvent.handler to here, then usually to notificationProcessor
+        // If we want specific logic here before processor, we add it. 
+        // For now, let's just let it fall through or log.
+        break;
+
       default:
         logger.warn(`⚠️ Unhandled company event type: ${type}`);
     }

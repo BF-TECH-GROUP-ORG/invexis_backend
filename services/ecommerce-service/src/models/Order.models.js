@@ -1,11 +1,17 @@
 // models/Order.js
 const mongoose = require("mongoose");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 const OrderItemSchema = new mongoose.Schema(
     {
         productId: { type: String, required: true },
         quantity: { type: Number, required: true },
-        priceAtOrder: { type: Number, required: true },
+        priceAtOrder: {
+            type: Number,
+            required: true,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
+        },
         currency: { type: String, required: true },
         metadata: mongoose.Schema.Types.Mixed,
     },
@@ -32,10 +38,30 @@ const OrderSchema = new mongoose.Schema(
     {
         userId: { type: String, required: true },
         items: { type: [OrderItemSchema], required: true },
-        subtotal: { type: Number, required: true },
-        shippingAmount: { type: Number, default: 0 },
-        taxes: { type: Number, default: 0 },
-        totalAmount: { type: Number, required: true },
+        subtotal: {
+            type: Number,
+            required: true,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
+        },
+        shippingAmount: {
+            type: Number,
+            default: 0,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
+        },
+        taxes: {
+            type: Number,
+            default: 0,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
+        },
+        totalAmount: {
+            type: Number,
+            required: true,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
+        },
         currency: { type: String, required: true },
         status: {
             type: String,
@@ -53,7 +79,11 @@ const OrderSchema = new mongoose.Schema(
         createdBy: { type: String },
         updatedBy: { type: String },
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { getters: true },
+        toObject: { getters: true }
+    }
 );
 
 module.exports = mongoose.model("Order", OrderSchema);

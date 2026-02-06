@@ -7,6 +7,7 @@
  */
 
 const mongoose = require("mongoose");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 
 const CatalogProductSchema = new mongoose.Schema(
@@ -112,7 +113,12 @@ const CatalogProductSchema = new mongoose.Schema(
                 ],
                 sku: { type: String, uppercase: true, trim: true },
                 stockQty: { type: Number, default: 0, min: 0 },
-                price: { type: Number, min: 0 },
+                price: {
+                    type: Number,
+                    min: 0,
+                    get: v => Money.toMajor(v),
+                    set: v => Money.toMinor(v)
+                },
                 images: [
                     {
                         url: { type: String, trim: true },
@@ -133,11 +139,15 @@ const CatalogProductSchema = new mongoose.Schema(
         basePrice: {
             type: Number,
             required: true,
-            min: 0
+            min: 0,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
         },
         salePrice: {
             type: Number,
-            min: 0
+            min: 0,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
         },
         currency: {
             type: String,
@@ -145,7 +155,9 @@ const CatalogProductSchema = new mongoose.Schema(
         },
         price: {
             type: Number,
-            required: true
+            required: true,
+            get: v => Money.toMajor(v),
+            set: v => Money.toMinor(v)
         },
 
         // ===== INVENTORY (Critical for cart/checkout) =====
@@ -237,7 +249,9 @@ const CatalogProductSchema = new mongoose.Schema(
     {
         timestamps: true,
         strict: true,
-        collection: "catalog_products"
+        collection: "catalog_products",
+        toJSON: { getters: true, virtuals: true },
+        toObject: { getters: true, virtuals: true }
     }
 );
 
@@ -336,8 +350,8 @@ CatalogProductSchema.methods.updateFromInventory = function (inventoryData) {
         this.categoryId = inventoryData.categoryId;
     } else if (inventoryData.category) {
         // Convert ObjectId to string
-        this.categoryId = inventoryData.category._id 
-            ? inventoryData.category._id.toString() 
+        this.categoryId = inventoryData.category._id
+            ? inventoryData.category._id.toString()
             : inventoryData.category.toString();
     }
 

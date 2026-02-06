@@ -40,11 +40,11 @@ const server = app.listen(PORT, async () => {
     logger.warn('Background worker queue initialization failed (non-blocking)', { error: err.message });
   }
 
-  // Start subscription auto-renewal cron job
+  // Start subscription auto-renewal cron job (Smart Guard Enabled)
   try {
     const subscriptionRenewalCron = require('./cron/subscriptionRenewal.cron');
     subscriptionRenewalCron.start();
-    logger.info('Subscription auto-renewal cron job started');
+    logger.info('Subscription smart guard cron job started');
   } catch (err) {
     logger.warn('Subscription cron job initialization failed (non-blocking)', { error: err.message });
   }

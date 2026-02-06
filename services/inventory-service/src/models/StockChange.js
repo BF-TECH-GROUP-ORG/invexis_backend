@@ -174,20 +174,25 @@ StockChangeSchema.post('save', async function (doc) {
   try {
     const Outbox = mongoose.model('Outbox');
     await Outbox.create({
-      type: `inventory.stock.${doc.type}`,
-      routingKey: `inventory.stock.${doc.type}`,
+      type: 'inventory.stock.updated',
+      routingKey: 'inventory.stock.updated',
       payload: {
         productId: doc.productId.toString(),
+        productName: doc.meta?.productName,
+        categoryId: doc.meta?.categoryId,
         variationId: doc.variationId || null,
         type: doc.type,
         qty: doc.qty,
+        quantityChange: doc.qty, // Alias for consolidated handler
         previous: doc.previous,
         new: doc.new,
+        newStockLevel: doc.new, // Alias for consolidated handler
         reason: doc.reason,
         userId: doc.userId,
         companyId: doc.companyId,
         shopId: doc.shopId,
         meta: doc.meta,
+        unitCost: doc.meta?.unitCost,
         timestamp: doc.createdAt
       }
     });

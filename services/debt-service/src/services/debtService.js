@@ -338,6 +338,7 @@ async function recordRepayment(payload) {
                         hashedCustomerId: debt.hashedCustomerId,
                         customer: debt.customer || null,
                         totalAmount: debt.totalAmount,
+                        salesId: debt.salesId,
                         createdAt: new Date()
                     });
                     console.log(`[DebtService] 🚀 DEBT_REPAID event published to RabbitMQ for repayment ${repayment._id}`);

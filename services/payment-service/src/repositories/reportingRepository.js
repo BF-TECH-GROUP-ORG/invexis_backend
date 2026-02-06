@@ -33,10 +33,17 @@ class ReportingRepository {
         const result = await query.first();
 
         // Calculate Derived Metrics
-        const total = parseInt(result.total_orders);
-        const successful = parseInt(result.successful_orders);
-        result.success_rate = total > 0 ? ((successful / total) * 100).toFixed(2) : 0;
+        const totalCount = parseInt(result.total_orders);
+        const successfulCount = parseInt(result.successful_orders);
+        const failedCount = parseInt(result.failed_orders);
+
+        result.success_rate = totalCount > 0 ? ((successfulCount / totalCount) * 100).toFixed(2) : 0;
+        result.failure_rate = totalCount > 0 ? ((failedCount / totalCount) * 100).toFixed(2) : 0;
         result.average_order_value = parseFloat(result.average_order_value).toFixed(2);
+
+        // Add gross volume (everything including pending/failed)
+        const grossResult = await query.clone().select(db.raw('COALESCE(SUM(amount), 0) as gross_volume')).first();
+        result.gross_volume = grossResult.gross_volume;
 
         return result;
     }
@@ -59,7 +66,10 @@ class ReportingRepository {
             .select(
                 db.raw(`TO_CHAR(created_at, ?) as period`, [dateFormat]),
                 db.raw('COUNT(*) as total_payments'),
-                db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as total_revenue', ['succeeded'])
+                db.raw('COUNT(*) FILTER (WHERE status = ?) as successful_count', ['succeeded']),
+                db.raw('COUNT(*) FILTER (WHERE status = ?) as failed_count', ['failed']),
+                db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as total_revenue', ['succeeded']),
+                db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as failed_revenue', ['failed'])
             )
             .groupBy(db.raw(`TO_CHAR(created_at, ?)`, [dateFormat]))
             .orderBy(db.raw(`TO_CHAR(created_at, ?)`, [dateFormat]), 'desc')
@@ -72,33 +82,6 @@ class ReportingRepository {
         return await query;
     }
 
-    /**
-     * Get top selling products
-     */
-    async getTopProducts(filters = {}, limit = 10) {
-        const { seller_id, company_id, shop_id } = filters;
-
-        // Assuming line_items is JSONB: [{ name: "Product A", ... }]
-        // We use the first item's name for simplicity, but ideally we'd unwind the array
-        let query = db('payments')
-            .select(
-                db.raw("line_items->0->>'name' as product_name"),
-                db.raw("COUNT(*) as sales_count"),
-                db.raw("COALESCE(SUM(amount), 0) as total_revenue")
-            )
-            .where({ status: 'succeeded' });
-
-        if (seller_id) query = query.where({ seller_id });
-        if (company_id) query = query.where({ company_id });
-        if (shop_id) query = query.where({ shop_id });
-
-        query = query
-            .groupBy(db.raw("line_items->0->>'name'"))
-            .orderBy('total_revenue', 'desc')
-            .limit(parseInt(limit));
-
-        return await query;
-    }
 
     /**
      * Get gateway performance stats
@@ -182,12 +165,15 @@ class ReportingRepository {
             default: dateFormat = 'YYYY-MM-DD';
         }
 
-        // 1. Line Chart: Revenue & Volume over time
+        // 1. Line Chart: Revenue & Volume & Failure over time
         let trendQuery = db('payments')
             .select(
                 db.raw(`TO_CHAR(created_at, ?) as label`, [dateFormat]),
                 db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as revenue', ['succeeded']),
-                db.raw('COUNT(*) as count')
+                db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as failed_revenue', ['failed']),
+                db.raw('COUNT(*) as count'),
+                db.raw('COUNT(*) FILTER (WHERE status = ?) as successful_count', ['succeeded']),
+                db.raw('COUNT(*) FILTER (WHERE status = ?) as failed_count', ['failed'])
             )
             .groupBy(db.raw(`TO_CHAR(created_at, ?)`, [dateFormat]))
             .orderBy(db.raw(`TO_CHAR(created_at, ?)`, [dateFormat]), 'asc') // ASC for charts
@@ -233,8 +219,10 @@ class ReportingRepository {
             .select(
                 'shop_id',
                 db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as total_revenue', ['succeeded']),
+                db.raw('COALESCE(SUM(amount) FILTER (WHERE status = ?), 0) as failed_revenue', ['failed']),
                 db.raw('COUNT(*) as transaction_count'),
-                db.raw('COUNT(*) FILTER (WHERE status = ?) as successful_count', ['succeeded'])
+                db.raw('COUNT(*) FILTER (WHERE status = ?) as successful_count', ['succeeded']),
+                db.raw('COUNT(*) FILTER (WHERE status = ?) as failed_count', ['failed'])
             )
             .where({ company_id })
             .groupBy('shop_id')

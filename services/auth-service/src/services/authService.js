@@ -588,11 +588,20 @@ async function login(data, options = {}) {
 
         // User not found or invalid status
         if (!user || user.isDeleted || user.accountStatus !== 'active') {
+            publishUserEvent.security('login.failed', null, {
+                identifier: value.identifier,
+                reason: 'user_not_found_or_inactive',
+                ip: options.ip
+            }).catch(() => { });
             return { status: 401, message: 'Invalid credentials' };
         }
 
         // ✅ Enforce Verification (except Super Admin)
         if (user.role == 'customer' && !user.isEmailVerified && !user.isPhoneVerified) {
+            publishUserEvent.security('login.failed', user._id, {
+                reason: 'unverified_account',
+                ip: options.ip
+            }).catch(() => { });
             return {
                 status: 403,
                 message: 'Account not verified. Please verify your email or phone number to login.',
@@ -667,6 +676,14 @@ async function login(data, options = {}) {
             // ✅ Fire-and-forget: Use updateOne instead of save() for better performance
             User.updateOne({ _id: user._id }, updateData)
                 .catch(err => console.warn('Failed to update user on login failure:', err.message));
+
+            publishUserEvent.security('login.failed', user._id, {
+                reason: 'invalid_password',
+                attempts: newFailedAttempts,
+                isLocked: newFailedAttempts >= 5,
+                ip: options.ip
+            }).catch(() => { });
+
             invalidateUserCache(user._id); // Fire-and-forget
             console.log('Failed login attempts:', newFailedAttempts);
             return { status: 401, message: 'Invalid credentials' };
@@ -675,9 +692,15 @@ async function login(data, options = {}) {
         // 2FA
         let method = 'password';
         if (user.twoFAEnabled) {
-            if (!value.otp) return { ok: false, status: 401, message: '2FA code required' };
+            if (!value.otp) {
+                publishUserEvent.security('mfa.challenge', user._id, { ip: options.ip }).catch(() => { });
+                return { ok: false, status: 401, message: '2FA code required' };
+            }
             const verified = speakeasy.totp.verify({ secret: user.twoFASecret, encoding: 'base32', token: value.otp, window: 1 });
-            if (!verified) return { ok: false, status: 401, message: 'Invalid 2FA code' };
+            if (!verified) {
+                publishUserEvent.security('mfa.failed', user._id, { ip: options.ip }).catch(() => { });
+                return { ok: false, status: 401, message: 'Invalid 2FA code' };
+            }
             method = '2fa';
         }
 
@@ -753,6 +776,12 @@ async function login(data, options = {}) {
 
         publishEvent('user.logged_in', { userId: user._id, role: user.role, method, ip: options.ip, device: options.device })
         // .catch(err => console.warn('Event publish failed:', err.message));
+
+        publishUserEvent.security('login.success', user._id, {
+            method,
+            ip: options.ip,
+            role: user.role
+        }).catch(() => { });
 
         // ✅ Return user object without additional DB lookup (already in memory)
         // Remove sensitive fields from in-memory user object (lean() returns plain object)

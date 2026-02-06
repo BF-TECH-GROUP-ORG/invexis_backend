@@ -49,38 +49,56 @@ class RabbitMQ {
     }
 
     /**
-     * Connect with exponential backoff and health checks.
+     * Connect with incremental backoff logic for initial startup resilience.
+     * Ensures services don't crash if RabbitMQ is still warming up.
      * @returns {Promise<this>}
      */
     async connect() {
         if (this.isConnected && this.channel) return this;
 
-        try {
-            console.log('RabbitMQ: Attempting connection...');
-            this.connection = await amqp.connect(RABBITMQ_URL, {
-                heartbeat: 30,  // Keep-alive for long-lived conns
-                retryDelay: 1000,  // Built-in retry
-            });
+        const maxAttempts = 10;
+        let attempt = 1;
 
-            this.channel = await this.connection.createChannel();
-            await this.channel.prefetch(this.config.prefetchCount);
+        while (attempt <= maxAttempts) {
+            try {
+                console.log(`RabbitMQ: Connection attempt ${attempt}/${maxAttempts}...`);
+                this.connection = await amqp.connect(RABBITMQ_URL, {
+                    heartbeat: 30,
+                    clientProperties: {
+                        connection_name: `invexis-service-${uuidv4().substring(0, 8)}`
+                    }
+                });
 
-            await this.setupInfrastructure();
-            this.isConnected = true;
-            this.reconnectAttempts = 0;
-            console.log('RabbitMQ: Connected successfully');
+                this.channel = await this.connection.createChannel();
+                await this.channel.prefetch(this.config.prefetchCount);
 
-            // Event listeners
-            this.connection.on('close', () => this.handleReconnect());
-            this.connection.on('error', (err) => this.handleError(err));
-            this.channel.on('error', (err) => this.handleError(err));
-            this.channel.on('close', () => this.handleReconnect());
+                await this.setupInfrastructure();
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
+                console.log('RabbitMQ: Connected successfully');
 
-            return this;
-        } catch (err) {
-            console.error('RabbitMQ: Connection failed', err.message);
-            this.isConnected = false;
-            throw err;
+                // Event listeners for runtime failures
+                this.connection.on('close', () => this.handleReconnect());
+                this.connection.on('error', (err) => this.handleError(err));
+                this.channel.on('error', (err) => this.handleError(err));
+                this.channel.on('close', () => this.handleReconnect());
+
+                return this;
+            } catch (err) {
+                console.error(`RabbitMQ: Connection attempt ${attempt} failed: ${err.message}`);
+
+                if (attempt === maxAttempts) {
+                    console.error('RabbitMQ: Maximum connection attempts reached. Failing.');
+                    this.isConnected = false;
+                    throw err;
+                }
+
+                // Exponential backoff with jitter
+                const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, 15000);
+                console.log(`RabbitMQ: Retrying in ${Math.round(delay)}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                attempt++;
+            }
         }
     }
 

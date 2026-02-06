@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const Money = require('/app/shared/utils/MoneyUtil');
 
 // models/repayment.model.js
 const RepaymentSchema = new mongoose.Schema({
@@ -14,7 +15,12 @@ const RepaymentSchema = new mongoose.Schema({
 
     // paymentId is an external idempotency key (may be ObjectId or external string like a payment provider id)
     paymentId: { type: String, required: true },
-    amountPaid: { type: Number, required: true },
+    amountPaid: {
+        type: Number,
+        required: true,
+        get: v => Money.toMajor(v),
+        set: v => Money.toMinor(v)
+    },
     paymentMethod: {
         type: String,
         enum: ["CASH", "MTN", "AIRTEL", "BANK_TRANSFER"],
@@ -39,6 +45,9 @@ const RepaymentSchema = new mongoose.Schema({
 
     paidAt: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now }
+}, {
+    toJSON: { getters: true },
+    toObject: { getters: true }
 });
 
 // Composite indexes for optimal query performance

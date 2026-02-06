@@ -183,15 +183,40 @@ class Subscription {
   }
 
   /**
-   * Get all subscriptions due for auto-renewal
+   * Get all active subscriptions due for "Expiring Soon" alert (2 days before)
+   */
+  static async getExpiringSoon(daysToExpiry = 2) {
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + daysToExpiry);
+    const dateString = targetDate.toISOString().split('T')[0];
+
+    return db(this.table)
+      .where("is_active", true)
+      .whereRaw("DATE(end_date) = ?", [dateString]);
+  }
+
+  /**
+   * Get all subscriptions that have been expired for exactly X days (grace period)
+   */
+  static async getGracePeriodExpired(daysAfterExpiry = 3) {
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() - daysAfterExpiry);
+    const dateString = targetDate.toISOString().split('T')[0];
+
+    return db(this.table)
+      .where("is_active", true)
+      .whereRaw("DATE(end_date) = ?", [dateString]);
+  }
+
+  /**
+   * Get all subscriptions due for auto-renewal check (Pivoted to explicit checks)
    * @returns {Promise<Array>} List of subscriptions
    */
   static async getDueRenewals() {
     return db(this.table)
       .where("is_active", true)
-      .andWhere("auto_renew", true)
       .andWhere("end_date", "<=", new Date())
-      .whereRaw("(last_billing_attempt IS NULL OR last_billing_attempt < ?)", [new Date(Date.now() - 24 * 60 * 60 * 1000)]); // Once every 24h
+      .whereRaw("(last_billing_attempt IS NULL OR last_billing_attempt < ?)", [new Date(Date.now() - 24 * 60 * 60 * 1000)]);
   }
 }
 

@@ -183,7 +183,13 @@ const saleEvents = {
           saleId: sale.saleId,
           companyId: sale.companyId,
           shopId: sale.shopId,
-          changes, // Array of changed fields
+          status: sale.status,
+          paymentStatus: sale.paymentStatus,
+          netSales: sale.totalAmount,
+          amountReceived: sale.amountReceived,
+          amountPending: sale.amountPending,
+          items: sale.items || [], // Items should be included for reconciliation
+          changes,
           updatedAt: new Date().toISOString(),
           traceId: uuidv4(),
         },

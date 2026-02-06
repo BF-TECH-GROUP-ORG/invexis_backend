@@ -1,47 +1,103 @@
 const mongoose = require('mongoose');
+const Money = require('/app/shared/utils/MoneyUtil');
 const { Schema } = mongoose;
 
 const PricingTierSchema = new Schema({
   minQuantity: { type: Number, default: 1, min: 1 },
-  price: { type: Number, required: true, min: 0 },
+  price: {
+    type: Number,
+    required: true,
+    min: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },
   currency: { type: String, default: 'USD' },
 });
 
 const ProductPricingSchema = new Schema({
   productId: { type: Schema.Types.ObjectId, ref: 'Product', index: true },
-  basePrice: { type: Number, required: true, min: 0 },
-  salePrice: { type: Number, min: 0 },
-  listPrice: { type: Number, min: 0 },
-  cost: { type: Number, min: 0 },
+  basePrice: {
+    type: Number,
+    required: true,
+    min: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },
+  salePrice: {
+    type: Number,
+    min: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },
+  listPrice: {
+    type: Number,
+    min: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },
+  cost: {
+    type: Number,
+    min: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },
   currency: { type: String, default: 'USD' },
   priceTiers: { type: [PricingTierSchema], default: [] },
   effectiveFrom: { type: Date, default: null },
   effectiveTo: { type: Date, default: null },
 
   // ========== MARGIN CALCULATIONS ==========
-  marginAmount: { type: Number, default: 0 },           // basePrice - cost
+  marginAmount: {
+    type: Number,
+    default: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },           // basePrice - cost
   marginPercent: { type: Number, default: 0, min: 0, max: 100 }, // (marginAmount / basePrice) * 100
-  saleMarginAmount: { type: Number, default: 0 },       // salePrice - cost (if on sale)
+  saleMarginAmount: {
+    type: Number,
+    default: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },       // salePrice - cost (if on sale)
   saleMarginPercent: { type: Number, default: 0 },      // Sale margin percentage
 
   // ========== PROFITABILITY TRACKING ==========
   profitRank: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' }, // Ranked by margin%
   unitsSoldLastMonth: { type: Number, default: 0, min: 0 },
-  revenue: { type: Number, default: 0, min: 0 },        // Total revenue (units * price)
-  profit: { type: Number, default: 0 },                 // Total profit (units * marginAmount)
+  revenue: {
+    type: Number,
+    default: 0,
+    min: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },        // Total revenue (units * price)
+  profit: {
+    type: Number,
+    default: 0,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },                 // Total profit (units * marginAmount)
 
   // ========== PRICE CHANGE HISTORY ==========
-  previousBasePrice: { type: Number, default: null },
+  previousBasePrice: {
+    type: Number,
+    default: null,
+    get: v => Money.toMajor(v),
+    set: v => Money.toMinor(v)
+  },
   priceChangedAt: { type: Date, default: null },
   priceChangeReason: { type: String, default: null }    // 'seasonal', 'competitor_match', 'clearance', etc.
 }, {
   timestamps: true,
+  toJSON: { getters: true },
+  toObject: { getters: true }
 });
 
 // Note: productId index automatically created by index: true property
 
 // Compute margin fields before save for analytics
-ProductPricingSchema.pre('save', async function() {
+ProductPricingSchema.pre('save', async function () {
   try {
     const bp = this.basePrice || 0;
     const cost = this.cost || 0;
@@ -55,7 +111,7 @@ ProductPricingSchema.pre('save', async function() {
 /* -------------------------------------------------------------------------- */
 /*         PRE-SAVE: VALIDATE & CALCULATE MARGIN & PROFIT METRICS              */
 /* -------------------------------------------------------------------------- */
-ProductPricingSchema.pre('save', async function() {
+ProductPricingSchema.pre('save', async function () {
   // Validate cost is not higher than basePrice
   if (this.cost > this.basePrice) {
     throw new Error('Cost cannot exceed basePrice');

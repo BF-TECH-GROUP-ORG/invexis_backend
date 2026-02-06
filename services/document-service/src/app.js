@@ -15,10 +15,11 @@ app.use(morgan('combined', { stream: { write: message => logger.info(message.tri
 
 // Routes
 const { authenticateToken } = require('/app/shared/middlewares/auth/production-auth');
+const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscription/production-subscription');
 
 // Routes
 app.use('/health', healthRoutes);
-app.use('/documents', authenticateToken, require('./routes/documents'));
+app.use('/document', authenticateToken, checkSubscriptionStatus(), require('./routes/api'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

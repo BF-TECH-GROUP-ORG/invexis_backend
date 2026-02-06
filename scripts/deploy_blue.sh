@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-COMPOSE_FILE="$PROJECT_ROOT/deployments/docker/docker-compose.prod.yml"
+COMPOSE_FILE="$PROJECT_ROOT/docker-compose.prod.yml"
 ENV_FILE="$PROJECT_ROOT/deployments/secrets/envs/.env.prod"
 
 # Default values
@@ -107,13 +107,14 @@ get_services_list() {
             "shop-service-blue"
             "inventory-service-blue"
             "sales-service-blue"
-            "ecommerce-service-blue"
             "notification-service-blue"
             "payment-service-blue"
             "analytics-service-blue"
             "audit-service-blue"
             "debt-service-blue"
             "websocket-service-blue"
+            "report-service-blue"
+            "document-service-blue"
         )
     else
         IFS=',' read -ra ADDR <<< "$SERVICES_TO_DEPLOY"
@@ -154,64 +155,60 @@ pull_images() {
     log "✅ All images pulled successfully"
 }
 
+# Helper: Wait for a container to be healthy
+wait_for_healthy() {
+    local service=$1
+    local max_attempts=30
+    local attempt=1
+    
+    info "⏳ Waiting for $service to be healthy..."
+    
+    while [[ $attempt -le $max_attempts ]]; do
+        local status=$(docker inspect --format='{{.State.Health.Status}}' "invexis-$service-prod" 2>/dev/null || echo "none")
+        
+        if [[ "$status" == "healthy" ]]; then
+            log "✅ $service is healthy"
+            return 0
+        fi
+        
+        # Fallback for services without healthcheck
+        if [[ "$status" == "none" ]]; then
+            if docker ps --format '{{.Names}}' | grep -q "invexis-$service-prod"; then
+                log "✅ $service is running (no healthcheck defined)"
+                return 0
+            fi
+        fi
+        
+        echo -ne "   Attempt $attempt/$max_attempts... \r"
+        sleep 2
+        ((attempt++))
+    done
+    
+    error "❌ $service failed to become healthy after $max_attempts attempts"
+    return 1
+}
+
 # Check database connectivity
 check_databases() {
-    log "🗄️ Checking database connectivity..."
+    log "🗄️ Checking and waiting for infrastructure..."
     
-    # Check PostgreSQL databases
-    local postgres_dbs=("company-postgres" "shop-postgres" "payment-postgres" "analytics-postgres")
-    for db in "${postgres_dbs[@]}"; do
-        info "Checking $db..."
-        if docker-compose -f "$COMPOSE_FILE" exec -T "$db" pg_isready -U invexis >/dev/null 2>&1; then
-            log "✅ $db is ready"
-        else
-            warn "⚠️ $db is not ready, starting it..."
-            docker-compose -f "$COMPOSE_FILE" up -d "$db"
-            sleep 10
+    # 1. Start core infra if not running
+    info "Ensuring core infrastructure containers are up..."
+    docker-compose -f "$COMPOSE_FILE" up -d \
+        company-postgres shop-postgres payment-postgres analytics-postgres \
+        sales-mysql mongodb redis rabbitmq
+    
+    # 2. Wait for each to be healthy
+    local infra_services=("company-postgres" "shop-postgres" "payment-postgres" "analytics-postgres" "sales-mysql" "mongodb" "redis" "rabbitmq")
+    
+    for service in "${infra_services[@]}"; do
+        if ! wait_for_healthy "$service"; then
+            error "Infrastructure failure: $service is not healthy."
+            exit 1
         fi
     done
     
-    # Check MySQL
-    info "Checking sales-mysql..."
-    if docker-compose -f "$COMPOSE_FILE" exec -T sales-mysql mysqladmin ping -h localhost -u root -p"$MYSQL_ROOT_PASSWORD" >/dev/null 2>&1; then
-        log "✅ sales-mysql is ready"
-    else
-        warn "⚠️ sales-mysql is not ready, starting it..."
-        docker-compose -f "$COMPOSE_FILE" up -d sales-mysql
-        sleep 15
-    fi
-    
-    # Check MongoDB
-    info "Checking mongodb..."
-    if docker-compose -f "$COMPOSE_FILE" exec -T mongodb mongosh --eval "db.adminCommand('ping')" >/dev/null 2>&1; then
-        log "✅ mongodb is ready"
-    else
-        warn "⚠️ mongodb is not ready, starting it..."
-        docker-compose -f "$COMPOSE_FILE" up -d mongodb
-        sleep 10
-    fi
-    
-    # Check Redis
-    info "Checking redis..."
-    if docker-compose -f "$COMPOSE_FILE" exec -T redis redis-cli -a "$REDIS_PASSWORD" ping >/dev/null 2>&1; then
-        log "✅ redis is ready"
-    else
-        warn "⚠️ redis is not ready, starting it..."
-        docker-compose -f "$COMPOSE_FILE" up -d redis
-        sleep 5
-    fi
-    
-    # Check RabbitMQ
-    info "Checking rabbitmq..."
-    if docker-compose -f "$COMPOSE_FILE" exec -T rabbitmq rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
-        log "✅ rabbitmq is ready"
-    else
-        warn "⚠️ rabbitmq is not ready, starting it..."
-        docker-compose -f "$COMPOSE_FILE" up -d rabbitmq
-        sleep 20
-    fi
-    
-    log "✅ Database connectivity check completed"
+    log "✅ All infrastructure components are verified healthy"
 }
 
 # Deploy blue services
