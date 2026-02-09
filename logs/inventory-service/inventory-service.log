@@ -21150,3 +21150,722 @@
 {"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 17:30:00"}
 {"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-06 17:30:00"}
 {"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-06 17:30:00"}
+{"level":"error","message":"❌ Error processing outbox: connection 434 to 172.18.0.5:27017 timed out","timestamp":"2026-02-06 17:46:51"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-06 18:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-06 18:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-06 18:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-06 18:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:02"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:02"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:02"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-06 18:00:02"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-06 18:00:02"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-06 18:00:02"}
+{"level":"info","message":"Initializing alert cron jobs...","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✓ Low stock monitoring job scheduled every 30 minutes","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✓ Backorder monitoring job scheduled hourly","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✓ Smart checks job scheduled for 2:00 AM daily","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✓ Daily summary job scheduled for 11:00 PM","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✓ Weekly summary job scheduled for Monday 9:00 AM","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✓ Monthly summary job scheduled for 1st of month at 9:00 AM","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✓ Yearly summary anniversary check scheduled daily at 10:00 AM","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✓ Alert cleanup job scheduled for 3:00 AM daily","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"✅ All alert cron jobs initialized successfully","timestamp":"2026-02-07 10:17:22"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 10:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 10:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 10:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 10:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 10:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 10:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 10:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 10:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 10:30:01"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 11:00:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 11:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 11:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 11:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 11:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 11:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 11:30:01"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 11:30:01"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 11:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 11:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 11:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 11:30:01"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 12:00:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 12:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 12:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 12:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 12:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 12:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 12:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 12:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 12:30:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 12:30:01"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 13:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:01"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 13:00:01"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 13:00:01"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 13:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 13:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 13:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 13:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 13:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 13:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 13:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 13:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 13:30:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 15:14:58"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 15:14:58"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 15:14:59"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 15:14:59"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 15:14:59"}
+{"level":"error","message":"Failed to retrieve companies from products: connection <monitor> to 172.18.0.8:27017 timed out","timestamp":"2026-02-07 15:15:06"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 0 alerts.","timestamp":"2026-02-07 15:15:07"}
+{"level":"error","message":"Failed to retrieve companies from products: connection <monitor> to 172.18.0.8:27017 timed out","timestamp":"2026-02-07 15:15:07"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 15:15:07"}
+{"level":"error","message":"Failed to retrieve companies from products: connection <monitor> to 172.18.0.8:27017 timed out","timestamp":"2026-02-07 15:15:07"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 0 alerts.","timestamp":"2026-02-07 15:15:07"}
+{"level":"error","message":"Failed to retrieve companies from products: connection <monitor> to 172.18.0.8:27017 timed out","timestamp":"2026-02-07 15:15:07"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 0 alerts.","timestamp":"2026-02-07 15:15:07"}
+{"level":"error","message":"Failed to retrieve companies from products: connection <monitor> to 172.18.0.8:27017 timed out","timestamp":"2026-02-07 15:15:07"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 15:15:07"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 15:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 15:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 15:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 15:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 15:30:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 15:30:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 15:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 15:30:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 15:30:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 16:00:00"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 16:00:00"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:20"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:21"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 21:00:22"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:22"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:22"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 21:00:24"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:24"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:25"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 21:00:26"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:26"}
+{"level":"error","message":"Failed to retrieve companies from products: connection <monitor> to 172.18.0.8:27017 timed out","timestamp":"2026-02-07 21:00:26"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 0 alerts.","timestamp":"2026-02-07 21:00:26"}
+{"level":"error","message":"Failed to retrieve companies from products: connection <monitor> to 172.18.0.8:27017 timed out","timestamp":"2026-02-07 21:00:26"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 0 alerts.","timestamp":"2026-02-07 21:00:26"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:26"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"🔍 Running low stock monitoring...","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"📦 Running backorder monitoring...","timestamp":"2026-02-07 21:00:27"}
+{"level":"error","message":"Failed to retrieve companies from products: connection <monitor> to 172.18.0.8:27017 timed out","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:27"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:28"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:28"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:29"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:29"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:30"}
+{"level":"info","message":"📦 Starting backorder monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0","timestamp":"2026-02-07 21:00:30"}
+{"level":"info","message":"✅ Backorder monitoring completed. Processed: 0 backorders.","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:30"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:31"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:31"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:31"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:31"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:31"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:31"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:31"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:31"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:31"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:31"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:31"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:32"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:32"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:32"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:32"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:32"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:32"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:32"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:32"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:33"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:34"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:35"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 21:00:35"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:35"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 21:00:35"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:35"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:36"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 21:00:36"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:36"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:36"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:36"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:37"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:37"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:37"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:37"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 21:00:37"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:37"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:37"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:37"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 21:00:37"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:37"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:37"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:37"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:37"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 21:00:37"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:37"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:37"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:38"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:38"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:38"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:38"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:38"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:38"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:39"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:39"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:40"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:40"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:40"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:40"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:40"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:40"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 21:00:40"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:40"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:40"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:40"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:40"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:40"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 13","timestamp":"2026-02-07 21:00:40"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:40"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:41"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:41"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:41"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 21:00:41"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:41"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:41"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:41"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:41"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:41"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:42"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:42"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:42"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 21:00:42"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:42"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 21:00:42"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:42"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:42"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:42"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 21:00:42"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:42"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 21:00:42"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:42"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:43"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:43"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 21:00:43"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:43"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:44"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:44"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:44"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:45"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:45"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:45"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:45"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:47"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:47"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 21:00:47"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:47"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:47"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/15aec3c3-3726-4605-8d98-eba6b1f64e30)","timestamp":"2026-02-07 21:00:48"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 6","timestamp":"2026-02-07 21:00:48"}
+{"level":"info","message":"📊 Starting low stock monitoring for company: 46e5d562-34f2-4892-a83a-c9cf55b60006","timestamp":"2026-02-07 21:00:48"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:48"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:48"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:49"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:49"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:49"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:49"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:49"}
+{"level":"error","message":"Failed to handle out of stock: Threshold is required for stock-related alerts","timestamp":"2026-02-07 21:00:49"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:49"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:49"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:49"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:49"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:50"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:50"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:50"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:50"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:50"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 21:00:50"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 21:00:50"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:51"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (7/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:51"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:51"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:51"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:51"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:53"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:53"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:53"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:53"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:53"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 21:00:53"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 21:00:53"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:53"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:54"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 21:00:54"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 21:00:54"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:54"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:54"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:54"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:54"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:54"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:55"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:55"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (10/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:55"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:55"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:56"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:56"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 21:00:56"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 21:00:56"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:56"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:56"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 21:00:56"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 21:00:56"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:56"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 21:00:56"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 21:00:56"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (1/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:56"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:56"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 21:00:56"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 21:00:56"}
+{"level":"warn","message":"⚠️ LOW STOCK ALERT: Officia dolorem quo (3/21) (46e5d562-34f2-4892-a83a-c9cf55b60006/39cf5aad-6a0f-4be8-90ba-675930d4b927)","timestamp":"2026-02-07 21:00:57"}
+{"level":"info","message":"✅ Low stock monitoring completed. Alerts generated: 7","timestamp":"2026-02-07 21:00:57"}
+{"level":"info","message":"✅ Low stock monitoring completed. Processed: 26 alerts.","timestamp":"2026-02-07 21:00:57"}

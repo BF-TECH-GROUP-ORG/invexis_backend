@@ -205,6 +205,14 @@ exports.createNotification = async (req, res) => {
 // 4. Simulate Event (Testing/Dev only)
 exports.simulateEvent = async (req, res) => {
     try {
+        // Security: Only allow event simulation in non-production environments
+        if (process.env.NODE_ENV === 'production') {
+            return res.status(403).json({
+                success: false,
+                message: "Event simulation is disabled in production for security reasons"
+            });
+        }
+
         const { type, data, source } = req.body;
         // Require lazily or ensure it's imported at top
         const recipientResolver = require('../services/recipientResolver');

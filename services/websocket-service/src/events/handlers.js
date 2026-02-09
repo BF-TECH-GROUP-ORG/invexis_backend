@@ -23,12 +23,53 @@ const handleJoin = (socket) => {
         throw new Error('Rate limit exceeded');
       }
 
-      // Join rooms with scaling constraints
+      // Security Validation: Ensure user has permission to join each requested room
+      // Rooms are typically formatted as 'company:ID', 'shop:ID', or 'user:ID'
+      const authorizedRooms = [];
+      const user = socket.user || {};
+      const userId = socket.userId;
+      const userCompanyId = user.companyId || (user.companies && user.companies[0]);
+      const userShopId = user.shopId || (user.shops && user.shops[0]);
+
       for (const room of rooms) {
-        await roomManager.joinRoom(socket, room);
-        logger.debug(`User ${socket.userId} joined ${room}`);
+        let isAuthorized = false;
+
+        // 1. Personal Room: user:ID
+        if (room === `user:${userId}`) {
+          isAuthorized = true;
+        }
+        // 2. Company Room: company:ID
+        else if (room.startsWith('company:')) {
+          const roomId = room.split(':')[1];
+          if (roomId === userCompanyId || user.role === 'super_admin') {
+            isAuthorized = true;
+          }
+        }
+        // 3. Shop Room: shop:ID
+        else if (room.startsWith('shop:')) {
+          const roomId = room.split(':')[1];
+          if (roomId === userShopId || user.role === 'super_admin' || user.role === 'company_admin') {
+            isAuthorized = true;
+          }
+        }
+        // 4. Global Broadcast
+        else if (room === 'global' || room === 'all_users') {
+          // Security: Only super_admin can join global broadcast rooms
+          if (user.role === 'super_admin') {
+            isAuthorized = true;
+          }
+        }
+
+        if (isAuthorized) {
+          await roomManager.joinRoom(socket, room);
+          authorizedRooms.push(room);
+          logger.debug(`User ${socket.userId} joined authorized room: ${room}`);
+        } else {
+          logger.warn(`Unauthorized room join attempt: User ${socket.userId} tried to join ${room}`);
+        }
       }
-      socket.emit('joined', { rooms, success: true });
+
+      socket.emit('joined', { rooms: authorizedRooms, success: true });
     } catch (error) {
       logger.error('Join error:', error);
       socket.emit('error', {

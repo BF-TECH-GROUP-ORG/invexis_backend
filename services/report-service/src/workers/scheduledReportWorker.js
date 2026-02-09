@@ -11,6 +11,7 @@ const ReportEventProducer = require('../events/ReportEventProducer');
  * Scheduled Report Worker
  * Automatically triggers hierarchical reports for all companies/shops
  */
+
 class ScheduledReportWorker {
     constructor() {
         this.batchSize = 5; // Processes 5 reports at a time to avoid saturation

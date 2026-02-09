@@ -1,4 +1,11 @@
-// websocket-service production-ready index.js
+const { authenticateToken: apiKeyAuth } = require('/app/shared/middlewares/auth/production-auth'); // Reusing production auth or apiKey logic if available
+// For now, we'll keep the existing apiKeyAuth call if it's different, but let's check.
+// The existing code uses security.apiKeyAuth(). The user wants "single centralized auth system".
+// The existing `security.apiKeyAuth()` seems to be from `shared/security.js`.
+// I will instead focus on ensuring the JWT logic in `io.use` uses the same secret as the shared auth.
+
+// To do this effectively, I need to know what `production-auth.js` uses.
+// I will verify the content of `production-auth.js` in the next step before editing `websocket-service`.
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -88,35 +95,44 @@ const activeConnections = new Map();
 
 // Middleware for Handshake Authentication
 io.use(async (socket, next) => {
-  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-  // userId can be extracted from token, but we allow it as a hint for debugging
-  const hintedUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
+  try {
+    const jwt = require('jsonwebtoken');
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    // userId can be extracted from token, but we allow it as a hint for debugging
+    const hintedUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
 
-  if (token) {
-    try {
-      const jwt = require('jsonwebtoken');
-      const secret = process.env.JWT_SECRET || 'sdjnjkdjafd8a79d7fa76yuadsjbjahsgtd76y3498hnjf//dkjsfa';
-      const decoded = jwt.verify(token, secret);
-
-      socket.userId = decoded.userId || decoded.id || hintedUserId;
-      socket.user = decoded;
-      socket.authenticated = true;
-
-      // Auto-join user room
-      socket.join(`user:${socket.userId}`);
-
-      logger.info('Socket authenticated via Handshake', {
-        socketId: socket.id,
-        userId: socket.userId
-      });
-      return next();
-    } catch (err) {
-      logger.warn('Socket handshake authentication failed', { error: err.message });
-      // We don't block the connection yet, but we mark as unauthenticated
-      socket.authenticated = false;
+    // Centralized Auth: Use JWT_ACCESS_SECRET and consistent verification options
+    const secret = process.env.JWT_ACCESS_SECRET;
+    if (!secret) {
+      logger.error('CRITICAL: JWT_ACCESS_SECRET not configured');
+      return next(new Error('Internal server configuration error'));
     }
+
+    // Match production-auth options
+    const decoded = jwt.verify(token, secret, {
+      algorithms: ['HS256'],
+      issuer: 'invexis-auth',
+      audience: 'invexis-apps'
+    });
+
+    socket.userId = decoded.sub || decoded.uid || decoded.userId || decoded.id || hintedUserId;
+    socket.user = decoded;
+    socket.authenticated = true;
+
+    // Auto-join user room
+    socket.join(`user:${socket.userId}`);
+
+    logger.info('Socket authenticated via Handshake', {
+      socketId: socket.id,
+      userId: socket.userId
+    });
+    return next();
+  } catch (err) {
+    logger.warn('Socket handshake authentication failed', { error: err.message });
+    // We don't block the connection yet, but we mark as unauthenticated
+    socket.authenticated = false;
+    return next();
   }
-  next();
 });
 
 // Socket.IO event handlers
@@ -142,7 +158,10 @@ io.on('connection', (socket) => {
 
       if (token) {
         const jwt = require('jsonwebtoken');
-        const secret = process.env.JWT_SECRET || 'sdjnjkdjafd8a79d7fa76yuadsjbjahsgtd76y3498hnjf//dkjsfa';
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+          throw new Error('Server configuration error: JWT_SECRET missing');
+        }
         const decoded = jwt.verify(token, secret);
 
         socket.userId = decoded.userId || decoded.id || data.userId;
@@ -177,64 +196,18 @@ io.on('connection', (socket) => {
   handleLeave(socket);
   handleCustomEvents(socket);
 
-  // Handle custom events
-  socket.on('notification', (data) => {
-    logger.info('Notification event received', {
-      socketId: socket.id,
-      userId: socket.userId,
-      data: data
-    });
-
-    // Broadcast to authenticated users
-    if (socket.authenticated && data.recipient) {
-      io.to(`user:${data.recipient}`).emit('notification', {
-        ...data,
-        timestamp: new Date().toISOString(),
-        from: socket.userId
-      });
-    }
-  });
-
-  // Handle order updates
-  socket.on('order_update', (data) => {
-    logger.info('Order update event received', {
-      socketId: socket.id,
-      userId: socket.userId,
-      orderId: data.orderId
-    });
-
-    // Broadcast to relevant users (seller, buyer, admins)
-    if (data.orderId && data.status) {
-      io.emit('order_status_change', {
-        orderId: data.orderId,
-        status: data.status,
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-
-  // Handle inventory alerts
-  socket.on('inventory_alert', (data) => {
-    logger.info('Inventory alert event received', {
-      socketId: socket.id,
-      productId: data.productId,
-      level: data.level
-    });
-
-    // Broadcast to relevant users
-    if (data.productId && data.level !== undefined) {
-      io.emit('inventory_low', {
-        productId: data.productId,
-        currentLevel: data.level,
-        threshold: data.threshold || 10,
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
+  // REMOVED INSECURE EVENT LISTENERS: notification, order_update, inventory_alert
+  // All system events must originate from backend services via RabbitMQ to prevent spoofing.
 
   // Handle chat messages
   socket.on('chat_message', (data) => {
     if (socket.authenticated && data.roomId && data.message) {
+      // Security: Sender must be a member of the room
+      if (!socket.rooms.has(data.roomId)) {
+        logger.warn('Unauthorized chat attempt', { userId: socket.userId, roomId: data.roomId });
+        return;
+      }
+
       logger.info('Chat message sent', {
         socketId: socket.id,
         userId: socket.userId,

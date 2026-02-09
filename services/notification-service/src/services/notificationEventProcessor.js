@@ -30,6 +30,33 @@ try {
  */
 class NotificationEventProcessor {
     /**
+     * Sanitize payload to remove sensitive data (passwords, tokens, etc.)
+     */
+    sanitizePayload(data) {
+        if (!data || typeof data !== 'object') return data;
+
+        const sensitiveFields = ['password', 'token', 'secret', 'key', 'pin', 'otp', 'generatedPassword'];
+        const sanitized = Array.isArray(data) ? [] : {};
+
+        for (const [key, value] of Object.entries(data)) {
+            // Check if key is sensitive
+            const isSensitive = sensitiveFields.some(field =>
+                key.toLowerCase().includes(field.toLowerCase())
+            );
+
+            if (isSensitive) {
+                sanitized[key] = '***';
+            } else if (value && typeof value === 'object' && !(value instanceof Date)) {
+                // Recursively sanitize nested objects
+                sanitized[key] = this.sanitizePayload(value);
+            } else {
+                sanitized[key] = value;
+            }
+        }
+        return sanitized;
+    }
+
+    /**
      * Process any event and create notifications if mapped
      * @param {Object} event - Standard event object {type, source, data, emittedAt, id}
      * @param {string} routingKey - RabbitMQ routing key
@@ -37,6 +64,9 @@ class NotificationEventProcessor {
     async processEvent(event, routingKey) {
         try {
             let { type, data, id: eventId, emittedAt, source } = event;
+
+            // Step 0: Sanitize incoming data
+            data = this.sanitizePayload(data);
 
             // Robust data unwrapping: Some services wrap the payload in 'body' or 'payload'
             if (data && !data.companyId && (data.body || data.payload || data.data)) {
