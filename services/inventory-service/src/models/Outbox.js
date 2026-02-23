@@ -109,46 +109,83 @@ outboxSchema.statics.findPending = async function (limit = 50) {
  * Finds pending events, marks them as processing, and returns them
  */
 outboxSchema.statics.claimPending = async function (limit = 50) {
-  const session = await mongoose.startSession();
   let events = [];
 
   try {
-    await session.withTransaction(async () => {
-      // Find candidate IDs first
-      const candidates = await this.find({ status: 'pending' })
-        .sort({ createdAt: 1 })
-        .limit(limit)
-        .select('_id')
-        .session(session);
+    const session = await mongoose.startSession().catch(() => null);
 
-      if (candidates.length === 0) return;
+    if (session) {
+      try {
+        await session.withTransaction(async () => {
+          // Find candidate IDs first
+          const candidates = await this.find({ status: 'pending' })
+            .sort({ createdAt: 1 })
+            .limit(limit)
+            .select('_id')
+            .session(session);
 
-      const ids = candidates.map(c => c._id);
+          if (candidates.length === 0) return;
 
-      // Update status to processing
-      await this.updateMany(
-        { _id: { $in: ids } },
-        {
-          $set: {
-            status: 'processing',
-            updatedAt: new Date()
-          }
-        },
-        { session }
-      );
+          const ids = candidates.map(c => c._id);
 
-      // Fetch full documents
-      events = await this.find({ _id: { $in: ids } }).session(session).lean();
-    });
+          // Update status to processing
+          await this.updateMany(
+            { _id: { $in: ids } },
+            {
+              $set: {
+                status: 'processing',
+                updatedAt: new Date()
+              }
+            },
+            { session }
+          );
+
+          // Fetch full documents
+          events = await this.find({ _id: { $in: ids } }).session(session).lean();
+        });
+        return events;
+      } catch (error) {
+        // Fallback to non-transactional if session fail or other session issue
+        if (error.message.includes('replSet') || error.code === 20) {
+          // logger would be good here
+        } else {
+          throw error;
+        }
+      } finally {
+        session.endSession();
+      }
+    }
+
+    // Fallback: Non-transactional claim (less safe but works in standalone)
+    const candidates = await this.find({ status: 'pending' })
+      .sort({ createdAt: 1 })
+      .limit(limit)
+      .select('_id')
+      .lean();
+
+    if (candidates.length === 0) return [];
+
+    const ids = candidates.map(c => c._id);
+
+    // Atomic update status to processing and return documents
+    events = await this.find({ _id: { $in: ids } }).lean();
+
+    await this.updateMany(
+      { _id: { $in: ids } },
+      {
+        $set: {
+          status: 'processing',
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    return events;
+
   } catch (error) {
-    // If transaction fails, we return empty array (safe fallback)
-    // logger would be good here but we don't have it imported in model
-    // console.error("Error in claimPending transaction:", error);
-  } finally {
-    session.endSession();
+    console.error("Error in claimPending:", error);
+    return [];
   }
-
-  return events;
 };
 
 /**

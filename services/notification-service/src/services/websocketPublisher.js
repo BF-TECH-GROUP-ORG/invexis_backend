@@ -24,9 +24,10 @@ class WebSocketPublisher {
 
     try {
       const payload = {
-        type: 'notification.new',
+        type: 'notification.created', // Standardized with consumer expectations
         source: 'notification-service',
-        userId: notification.userId?.toString(), // Add userId at top level for websocket-service
+        userId: notification.userId?.toString(),
+        targetUserIds: [notification.userId?.toString()], // Add targetUserIds array
         data: {
           notificationId: notification._id.toString(),
           userId: notification.userId?.toString(),
@@ -54,7 +55,9 @@ class WebSocketPublisher {
         rabbitMQ.exchanges.topic,  // 'events_topic'
         routingKey,
         payload,
-        {}
+        {
+          persistent: true, // Make sure events survive restarts
+        }
       );
 
       logger.info(`📡 Published notification ${notification._id} to WebSocket`);
@@ -87,6 +90,7 @@ class WebSocketPublisher {
           title: notification.title,
           body: notification.body,
           priority: notification.priority,
+          createdAt: notification.createdAt,
           // Include compiled content for rich notifications
           content: notification.compiledContent?.inApp || {
             title: notification.title,
@@ -98,12 +102,15 @@ class WebSocketPublisher {
       };
 
       // Use correct exchange and routing key
+      // Consumer listens on notification.*
       const routingKey = 'notification.broadcast';
       await rabbitMQ.publish(
         rabbitMQ.exchanges.topic,  // 'events_topic'
         routingKey,
         payload,
-        {}
+        {
+          persistent: true,
+        }
       );
 
       logger.info(`📡 Broadcast notification ${notification._id} via WebSocket`);

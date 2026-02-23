@@ -220,6 +220,14 @@ const sendPush = async (notification, fcmToken, userId, companyId) => {
         new Date(Date.now() + 300000)
       );
       return { success: false, circuitBreakerOpen: true };
+    } else {
+      // Handle standard failure from core (e.g. invalid token)
+      await DeliveryLog.markAsFailed(
+        deliveryLog._id,
+        result.error,
+        null
+      );
+      return result;
     }
   } catch (error) {
     const log = await DeliveryLog.findById(deliveryLog._id);

@@ -113,6 +113,16 @@ module.exports = {
             "channels": ["email", "sms", "push", "inApp"],
             "priority": "urgent"
         },
+        "inventory.alert.product_expiring": {
+            "service": "Notification-Service",
+            "channels": ["email", "push", "inApp"],
+            "priority": "high"
+        },
+        "inventory.alert.product_expired": {
+            "service": "Notification-Service",
+            "channels": ["email", "push", "inApp"],
+            "priority": "urgent"
+        },
 
         // --- Sale Events ---
         "sales.created": { // Legacy support
@@ -158,6 +168,11 @@ module.exports = {
         "sales.refunded": { // Legacy support
             "service": "Notification-Service",
             "channels": ["email", "sms"],
+            "priority": "normal"
+        },
+        "sale.refund.processed": {
+            "service": "Notification-Service",
+            "channels": ["email", "sms", "inApp"],
             "priority": "normal"
         },
 

@@ -56,6 +56,12 @@ class AlertCronJobWorker {
             // Cleanup old alerts - runs every day at 3 AM
             this.scheduleCleanupOldAlerts();
 
+            // PRODUCT EXPIRATION MONITORING - runs every day at 4 AM
+            this.scheduleExpirationMonitoring();
+
+            // STOCK REBALANCING ANALYSIS - runs every day at 5 AM
+            this.scheduleStockRebalancing();
+
             logger.info('✅ All alert cron jobs initialized successfully');
         } catch (error) {
             logger.error(`Failed to initialize alert cron jobs: ${error.message}`);
@@ -426,6 +432,87 @@ class AlertCronJobWorker {
         });
 
         logger.info('✓ Alert cleanup job scheduled for 3:00 AM daily');
+    }
+
+    /**
+     * Monitor product expirations every day at 4:00 AM
+     */
+    scheduleExpirationMonitoring() {
+        const jobName = 'expirationMonitoring';
+
+        if (this.jobs[jobName]) {
+            this.jobs[jobName].cancel();
+        }
+
+        this.jobs[jobName] = schedule.scheduleJob('0 4 * * *', async () => {
+            try {
+                logger.info('⏳ Running product expiration monitoring...');
+
+                const companies = await this.getAllCompanies();
+                let totalAlerts = 0;
+
+                for (const company of companies) {
+                    try {
+                        // Monitor for company level
+                        const alerts = await AlertTriggerService.checkProductExpirations(company._id.toString());
+                        totalAlerts += (alerts || []).length;
+
+                        // Monitor for each shop
+                        const shops = company.shops || [];
+                        for (const shop of shops) {
+                            const shopAlerts = await AlertTriggerService.checkProductExpirations(
+                                company._id.toString(),
+                                shop._id.toString()
+                            );
+                            totalAlerts += (shopAlerts || []).length;
+                        }
+                    } catch (error) {
+                        logger.error(`Error monitoring expirations for company ${company._id}: ${error.message}`);
+                    }
+                }
+
+                logger.info(`✅ Product expiration monitoring completed. Generated ${totalAlerts} alerts.`);
+            } catch (error) {
+                logger.error(`Failed to run product expiration monitoring: ${error.message}`);
+            }
+        });
+
+        logger.info('✓ Product expiration monitoring job scheduled daily at 4:00 AM');
+    }
+
+    /**
+     * Monitor stock rebalancing opportunities every day at 5:00 AM
+     */
+    scheduleStockRebalancing() {
+        const jobName = 'stockRebalancing';
+
+        if (this.jobs[jobName]) {
+            this.jobs[jobName].cancel();
+        }
+
+        this.jobs[jobName] = schedule.scheduleJob('0 5 * * *', async () => {
+            try {
+                logger.info('⚖️ Running stock rebalancing analysis...');
+
+                const companies = await this.getAllCompanies();
+                let totalSuggestions = 0;
+
+                for (const company of companies) {
+                    try {
+                        const alerts = await AlertTriggerService.checkStockRebalancing(company._id.toString());
+                        totalSuggestions += (alerts || []).length;
+                    } catch (error) {
+                        logger.error(`Error analyzing rebalancing for company ${company._id}: ${error.message}`);
+                    }
+                }
+
+                logger.info(`✅ Stock rebalancing analysis completed. Generated ${totalSuggestions} suggestions.`);
+            } catch (error) {
+                logger.error(`Failed to run stock rebalancing: ${error.message}`);
+            }
+        });
+
+        logger.info('✓ Stock rebalancing analysis job scheduled daily at 5:00 AM');
     }
 
     /**

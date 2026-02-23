@@ -48,7 +48,7 @@ const notificationSchema = new mongoose.Schema({
 
     // Targeting
     userId: { type: mongoose.Schema.Types.ObjectId, index: true }, // For personal
-    companyId: { type: String, required: true, index: true },
+    companyId: { type: String, required: false, index: true, default: null },
     shopId: { type: String, index: true },
     departmentId: { type: String, index: true },
     roles: [{ type: String }],

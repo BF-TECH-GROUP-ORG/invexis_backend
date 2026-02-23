@@ -86,11 +86,30 @@ module.exports = {
     description: 'Published when stock is replenished'
   },
 
-  // Alert Events
   'inventory.alert.triggered': {
     exchange: 'events_topic',
     routingKey: 'inventory.alert.triggered',
     description: 'Published when an inventory alert is triggered'
+  },
+  'inventory.alert.product_expiring': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.alert.product_expiring',
+    description: 'Published when a product is expiring soon'
+  },
+  'inventory.alert.product_expired': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.alert.product_expired',
+    description: 'Published when a product has expired'
+  },
+  'inventory.alert.low_stock': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.alert.low_stock',
+    description: 'Published when stock is low'
+  },
+  'inventory.alert.out_of_stock': {
+    exchange: 'events_topic',
+    routingKey: 'inventory.alert.out_of_stock',
+    description: 'Published when stock is out'
   },
   'inventory.backorder.fulfilled': {
     exchange: 'events_topic',

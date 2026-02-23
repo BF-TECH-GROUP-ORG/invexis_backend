@@ -24,8 +24,8 @@ async function testInventoryEvents() {
             type: 'inventory.low_stock',
             data: {
                 productId: 'product-low-001',
-                companyId: 'test-company-123',
-                shopId: 'test-shop-456',
+                companyId: '46e5d562-34f2-4892-a83a-c9cf55b60006',
+                shopId: '39cf5aad-6a0f-4be8-90ba-675930d4b927',
                 productName: 'Test Product - Low Stock',
                 currentStock: 5,
                 threshold: 10,
@@ -52,8 +52,8 @@ async function testInventoryEvents() {
             type: 'inventory.out_of_stock',
             data: {
                 productId: 'product-out-002',
-                companyId: 'test-company-123',
-                shopId: 'test-shop-456',
+                companyId: '46e5d562-34f2-4892-a83a-c9cf55b60006',
+                shopId: '39cf5aad-6a0f-4be8-90ba-675930d4b927',
                 productName: 'Test Product - Out of Stock',
                 currentStock: 0,
                 sku: 'TEST-SKU-002',
@@ -80,8 +80,8 @@ async function testInventoryEvents() {
             type: 'product.created',
             data: {
                 productId: 'product-new-003',
-                companyId: 'test-company-123',
-                shopId: 'test-shop-456',
+                companyId: '46e5d562-34f2-4892-a83a-c9cf55b60006',
+                shopId: '39cf5aad-6a0f-4be8-90ba-675930d4b927',
                 productName: 'New Test Product',
                 sku: 'TEST-SKU-003',
                 price: 99.99,

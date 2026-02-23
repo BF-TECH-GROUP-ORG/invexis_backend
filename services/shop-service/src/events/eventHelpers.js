@@ -59,6 +59,7 @@ const shopEvents = {
           city: shop.city,
           country: shop.country,
           status: shop.status,
+          timezone: shop.timezone, // Add timezone to payload
           updatedAt: new Date().toISOString(),
           userId: shop.updated_by, // Add userId for notification
           updatedBy: shop.updated_by,

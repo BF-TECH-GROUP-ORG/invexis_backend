@@ -2,7 +2,7 @@
 
 const asyncHandler = require("express-async-handler");
 const { Shop, ShopOperatingHours, ShopPreferences } = require("../models/index.model");
-const { shopEvents } = require("../events/eventHelpers");
+const { shopEvents, operatingHoursEvents } = require("../events/eventHelpers");
 const db = require("../config/db");
 const tiers = require("/app/shared/config/tierFeatures.config");
 
@@ -113,12 +113,15 @@ const createShop = asyncHandler(async (req, res) => {
 
     // Create operating hours if provided
     if (operatingHours && Array.isArray(operatingHours)) {
-      await ShopOperatingHours.bulkCreate(
+      const createdHours = await ShopOperatingHours.bulkCreate(
         newShop.id,
         operatingHours,
         req.user?.id || null,
         trx
       );
+
+      // Emit operating hours event
+      await operatingHoursEvents.updated(newShop.id, companyId, createdHours, trx);
     }
 
     // Create preferences if provided

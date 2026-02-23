@@ -248,7 +248,7 @@ app.use("/api/shop", ...protectedService, requireRole(['company_admin', 'super_a
 app.use("/api/inventory", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), inventoryProxy);
 app.use("/api/sales", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), salesProxy);
 app.use("/api/payment", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), paymentProxy);
-app.use("/api/notification", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), notificationProxy);
+app.use("/api/notification", ...protectedService, notificationProxy);
 app.use("/api/audit", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), auditProxy);
 app.use("/api/document", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), documentProxy);
 app.use("/api/report", ...protectedService, requireRole(['company_admin', 'super_admin', 'worker']), reportProxy);

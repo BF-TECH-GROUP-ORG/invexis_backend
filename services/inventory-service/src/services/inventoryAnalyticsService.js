@@ -9,9 +9,79 @@ const ProductPricing = require('../models/ProductPricing');
 const ProductStock = require('../models/ProductStock');
 const StockChange = require('../models/StockChange');
 const ProductVariation = require('../models/ProductVariation');
+const Stocktake = require('../models/Stocktake');
 const logger = require('../utils/logger');
+const Money = require('/app/shared/utils/MoneyUtil');
 
 class InventoryAnalyticsService {
+  /**
+   * Get shrinkage report (financial loss due to discrepancies)
+   * @param {string} companyId
+   * @param {string} shopId - optional
+   * @returns {object} - shrinkage metrics
+   */
+  static async getShrinkageReport(companyId, shopId = null, options = {}) {
+    try {
+      const { startDate, endDate } = options;
+      const query = { companyId, status: 'completed' };
+      if (shopId) query.shopId = shopId;
+
+      if (startDate || endDate) {
+        query.completedAt = {};
+        if (startDate) query.completedAt.$gte = new Date(startDate);
+        if (endDate) query.completedAt.$lte = new Date(endDate);
+      }
+
+      const report = await Stocktake.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            totalDiscrepancyValue: { $sum: '$totalDiscrepancyValue' },
+            totalExpectedValue: { $sum: '$totalExpectedValue' },
+            totalActualValue: { $sum: '$totalActualValue' },
+            sessionsCount: { $sum: 1 },
+            itemsCounted: { $sum: '$itemsCounted' },
+            itemsWithDiscrepancy: { $sum: '$itemsWithDiscrepancy' }
+          }
+        }
+      ]);
+
+      const data = report[0] || {
+        totalDiscrepancyValue: 0,
+        totalExpectedValue: 0,
+        totalActualValue: 0,
+        sessionsCount: 0,
+        itemsCounted: 0,
+        itemsWithDiscrepancy: 0
+      };
+
+      // Shrinkage rate % (Loss / Expected Value)
+      const shrinkageRate = data.totalExpectedValue > 0
+        ? Math.abs((data.totalDiscrepancyValue / data.totalExpectedValue) * 100).toFixed(2)
+        : 0;
+
+      return {
+        companyId,
+        shopId,
+        metrics: {
+          financialLoss: parseFloat(Money.toMajor(Math.abs(data.totalDiscrepancyValue))),
+          financialGain: parseFloat(Money.toMajor(data.totalDiscrepancyValue > 0 ? data.totalDiscrepancyValue : 0)),
+          netDiscrepancy: parseFloat(Money.toMajor(data.totalDiscrepancyValue)),
+          shrinkageRatePercent: parseFloat(shrinkageRate),
+          sessionsCount: data.sessionsCount,
+          accuracyRatePercent: data.itemsCounted > 0
+            ? parseFloat(((1 - (data.itemsWithDiscrepancy / data.itemsCounted)) * 100).toFixed(2))
+            : 100
+        },
+        summary: data
+      };
+    } catch (err) {
+      logger.error('InventoryAnalyticsService.getShrinkageReport failed:', err);
+      throw err;
+    }
+  }
+
   /**
    * Get company-wide inventory metrics
    * @param {string} companyId

@@ -107,7 +107,24 @@ async function handleCompanyCreated(data) {
       channels
     });
 
-    logger.info(`✅ Welcome notification dispatched for company ${companyId} (channels: ${channels.join(', ')})`);
+    // Notify Super Admin about the new company
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+    await dispatchBroadcastEvent({
+      event: "company.created",
+      companyId: "system", // Scope for super admins
+      data: {
+        companyName: name,
+        companyId,
+        adminEmail: email,
+        userName: name,
+        ...data
+      },
+      roles: ["super_admin"],
+      templateName: "company.created.admin",
+      channels: ["push", "inApp", "email"]
+    });
+
+    logger.info(`✅ Welcome notification and Super Admin alert dispatched for company ${companyId}`);
   } catch (error) {
     logger.error(`❌ Error creating welcome notification:`, error.message);
     throw error;
@@ -120,38 +137,106 @@ async function handleCompanyCreated(data) {
 async function handleCompanyUpdated(data) {
   const { companyId, name } = data;
 
-  logger.info(`📝 Company updated: ${name} (${companyId})`);
-  // Could send notification to admins about profile update
+  try {
+    logger.info(`📝 Company updated: ${name} (${companyId})`);
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "company.updated",
+      companyId,
+      data: {
+        companyName: name,
+        ...data
+      },
+      roles: ["company_admin"],
+      templateName: "company.updated",
+      channels: ["push", "inApp"]
+    });
+  } catch (error) {
+    logger.error(`❌ Error dispatching company update notification: ${error.message}`);
+  }
 }
 
 /**
  * Handle company status change
  */
 async function handleCompanyStatusChanged(data) {
-  const { companyId, status } = data;
+  const { companyId, status, name } = data;
 
-  logger.info(`🔄 Company status changed: ${companyId} -> ${status}`);
-  // Could send notification about status change
+  try {
+    logger.info(`🔄 Company status changed: ${companyId} -> ${status}`);
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "company.status.changed",
+      companyId,
+      data: {
+        companyName: name || companyId,
+        status,
+        ...data
+      },
+      roles: ["company_admin"],
+      templateName: "company.status.changed",
+      channels: ["push", "inApp"]
+    });
+  } catch (error) {
+    logger.error(`❌ Error dispatching company status change notification: ${error.message}`);
+  }
 }
 
 /**
  * Handle company suspension
  */
 async function handleCompanySuspended(data) {
-  const { companyId } = data;
+  const { companyId, name, reason } = data;
 
-  logger.info(`⏸️ Company suspended: ${companyId}`);
-  // Could send notification about suspension
+  try {
+    logger.info(`⏸️ Company suspended: ${companyId}`);
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    await dispatchBroadcastEvent({
+      event: "company.suspended",
+      companyId,
+      data: {
+        companyName: name || companyId,
+        reason: reason || "Administrative decision",
+        ...data
+      },
+      roles: ["company_admin", "super_admin"],
+      templateName: "company.suspended",
+      channels: ["push", "inApp", "email"]
+    });
+  } catch (error) {
+    logger.error(`❌ Error dispatching company suspension notification: ${error.message}`);
+  }
 }
 
 /**
  * Handle company deletion
  */
 async function handleCompanyDeleted(data) {
-  const { companyId } = data;
+  const { companyId, name } = data;
 
-  logger.info(`🗑️ Company deleted: ${companyId}`);
-  // Could clean up notifications for this company
+  try {
+    logger.info(`🗑️ Company deleted: ${companyId}`);
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    // For deletion, we mostly notify super admins as the company admins might be gone
+    await dispatchBroadcastEvent({
+      event: "company.deleted",
+      companyId: "system", // Use system scope for global deletion alert
+      data: {
+        companyName: name || companyId,
+        companyId,
+        ...data
+      },
+      roles: ["super_admin"],
+      templateName: "company.deleted",
+      channels: ["push", "inApp"]
+    });
+  } catch (error) {
+    logger.error(`❌ Error dispatching company deletion notification: ${error.message}`);
+  }
 }
 
 /**

@@ -10,9 +10,11 @@ const { getSmsMessage, hasTemplate } = require("../config/smsTemplates");
  * Core SMS sending function (wrapped by circuit breaker)
  */
 const sendSMSCore = async (notification, phoneNumber, userId, companyId) => {
+
   const startTime = Date.now();
 
   try {
+
     let messageBody;
 
     // Use the new simple template system
@@ -73,7 +75,8 @@ const sendSMSCore = async (notification, phoneNumber, userId, companyId) => {
       recipient: phoneNumber,
     };
   }
-};
+
+}
 
 // Wrap with circuit breaker
 const smsCircuitBreaker = createSmsCircuitBreaker(sendSMSCore);
@@ -96,11 +99,21 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
   const originalPhone = phoneNumber;
   phoneNumber = phoneNumber.replace(/[^\d+]/g, '');
 
+  // Handle common international dialing prefix '00' (e.g., 0025078... -> +25078...)
+  if (phoneNumber.startsWith('00')) {
+    phoneNumber = '+' + phoneNumber.substring(2);
+  }
+
   // Handle local Rwanda format (07... -> +2507...)
   if (phoneNumber.startsWith('0') && phoneNumber.length === 10) {
     phoneNumber = '+250' + phoneNumber.substring(1);
   } else if (!phoneNumber.startsWith('+') && phoneNumber.length === 9) {
+    // e.g., 781234567 -> +250781234567
     phoneNumber = '+250' + phoneNumber;
+  } else if (!phoneNumber.startsWith('+') && phoneNumber.length >= 10 && phoneNumber.length <= 15) {
+    // Auto-prepend '+' if the user provided country code but forgot the plus sign.
+    // Covers cases like 25078XXXXXXX (12 chars), 2547XXXXXXXX (12 chars), 1415XXXXXXX (11 chars)
+    phoneNumber = '+' + phoneNumber;
   }
 
   // Basic E.164 validation
@@ -115,12 +128,13 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
     // Rwandan mobile numbers usually start with 7
     if (afterPrefix.startsWith('5')) {
       logger.warn(`⚠️ Rwandan phone number ${phoneNumber} starts with '5', which is likely invalid for mobile. Did you mean 7?`);
+      return { success: false, error: `Invalid Rwandan mobile prefix (started with 5): ${phoneNumber}` };
     }
 
     if (phoneNumber.length !== 13) {
       const actualAfter = phoneNumber.length - 4;
       logger.warn(`⚠️ Rwandan phone number ${phoneNumber} has invalid length (${actualAfter} digits after +250, expected 9). If you have 10 digits, please check for a typo.`);
-      // We still try to send it, but Twilio will likely fail with 21211 if it's too long/short
+      return { success: false, error: `Invalid Rwandan phone number length: ${phoneNumber}` };
     }
   }
 
@@ -182,7 +196,10 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
     }
   } catch (error) {
     const log = await DeliveryLog.findById(deliveryLog._id);
-    const nextRetryAt = log.canRetry() ? log.calculateNextRetry() : null;
+
+    // Do not retry client/validation errors (4xx) as they are permanent
+    const isClientError = error.error && (error.error.status < 500 || error.error.code === 21608 || error.error.code === 21211);
+    const nextRetryAt = (log.canRetry() && !isClientError) ? log.calculateNextRetry() : null;
 
     await DeliveryLog.markAsFailed(
       deliveryLog._id,
@@ -194,6 +211,6 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
     logger.error(`❌ Failed to send SMS to ${phoneNumber}:`, errorMessage);
     return { success: false, error: errorMessage, logId: deliveryLog._id };
   }
-};
+}
 
-module.exports = { sendSMS, smsCircuitBreaker };
+module.exports = { sendSMS , smsCircuitBreaker } 

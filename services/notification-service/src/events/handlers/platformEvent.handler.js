@@ -13,6 +13,8 @@ const paymentEventHandler = require('./paymentEvent.handler');
 const authEventHandler = require('./authEvent.handler');
 const shopEventHandler = require('./shopEvent.handler');
 const companyEventHandler = require('./companyEvent.handler');
+const subscriptionEventHandler = require('./subscriptionEvent.handler');
+const staffEventHandler = require('./staffEvent.handler');
 const productEventHandler = require('./productEvent.handler');
 const reportEventHandler = require('./reportEvent.handler');
 
@@ -47,7 +49,9 @@ module.exports = async function handlePlatformEvent(event, routingKey) {
             handled = true;
         }
 
-        if (type && type.startsWith('auth.')) {
+        // Route auth and user lifecycle events to authEventHandler
+        if (type && (type.startsWith('auth.') || type.startsWith('user.'))) {
+            console.log(`🔐 [PlatformHandler] Routing to authEventHandler: ${type}`);
             await authEventHandler(event, routingKey);
             handled = true;
         }
@@ -57,13 +61,18 @@ module.exports = async function handlePlatformEvent(event, routingKey) {
             handled = true;
         }
 
+        if (type && type.startsWith('department_user.')) {
+            await staffEventHandler(event, routingKey);
+            handled = true;
+        }
+
         if (type && type.startsWith('company.')) {
             await companyEventHandler(event, routingKey);
             handled = true;
         }
 
         if (type && type.startsWith('subscription.')) {
-            await companyEventHandler(event, routingKey);
+            await subscriptionEventHandler(event, routingKey);
             handled = true;
         }
 

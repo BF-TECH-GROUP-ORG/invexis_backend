@@ -30,16 +30,25 @@ const registerConsumers = async (consumerConfigs) => {
           pattern: config.pattern,
         },
         async (event, routingKey) => {
-          console.log(`📥 [${config.name}] Received: ${routingKey}`);
+          logger.info(`📥 [${config.name}] Received event: ${routingKey}`);
+          logger.debug(`📦 [${config.name}] Raw event:`, { event: JSON.stringify(event).substring(0, 200) });
+
           // Normalize incoming message shape so handlers can expect { type, data }
           // Some publishers send a wrapped object { type, data } (company-service style),
           // while others (legacy debt-service) publish raw payloads. Normalize both.
           const normalized = (event && event.type && ("data" in event))
             ? event
             : { type: routingKey, data: event };
+
+          logger.debug(`🔄 [${config.name}] Normalized type: ${normalized.type}`, { hasData: !!normalized.data });
+
           try {
+            console.log(`⚙️  [${config.name}] Calling handler for ${normalized.type}...`);
             await config.handler(normalized, routingKey);
+            console.log(`✅ [${config.name}] Handler completed for ${normalized.type}`);
           } catch (err) {
+            console.error(`❌ [${config.name}] Handler error for ${normalized.type}:`, err.message);
+            console.error(`❌ [${config.name}] Stack:`, err.stack);
             // Re-throw to allow subscribe() to handle retries/DLQ logic
             throw err;
           }

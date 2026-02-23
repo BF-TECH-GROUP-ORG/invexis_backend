@@ -57,11 +57,9 @@ const templates = {
             metadata: { maxLength: 160 }
         },
         push: {
-            content: JSON.stringify({
-                title: 'Welcome to {{companyName}}!',
-                body: 'Hi {{userName}}, tap to complete your setup',
-                data: { action: 'open_welcome', url: '{{actionUrl}}' }
-            }),
+            title: 'Welcome to {{companyName}}!',
+            body: 'Hi {{userName}}, tap to complete your setup',
+            data: { action: 'open_welcome', url: '{{actionUrl}}' },
             metadata: { sound: 'default' }
         },
         inApp: {
@@ -90,11 +88,9 @@ const templates = {
             metadata: { maxLength: 160 }
         },
         push: {
-            content: JSON.stringify({
-                title: 'Welcome to {{companyName}}!',
-                body: 'Hi {{userName}}, welcome aboard!',
-                data: { action: 'open_welcome', url: '{{actionUrl}}' }
-            }),
+            title: 'Welcome to {{companyName}}!',
+            body: 'Hi {{userName}}, welcome aboard!',
+            data: { action: 'open_welcome', url: '{{actionUrl}}' },
             metadata: { sound: 'default' }
         },
         inApp: {
@@ -133,10 +129,8 @@ const templates = {
             content: 'Order {{orderId}} confirmed! Total: {{orderTotal}}.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Order {{orderId}} confirmed',
-                body: 'Your order total is {{orderTotal}}'
-            })
+            title: 'Order {{orderId}} confirmed',
+            body: 'Your order total is {{orderTotal}}'
         },
         inApp: {
             subject: 'Order {{orderId}} confirmed',
@@ -159,14 +153,12 @@ const templates = {
             }
         },
         push: {
-            content: JSON.stringify({
-                title: 'Verification Code',
-                body: 'Your OTP: {{otp}}. Valid for {{expiryMinutes}} minutes',
-                data: {
-                    action: 'otp',
-                    otp: '{{otp}}'
-                }
-            }),
+            title: 'Verification Code',
+            body: 'Your OTP: {{otp}}. Valid for {{expiryMinutes}} minutes',
+            data: {
+                action: 'otp',
+                otp: '{{otp}}'
+            },
             metadata: {
                 sound: 'default',
                 priority: 'high'
@@ -194,11 +186,9 @@ const templates = {
             metadata: { priority: 'normal' }
         },
         push: {
-            content: JSON.stringify({
-                title: 'Return Initiated',
-                body: 'Return for sale #{{saleId}} initiated: {{formatCurrency refundAmount}}',
-                data: { action: 'open_return', saleId: '{{saleId}}', returnId: '{{returnId}}' }
-            })
+            title: 'Return Initiated',
+            body: 'Return for sale #{{saleId}} initiated: {{formatCurrency refundAmount}}',
+            data: { action: 'open_return', saleId: '{{saleId}}', returnId: '{{returnId}}' }
         },
         inApp: {
             subject: 'Return Initiated',
@@ -209,54 +199,82 @@ const templates = {
     // --- SHOP NOTIFICATIONS ---
     // --- SHOP NOTIFICATIONS ---
     "shop.created": {
-        email: {
-            subject: 'New Shop Created: {{name}}',
-            content: `
-                <div style="font-family: Arial, sans-serif;">
-                    <h2>New Shop Created</h2>
-                    <p>Shop <strong>{{name}}</strong> has been successfully created.</p>
-                </div>
-            `,
-            metadata: { priority: 'normal' }
-        },
         push: {
-            content: JSON.stringify({
-                title: 'New Shop Created',
-                body: 'Shop "{{name}}" is ready.',
-                data: { action: 'open_shop', shopId: '{{id}}' }
-            })
+            title: "New Shop Created",
+            body: "A new shop **{{name}}** has been created by **{{performedByName}}**.",
+            data: {
+                type: "shop.created",
+                shopId: "{{id}}"
+            }
         },
         inApp: {
-            subject: 'New Shop Created',
-            content: 'Shop **{{name}}** has been created.'
+            title: "New Shop Created",
+            body: "A new shop **{{name}}** has been created by **{{performedByName}}**.",
+            actionUrl: "/shops/{{id}}"
         }
     },
 
     "shop.updated": {
-        inApp: {
-            subject: 'Shop Updated',
-            content: 'Shop **{{name}}** details have been updated.'
-        },
         push: {
-            content: JSON.stringify({
-                title: 'Shop Updated',
-                body: 'Details for shop "{{name}}" were updated.',
-                data: { action: 'open_shop', shopId: '{{id}}' }
-            })
+            title: "Shop Updated",
+            body: "Shop **{{name}}** has been updated by **{{performedByName}}**.",
+            data: {
+                type: "shop.updated",
+                shopId: "{{id}}"
+            }
+        },
+        inApp: {
+            title: "Shop Updated",
+            body: "Shop **{{name}}** has been updated by **{{performedByName}}**.",
+            actionUrl: "/shops/{{id}}"
         }
     },
 
     "shop.deleted": {
-        inApp: {
-            subject: 'Shop Deleted',
-            content: 'Shop **{{name}}** has been deleted.'
-        },
         push: {
-            content: JSON.stringify({
-                title: 'Shop Deleted',
-                body: 'Shop "{{name}}" was removed.',
-                data: { action: 'open_dashboard' }
-            })
+            title: "Shop Deleted",
+            body: "Shop **{{name}}** has been deleted by **{{performedByName}}**.",
+            data: {
+                type: "shop.deleted",
+                shopId: "{{id}}"
+            }
+        },
+        inApp: {
+            title: "Shop Deleted",
+            body: "Shop **{{name}}** has been deleted by **{{performedByName}}**.",
+            actionUrl: "/shops"
+        }
+    },
+
+    "shop.reminder.opening": {
+        push: {
+            title: "Shop Opening Soon",
+            body: "Reminder: **{{shopName}}** is scheduled to open in **{{minutes}} minutes** ({{time}}).",
+            data: {
+                type: "shop.reminder.opening",
+                shopId: "{{shopId}}"
+            }
+        },
+        inApp: {
+            title: "Shop Opening Soon",
+            body: "Reminder: **{{shopName}}** is scheduled to open in **{{minutes}} minutes** ({{time}}).",
+            actionUrl: "/shops/{{shopId}}"
+        }
+    },
+
+    "shop.reminder.closing": {
+        push: {
+            title: "Shop Closing Soon",
+            body: "Reminder: **{{shopName}}** is scheduled to close in **{{minutes}} minutes** ({{time}}).",
+            data: {
+                type: "shop.reminder.closing",
+                shopId: "{{shopId}}"
+            }
+        },
+        inApp: {
+            title: "Shop Closing Soon",
+            body: "Reminder: **{{shopName}}** is scheduled to close in **{{minutes}} minutes** ({{time}}).",
+            actionUrl: "/shops/{{shopId}}"
         }
     },
 
@@ -266,11 +284,9 @@ const templates = {
             content: 'Shop **{{name}}** is now **{{status}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Shop Status Changed',
-                body: 'Shop "{{name}}" is now {{status}}.',
-                data: { action: 'open_shop', shopId: '{{id}}' }
-            })
+            title: 'Shop Status Changed',
+            body: 'Shop "{{name}}" is now {{status}}.',
+            data: { action: 'open_shop', shopId: '{{id}}' }
         }
     },
 
@@ -282,11 +298,9 @@ const templates = {
             content: 'New product **{{productName}}** added by {{userName}}.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'New Product',
-                body: '{{productName}} was added to inventory.',
-                data: { action: 'open_product', productId: '{{productId}}' }
-            })
+            title: 'New Product',
+            body: '{{productName}} was added to inventory.',
+            data: { action: 'open_product', productId: '{{productId}}' }
         }
     },
 
@@ -323,33 +337,33 @@ const templates = {
         email: {
             subject: '⚠️ Low Stock Alert: {{productName}}',
             content: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 20px 0;">
-                        <h2 style="color: #856404; margin: 0 0 15px 0;">⚠️ Low Stock Alert</h2>
-                        <p style="font-size: 16px; color: #333; margin: 10px 0;">
-                            <strong>Product:</strong> {{productName}}
-                        </p>
-                        {{#if sku}}
-                        <p style="font-size: 14px; color: #666; margin: 5px 0;">
-                            <strong>SKU:</strong> {{sku}}
-                        </p>
-                        {{/if}}
-                        <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                            <p style="margin: 5px 0;"><strong>Current Stock:</strong> <span style="color: #dc3545; font-size: 18px;">{{currentStock}}</span> units</p>
-                            <p style="margin: 5px 0;"><strong>Threshold:</strong> {{threshold}} units</p>
-                            {{#if percentageOfThreshold}}
-                            <p style="margin: 5px 0;"><strong>Stock Level:</strong> {{percentageOfThreshold}}% of threshold</p>
-                            {{/if}}
-                            {{#if suggestedReorderQty}}
-                            <p style="margin: 5px 0;"><strong>Suggested Reorder:</strong> {{suggestedReorderQty}} units</p>
-                            {{/if}}
-                        </div>
-                        <p style="color: #856404; font-weight: bold; margin: 15px 0 0 0;">
-                            ⚡ Action Required: Please restock soon to avoid stockouts.
-                        </p>
-                    </div>
-                </div>
-            `,
+        < div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
+        <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 20px 0;">
+            <h2 style="color: #856404; margin: 0 0 15px 0;">⚠️ Low Stock Alert</h2>
+            <p style="font-size: 16px; color: #333; margin: 10px 0;">
+                <strong>Product:</strong> {{ productName }}
+            </p>
+            {{ #if sku }}
+            <p style="font-size: 14px; color: #666; margin: 5px 0;">
+                <strong>SKU:</strong> {{ sku }}
+            </p>
+            {{/if}}
+            <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                <p style="margin: 5px 0;"><strong>Current Stock:</strong> <span style="color: #dc3545; font-size: 18px;">{{ currentStock }}</span> units</p>
+                <p style="margin: 5px 0;"><strong>Threshold:</strong> {{ threshold }} units</p>
+                {{ #if percentageOfThreshold }}
+                <p style="margin: 5px 0;"><strong>Stock Level:</strong> {{ percentageOfThreshold }}% of threshold</p>
+                {{/if}}
+                {{ #if suggestedReorderQty }}
+                <p style="margin: 5px 0;"><strong>Suggested Reorder:</strong> {{ suggestedReorderQty }} units</p>
+                {{/if}}
+            </div>
+            <p style="color: #856404; font-weight: bold; margin: 15px 0 0 0;">
+                ⚡ Action Required: Please restock soon to avoid stockouts.
+            </p>
+        </div>
+                </div >
+    `,
             metadata: { priority: 'high' }
         },
         sms: {
@@ -380,29 +394,29 @@ const templates = {
         email: {
             subject: '🚨 URGENT: {{productName}} is Out of Stock',
             content: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 20px 0;">
-                        <h2 style="color: #721c24; margin: 0 0 15px 0;">🚨 URGENT: Out of Stock Alert</h2>
-                        <p style="font-size: 18px; color: #333; margin: 10px 0; font-weight: bold;">
-                            Product: {{productName}}
-                        </p>
-                        {{#if sku}}
-                        <p style="font-size: 14px; color: #666; margin: 5px 0;">
-                            <strong>SKU:</strong> {{sku}}
-                        </p>
-                        {{/if}}
-                        <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                            <p style="margin: 5px 0; color: #dc3545; font-size: 20px; font-weight: bold;">
-                                Current Stock: 0 units
-                            </p>
-                            <p style="margin: 5px 0;"><strong>Threshold:</strong> {{threshold}} units</p>
-                        </div>
-                        <p style="color: #721c24; font-weight: bold; margin: 15px 0 0 0; font-size: 16px;">
-                            🚨 IMMEDIATE ACTION REQUIRED: This product is completely out of stock!
-                        </p>
-                    </div>
-                </div>
-            `,
+    < div style = "font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
+        <div style="background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 20px 0;">
+            <h2 style="color: #721c24; margin: 0 0 15px 0;">🚨 URGENT: Out of Stock Alert</h2>
+            <p style="font-size: 18px; color: #333; margin: 10px 0; font-weight: bold;">
+                Product: {{ productName }}
+            </p>
+            {{ #if sku }}
+            <p style="font-size: 14px; color: #666; margin: 5px 0;">
+                <strong>SKU:</strong> {{ sku }}
+            </p>
+            {{/if}}
+            <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                <p style="margin: 5px 0; color: #dc3545; font-size: 20px; font-weight: bold;">
+                    Current Stock: 0 units
+                </p>
+                <p style="margin: 5px 0;"><strong>Threshold:</strong> {{ threshold }} units</p>
+            </div>
+            <p style="color: #721c24; font-weight: bold; margin: 15px 0 0 0; font-size: 16px;">
+                🚨 IMMEDIATE ACTION REQUIRED: This product is completely out of stock!
+            </p>
+        </div>
+                </div >
+    `,
             metadata: { priority: 'urgent' }
         },
         sms: {
@@ -428,19 +442,100 @@ const templates = {
         }
     },
 
+    // Product Expiring soon
+    "inventory.alert.product_expiring": {
+        email: {
+            subject: '📝 Warning: Product Expiring Soon - {{productName}}',
+            content: `
+    < div style = "font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
+        <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; margin: 20px 0;">
+            <h2 style="color: #856404; margin: 0 0 15px 0;">📝 Expiration Warning</h2>
+            <p style="font-size: 16px; color: #333; margin: 10px 0;">
+                <strong>Product:</strong> {{ productName }}
+            </p>
+            <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                <p style="margin: 5px 0;"><strong>Expiry Date:</strong> <span style="color: #dc3545; font-size: 18px;">{{ formatDate expiryDate 'short'}}</span></p>
+                <p style="margin: 5px 0;"><strong>Days Remaining:</strong> {{ daysToExpiry }} days</p>
+            </div>
+            <p style="color: #856404; font-weight: bold; margin: 15px 0 0 0;">
+                ⚡ Action Required: Please check stock and plan for removal or discount.
+            </p>
+        </div>
+                </div >
+    `,
+            metadata: { priority: 'high' }
+        },
+        push: {
+            content: JSON.stringify({
+                title: '📝 Expiring: {{productName}}',
+                body: 'Expires in {{daysToExpiry}} days ({{formatDate expiryDate "short"}}).',
+                data: {
+                    action: 'open_product',
+                    productId: '{{productId}}'
+                }
+            }),
+            metadata: { priority: 'high' }
+        },
+        inApp: {
+            subject: '📝 Expiring soon: {{productName}}',
+            content: '**{{productName}}** will expire in **{{daysToExpiry}} days** ({{formatDate expiryDate "short"}}).'
+        }
+    },
+
+    // Product Expired
+    "inventory.alert.product_expired": {
+        email: {
+            subject: '🚨 URGENT: Product Expired - {{productName}}',
+            content: `
+    < div style = "font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
+        <div style="background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 20px; margin: 20px 0;">
+            <h2 style="color: #721c24; margin: 0 0 15px 0;">🚨 URGENT: Product Expired</h2>
+            <p style="font-size: 18px; color: #333; margin: 10px 0; font-weight: bold;">
+                Product: {{ productName }}
+            </p>
+            <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                <p style="margin: 5px 0; color: #dc3545; font-size: 20px; font-weight: bold;">
+                    EXPIRED ON: {{ formatDate expiryDate 'short'}}
+                </p>
+            </div>
+            <p style="color: #721c24; font-weight: bold; margin: 15px 0 0 0; font-size: 16px;">
+                🚨 IMMEDIATE ACTION REQUIRED: Remove this product from sale immediately!
+            </p>
+        </div>
+                </div >
+    `,
+            metadata: { priority: 'urgent' }
+        },
+        push: {
+            content: JSON.stringify({
+                title: '🚨 EXPIRED: {{productName}}',
+                body: 'IMMEDIATE ACTION: Product expired on {{formatDate expiryDate "short"}}!',
+                data: {
+                    action: 'open_product',
+                    productId: '{{productId}}'
+                }
+            }),
+            metadata: { priority: 'urgent', sound: 'alert' }
+        },
+        inApp: {
+            subject: '🚨 EXPIRED: {{productName}}',
+            content: '**URGENT:** {{productName}} expired on {{formatDate expiryDate "short"}}! Remove from sale immediately.'
+        }
+    },
+
     // Legacy templates (kept for backward compatibility)
     "inventory.low_stock": {
         email: {
             subject: 'Low Stock Alert: {{productName}}',
             content: `
-                <div style="font-family: Arial, sans-serif;">
+    < div style = "font-family: Arial, sans-serif;" >
                     <h2>Low Stock Warning</h2>
                     <p>Product <strong>{{productName}}</strong> is running low at <strong>{{shopName}}</strong>.</p>
                     <p><strong>Current Stock:</strong> {{currentStock}}</p>
                     <p><strong>Reorder Level:</strong> {{reorderLevel}}</p>
                     <a href="{{dashboardUrl}}/inventory/restock?productId={{productId}}&shopId={{shopId}}">Restock Now</a>
-                </div>
-            `,
+                </div >
+    `,
             metadata: { priority: 'high' }
         },
         push: {
@@ -458,7 +553,7 @@ const templates = {
     "inventory.out_of_stock": {
         email: {
             subject: 'STOCK OUT: {{productName}} - {{shopName}}',
-            content: `<p>🚨 <strong>STOCK OUT ALERT</strong></p><p>Product <strong>{{productName}}</strong> is now out of stock at <strong>{{shopName}}</strong>!</p>`,
+            content: `< p >🚨 <strong>STOCK OUT ALERT</strong></p > <p>Product <strong>{{ productName }}</strong> is now out of stock at <strong>{{ shopName }}</strong>!</p>`,
             metadata: { priority: 'high' }
         },
         inApp: {
@@ -502,17 +597,15 @@ const templates = {
             content: 'Payment of **{{formatCurrency amount}}** from **{{customerName}}** failed. Reason: {{reason}}.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Payment Failed',
-                body: 'Payment of {{formatCurrency amount}} failed: {{reason}}',
-                data: { action: 'open_payment', paymentId: '{{paymentId}}' }
-            }),
+            title: 'Payment Failed',
+            body: 'Payment of {{formatCurrency amount}} failed: {{reason}}',
+            data: { action: 'open_payment', paymentId: '{{paymentId}}' },
             metadata: { priority: 'high' }
         },
         email: {
             subject: 'Payment Failed - {{companyName}}',
             content: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    < div style = "font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
                     <h2 style="color: #dc3545;">Payment Failed</h2>
                     <p>We were unable to process a payment for your company.</p>
                     <div style="background-color: #f8d7da; padding: 15px; border-radius: 5px; margin: 20px 0;">
@@ -520,16 +613,31 @@ const templates = {
                         <p><strong>Reason:</strong> {{reason}}</p>
                     </div>
                     <p>Please check your payment settings to avoid service interruption.</p>
-                </div>
-            `
+                </div >
+    `
         }
     },
 
     // --- SUBSCRIPTIONS ---
+    "subscription.created": {
+        email: {
+            subject: 'Welcome to Your Invexis Subscription',
+            content: `<p>Hello,</p><p>Your subscription for **{{companyName}}** has been successfully created. You are now on the **{{tier}}** plan.</p><p>Your subscription is active until {{formatDate expiryDate 'long'}}.</p><p>Thank you for choosing Invexis!</p>`
+        },
+        inApp: {
+            subject: 'Subscription Created',
+            content: '✅ Your subscription for **{{companyName}}** is now active ({{tier}} plan).'
+        },
+        push: {
+            title: 'Subscription Created',
+            body: 'Your subscription for {{companyName}} is now active ({{tier}} plan).',
+            data: { action: 'open_subscription' }
+        }
+    },
     "subscription.expiring": {
         email: {
             subject: 'Action Required: Your Subscription is Expiring Soon',
-            content: `<p>Hello,</p><p>Your subscription for {{companyName}} will expire on {{formatDate expiryDate 'long'}}.</p><p>Please renew now to avoid service interruption.</p>`,
+            content: `< p > Hello,</p ><p>Your subscription for {{companyName}} will expire on {{formatDate expiryDate 'long'}}.</p><p>Please renew now to avoid service interruption.</p>`,
             metadata: { priority: 'high' }
         },
         inApp: {
@@ -537,17 +645,16 @@ const templates = {
             content: 'Your subscription expires on {{formatDate expiryDate "short"}}. Renew now to maintain access.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Subscription Expiring',
-                body: 'Renew by {{formatDate expiryDate "short"}} to keep using Invexis.',
-            }),
+            title: 'Subscription Expiring Soon',
+            body: 'Your subscription expires on {{formatDate expiryDate "short"}}. Renew now to avoid interruption.',
+            data: { action: 'open_subscription' },
             metadata: { priority: 'high' }
         }
     },
     "subscription.expired": {
         email: {
             subject: 'Service Suspended: Subscription Expired',
-            content: `<p>Hello,</p><p>Your subscription has expired. Access to premium features has been suspended.</p><p>Please renew immediately to restore access.</p>`,
+            content: `< p > Hello,</p ><p>Your subscription has expired. Access to premium features has been suspended.</p><p>Please renew immediately to restore access.</p>`,
             metadata: { priority: 'high' }
         },
         sms: {
@@ -558,21 +665,39 @@ const templates = {
         },
         inApp: {
             subject: 'Subscription Expired',
-            content: '🚨 Your subscription has expired. Please renew to restore services.'
+            content: '🚨 Your subscription has expired on {{formatDate expiredAt "short"}}. Please renew to restore services.'
+        },
+        push: {
+            title: 'Subscription Expired',
+            body: 'Your subscription has expired. Renew now to restore access.',
+            data: { action: 'open_subscription' },
+            metadata: { priority: 'high' }
+        }
+    },
+    "subscription.renewed": {
+        email: {
+            subject: 'Subscription Renewed Successfully',
+            content: `<p>Hello,</p><p>Your subscription for {{companyName}} has been successfully renewed until {{formatDate expiryDate 'long'}}.</p><p>Thank you for your business!</p>`
+        },
+        inApp: {
+            subject: 'Subscription Renewed',
+            content: '✅ Your subscription has been renewed until {{formatDate expiryDate "short"}}.'
+        },
+        push: {
+            title: 'Subscription Renewed',
+            body: 'Subscription renewed until {{formatDate expiryDate "short"}}.',
+            data: { action: 'open_subscription' }
         }
     },
     "company.suspended": {
         inApp: {
-            subject: 'Company Suspended',
-            content: 'Your company account has been suspended. Please contact support for assistance.'
+            title: 'Account Suspended',
+            body: 'Your company account **{{companyName}}** has been suspended. Please contact support.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Account Suspended',
-                body: 'Your company access has been suspended.',
-                data: { action: 'contact_support' }
-            }),
-            metadata: { priority: 'high' }
+            title: 'Account Suspended',
+            body: 'Your company access for {{companyName}} has been suspended.',
+            data: { action: 'contact_support' }
         },
         email: {
             subject: 'Urgent: Company Account Suspended',
@@ -586,6 +711,66 @@ const templates = {
             `
         }
     },
+    "company.updated": {
+        inApp: {
+            title: 'Company Profile Updated',
+            body: 'The profile for **{{companyName}}** has been updated.'
+        },
+        push: {
+            title: 'Company Updated',
+            body: 'The profile for {{companyName}} has been updated.',
+            data: { action: 'open_company_settings' }
+        }
+    },
+    "company.status.changed": {
+        inApp: {
+            title: 'Account Status Changed',
+            body: 'Company **{{companyName}}** status changed to **{{status}}**.'
+        },
+        push: {
+            title: 'Account Status Changed',
+            body: 'Company {{companyName}} status is now {{status}}.',
+            data: { action: 'open_dashboard' }
+        }
+    },
+    "company.deleted": {
+        inApp: {
+            title: 'Company Deleted',
+            body: 'Company **{{companyName}}** ({{companyId}}) has been permanently deleted.'
+        },
+        push: {
+            title: 'Company Deleted',
+            body: 'Important: Company {{companyName}} has been deleted.',
+            data: { action: 'open_admin_panel' }
+        }
+    },
+    "company.created.admin": {
+        inApp: {
+            title: 'New Company Created',
+            body: 'A new company **{{companyName}}** has been created by **{{adminEmail}}**.'
+        },
+        push: {
+            title: 'New Company Created',
+            body: 'Company {{companyName}} has been added to the platform.',
+            data: { action: 'open_dashboard' }
+        },
+        email: {
+            subject: 'New Company Registered: {{companyName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>New Company Alert</h2>
+                    <p>A new company has been registered on the platform:</p>
+                    <ul>
+                        <li><strong>Name:</strong> {{companyName}}</li>
+                        <li><strong>ID:</strong> {{companyId}}</li>
+                        <li><strong>Admin:</strong> {{userName}}</li>
+                        <li><strong>Email:</strong> {{adminEmail}}</li>
+                    </ul>
+                    <p>Please review the onboarding status if necessary.</p>
+                </div>
+            `
+        }
+    },
 
     // --- Sales Templates ---
     // --- Sales Templates ---
@@ -593,30 +778,93 @@ const templates = {
         email: {
             subject: 'New Sale: {{saleId}} at {{shopName}}',
             content: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2>New Sale Created</h2>
-                    <p>A new sale has been recorded at <strong>{{shopName}}</strong>.</p>
-                    <p><strong>Sale ID:</strong> {{saleId}}</p>
-                    <p><strong>Amount:</strong> {{formatCurrency totalAmount}}</p>
-                    {{#if customerId}}<p><strong>Customer ID:</strong> {{customerId}}</p>{{/if}}
-                    <p><strong>Items:</strong> {{items.length}}</p>
-                    {{#if performedByName}}<p><strong>Processed by:</strong> {{performedByName}}</p>{{/if}}
-                </div>
-            `
+    < div style = "font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;">
+            <h2 style="color: #28a745; margin-top: 0;">New Sale Recorded</h2>
+            <p>A new sale has been successfully processed at <strong>{{ shopName }}</strong>.</p>
+
+            <div style="background-color: #ffffff; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Sale ID:</strong> #{{ saleId }}</p>
+                <p style="margin: 5px 0;"><strong>Total Amount:</strong> <span style="font-size: 18px; color: #28a745; font-weight: bold;">{{ formatCurrency totalAmount }}</span></p>
+                {{ #if customerId }}<p style="margin: 5px 0;"><strong>Customer:</strong> {{ customerName }}</p>{{/if}}
+            </div>
+
+            <h3 style="border-bottom: 1px solid #eee; padding-bottom: 5px;">Items Sold:</h3>
+            <ul style="list-style: none; padding: 0;">
+                {{ #each items }}
+                <li style="padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
+                    {{ productName }} x {{ quantity }} - <strong>{{ formatCurrency total }}</strong>
+                </li>
+                {{/ each}}
+            </ul>
+
+            <div style="margin-top: 25px; font-size: 14px; color: #6c757d;">
+                <p><strong>Processed by:</strong> {{ performedByName }}</p>
+                <p><strong>Date:</strong> {{ formatDate createdAt 'long'}}</p>
+            </div>
+        </div>
+                </div >
+    `
         },
         sms: {
-            content: 'New Sale at {{shopName}}: {{formatCurrency totalAmount}} (ID: {{saleId}}). Processed by {{performedByName}}.'
+            content: '{{companyName}}: Order #{{saleId}} confirmed! {{#each items}}{{productName}} ({{quantity}}), {{/each}} Total: {{formatCurrency totalAmount}}. Thank you for shopping at {{shopName}}!'
         },
         push: {
-            content: JSON.stringify({
-                title: 'New Sale: {{formatCurrency totalAmount}}',
-                body: 'Sale {{saleId}} recorded at {{shopName}} by {{performedByName}}.',
-                data: { action: 'open_sale', saleId: '{{saleId}}' }
-            })
+            title: 'New Sale: {{formatCurrency totalAmount}}',
+            body: 'Sale {{saleId}} recorded at {{shopName}} by {{performedByName}}.',
+            data: { action: 'open_sale', saleId: '{{saleId}}' }
         },
         inApp: {
             subject: 'New Sale: {{formatCurrency totalAmount}}',
             content: 'Sale **{{saleId}}** for **{{formatCurrency totalAmount}}** created at **{{shopName}}** by **{{performedByName}}**.'
+        }
+    },
+
+    "sale.refund.processed": {
+        email: {
+            subject: 'Refund Processed: Sale #{{saleId}}',
+            content: `
+    < div style = "font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
+        <div style="background-color: #fffaf0; padding: 20px; border-radius: 8px; border: 1px solid #ffeeba;">
+            <h2 style="color: #856404; margin-top: 0;">Refund Processed</h2>
+            <p>A refund has been successfully processed for sale #<strong>{{ saleId }}</strong> at {{ shopName }}.</p>
+
+            <div style="background-color: #ffffff; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Refund Amount:</strong> <span style="font-size: 18px; color: #dc3545; font-weight: bold;">{{ formatCurrency refundAmount }}</span></p>
+                <p style="margin: 5px 0;"><strong>Original Sale:</strong> #{{ saleId }}</p>
+            </div>
+
+            <p>The funds will be reflected in the account shortly.</p>
+            <p>— The {{ companyName }} Team</p>
+        </div>
+                </div >
+    `
+        },
+        sms: {
+            content: '{{companyName}}: Refund processed for Order #{{saleId}}. Amount: {{formatCurrency refundAmount}}. Thank you for your patience.'
+        },
+        push: {
+            title: 'Refund Processed: {{formatCurrency refundAmount}}',
+            body: 'A refund has been completed for sale #{{saleId}} at {{shopName}}.',
+            data: { action: 'open_sale', saleId: '{{saleId}}' }
+        },
+        inApp: {
+            subject: 'Refund Processed: {{formatCurrency refundAmount}}',
+            content: 'Refund for sale **{{saleId}}** at **{{shopName}}** has been completed.'
+        }
+    },
+
+    "sale.return.approved": {
+        email: {
+            subject: 'Return Approved: Sale #{{saleId}}',
+            content: `< h2 > Return Approved</h2 > <p>Your return for sale #{{ saleId }} has been approved. Refund is being processed.</p>`
+        },
+        sms: {
+            content: '{{companyName}}: Your return for Order #{{saleId}} has been APPROVED. Refund of {{formatCurrency refundAmount}} is incoming.'
+        },
+        inApp: {
+            subject: 'Return Approved',
+            content: 'Return for sale **{{saleId}}** has been approved.'
         }
     },
 
@@ -626,12 +874,10 @@ const templates = {
             content: 'Sale **{{saleId}}** at **{{shopName}}** was updated by **{{performedByName}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Sale Updated',
-                body: 'Sale {{saleId}} updated at {{shopName}} by {{performedByName}}.',
-                data: { action: 'open_sale', saleId: '{{saleId}}' }
-            })
-        }
+            title: 'Sale Updated',
+            body: 'Sale {{saleId}} updated at {{shopName}} by {{performedByName}}.',
+            data: { action: 'open_sale', saleId: '{{saleId}}' }
+        },
     },
 
     "sale.deleted": {
@@ -640,25 +886,23 @@ const templates = {
             content: 'Sale **{{saleId}}** at **{{shopName}}** was deleted by **{{performedByName}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Sale Deleted',
-                body: 'Sale {{saleId}} removed from {{shopName}} by {{performedByName}}.',
-                data: { action: 'open_dashboard' }
-            })
-        }
+            title: 'Sale Deleted',
+            body: 'Sale {{saleId}} removed from {{shopName}} by {{performedByName}}.',
+            data: { action: 'open_dashboard' }
+        },
     },
 
     "sale.cancelled": {
         email: {
             subject: 'Sale Cancelled: {{saleId}}',
             content: `
-                <div style="font-family: Arial, sans-serif;">
+    < div style = "font-family: Arial, sans-serif;" >
                     <h2>Sale Cancelled</h2>
                     <p>Sale #{{saleId}} at <strong>{{shopName}}</strong> has been cancelled by <strong>{{performedByName}}</strong>.</p>
-                    {{#if reason}}<p><strong>Reason:</strong> {{reason}}</p>{{/if}}
-                    <p><strong>Amount:</strong> {{formatCurrency totalAmount}}</p>
-                </div>
-            `,
+{ { #if reason } } <p><strong>Reason:</strong> {{ reason }}</p>{ {/if } }
+<p><strong>Amount:</strong> {{ formatCurrency totalAmount }}</p>
+                </div >
+    `,
             metadata: { priority: 'normal' }
         },
         push: {
@@ -679,7 +923,7 @@ const templates = {
         email: {
             subject: 'Reminder: Scheduled Payment Due Soon',
             content: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    < div style = "font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
                     <h2 style="color: #0056b3;">Upcoming Payment Reminder</h2>
                     <p>Hello {{customerName}},</p>
                     <p>This is a gentle reminder that a payment of <strong>{{formatCurrency amount}}</strong> for debt #{{debtId}} is due on <strong>{{dueDate}}</strong>.</p>
@@ -687,8 +931,8 @@ const templates = {
                     <p><strong>Total Remaining Balance:</strong> {{formatCurrency remainingBalance}}</p>
                     <p>Thank you for your business!</p>
                     <p>— {{shopName}}</p>
-                </div>
-            `,
+                </div >
+    `,
             metadata: { priority: 'normal' }
         },
         sms: {
@@ -705,7 +949,7 @@ const templates = {
         email: {
             subject: 'Action Required: Payment Overdue - {{shopName}}',
             content: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    < div style = "font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;" >
                     <h2 style="color: #dc3545;">Payment Overdue Notice</h2>
                     <p>Hello {{customerName}},</p>
                     <p>We noticed that the payment of <strong>{{formatCurrency amount}}</strong> for debt #{{debtId}} was due on <strong>{{dueDate}}</strong> and is now overdue.</p>
@@ -713,8 +957,8 @@ const templates = {
                     <p><strong>Total Outstanding Balance:</strong> {{formatCurrency remainingBalance}}</p>
                     <p>If you have already made this payment, please disregard this notice.</p>
                     <p>— {{shopName}}</p>
-                </div>
-            `,
+                </div >
+    `,
             metadata: { priority: 'high' }
         },
         sms: {
@@ -741,12 +985,10 @@ const templates = {
             content: 'New debt of **{{formatCurrency amount}}** recorded for **{{customerName}}** at **{{shopName}}** by **{{performedByName}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'New Debt Recorded',
-                body: 'Debt of {{amount}} recorded at {{shopName}} by {{performedByName}}.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            })
-        }
+            title: 'New Debt Recorded',
+            body: 'Debt of {{formatCurrency amount}} recorded at {{shopName}} by {{performedByName}}.',
+            data: { action: 'open_debt', debtId: '{{debtId}}' }
+        },
     },
 
     "debt.payment.received": {
@@ -764,12 +1006,10 @@ const templates = {
             content: 'Debt payment of **{{formatCurrency amount}}** received from **{{customerName}}** at **{{shopName}}** (recorded by **{{performedByName}}**).'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Debt Payment',
-                body: 'Received {{formatCurrency amount}} from {{customerName}} at {{shopName}}.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            })
-        }
+            title: 'Debt Payment',
+            body: 'Received {{formatCurrency amount}} from {{customerName}} at {{shopName}}.',
+            data: { action: 'open_debt', debtId: '{{debtId}}' }
+        },
     },
     "debt.repayment.created": {
         sms: {
@@ -781,12 +1021,10 @@ const templates = {
             content: 'Debt repayment of **{{formatCurrency amount}}** recorded for **{{customerName}}** at **{{shopName}}** by **{{performedByName}}**. New balance: **{{formatCurrency remainingBalance}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Debt Repayment',
-                body: '{{customerName}} paid {{formatCurrency amount}}. Balance: {{formatCurrency remainingBalance}}.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            })
-        }
+            title: 'Debt Repayment',
+            body: '{{customerName}} paid {{formatCurrency amount}}. Balance: {{formatCurrency remainingBalance}}.',
+            data: { action: 'open_debt', debtId: '{{debtId}}' }
+        },
     },
 
     "debt.fully_paid": {
@@ -797,24 +1035,22 @@ const templates = {
         email: {
             subject: 'Debt Fully Paid: {{customerName}}',
             content: `
-                <div style="font-family: Arial, sans-serif;">
+    < div style = "font-family: Arial, sans-serif;" >
                     <h2>Debt Cleared</h2>
                     <p>The debt for {{customerName}} at {{shopName}} has been fully paid.</p>
                     <p><strong>Amount Cleared:</strong> {{formatCurrency amount}}</p>
-                </div>
-            `
+                </div >
+    `
         },
         inApp: {
             subject: 'Debt Cleared via Payment',
             content: 'Debt for **{{customerName}}** at **{{shopName}}** has been fully paid.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Debt Fully Paid',
-                body: 'The debt for {{customerName}} at {{shopName}} has been cleared.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            })
-        }
+            title: 'Debt Fully Paid',
+            body: 'The debt for {{customerName}} at {{shopName}} has been cleared.',
+            data: { action: 'open_debt', debtId: '{{debtId}}' }
+        },
     },
     "debt.fully.paid": { // Legacy support mapping
         sms: {
@@ -835,24 +1071,22 @@ const templates = {
         email: {
             subject: 'Debt Cancelled: {{customerName}}',
             content: `
-                <div style="font-family: Arial, sans-serif;">
+    < div style = "font-family: Arial, sans-serif;" >
                     <h2>Debt Cancelled</h2>
                     <p>The debt for {{customerName}} at {{shopName}} has been cancelled.</p>
                     <p><strong>Amount:</strong> {{formatCurrency amount}}</p>
-                </div>
-            `
+                </div >
+    `
         },
         inApp: {
             subject: 'Debt Cancelled',
             content: 'Debt of **{{formatCurrency amount}}** for **{{customerName}}** at **{{shopName}}** has been cancelled.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Debt Cancelled',
-                body: 'Debt of {{formatCurrency amount}} for {{customerName}} at {{shopName}} was cancelled.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            })
-        }
+            title: 'Debt Cancelled',
+            body: 'Debt of {{formatCurrency amount}} for {{customerName}} at {{shopName}} was cancelled.',
+            data: { action: 'open_debt', debtId: '{{debtId}}' }
+        },
     },
 
     "debt.status.updated": {
@@ -861,12 +1095,10 @@ const templates = {
             content: 'Debt status for **{{customerName}}** at **{{shopName}}** is now **{{status}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Debt Status Changed',
-                body: 'Debt for {{customerName}} at {{shopName}} is now {{status}}.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            })
-        }
+            title: 'Debt Status Changed',
+            body: 'Debt for {{customerName}} at {{shopName}} is now {{status}}.',
+            data: { action: 'open_debt', debtId: '{{debtId}}' }
+        },
     },
 
     "debt.overdue": {
@@ -877,14 +1109,14 @@ const templates = {
         email: {
             subject: 'Overdue Debt Reminder: {{customerName}} at {{shopName}}',
             content: `
-                <div style="font-family: Arial, sans-serif;">
+    < div style = "font-family: Arial, sans-serif;" >
                     <h2>Debt Overdue Reminder</h2>
                     <p>Dear {{customerName}},</p>
                     <p>This is a reminder that your debt #{{debtId}} at <strong>{{shopName}}</strong> is overdue by {{daysOverdue}} days.</p>
                     <p><strong>Amount Due:</strong> {{formatCurrency amount}}</p>
                     <p>Please settle this payment as soon as possible.</p>
-                </div>
-            `,
+                </div >
+    `,
             metadata: { priority: 'high' }
         },
         inApp: {
@@ -892,13 +1124,11 @@ const templates = {
             content: '⚠️ Debt #{{debtId}} for **{{customerName}}** at **{{shopName}}** is overdue by {{daysOverdue}} days. Amount: {{formatCurrency amount}}.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Debt Overdue',
-                body: 'Your debt of {{formatCurrency amount}} at {{shopName}} is overdue. Please pay now.',
-                data: { action: 'open_debt', debtId: '{{debtId}}' }
-            }),
+            title: 'Debt Overdue',
+            body: 'Your debt of {{formatCurrency amount}} at {{shopName}} is overdue. Please pay now.',
+            data: { action: 'open_debt', debtId: '{{debtId}}' },
             metadata: { priority: 'high' }
-        }
+        },
     },
     "inventory.stock.updated": {
         inApp: {
@@ -934,11 +1164,9 @@ const templates = {
             content: 'Successfully removed stock for **{{successCount}}** products. Total requested: **{{totalRequested}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Bulk Removal Success',
-                body: '{{successCount}} products were updated.',
-                data: { action: 'open_stock_history' }
-            })
+            title: 'Bulk Removal Success',
+            body: '{{successCount}} products were updated.',
+            data: { action: 'open_stock_history' }
         }
     },
 
@@ -946,21 +1174,19 @@ const templates = {
         email: {
             subject: 'Transfer Initiated: {{productName}}',
             content: `
-                <div style="font-family: Arial, sans-serif;">
+    < div style = "font-family: Arial, sans-serif;" >
                     <h2>Transfer Initiated</h2>
                     <p>Transfer of <strong>{{quantity}}</strong> x <strong>{{productName}}</strong> has been initiated.</p>
                     <p><strong>From:</strong> {{sourceShopName}}</p>
                     <p><strong>To:</strong> {{destinationShopName}}</p>
-                    {{#if performedByName}}<p><strong>Initiated by:</strong> {{performedByName}}</p>{{/if}}
-                </div>
-            `
+{ { #if performedByName } } <p><strong>Initiated by:</strong> {{ performedByName }}</p>{ {/if } }
+                </div >
+    `
         },
         push: {
-            content: JSON.stringify({
-                title: 'Transfer Initiated',
-                body: 'Transfer of {{quantity}} {{productName}} from {{sourceShopName}} to {{destinationShopName}} started by {{performedByName}}.',
-                data: { action: 'open_transfer', transferId: '{{transferId}}' }
-            })
+            title: 'Transfer Initiated',
+            body: 'Transfer of {{quantity}} {{productName}} from {{sourceShopName}} to {{destinationShopName}} started by {{performedByName}}.',
+            data: { action: 'open_transfer', transferId: '{{transferId}}' }
         },
         inApp: {
             subject: 'Transfer Initiated',
@@ -974,11 +1200,9 @@ const templates = {
             content: 'Transfer of **{{quantity}}** x **{{productName}}** to **{{destinationShopName}}** has been completed (received by **{{performedByName}}**).'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Transfer Completed',
-                body: 'Transfer of {{quantity}} {{productName}} to {{destinationShopName}} completed.',
-                data: { action: 'open_transfer', transferId: '{{transferId}}' }
-            })
+            title: 'Transfer Completed',
+            body: 'Transfer of {{quantity}} {{productName}} to {{destinationShopName}} completed.',
+            data: { action: 'open_transfer', transferId: '{{transferId}}' }
         }
     },
 
@@ -988,11 +1212,9 @@ const templates = {
             content: 'Successfully transferred **{{count}}** products from **{{sourceShopName}}** to **{{destinationShopName}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Bulk Transfer Success',
-                body: '{{count}} products transferred from {{sourceShopName}} to {{destinationShopName}}.',
-                data: { action: 'open_transfers' }
-            })
+            title: 'Bulk Transfer Success',
+            body: '{{count}} products transferred from {{sourceShopName}} to {{destinationShopName}}.',
+            data: { action: 'open_transfers' }
         }
     },
 
@@ -1016,11 +1238,9 @@ const templates = {
             content: 'Sent **{{quantity}}** units of **{{productName}}** to company **{{targetCompanyId}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Transfer Sent',
-                body: '{{quantity}} units of {{productName}} sent to {{targetCompanyId}}.',
-                data: { action: 'open_transfers' }
-            })
+            title: 'Transfer Sent',
+            body: '{{quantity}} units of {{productName}} sent to {{targetCompanyId}}.',
+            data: { action: 'open_transfers' }
         }
     },
 
@@ -1030,11 +1250,57 @@ const templates = {
             content: 'Received **{{quantity}}** units of **{{productName}}** from company **{{sourceCompanyId}}**.'
         },
         push: {
-            content: JSON.stringify({
-                title: 'Transfer Received',
-                body: 'Received {{quantity}} units of {{productName}} from {{sourceCompanyId}}.',
-                data: { action: 'open_transfers' }
-            })
+            title: 'Transfer Received',
+            body: 'Received {{quantity}} units of {{productName}} from {{sourceCompanyId}}.',
+            data: { action: 'open_transfers' }
+        }
+    },
+
+    // --- STAFF MANAGEMENT ---
+    "staff.department_assigned": {
+        push: {
+            title: "New Department Assignment",
+            body: "You have been assigned to the **{{departmentName}}** department by **{{performedByName}}**.",
+            data: { type: "staff.assigned", departmentId: "{{departmentId}}" }
+        },
+        inApp: {
+            title: "Department Assignment",
+            body: "You have been assigned to the **{{departmentName}}** department by **{{performedByName}}**."
+        }
+    },
+    "staff.role_changed": {
+        push: {
+            title: "Role Updated",
+            body: "Your role in **{{departmentName}}** has been updated to **{{role}}** by **{{performedByName}}**.",
+            data: { type: "staff.role_changed", departmentId: "{{departmentId}}", role: "{{role}}" }
+        },
+        inApp: {
+            title: "Role Updated",
+            body: "Your role in **{{departmentName}}** has been updated to **{{role}}** by **{{performedByName}}**."
+        }
+    },
+    "staff.suspended": {
+        push: {
+            title: "Staff Suspension",
+            body: "Your access to **{{departmentName}}** has been suspended by **{{performedByName}}**.",
+            data: { type: "staff.suspended", departmentId: "{{departmentId}}" },
+            metadata: { priority: "high" }
+        },
+        inApp: {
+            title: "Staff Suspension",
+            body: "Your access to **{{departmentName}}** has been suspended by **{{performedByName}}**."
+        }
+    },
+    "staff.removed": {
+        push: {
+            title: "Staff Removal",
+            body: "You have been removed from the **{{departmentName}}** department by **{{performedByName}}**.",
+            data: { type: "staff.removed", departmentId: "{{departmentId}}" },
+            metadata: { priority: "high" }
+        },
+        inApp: {
+            title: "Staff Removal",
+            body: "You have been removed from the **{{departmentName}}** department by **{{performedByName}}**."
         }
     }
 };

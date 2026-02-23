@@ -46,7 +46,7 @@ const deliverNotification = async ({ notificationId }) => {
   }
 
   let successes = 0;
-  const results = [];
+  const deliveryTasks = [];
 
   // Email
   if (
@@ -54,136 +54,155 @@ const deliverNotification = async ({ notificationId }) => {
     prefs.email &&
     notification.payload.email
   ) {
-    const result = await sendEmail(
-      notification,
-      notification.payload.email,
-      userId,
-      companyId
+    deliveryTasks.push(
+      sendEmail(
+        notification,
+        notification.payload.email,
+        userId,
+        companyId
+      ).then(result => ({ channel: "email", ...result }))
     );
-    results.push({ channel: "email", ...result });
-    if (result.success) successes++;
   }
 
   // SMS
   if (notification.channels.sms && prefs.sms && notification.payload.phone) {
-    const result = await sendSMS(
-      notification,
-      notification.payload.phone,
-      userId,
-      companyId
+    deliveryTasks.push(
+      sendSMS(
+        notification,
+        notification.payload.phone,
+        userId,
+        companyId
+      ).then(result => ({ channel: "sms", ...result }))
     );
-    results.push({ channel: "sms", ...result });
-    if (result.success) successes++;
   }
 
   // Push
   if (notification.channels.push && prefs.push) {
     // 1. Resolve recipients for Push (handles both personal and broadcast)
-    let pushRecipients = [];
-    if (userId) {
-      pushRecipients = [userId];
-    } else if (notification.scope !== 'personal' && notification.companyId) {
-      const recipientResolver = require("../services/recipientResolver");
-      try {
-        const rolesMapping = await recipientResolver.resolveByRole(notification.templateName, {
-          companyId: notification.companyId,
-          shopId: notification.shopId,
-          departmentId: notification.departmentId,
-          roles: notification.roles
-        });
-        // Flatten all user IDs from all roles
-        pushRecipients = [...new Set(Object.values(rolesMapping).flat())];
-        logger.debug(`📢 Resolved ${pushRecipients.length} recipients for broadcast Push`);
-      } catch (err) {
-        logger.error(`❌ Failed to resolve recipients for broadcast Push: ${err.message}`);
-      }
-    }
-
-    if (pushRecipients.length > 0) {
-      // 2. Get tokens from DB for all recipients
-      const UserDevice = require("../models/UserDevice");
-      const devices = await UserDevice.find({
-        userId: { $in: pushRecipients },
-        isActive: true
-      });
-
-      // 3. Get tokens from payload (legacy/manual override)
-      const payloadTokens = notification.payload.fcmToken
-        ? (Array.isArray(notification.payload.fcmToken) ? notification.payload.fcmToken : [notification.payload.fcmToken])
-        : [];
-
-      // 4. Merge unique tokens, prefer DB user info
-      const tokenMap = new Map();
-
-      // Add DB tokens (have userId)
-      devices.forEach(d => {
-        tokenMap.set(d.fcmToken, { token: d.fcmToken, userId: d.userId });
-      });
-
-      // Add payload tokens (might not have userId, use main notification userId)
-      payloadTokens.forEach(t => {
-        if (!tokenMap.has(t)) {
-          // For payload tokens, we use the main userId if available, or null
-          tokenMap.set(t, { token: t, userId: userId });
+    deliveryTasks.push((async () => {
+      let pushRecipients = [];
+      if (userId) {
+        pushRecipients = [userId];
+      } else if (notification.scope !== 'personal' && notification.companyId) {
+        const recipientResolver = require("../services/recipientResolver");
+        try {
+          const rolesMapping = await recipientResolver.resolveByRole(notification.templateName, {
+            companyId: notification.companyId,
+            shopId: notification.shopId,
+            departmentId: notification.departmentId,
+            roles: notification.roles
+          });
+          // Flatten all user IDs from all roles
+          pushRecipients = [...new Set(Object.values(rolesMapping).flat())];
+          logger.debug(`📢 Resolved ${pushRecipients.length} recipients for broadcast Push`);
+        } catch (err) {
+          logger.error(`❌ Failed to resolve recipients for broadcast Push: ${err.message}`);
         }
-      });
+      }
 
-      const allTargets = Array.from(tokenMap.values());
+      const pushResults = [];
+      if (pushRecipients.length > 0) {
+        // 2. Get tokens from DB for all recipients
+        const UserDevice = require("../models/UserDevice");
+        const devices = await UserDevice.find({
+          userId: { $in: pushRecipients },
+          isActive: true
+        });
 
-      if (allTargets.length > 0) {
-        logger.debug(`📱 Sending push to ${allTargets.length} device(s) for ${pushRecipients.length} users`);
+        // 3. Get tokens from payload (legacy/manual override)
+        const payloadTokens = notification.payload.fcmToken
+          ? (Array.isArray(notification.payload.fcmToken) ? notification.payload.fcmToken : [notification.payload.fcmToken])
+          : [];
 
-        for (const target of allTargets) {
-          const { token, userId: targetUserId } = target;
+        // 4. Merge unique tokens, prefer DB user info
+        const tokenMap = new Map();
 
-          // Avoid sending to invalid/empty tokens
-          if (!token) continue;
+        // Add DB tokens (have userId)
+        devices.forEach(d => {
+          tokenMap.set(d.fcmToken, { token: d.fcmToken, userId: d.userId });
+        });
 
-          const result = await sendPush(
-            notification,
-            token,
-            targetUserId, // Use the specific user ID for this token if available
-            companyId
-          );
-
-          // Check for invalid token errors and cleanup
-          if (!result.success && result.error) {
-            const errCode = result.error.code || result.error.errorInfo?.code;
-            if (errCode === 'messaging/registration-token-not-registered' ||
-              errCode === 'messaging/invalid-argument' ||
-              result.error.message?.includes('Entity was not found')) {
-              await UserDevice.deleteOne({ fcmToken: token });
-              logger.info(`🗑️ Removed invalid FCM token: ${token}`);
-            }
+        // Add payload tokens (might not have userId, use main notification userId)
+        payloadTokens.forEach(t => {
+          if (!tokenMap.has(t)) {
+            // For payload tokens, we use the main userId if available, or null
+            tokenMap.set(t, { token: t, userId: userId });
           }
+        });
 
-          results.push({ channel: "push", ...result });
-          if (result.success) successes++;
+        const allTargets = Array.from(tokenMap.values());
+
+        if (allTargets.length > 0) {
+          logger.debug(`📱 Sending push to ${allTargets.length} device(s) for ${pushRecipients.length} users`);
+
+          const targetPromises = allTargets.map(async (target) => {
+            const { token, userId: targetUserId } = target;
+            if (!token) return { success: false, channel: "push", error: "Empty token" };
+
+            const result = await sendPush(
+              notification,
+              token,
+              targetUserId,
+              companyId
+            );
+
+            // Check for invalid token errors and cleanup
+            if (!result.success && result.error) {
+              const errCode = result.error.code || result.error.errorInfo?.code;
+              if (errCode === 'messaging/registration-token-not-registered' ||
+                errCode === 'messaging/invalid-argument' ||
+                result.error.message?.includes('Entity was not found')) {
+                await UserDevice.deleteOne({ fcmToken: token });
+                logger.info(`🗑️ Removed invalid FCM token: ${token}`);
+              }
+            }
+            return { channel: "push", ...result };
+          });
+
+          const pushDeliveryResults = await Promise.all(targetPromises);
+          pushResults.push(...pushDeliveryResults);
+        } else {
+          logger.debug(`📭 No push tokens found for recipients`);
         }
       } else {
-        logger.debug(`📭 No push tokens found for recipients`);
+        logger.debug(`📭 No recipients resolved for Push`);
       }
-    } else {
-      logger.debug(`📭 No recipients resolved for Push`);
-    }
+      return pushResults; // This will be flattened later
+    })());
   }
 
   // In-App (via WebSocket service)
   if (notification.channels.inApp && prefs.inApp) {
-    let success = false;
-
-    if (notification.scope !== 'personal') {
-      // Use broadcast publisher for non-personal scopes (company, department, etc.)
-      success = await websocketPublisher.publishBroadcast(notification);
-    } else {
-      // Direct personal message
-      success = await websocketPublisher.publishNotification(notification);
-    }
-
-    const result = { success }; // normalize result structure
-    results.push({ channel: "inApp", ...result });
-    if (result.success) successes++;
+    deliveryTasks.push((async () => {
+      let success = false;
+      if (notification.scope !== 'personal') {
+        success = await websocketPublisher.publishBroadcast(notification);
+      } else {
+        success = await websocketPublisher.publishNotification(notification);
+      }
+      return { channel: "inApp", success };
+    })());
   }
+
+  // Execute all tasks in parallel
+  const settlement = await Promise.allSettled(deliveryTasks);
+  const results = [];
+
+  settlement.forEach((res) => {
+    if (res.status === 'fulfilled') {
+      if (Array.isArray(res.value)) {
+        results.push(...res.value);
+      } else {
+        results.push(res.value);
+      }
+    } else {
+      logger.error(`❌ Channel task failed:`, res.reason);
+      results.push({ success: false, error: res.reason?.message || "Internal error" });
+    }
+  });
+
+  // Calculate success count from flattened results
+  successes = results.filter(r => r.success).length;
 
   // Update status
   const totalChannels = results.length;

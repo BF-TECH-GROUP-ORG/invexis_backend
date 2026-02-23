@@ -1,10 +1,10 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
+const redis = require('/app/shared/redis');
 
-// Simple in-memory cache for name resolution
-// Key: "type:id" -> Value: { name: "Name", expires: timestamp }
-const enrichmentCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Cache settings
+const CACHE_PREFIX = 'enrichment:';
+const CACHE_TTL = 300; // 5 minutes in seconds
 
 class EnrichmentService {
     constructor() {
@@ -25,10 +25,14 @@ class EnrichmentService {
     async getCompanyName(companyId) {
         if (!companyId) return 'Invexis';
 
-        const cacheKey = `company:${companyId}`;
-        const cached = enrichmentCache.get(cacheKey);
-        if (cached && cached.expires > Date.now()) {
-            return cached.name;
+        const cacheKey = `${CACHE_PREFIX}company:${companyId}`;
+        try {
+            const cached = await redis.get(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        } catch (err) {
+            logger.warn(`Redis cache fetch failed for ${cacheKey}: ${err.message}`);
         }
 
         try {
@@ -40,7 +44,7 @@ class EnrichmentService {
 
             if (response.data && response.data.data) {
                 const name = response.data.data.name;
-                enrichmentCache.set(cacheKey, { name, expires: Date.now() + CACHE_TTL });
+                await redis.set(cacheKey, name, 'EX', CACHE_TTL);
                 return name;
             }
         } catch (error) {
@@ -59,10 +63,14 @@ class EnrichmentService {
         if (!shopId) return 'Unknown Shop';
         if (shopId === 'all') return 'All Shops';
 
-        const cacheKey = `shop:${shopId}`;
-        const cached = enrichmentCache.get(cacheKey);
-        if (cached && cached.expires > Date.now()) {
-            return cached.name;
+        const cacheKey = `${CACHE_PREFIX}shop:${shopId}`;
+        try {
+            const cached = await redis.get(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        } catch (err) {
+            logger.warn(`Redis cache fetch failed for ${cacheKey}: ${err.message}`);
         }
 
         try {
@@ -73,15 +81,11 @@ class EnrichmentService {
             });
 
             if (response.data) {
-                // Shop service returns object directly or inside data? 
-                // Based on controller, likely returns JSON. Assuming structure similar to others or direct object
-                // Checking standard response: likely { success: true, data: { ... } } or just object.
-                // Safest to check both
                 const shopData = response.data.data || response.data;
                 const name = shopData.name;
 
                 if (name) {
-                    enrichmentCache.set(cacheKey, { name, expires: Date.now() + CACHE_TTL });
+                    await redis.set(cacheKey, name, 'EX', CACHE_TTL);
                     return name;
                 }
             }
@@ -101,10 +105,14 @@ class EnrichmentService {
         if (!userId) return 'Unknown User';
         if (userId === 'system') return 'System';
 
-        const cacheKey = `user:${userId}`;
-        const cached = enrichmentCache.get(cacheKey);
-        if (cached && cached.expires > Date.now()) {
-            return cached.name;
+        const cacheKey = `${CACHE_PREFIX}user:${userId}`;
+        try {
+            const cached = await redis.get(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        } catch (err) {
+            logger.warn(`Redis cache fetch failed for ${cacheKey}: ${err.message}`);
         }
 
         try {
@@ -117,12 +125,11 @@ class EnrichmentService {
             if (response.data && response.data.data) {
                 const user = response.data.data;
                 const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || 'User';
-                enrichmentCache.set(cacheKey, { name, expires: Date.now() + CACHE_TTL });
+                await redis.set(cacheKey, name, 'EX', CACHE_TTL);
                 return name;
             }
         } catch (error) {
             // 404 is common for system/deleted users, so ignore it.
-            // Log everything else (including network errors where response is undefined)
             if (!error.response || error.response.status !== 404) {
                 logger.warn(`Failed to fetch user name for ${userId}: ${error.message}`);
             }

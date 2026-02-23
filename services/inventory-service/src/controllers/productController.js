@@ -393,6 +393,10 @@ const createProduct = asyncHandler(async (req, res) => {
     productData.isFeatured = req.body.featured;
   }
 
+  // Explicitly handle expiration fields
+  if (req.body.expiryDate) productData.expiryDate = new Date(req.body.expiryDate);
+  if (req.body.manufacturingDate) productData.manufacturingDate = new Date(req.body.manufacturingDate);
+
   const product = new Product(productData);
 
   // Process images - handle base64 uploads via events

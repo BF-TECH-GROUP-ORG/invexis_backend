@@ -31,12 +31,12 @@ module.exports = async function handleDebtEvent(event, routingKey) {
             return;
         }
 
-        if (type === "debt.repayment.created" || type === "debt.repaid") {
+        if (type === "debt.repayment.created" || type === "debt.repaid" || type === "debt.payment.received") {
             await handleRepaymentCreated(data);
             return;
         }
 
-        if (type === "debt.fully_paid") {
+        if (type === "debt.fully_paid" || type === "debt.settled") {
             await handleDebtFullyPaid(data);
             return;
         }
@@ -163,7 +163,7 @@ async function handleRepaymentCreated(data) {
                 ...data
             },
             companyId,
-            templateName: "debt.repayment.created",
+            templateName: "debt.payment.received",
             scope: "department",
             departmentId: DEPARTMENTS.MANAGEMENT,
             roles: ["company_admin", "worker"]
@@ -530,7 +530,7 @@ async function handleDebtCancelled(data) {
 async function sendCustomerSms({ event, templateName, companyId, phone, payload }) {
     try {
         if (!phone) {
-            // logger.warn(`⚠️ Skipping customer SMS for ${event}: phone missing`);
+            logger.warn(`⚠️ Skipping customer SMS for ${event}: phone missing`);
             return;
         }
 

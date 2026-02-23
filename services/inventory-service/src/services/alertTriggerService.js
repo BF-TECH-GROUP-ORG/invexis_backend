@@ -473,6 +473,181 @@ class AlertTriggerService {
             throw error;
         }
     }
+
+    /**
+     * Run checks for product expirations (Expired and Expiring Soon)
+     */
+    static async checkProductExpirations(companyId, shopId = null) {
+        try {
+            const alertsGenerated = [];
+            const today = new Date();
+
+            // 7 days and 30 days thresholds
+            const sevenDaysFromNow = new Date(today);
+            sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+            const thirtyDaysFromNow = new Date(today);
+            thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+            const scope = shopId ? 'shop' : 'company';
+            const query = {
+                companyId,
+                isDeleted: false,
+                expiryDate: { $ne: null }
+            };
+            if (shopId) query.shopId = shopId;
+
+            const products = await Product.find(query);
+
+            for (const product of products) {
+                const expiry = new Date(product.expiryDate);
+                let alertType = null;
+                let priority = 'medium';
+                let message = '';
+
+                if (expiry <= today) {
+                    alertType = 'product_expired';
+                    priority = 'critical';
+                    message = `🚨 Product Expired: ${product.name}`;
+                } else if (expiry <= sevenDaysFromNow) {
+                    alertType = 'product_expiring';
+                    priority = 'high';
+                    message = `⚠️ Expiring in <7 days: ${product.name}`;
+                } else if (expiry <= thirtyDaysFromNow) {
+                    alertType = 'product_expiring';
+                    priority = 'medium';
+                    message = `📝 Expiring in <30 days: ${product.name}`;
+                }
+
+                if (alertType) {
+                    // Deduplication logic: check if unresolved alert exists for this product
+                    const existingAlert = await Alert.findOne({
+                        companyId,
+                        type: alertType,
+                        productId: product._id,
+                        isResolved: false
+                    });
+
+                    if (!existingAlert) {
+                        const alert = await Alert.create({
+                            scope,
+                            companyId,
+                            shopId,
+                            type: alertType,
+                            productId: product._id,
+                            priority,
+                            message,
+                            description: `Product ${product.name} expires on ${expiry.toLocaleDateString()}`,
+                            data: {
+                                productId: product._id.toString(),
+                                productName: product.name,
+                                expiryDate: product.expiryDate,
+                                daysToExpiry: Math.ceil((expiry - today) / (1000 * 60 * 60 * 24))
+                            }
+                        });
+                        alertsGenerated.push(alert);
+                    }
+                }
+            }
+
+            if (alertsGenerated.length > 0) {
+                logger.info(`✅ Expiration checks generated ${alertsGenerated.length} alerts for ${scope} ${shopId || companyId}`);
+            }
+            return alertsGenerated;
+        } catch (error) {
+            logger.error(`Failed to run product expiration checks: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Run Stock Rebalancing analysis (Company level)
+     * Identifies shops with excess stock and shops with low stock for the same item
+     */
+    static async checkStockRebalancing(companyId) {
+        try {
+            const alertsGenerated = [];
+
+            // 1. Get all products grouped by SKU to find cross-shop matches
+            // We only care about products with a SKU and owned by this company
+            const skuGroups = await Product.aggregate([
+                { $match: { companyId, isDeleted: false, sku: { $ne: null } } },
+                { $group: { _id: '$sku', products: { $push: '$$ROOT' } } },
+                { $match: { 'products.1': { $exists: true } } } // At least 2 shops must have this item
+            ]);
+
+            for (const group of skuGroups) {
+                const sku = group._id;
+                const shopStocks = [];
+
+                // 2. Fetch current stock for each instance of this SKU
+                for (const product of group.products) {
+                    const stockRecord = await ProductStock.findOne({ productId: product._id }).lean();
+                    if (stockRecord) {
+                        shopStocks.push({
+                            productId: product._id,
+                            shopId: product.shopId,
+                            productName: product.name,
+                            stockQty: stockRecord.stockQty,
+                            threshold: stockRecord.lowStockThreshold || 10
+                        });
+                    }
+                }
+
+                // 3. Identify Low and Excess shops
+                const lowShops = shopStocks.filter(s => s.stockQty <= s.threshold);
+                const excessShops = shopStocks.filter(s => s.stockQty > (s.threshold * 3));
+
+                // 4. Generate suggestion if a match is found
+                if (lowShops.length > 0 && excessShops.length > 0) {
+                    for (const target of lowShops) {
+                        // Find the shop with the most excess
+                        const source = excessShops.sort((a, b) => b.stockQty - a.stockQty)[0];
+
+                        const alertType = 'rebalancing_suggestion';
+
+                        // Deduplication
+                        const existingAlert = await Alert.findOne({
+                            companyId,
+                            type: alertType,
+                            productId: target.productId,
+                            isResolved: false
+                        });
+
+                        if (!existingAlert) {
+                            const alert = await Alert.create({
+                                scope: 'company', // Admins need to see this
+                                companyId,
+                                shopId: target.shopId, // Alert belongs to the shop that needs stock
+                                type: alertType,
+                                productId: target.productId,
+                                priority: 'medium',
+                                message: `💡 Rebalancing Suggestion: ${target.productName}`,
+                                description: `Shop ${target.shopId} is low (${target.stockQty}). Shop ${source.shopId} has excess (${source.stockQty}). Consider an internal transfer.`,
+                                data: {
+                                    sku,
+                                    targetShopId: target.shopId,
+                                    sourceShopId: source.shopId,
+                                    targetStock: target.stockQty,
+                                    sourceStock: source.stockQty,
+                                    suggestedTransferQty: Math.ceil(source.stockQty / 2)
+                                }
+                            });
+                            alertsGenerated.push(alert);
+                        }
+                    }
+                }
+            }
+
+            if (alertsGenerated.length > 0) {
+                logger.info(`✅ Rebalancing analysis generated ${alertsGenerated.length} suggestions for company ${companyId}`);
+            }
+            return alertsGenerated;
+        } catch (error) {
+            logger.error(`Failed to run stock rebalancing check: ${error.message}`);
+            throw error;
+        }
+    }
 }
 
 module.exports = AlertTriggerService

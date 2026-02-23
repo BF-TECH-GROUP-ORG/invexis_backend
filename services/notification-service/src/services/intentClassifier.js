@@ -29,8 +29,12 @@ class IntentClassifier {
             'payment.success': NOTIFICATION_INTENTS.FINANCIAL,
             'payment.processed': NOTIFICATION_INTENTS.FINANCIAL,
             'payment.refunded': NOTIFICATION_INTENTS.FINANCIAL,
-            'sale.refunded': NOTIFICATION_INTENTS.FINANCIAL,
+            'sale.status.changed': NOTIFICATION_INTENTS.OPERATIONAL,
+            'sale.payment.status.changed': NOTIFICATION_INTENTS.OPERATIONAL,
+            'sale.refund.processed': NOTIFICATION_INTENTS.FINANCIAL,
             'sale.return.created': NOTIFICATION_INTENTS.FINANCIAL,
+            'sale.return.approved': NOTIFICATION_INTENTS.FINANCIAL,
+            'sale.return.fully_returned': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.repayment.created': NOTIFICATION_INTENTS.FINANCIAL,
             'debt.repaid': NOTIFICATION_INTENTS.FINANCIAL,
@@ -79,14 +83,17 @@ class IntentClassifier {
             [NOTIFICATION_INTENTS.OPERATIONAL]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['inApp', 'email', 'push'],
                 [AUTH_ROLES.WORKER]: ['inApp', 'push'],
-                [AUTH_ROLES.SUPER_ADMIN]: ['inApp']
+                [AUTH_ROLES.SUPER_ADMIN]: ['inApp'],
+                'AFFECTED_USER': ['inApp', 'push'], // Confirms "You did X"
+                'external': ['sms']                 // Customer SMS
             },
 
             [NOTIFICATION_INTENTS.FINANCIAL]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp', 'push'],
                 [AUTH_ROLES.WORKER]: ['inApp', 'push'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp'],
-                'AFFECTED_USER': ['sms'] // Debtors (Customers) only get SMS
+                'AFFECTED_USER': ['inApp', 'push'], // Confirms "Refund processed"
+                'external': ['sms']                 // Customer SMS
             },
 
             [NOTIFICATION_INTENTS.RISK_SECURITY]: {
@@ -94,14 +101,15 @@ class IntentClassifier {
                 [AUTH_ROLES.WORKER]: ['email', 'inApp', 'push'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp'],
                 [AUTH_ROLES.CUSTOMER]: ['email', 'inApp'],
-                'AFFECTED_USER': ['sms'] // Overdue reminders for customers
+                'AFFECTED_USER': ['inApp', 'push'], // Cancellation alerts
+                'external': ['sms']                 // Cancellation SMS (optional but enabled)
             },
 
             [NOTIFICATION_INTENTS.ACCOUNTABILITY]: {
                 [AUTH_ROLES.COMPANY_ADMIN]: ['email', 'inApp', 'push'],
                 [AUTH_ROLES.WORKER]: ['inApp', 'push'],
                 [AUTH_ROLES.SUPER_ADMIN]: ['email', 'inApp'],
-                [AUTH_ROLES.CUSTOMER]: ['email', 'inApp'],
+                [AUTH_ROLES.CUSTOMER]: ['email', 'inApp', 'sms'],
                 'AFFECTED_USER': ['email', 'inApp', 'sms']
             },
 

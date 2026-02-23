@@ -30,13 +30,20 @@ const alertSchema = new Schema({
       'order_delivered',
       'inventory_adjustment',
       'stock_received',
+      'product_expiring',
+      'product_expired',
       // Smart/Scheduled Alerts
       'daily_summary',
       'weekly_summary',
       'monthly_summary',
       'high_velocity',
       'dead_stock',
-      'stock_out_prediction'
+      'stock_out_prediction',
+      'rebalancing_suggestion',
+      // Guardian AI (Fraud Prevention)
+      'suspicious_cancellation',
+      'price_overwrite',
+      'night_watch_activity'
     ],
     required: true
   },

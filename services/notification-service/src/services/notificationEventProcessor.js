@@ -66,7 +66,10 @@ class NotificationEventProcessor {
             let { type, data, id: eventId, emittedAt, source } = event;
 
             // Step 0: Sanitize incoming data
-            data = this.sanitizePayload(data);
+            // CRITICAL: For user.created events, preserve password temporarily for template compilation
+            // It will be sanitized before storage in the notification payload
+            const shouldPreservePassword = type === 'user.created';
+            data = shouldPreservePassword ? data : this.sanitizePayload(data);
 
             // Robust data unwrapping: Some services wrap the payload in 'body' or 'payload'
             if (data && !data.companyId && (data.body || data.payload || data.data)) {
@@ -282,8 +285,8 @@ class NotificationEventProcessor {
         }
 
         // Enrich performer if available
-        if (data.performedBy) {
-            const performerId = typeof data.performedBy === 'object' ? data.performedBy.userId : data.performedBy;
+        if (data.performedBy || data.soldBy) {
+            const performerId = data.performedBy?.userId || data.performedBy || data.soldBy;
             extracted.performedByName = await enrichmentService.getUserName(performerId);
         } else if (extracted.userId && extracted.userName) {
             // Fallback: if main user is the actor
@@ -349,14 +352,21 @@ class NotificationEventProcessor {
             case 'sale.updated':
             case 'sale.deleted':
             case 'sale.cancelled':
+            case 'sale.status.changed':
+            case 'sale.payment.status.changed':
             case 'sale.return.created':
+            case 'sale.return.approved':
+            case 'sale.refund.processed':
+            case 'sale.return.fully_returned':
                 return {
                     ...extracted,
                     saleId: cleanValue(data.saleId || data.id, 'unknown'),
                     totalAmount: cleanAmount(data.totalAmount || data.refundAmount || data.amount, 0),
+                    refundAmount: cleanAmount(data.refundAmount || 0, 0),
                     customerId: cleanValue(data.customerId, 'Guest'),
-                    items: data.items,
-                    createdAt: data.createdAt || new Date()
+                    customerName: cleanValue(data.customerName, 'Customer'),
+                    items: data.items || [],
+                    createdAt: data.createdAt || data.processedAt || new Date()
                 };
 
             case 'inventory.low_stock':
@@ -466,7 +476,9 @@ class NotificationEventProcessor {
         // Compile content for all channels
         let compiledContent = {};
         try {
-            compiledContent = await compileTemplatesForChannels(templateName, data, channelConfig);
+            // Include role in compilation data for role-based template selection
+            const compilationData = { ...data, role };
+            compiledContent = await compileTemplatesForChannels(templateName, compilationData, channelConfig);
         } catch (err) {
             logger.warn(`Template compilation failed for ${templateName}:`, err.message);
             // Use fallback content

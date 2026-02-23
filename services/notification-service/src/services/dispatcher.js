@@ -8,11 +8,17 @@ const logger = require('../utils/logger');
 const { eventChannelMapping } = require('../config/eventChannelMapping');
 
 const dispatchEvent = async (eventPayload) => {
+    console.log(`🚀 [Dispatcher] dispatchEvent ENTRY - event: ${eventPayload.event}, template: ${eventPayload.templateName}`);
+    console.log(`🚀 [Dispatcher] Recipients: ${eventPayload.recipients?.length || 0}, companyId: ${eventPayload.companyId || 'NONE'}`);
+
     const { error } = notificationEventSchema.validate(eventPayload);
     if (error) {
+        console.error(`❌ [Dispatcher] Validation FAILED:`, error.details[0].message);
         logger.error('Invalid event payload:', error.details[0].message);
         return false;
     }
+    console.log(`✅ [Dispatcher] Validation passed`);
+
 
     let { event, data: payload, recipients, companyId, templateName, channels, priority } = eventPayload;
 
@@ -31,8 +37,11 @@ const dispatchEvent = async (eventPayload) => {
 
     // Fallback to default if still no channels
     if (!channels || channels.length === 0) {
+        console.log(`⚠️  [Dispatcher] No channels specified, using default: inApp`);
         channels = ['inApp']; // Default fallback
     }
+    console.log(`📡 [Dispatcher] Channels to use: ${channels.join(', ')}`);
+
 
     // --- TIER ENFORCEMENT START ---
     // Remove channels not allowed by the company's subscription tier

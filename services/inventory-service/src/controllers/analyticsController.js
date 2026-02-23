@@ -8,6 +8,7 @@ const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 const AnalyticsService = require('../services/analyticsService');
+const InventoryAnalyticsService = require('../services/inventoryAnalyticsService');
 const { getCache, setCache } = require('../utils/redisHelper');
 const logger = require('../utils/logger');
 
@@ -322,6 +323,25 @@ const getStockChangeHistory = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, ...result });
 });
 
+/**
+ * GET /inventory/v1/analytics/shrinkage
+ * Get shrinkage report (financial loss from discrepancies)
+ */
+const getShrinkageReport = asyncHandler(async (req, res) => {
+  const { companyId, shopId, startDate, endDate } = req.query;
+
+  if (!companyId) {
+    return res.status(400).json({ success: false, message: 'companyId is required' });
+  }
+
+  const report = await InventoryAnalyticsService.getShrinkageReport(companyId, shopId, {
+    startDate,
+    endDate
+  });
+
+  res.status(200).json({ success: true, data: report });
+});
+
 module.exports = {
   getOverview,
   getCompanyMetrics,
@@ -333,5 +353,6 @@ module.exports = {
   getInventoryTrendsGraph,
   getProfitComparisonGraph,
   getProductProfitTrendsGraph,
-  getStockChangeHistory
+  getStockChangeHistory,
+  getShrinkageReport
 };

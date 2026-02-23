@@ -16,7 +16,8 @@ const {
   getInventoryTrendsGraph,
   getProfitComparisonGraph,
   getProductProfitTrendsGraph,
-  getStockChangeHistory
+  getStockChangeHistory,
+  getShrinkageReport
 } = require('../controllers/analyticsController');
 
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
@@ -60,6 +61,11 @@ router.get('/low-stock', authenticateToken, requireRole(['super_admin', 'company
  * Stockout risk predictions
  */
 router.get('/stockout-risk', authenticateToken, requireRole(['super_admin', 'company_admin']), getStockoutRiskProducts);
+
+/**
+ * Audit & Shrinkage Reports
+ */
+router.get('/shrinkage', authenticateToken, requireRole(['super_admin', 'company_admin']), getShrinkageReport);
 
 /**
  * Graph data endpoints

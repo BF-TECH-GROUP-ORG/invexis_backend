@@ -15,7 +15,44 @@ const getCacheKey = (params) => {
  * Handles API requests for notifications
  */
 
-// 1. Get Notifications for User (with filters)
+// 1. Get User Preferences
+exports.getPreferences = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const companyId = req.query.companyId || req.user.companyId || (req.user.companies && req.user.companies[0]);
+
+        const preferenceService = require('../services/preferenceService');
+        const prefs = await preferenceService.getPreferences(userId, companyId);
+
+        res.json({ success: true, data: prefs });
+    } catch (error) {
+        console.error("Error fetching preferences:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+// 2. Update User Preferences
+exports.updatePreferences = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const companyId = req.body.companyId || req.user.companyId || (req.user.companies && req.user.companies[0]);
+        const newPrefs = req.body.preferences;
+
+        if (!newPrefs || typeof newPrefs !== 'object') {
+            return res.status(400).json({ success: false, message: "Invalid preferences object" });
+        }
+
+        const preferenceService = require('../services/preferenceService');
+        const updated = await preferenceService.updatePreferences(userId, companyId, newPrefs);
+
+        res.json({ success: true, data: updated.preferences, message: "Preferences updated" });
+    } catch (error) {
+        console.error("Error updating preferences:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+// 3. Get Notifications for User (with filters)
 exports.getNotifications = async (req, res) => {
     try {
         const userId = req.params.userId || req.user._id || req.user.id;

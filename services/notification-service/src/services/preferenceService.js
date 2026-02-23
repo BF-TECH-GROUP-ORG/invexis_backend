@@ -16,11 +16,11 @@ const getPreferences = async (userId, companyId) => {
     prefs = preference
       ? preference.preferences
       : {
-          email: true,
-          sms: true,
-          push: true,
-          inApp: true,
-        };
+        email: true,
+        sms: true,
+        push: true,
+        inApp: true,
+      };
 
     await redisClient.set(cacheKey, JSON.stringify(prefs), "EX", 3600); // 1h cache
     return prefs;

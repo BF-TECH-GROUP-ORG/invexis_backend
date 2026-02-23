@@ -12,6 +12,7 @@ const analyticsRoutes = require("./analyticsRoutes");
 const stockRoutes = require("./stockRoutes");
 const organizationRoutes = require("./organizationRoutes");
 const shopInventoryRoutes = require("./shopInventoryRoutes");
+const stocktakeRoutes = require("./stocktakeRoutes");
 
 const { authenticateToken, requireRole } = require('/app/shared/middlewares/auth/production-auth');
 
@@ -48,5 +49,8 @@ router.use("/v1", authenticateToken, requireRole(['super_admin', 'company_admin'
 
 // NEW: Shop inventory management
 router.use("/v1/shop-inventory", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), shopInventoryRoutes);
+
+// NEW: Audit & Stocktake management
+router.use("/v1/stocktake", authenticateToken, requireRole(['super_admin', 'company_admin', 'worker']), stocktakeRoutes);
 
 module.exports = router

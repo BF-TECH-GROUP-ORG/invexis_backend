@@ -10,6 +10,10 @@ const { checkSubscriptionStatus } = require('/app/shared/middlewares/subscriptio
 router.use(authenticateToken);
 router.use(checkSubscriptionStatus());
 
+// Get/Update preferences
+router.get('/preferences', NotificationController.getPreferences);
+router.put('/preferences', NotificationController.updatePreferences);
+
 // Mark as read
 router.post('/mark-read', NotificationController.markAsRead);
 

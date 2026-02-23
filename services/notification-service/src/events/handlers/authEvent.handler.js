@@ -17,7 +17,9 @@ module.exports = async function handleAuthEvent(event, routingKey) {
 
     switch (type) {
       case "user.created":
+        console.log(`👤 [AuthHandler] Matched user.created case, calling handleUserCreated`);
         await handleUserCreated(data);
+        console.log(`👤 [AuthHandler] handleUserCreated completed`);
         break;
 
       case "user.verified":
@@ -61,14 +63,17 @@ module.exports = async function handleAuthEvent(event, routingKey) {
  * Handle user creation
  */
 async function handleUserCreated(data) {
+  console.log(`👤 [handleUserCreated] ENTRY - userId: ${data.userId}, email: ${data.email}`);
   const { userId, email, phone, companyId, preferences } = data;
 
   if (!userId || !email) {
+    console.log(`⚠️  [handleUserCreated] Missing required fields - userId: ${userId}, email: ${email}`);
     logger.warn("⚠️ User created event missing required fields");
     return;
   }
 
   try {
+    console.log(`👤 [handleUserCreated] Processing user: ${email} (${userId}), companyId: ${companyId || 'NONE'}`);
     logger.info(`👤 New user created: ${email} (${userId})`);
 
     const { dispatchEvent } = require("../../services/dispatcher");

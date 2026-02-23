@@ -34,6 +34,7 @@ module.exports = async function handleSaleEvent(event, routingKey) {
         break;
 
       case "sale.refunded":
+      case "sale.refund.processed":
         await handleSaleRefunded(data);
         break;
 

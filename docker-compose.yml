@@ -224,6 +224,7 @@ services:
       - audit-service
       - debt-service
       - websocket-service
+      - procurement-service
     healthcheck:
       test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health" ]
       interval: 15s
@@ -666,6 +667,39 @@ services:
       - "traefik.enable=false"
     ports:
       - "9004:9004"
+
+  procurement-service:
+    build: ./services/procurement-service
+    container_name: invexis-procurement-service
+    restart: unless-stopped
+    command: npm run dev
+    environment:
+      NODE_ENV: development
+      DB_MONGO: mongodb://root:invexispass@mongodb:27017/procurementdb?authSource=admin
+      RABBITMQ_URL: amqp://invexis:invexispass@rabbitmq:5672
+      JWT_SECRET: your_jwt_secret_invexis_strong_key_change_in_prod
+      PORT: 8011
+    volumes:
+      - ./shared:/app/shared
+      - ./services/procurement-service:/app
+      - ./logs/procurement-service:/app/logs
+    depends_on:
+      - mongodb
+      - rabbitmq
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8011/health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - invexis-network
+    user: "node"
+    labels:
+      - "traefik.enable=false"
+    ports:
+      - "8011:8011"
+
   # ----------------------
   # Volumes
   # ======================
@@ -713,6 +747,8 @@ volumes:
     name: invexis_debt_service_logs
   websocket_service_logs:
     name: invexis_websocket_service_logs
+  procurement_service_logs:
+    name: invexis_procurement_service_logs
 
 networks:
   invexis-network:

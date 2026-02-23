@@ -12,6 +12,12 @@ function createEmailCircuitBreaker(fn) {
     resetTimeout: 30000, // Try again after 30 seconds
     volumeThreshold: 5, // Minimum requests before opening
     name: "email-breaker",
+    errorFilter: (err) => {
+      // Ignore client-side format/config errors (4xx) so they don't trip the breaker
+      if (err && err.error && err.error.response && err.error.response.status < 500) return true;
+      if (err && err.error && err.error.status && err.error.status < 500) return true;
+      return false;
+    }
   });
 
   breaker.fallback(() => ({
@@ -45,6 +51,12 @@ function createSmsCircuitBreaker(fn) {
     resetTimeout: 30000,
     volumeThreshold: 5,
     name: "sms-breaker",
+    errorFilter: (err) => {
+      // Twilio errors typically include a status property or err.error.status.
+      // E.g., Unverified number (21608) triggers a 400.
+      if (err && err.error && err.error.status && err.error.status < 500) return true;
+      return false;
+    }
   });
 
   breaker.fallback(() => ({

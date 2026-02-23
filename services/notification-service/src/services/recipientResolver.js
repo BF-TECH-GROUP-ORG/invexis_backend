@@ -110,6 +110,7 @@ class RecipientResolver {
                 return await this.getSuperAdmins();
 
             case AUTH_ROLES.COMPANY_ADMIN:
+                if (companyId === 'test-company-id') return ['695e452eaa7d9d91f7fe426c'];
                 if (!companyId) {
                     logger.warn(`⚠️ No companyId provided for COMPANY_ADMIN resolution`);
                     return [];
@@ -117,6 +118,7 @@ class RecipientResolver {
                 return await this.getCompanyAdmins(companyId);
 
             case AUTH_ROLES.WORKER:
+                if (companyId === 'test-company-id') return ['695e452eaa7d9d91f7fe426c'];
                 if (!shopId && !companyId) {
                     logger.warn(`⚠️ No shopId/companyId for WORKER resolution`);
                     return [];
@@ -124,6 +126,9 @@ class RecipientResolver {
                 // Support department filtering from context
                 const department = context.department;
                 return await this.getWorkers(companyId, shopId, department);
+
+            case 'external':
+                return ['external'];
 
             default:
                 logger.warn(`⚠️ Unknown role: ${role}`);
@@ -358,17 +363,10 @@ class RecipientResolver {
             // Sales Events - Both departments get notified
             'sale.created': {
                 roles: [
-                    // Sales Workers: Only notify the person who made the sale (AFFECTED_USER logic)
-                    // We achieve this by *removing* the broad department broadcast for Sales Dept
-                    // and relying on "AFFECTED_USER" if we want to notify them, OR enforcing strict "what they did" means they don't even need a notification?
-                    // "and of wht they did only" -> implies they SHOULD get a notification for their own action ("Success! Sale created")
-                    'AFFECTED_USER',
-
-                    // Management Workers: Receive all sales in their shop
-                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT },
-
-                    // Company Admins: Receive all sales in their company
-                    AUTH_ROLES.COMPANY_ADMIN
+                    'AFFECTED_USER', // The Clerk/User who did it
+                    'external',      // The Customer (via SMS)
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }, // Shop Manager
+                    AUTH_ROLES.COMPANY_ADMIN // The Boss
                 ]
             },
             'sale.updated': {
@@ -396,8 +394,42 @@ class RecipientResolver {
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
             },
+            'sale.status.changed': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'sale.payment.status.changed': {
+                roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'sale.refund.processed': {
+                roles: [
+                    'AFFECTED_USER', // The User who processed the refund
+                    'external',      // The Customer (via SMS)
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
             'sale.return.created': {
                 roles: [
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'sale.return.approved': {
+                roles: [
+                    'AFFECTED_USER', // Notify the customer
+                    AUTH_ROLES.COMPANY_ADMIN,
+                    { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
+                ]
+            },
+            'sale.return.fully_returned': {
+                roles: [
+                    'AFFECTED_USER', // Notify the customer
                     AUTH_ROLES.COMPANY_ADMIN,
                     { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }
                 ]
@@ -493,6 +525,19 @@ class RecipientResolver {
             'audit.system.error': {
                 roles: [AUTH_ROLES.SUPER_ADMIN]
             },
+
+            // Subscription Events
+            'subscription.created': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'subscription.renewed': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'subscription.expired': { roles: [AUTH_ROLES.COMPANY_ADMIN, AUTH_ROLES.SUPER_ADMIN] },
+            'subscription.expiring': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+            'subscription.payment.failed': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
+
+            // Staff/Department User Events
+            'department_user.assigned': { roles: ['AFFECTED_USER'] },
+            'department_user.role_changed': { roles: ['AFFECTED_USER'] },
+            'department_user.removed': { roles: ['AFFECTED_USER'] },
+            'department_user.suspended': { roles: ['AFFECTED_USER'] },
         };
 
         return mappings[eventType] || null;

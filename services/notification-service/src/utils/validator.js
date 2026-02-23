@@ -5,7 +5,7 @@ const notificationEventSchema = Joi.object({
     event: Joi.string().required(),
     data: Joi.object().required(),
     recipients: Joi.array().items(Joi.string()).optional(),
-    companyId: Joi.string().required(),
+    companyId: Joi.string().optional().allow(null),
     templateName: Joi.string().required(),
     channels: Joi.alternatives().try(
         Joi.array().items(Joi.string()),

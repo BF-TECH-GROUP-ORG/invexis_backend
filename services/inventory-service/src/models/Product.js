@@ -106,6 +106,10 @@ const ProductSchema = new Schema({
 
   browseNodeId: { type: String },
 
+  /* ------------------------------ Expirations ---------------------------- */
+  expiryDate: { type: Date, index: true },
+  manufacturingDate: { type: Date },
+
   /* ------------------------------ Supply Chain --------------------------- */
   costPrice: {
     type: Number,

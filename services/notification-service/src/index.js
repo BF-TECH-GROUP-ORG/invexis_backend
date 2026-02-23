@@ -37,7 +37,7 @@ app.use(logger.requestLogger());
 healthChecker.setupRoutes(app);
 
 // Initialize services
-let connectDB, connectRabbitMQ, redisClient, notificationQueue, consumeEvents, initPublishers;
+let connectDB, connectRabbitMQ, redisClient, notificationQueue, consumeEvents, initPublishers, schedulerService;
 
 try {
   connectDB = require("./config/db");
@@ -46,6 +46,7 @@ try {
   consumeEvents = require("./events/consumer");
   const { initPublishers: initPub } = require("./events/producer");
   initPublishers = initPub;
+  schedulerService = require("./services/scheduler");
 
   // Try to get RabbitMQ connection
   try {
@@ -181,6 +182,11 @@ const startServer = async () => {
     if (notificationQueue) {
       await notificationQueue.isReady();
       logger.info('Notification Delivery Queue ready');
+    }
+
+    // Initialize Scheduler
+    if (schedulerService) {
+      await schedulerService.init();
     }
 
     // Start HTTP server

@@ -1,6 +1,7 @@
 "use strict";
 
 const Notification = require("../../models/Notification");
+const ShopSchedule = require("../../models/ShopSchedule");
 const notificationQueue = require("../../config/queue");
 const logger = require("../../utils/logger");
 
@@ -28,6 +29,14 @@ module.exports = async function handleShopEvent(event, routingKey) {
         await handleShopDeleted(data);
         break;
 
+      case "shop.operating_hours.updated":
+        await handleOperatingHoursUpdated(data);
+        break;
+
+      case "shop.operating_hours.deleted":
+        await handleOperatingHoursDeleted(data);
+        break;
+
       default:
         logger.warn(`⚠️ Unhandled shop event type: ${type}`);
     }
@@ -51,6 +60,21 @@ async function handleShopCreated(data) {
 
   try {
     logger.info(`🏪 New shop created: ${shopName} (${shopId})`);
+
+    // Create schedule entry
+    await ShopSchedule.findOneAndUpdate(
+      { shopId },
+      {
+        $set: {
+          shopId,
+          companyId,
+          shopName,
+          timezone: data.timezone || 'Africa/Kigali',
+          lastSyncedAt: new Date()
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
@@ -80,12 +104,25 @@ async function handleShopCreated(data) {
  * Handle shop update
  */
 async function handleShopUpdated(data) {
-  const { shopId, shopName, companyId, performedByName } = data || {};
+  const { shopId, shopName, companyId, performedByName, timezone } = data || {};
   const { cleanValue } = require("../../utils/dataSanitizer");
 
   if (!shopId || !companyId) return;
 
   try {
+    // Update schedule entry
+    const update = {
+      shopName,
+      lastSyncedAt: new Date()
+    };
+    if (timezone) update.timezone = timezone;
+
+    await ShopSchedule.findOneAndUpdate(
+      { shopId },
+      { $set: update },
+      { upsert: true }
+    );
+
     const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
     await dispatchBroadcastEvent({
@@ -137,8 +174,71 @@ async function handleShopDeleted(data) {
     });
 
     logger.info(`✅ Shop deletion notification broadcasted for shop ${shopId}`);
+
+    // Cleanup schedule
+    await ShopSchedule.deleteOne({ shopId });
+    logger.info(`🗑️ Removed shop schedule for ${shopId}`);
   } catch (error) {
     logger.error(`❌ Error in handleShopDeleted:`, error.message);
+  }
+}
+
+/**
+ * Handle operating hours update (Sync to local cache)
+ */
+async function handleOperatingHoursUpdated(data) {
+  const { shopId, companyId, operatingHours, timezone } = data || {};
+
+  if (!shopId || !companyId) return;
+
+  try {
+    const update = {
+      shopId,
+      companyId,
+      operatingHours: operatingHours || [],
+      lastSyncedAt: new Date()
+    };
+
+    // If timezone is provided, update it (it might come from shop.updated too, but good to have here if available)
+    if (timezone) update.timezone = timezone;
+
+    // Helper to fetch shop name if missing? For now assuming shop.created/updated populated it.
+    // Or we can rely on upsert. If shopName is missing in existing doc, we might need to fetch it or wait for shop.updated.
+    // For simplicity, we use a placeholder or leave it if existing.
+    // Actually, eventHelpers in shop-service sending only operatingHours.
+    // We should upsert carefully.
+
+    const shopSchedule = await ShopSchedule.findOneAndUpdate(
+      { shopId },
+      { $set: update },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // If shopName is missing (new schedule for existing shop), we might want to log a warning or rely on it being there
+    if (!shopSchedule.shopName) {
+      // In a real scenario we might fetch details from shop-service or wait.
+      // For now, we set a default to avoid scheduler errors.
+      await ShopSchedule.updateOne({ _id: shopSchedule._id }, { $set: { shopName: "Shop (Syncing...)" } });
+    }
+
+    logger.info(`✅ Synced operating hours for shop ${shopId}`);
+  } catch (error) {
+    logger.error(`❌ Error syncing operating hours:`, error.message);
+  }
+}
+
+/**
+ * Handle operating hours deletion
+ */
+async function handleOperatingHoursDeleted(data) {
+  const { shopId } = data || {};
+  if (!shopId) return;
+
+  try {
+    await ShopSchedule.updateOne({ shopId }, { $set: { operatingHours: [] } });
+    logger.info(`✅ Cleared operating hours for shop ${shopId}`);
+  } catch (error) {
+    logger.error(`❌ Error clearing operating hours:`, error.message);
   }
 }
 

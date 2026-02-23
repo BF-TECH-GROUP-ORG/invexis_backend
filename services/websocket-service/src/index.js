@@ -151,6 +151,31 @@ io.on('connection', (socket) => {
     userAgent: socket.handshake.headers['user-agent']
   });
 
+  // Presence Tracking Component: handle online status on auth
+  const markUserOnline = async (userId) => {
+    try {
+      const { redis } = require('./config/shared');
+      // Set key with an expiry to auto-cleanup in case of crash (e.g. 5 minutes)
+      // Can be refreshed via pings if needed, but socket disconnect covers normal cases
+      await redis.setex(`presence:user:${userId}`, 300, 'online');
+
+      // Optional: Broadcast to company/friends that user is online
+      // io.to(`company:${socket.user.companyId}`).emit('user_status', { userId, status: 'online' });
+    } catch (err) {
+      logger.warn('Failed to mark user online', { error: err.message });
+    }
+  };
+
+  const markUserOffline = async (userId) => {
+    if (!userId) return;
+    try {
+      const { redis } = require('./config/shared');
+      await redis.del(`presence:user:${userId}`);
+    } catch (err) {
+      logger.warn('Failed to mark user offline', { error: err.message });
+    }
+  };
+
   // Authentication (if token is provided after connection)
   socket.on('authenticate', (data) => {
     try {
@@ -177,6 +202,9 @@ io.on('connection', (socket) => {
         });
 
         socket.emit('authenticated', { ok: true, userId: socket.userId });
+
+        // Presence Tracking Update
+        markUserOnline(socket.userId);
       } else {
         socket.emit('authenticated', { ok: false, message: 'Token required' });
       }
@@ -186,9 +214,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Join user-specific room automatically
+  // Join user-specific room automatically and set presence
   if (socket.userId) {
     socket.join(`user:${socket.userId}`);
+    markUserOnline(socket.userId);
   }
 
   // Use modular handlers
@@ -200,11 +229,23 @@ io.on('connection', (socket) => {
   // All system events must originate from backend services via RabbitMQ to prevent spoofing.
 
   // Handle chat messages
-  socket.on('chat_message', (data) => {
+  socket.on('chat_message', async (data) => {
     if (socket.authenticated && data.roomId && data.message) {
       // Security: Sender must be a member of the room
       if (!socket.rooms.has(data.roomId)) {
         logger.warn('Unauthorized chat attempt', { userId: socket.userId, roomId: data.roomId });
+        return;
+      }
+
+      // Rate span: prevent spamming chat
+      const { rateLimiter } = require('./events/handlers'); // Need to export or re-init
+      // Assuming rateLimiter is accessible or we instanciate a simple one
+      const { redis } = require('./config/shared');
+      const limitKey = `rate:chat:${socket.userId}`;
+      const count = await redis.incr(limitKey);
+      if (count === 1) await redis.expire(limitKey, 5); // 5 seconds window
+      if (count > 5) { // Max 5 messages per 5 seconds
+        socket.emit('error', { message: 'Chat rate limit exceeded. Please wait.' });
         return;
       }
 
@@ -234,6 +275,11 @@ io.on('connection', (socket) => {
         Date.now() - new Date(activeConnections.get(socket.id).connectedAt).getTime() : 0,
       totalConnections: io.engine.clientsCount
     });
+
+    // Presence Tracking Update
+    if (socket.userId) {
+      markUserOffline(socket.userId);
+    }
 
     activeConnections.delete(socket.id);
   });

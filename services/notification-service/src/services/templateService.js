@@ -114,7 +114,7 @@ const compileTemplatesForChannels = async (templateName, payload, channels) => {
 
     // Compile for each enabled channel
     for (const channel of enabledChannels) {
-      const templateDef = templateGroup[channel];
+      let templateDef = templateGroup[channel];
 
       if (!templateDef) {
         logger.warn(`Template ${templateName} missing for channel ${channel}, using default`);
@@ -123,12 +123,32 @@ const compileTemplatesForChannels = async (templateName, payload, channels) => {
       }
 
       try {
+        // Support role-based template selection
+        if (templateDef.role_mappings && payload.role) {
+          const roleKey = templateDef.role_mappings[payload.role] ? payload.role : 'default';
+          const roleTemplate = templateDef.role_mappings[roleKey];
+
+          // Merge role-specific fields into a temporary copy of templateDef
+          templateDef = {
+            ...templateDef,
+            ...roleTemplate,
+            // If the role mapping has its own content/subject, they win
+            content: roleTemplate.content || templateDef.content,
+            subject: roleTemplate.subject || templateDef.subject,
+            title: roleTemplate.title || templateDef.title,
+            body: roleTemplate.body || templateDef.body
+          };
+        }
+
         // Construct a template object similar to what the DB would return
         const templateObj = {
           name: templateName,
           type: channel,
           content: templateDef.content,
           subject: templateDef.subject,
+          title: templateDef.title,
+          body: templateDef.body,
+          data: templateDef.data,
           metadata: templateDef.metadata || {}
         };
 
@@ -154,17 +174,16 @@ const compileTemplatesForChannels = async (templateName, payload, channels) => {
  * @returns {object} Compiled content for the channel
  */
 const compileTemplateForChannel = async (template, payload) => {
-  const hbsTemplate = Handlebars.compile(template.content);
-
   switch (template.type) {
     case 'email':
-      return compileEmailTemplate(template, payload, hbsTemplate);
+      return compileEmailTemplate(template, payload, Handlebars.compile(template.content || ""));
     case 'sms':
-      return compileSmsTemplate(template, payload, hbsTemplate);
+      return compileSmsTemplate(template, payload, Handlebars.compile(template.content || ""));
     case 'push':
-      return compilePushTemplate(template, payload, hbsTemplate);
+      // Push has its own safety logic for title/body vs content
+      return compilePushTemplate(template, payload, template.content ? Handlebars.compile(template.content) : null);
     case 'inApp':
-      return compileInAppTemplate(template, payload, hbsTemplate);
+      return compileInAppTemplate(template, payload, Handlebars.compile(template.content || ""));
     default:
       throw new Error(`Unknown template type: ${template.type}`);
   }
@@ -205,6 +224,17 @@ const compileSmsTemplate = (template, payload, hbsTemplate) => {
  */
 const compilePushTemplate = (template, payload, hbsTemplate) => {
   try {
+    // If content is missing but title/body exist (modern format), use them
+    if (!template.content && (template.title || template.body)) {
+      return {
+        title: Handlebars.compile(template.title || "Notification")(payload),
+        body: Handlebars.compile(template.body || "")(payload),
+        data: compileObjectTemplate(template.data || {}, payload),
+        sound: template.metadata?.pushConfig?.sound || 'default',
+        priority: template.metadata?.pushConfig?.priority || 'normal'
+      };
+    }
+
     // Push templates are stored as JSON strings
     const jsonTemplate = JSON.parse(template.content);
     const compiled = {};

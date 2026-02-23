@@ -72,6 +72,14 @@ module.exports = async function handleProductEvent(event, routingKey) {
         await handleTransferCross(data);
         break;
 
+      case "inventory.alert.triggered":
+      case "inventory.alert.product_expiring":
+      case "inventory.alert.product_expired":
+      case "inventory.alert.low_stock":
+      case "inventory.alert.out_of_stock":
+        await handleInventoryAlert(data, routingKey);
+        break;
+
       default:
         logger.warn(`⚠️ Unhandled product event type: ${type}`);
     }
@@ -604,5 +612,44 @@ async function handleTransferCross(data) {
     }
   } catch (error) {
     logger.error(`❌ Error in handleTransferCross:`, error.message);
+  }
+}
+
+/**
+ * Handle generic inventory alerts (Expirations, etc)
+ */
+async function handleInventoryAlert(data, routingKey) {
+  const { companyId, shopId, type, productId, message } = data;
+  const alertData = data.data || {}; // Specific payload from Alert model
+
+  if (!companyId) return;
+
+  try {
+    const { dispatchBroadcastEvent } = require("../../services/dispatcher");
+
+    // Map internal alert type to notification event name
+    // internal: product_expiring -> notif: inventory.alert.product_expiring
+    // internal: product_expired -> notif: inventory.alert.product_expired
+    const eventName = `inventory.alert.${type}`;
+
+    await dispatchBroadcastEvent({
+      event: eventName,
+      data: {
+        ...alertData,
+        message: cleanValue(message, ""),
+        alertId: data._id
+      },
+      companyId,
+      shopId,
+      templateName: eventName,
+      channels: ["email", "push", "inApp"],
+      scope: "company",
+      roles: ["company_admin", "worker"],
+      priority: type === 'product_expired' ? 'urgent' : 'high'
+    });
+
+    logger.info(`✅ Inventory alert notification dispatched: ${eventName} for ${productId}`);
+  } catch (error) {
+    logger.error(`❌ Error in handleInventoryAlert:`, error.message);
   }
 }
