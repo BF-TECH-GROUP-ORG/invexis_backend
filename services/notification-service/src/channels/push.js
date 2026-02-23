@@ -143,7 +143,12 @@ const sendPushCore = async (notification, fcmToken, userId, companyId) => {
     ];
 
     if (errorCode && ignoreBreakerErrors.includes(errorCode)) {
-      logger.warn(`⚠️ Push failed due to invalid token (Breaker safe): ${fcmToken.substring(0, 10)}... - ${errorCode}`);
+      logger.warn(`⚠️ Push failed due to invalid token (Breaker safe): ${fcmToken.substring(0, 10)}... - ${errorCode}`, {
+        error: error.message,
+        code: errorCode,
+        responseTime,
+        token: fcmToken.substring(0, 10) + '...'
+      });
       return {
         success: false,
         providerId: null,
@@ -154,14 +159,24 @@ const sendPushCore = async (notification, fcmToken, userId, companyId) => {
       };
     }
 
-    // Real system errors
-    logger.error("❌ Push send error:", error);
-    throw {
-      success: false,
-      error,
-      responseTime,
-      recipient: fcmToken,
+    // Real system errors - wrap properly for circuit breaker to detect
+    const wrappedError = new Error(error.message);
+    wrappedError.error = {
+      code: error.code || error.errorInfo?.code,
+      status: error.status || error.errorInfo?.status,
+      response: error.response,
+      message: error.message
     };
+    
+    logger.error("❌ Push send error:", {
+      error: error.message,
+      code: error.code || error.errorInfo?.code,
+      errorInfo: error.errorInfo || error,
+      responseTime,
+      token: fcmToken.substring(0, 10) + '...',
+      notificationId: notification._id.toString()
+    });
+    throw wrappedError;
   }
 };
 
@@ -212,16 +227,40 @@ const sendPush = async (notification, fcmToken, userId, companyId) => {
       );
       return { success: true, logId: deliveryLog._id };
     } else if (result.fallback) {
+      // Circuit breaker is open - service unavailable
+      logger.warn(`⚠️  push circuit breaker open - falling back`, {
+        reason: result.error,
+        fcmToken: fcmToken.substring(0, 10) + '...',
+        notificationId: notification._id.toString()
+      });
       const error = new Error(result.error);
       error.code = "CIRCUIT_BREAKER_OPEN";
       await DeliveryLog.markAsFailed(
         deliveryLog._id,
         error,
-        new Date(Date.now() + 300000)
+        new Date(Date.now() + 300000) // Retry in 5 minutes
       );
       return { success: false, circuitBreakerOpen: true };
+    } else if (result.isUserError) {
+      // Invalid token or user-side error - don't retry frequently
+      logger.warn(`⚠️ Push delivery skipped (user error)`, {
+        error: result.error,
+        fcmToken: fcmToken.substring(0, 10) + '...',
+        reason: 'Invalid or unregistered token'
+      });
+      await DeliveryLog.markAsFailed(
+        deliveryLog._id,
+        new Error(result.error),
+        null // Don't retry invalid tokens
+      );
+      return result;
     } else {
-      // Handle standard failure from core (e.g. invalid token)
+      // Handle standard failure from core
+      logger.error(`❌ Push delivery failed`, {
+        error: result.error?.message || result.error,
+        fcmToken: fcmToken.substring(0, 10) + '...',
+        responseTime: result.responseTime
+      });
       await DeliveryLog.markAsFailed(
         deliveryLog._id,
         result.error,

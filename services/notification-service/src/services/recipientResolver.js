@@ -526,6 +526,20 @@ class RecipientResolver {
                 roles: [AUTH_ROLES.SUPER_ADMIN]
             },
 
+            // Inventory Alert Events
+            'inventory.alert.low_stock': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.alert.out_of_stock': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.alert.critical': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+            'inventory.alert.reorder_needed': {
+                roles: [AUTH_ROLES.COMPANY_ADMIN, { role: AUTH_ROLES.WORKER, department: DEPARTMENTS.MANAGEMENT }]
+            },
+
             // Subscription Events
             'subscription.created': { roles: [AUTH_ROLES.COMPANY_ADMIN] },
             'subscription.renewed': { roles: [AUTH_ROLES.COMPANY_ADMIN] },

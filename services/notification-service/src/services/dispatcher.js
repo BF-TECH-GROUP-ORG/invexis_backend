@@ -13,8 +13,17 @@ const dispatchEvent = async (eventPayload) => {
 
     const { error } = notificationEventSchema.validate(eventPayload);
     if (error) {
-        console.error(`❌ [Dispatcher] Validation FAILED:`, error.details[0].message);
-        logger.error('Invalid event payload:', error.details[0].message);
+        const errorDetail = error.details[0];
+        const errorInfo = {
+            message: errorDetail.message,
+            path: errorDetail.path?.join('.'),
+            type: errorDetail.type,
+            context: errorDetail.context,
+            invalidValue: errorDetail.context?.value,
+            payload: eventPayload
+        };
+        console.error(`❌ [Dispatcher] Validation FAILED:`, JSON.stringify(errorInfo, null, 2));
+        logger.error('Invalid event payload - validation failed:', errorInfo);
         return false;
     }
     console.log(`✅ [Dispatcher] Validation passed`);

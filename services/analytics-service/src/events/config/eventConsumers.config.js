@@ -25,6 +25,14 @@ module.exports = [
         description: "Tracks product returns",
     },
     {
+        name: "analyticsSaleEvents",
+        queue: "analytics_service_queue", // Route sale events to main analytics handler for ingestion
+        exchange: exchanges.topic,
+        pattern: "sale.#",
+        handler: handleAnalyticsEvent,
+        description: "Tracks all sale events for metrics ingestion (sales, returns, etc.)",
+    },
+    {
         name: "analyticsCustomerPurchases",
         queue: "analytics_customer_queue", // Shared queue for customer metrics
         exchange: exchanges.topic,

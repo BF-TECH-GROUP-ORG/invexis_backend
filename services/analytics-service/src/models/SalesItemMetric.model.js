@@ -47,20 +47,44 @@ const SalesItemMetric = sequelize.define("SalesItemMetric", {
         defaultValue: "Uncategorized",
     },
     quantity: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.BIGINT,
         defaultValue: 1,
     },
     unitPrice: {
-        type: DataTypes.BIGINT,
+        type: DataTypes.DECIMAL(30,2),
         defaultValue: 0,
         get() { return Money.toMajor(this.getDataValue('unitPrice')); },
         set(value) { this.setDataValue('unitPrice', Money.toMinor(value)); }
     },
+    costPrice: {
+        type: DataTypes.DECIMAL(30,2),
+        defaultValue: 0,
+        get() { return Money.toMajor(this.getDataValue('costPrice')); },
+        set(value) { this.setDataValue('costPrice', Money.toMinor(value)); }
+    },
+    discount: {
+        type: DataTypes.DECIMAL(30,2),
+        defaultValue: 0,
+        get() { return Money.toMajor(this.getDataValue('discount')); },
+        set(value) { this.setDataValue('discount', Money.toMinor(value)); }
+    },
+    tax: {
+        type: DataTypes.DECIMAL(30,2),
+        defaultValue: 0,
+        get() { return Money.toMajor(this.getDataValue('tax')); },
+        set(value) { this.setDataValue('tax', Money.toMinor(value)); }
+    },
     totalAmount: { // quantity * unitPrice
-        type: DataTypes.BIGINT,
+        type: DataTypes.DECIMAL(30,2),
         defaultValue: 0,
         get() { return Money.toMajor(this.getDataValue('totalAmount')); },
         set(value) { this.setDataValue('totalAmount', Money.toMinor(value)); }
+    },
+    total: {
+        type: DataTypes.DECIMAL(30,2),
+        defaultValue: 0,
+        get() { return Money.toMajor(this.getDataValue('total')); },
+        set(value) { this.setDataValue('total', Money.toMinor(value)); }
     },
     costPrice: {
         type: DataTypes.BIGINT,

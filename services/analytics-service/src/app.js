@@ -68,7 +68,7 @@ const initializeDatabase = async () => {
         // Sync models
         // Sync models
         // Disable alter: true as it is unsafe for Hypertables/Views
-        await sequelize.sync({ force: false });
+        await sequelize.sync({ alter:true,force: false });
         console.log("✅ Database models synchronized");
 
         // Check for TimescaleDB extension

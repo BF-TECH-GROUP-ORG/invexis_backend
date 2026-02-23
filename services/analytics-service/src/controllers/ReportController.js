@@ -4,7 +4,7 @@ const InventoryMetric = require("../models/InventoryMetric.model");
 
 const sequelize = require("../config/database");
 const { Op } = require("sequelize");
-const { startOfDay, endOfDay, subDays, format } = require("date-fns");
+const { startOfDay, endOfDay, subDays, format, startOfMonth } = require("date-fns");
 const redis = require("/app/shared/redis"); // Shared Redis Client
 
 const CACHE_TTL = 180; // 3 minutes default
@@ -52,11 +52,29 @@ const getTimeRange = (req) => {
     } else {
         end = new Date();
         switch (period) {
-            case '24h': start = subDays(end, 1); break;
-            case '30d': start = subDays(end, 30); break;
-            case '90d': start = subDays(end, 90); break;
-            case '1y': start = subDays(end, 365); break;
-            default: start = subDays(end, 7); // Default 7d
+            case '24h': 
+                start = subDays(end, 1); 
+                break;
+            case '7d': 
+                start = subDays(end, 7); 
+                break;
+            case 'currentMonth': 
+                start = startOfMonth(end); 
+                break;
+            case '3m': 
+                start = subDays(end, 90); 
+                break;
+            case '30d': 
+                start = subDays(end, 30); 
+                break;
+            case '90d': 
+                start = subDays(end, 90); 
+                break;
+            case '1y': 
+                start = subDays(end, 365); 
+                break;
+            default: 
+                start = subDays(end, 7); // Default 7d (current week)
         }
     }
     return { start, end };

@@ -63,83 +63,48 @@ try {
 }
 
 // Routes
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', service: 'notification-service', timestamp: new Date() });
-});
-
 // Device Registry Routes
 const deviceRoutes = require('./routes/device.routes');
 app.use('/devices', deviceRoutes);
 
-// Health endpoint defined before API routes to prevent conflicts
-app.get("/health", (_req, res) => {
-  res.json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    service: "notification-service",
-  });
-});
-
-app.get("/ready", async (_req, res) => {
-  try {
-    const redisOk = redisClient.isConnected;
-
-    if (redisOk) {
-      res.json({ ready: true });
-    } else {
-      res.status(503).json({ ready: false, reason: "Dependencies not ready" });
-    }
-  } catch (error) {
-    res.status(503).json({ ready: false, error: error.message });
-  }
-});
-
-// Routes
+// Routes for notifications
 const notificationRoutes = require("./routes/notification");
-// Mount at specific api path AND root (for flexibility) AFTER health checks
+// Mount at specific api path
 app.use("/notification", notificationRoutes);
-// app.use("/", notificationRoutes);
 
-
-app.get("/health", (_req, res) => {
-  res.json({
-    service: SERVICE_NAME,
-    status: 'running',
-    version: '1.0.0',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Readiness check
-app.get("/ready", async (req, res) => {
+// Status endpoint - check circuit breakers and service health (no auth required)
+app.get('/status', (req, res) => {
   try {
-    const isRedisConnected = redisClient?.isConnected || false;
-    const isMongoConnected = true; // Will be updated after DB connection
-
-    if (isRedisConnected && isMongoConnected) {
-      res.json({
-        status: "ready",
-        timestamp: new Date().toISOString(),
-        service: SERVICE_NAME,
-        dependencies: {
-          redis: isRedisConnected,
-          mongodb: isMongoConnected
+    const { pushCircuitBreaker } = require('./channels/push');
+    const { getCircuitBreakerStatus } = require('./utils/circuitBreaker');
+    
+    const pushStats = pushCircuitBreaker.stats;
+    
+    res.json({
+      service: 'notification-service',
+      status: 'operational',
+      timestamp: new Date().toISOString(),
+      circuitBreaker: {
+        push: {
+          state: pushCircuitBreaker.opened ? 'open' : pushCircuitBreaker.halfOpen ? 'half-open' : 'closed',
+          stats: {
+            fires: pushStats.fires,
+            failures: pushStats.failures,
+            successes: pushStats.successes,
+            timeouts: pushStats.timeouts,
+            fallbacks: pushStats.fallbacks,
+            errorRate: pushStats.fires > 0 ? ((pushStats.failures / pushStats.fires) * 100).toFixed(2) + '%' : 'N/A'
+          }
         }
-      });
-    } else {
-      res.status(503).json({
-        status: "not ready",
-        dependencies: {
-          redis: isRedisConnected,
-          mongodb: isMongoConnected
-        }
-      });
-    }
+      },
+      firebase: {
+        initialized: !!require('./config/push')
+      }
+    });
   } catch (error) {
-    logger.error('Readiness check failed', { error: error.message });
-    res.status(503).json({
-      status: "not ready",
+    res.status(500).json({
+      service: 'notification-service',
+      status: 'error',
       error: error.message
     });
   }

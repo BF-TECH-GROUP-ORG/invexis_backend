@@ -138,6 +138,100 @@ const templates = {
         }
     },
 
+    "verification_code": {
+        email: {
+            subject: 'Your Verification Code - {{companyName}}',
+            content: loadTemplate('otp.html'),
+            metadata: {
+                priority: 'high'
+            }
+        },
+        sms: {
+            content: '{{companyName}} verification code: {{otp}}. Valid for {{expiryMinutes}} minutes. Do not share.',
+            metadata: { maxLength: 160 }
+        },
+        push: {
+            title: 'Verification Code',
+            body: 'Your verification code is: {{otp}}',
+            data: { action: 'verification', code: '{{otp}}' },
+            metadata: { priority: 'high', sound: 'default' }
+        },
+        inApp: {
+            subject: 'Verification Code',
+            content: 'Your verification code is **{{otp}}**. Valid for {{expiryMinutes}} minutes.'
+        }
+    },
+
+    "inventory.alert.low_stock": {
+        email: {
+            subject: '⚠️ Low Stock Alert - {{productName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                    <h2>⚠️ Low Stock Alert</h2>
+                    <p>The product <strong>{{productName}}</strong> is running low on stock.</p>
+                    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ff9800;">
+                        <p style="margin: 0;"><strong>Current Stock:</strong> {{currentStock}} units</p>
+                        <p style="margin: 10px 0 0 0;"><strong>Reorder Level:</strong> {{reorderLevel}} units</p>
+                    </div>
+                    <p>Please reorder as soon as possible to avoid stockouts.</p>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="{{actionUrl}}" style="background-color: #ff9800; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">View Inventory</a>
+                    </div>
+                </div>
+            `,
+            metadata: { priority: 'high' }
+        },
+        sms: {
+            content: '⚠️ Low stock: {{productName}} has only {{currentStock}} units (reorder level: {{reorderLevel}}).',
+            metadata: { maxLength: 160 }
+        },
+        push: {
+            title: '⚠️ Low Stock: {{productName}}',
+            body: 'Stock: {{currentStock}} units',
+            data: { action: 'inventory_alert', productId: '{{productId}}', url: '{{actionUrl}}' },
+            metadata: { priority: 'high', sound: 'default' }
+        },
+        inApp: {
+            subject: '⚠️ Low Stock Alert',
+            content: '**{{productName}}** stock low: {{currentStock}} units (reorder at {{reorderLevel}}). [Check Inventory →]({{actionUrl}})'
+        }
+    },
+
+    "inventory.alert.out_of_stock": {
+        email: {
+            subject: '🚨 Out of Stock - {{productName}}',
+            content: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                    <h2>🚨 Out of Stock Alert</h2>
+                    <p>The product <strong>{{productName}}</strong> is now out of stock!</p>
+                    <div style="background-color: #ffebee; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #f44336;">
+                        <p style="margin: 0;"><strong>SKU:</strong> {{productSku}}</p>
+                        <p style="margin: 10px 0 0 0;"><strong>Last Stock Date:</strong> {{lastStockDate}}</p>
+                    </div>
+                    <p>Immediate reorder action required to prevent lost sales.</p>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="{{actionUrl}}" style="background-color: #f44336; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Reorder Now</a>
+                    </div>
+                </div>
+            `,
+            metadata: { priority: 'urgent' }
+        },
+        sms: {
+            content: '🚨 URGENT: {{productName}} is out of stock! Immediate reorder required.',
+            metadata: { maxLength: 160 }
+        },
+        push: {
+            title: '🚨 Out of Stock: {{productName}}',
+            body: 'Immediate action needed',
+            data: { action: 'inventory_alert', type: 'out_of_stock', productId: '{{productId}}' },
+            metadata: { priority: 'high', sound: 'alert' }
+        },
+        inApp: {
+            subject: '🚨 Out of Stock Alert',
+            content: '**{{productName}}** is now out of stock! Immediate reorder action required.'
+        }
+    },
+
     otp: {
         email: {
             subject: 'Your Verification Code - {{companyName}}',

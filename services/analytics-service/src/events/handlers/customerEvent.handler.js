@@ -4,13 +4,17 @@ const logger = require("/app/shared/logger").getLogger("analytics-service");
 const handleCustomerEvents = async (event) => {
     try {
         const { type, payload, emittedAt, id } = event;
+        if (!payload) {
+            logger.error(`customerEvent.handler: Missing payload for event type ${type} (event id: ${id})`);
+            return;
+        }
         const { companyId, hashedCustomerId, customerId } = payload;
 
         // We need at least companyId and a customer identifier (hashedCustomerId preferred)
         const effectiveCustomerId = hashedCustomerId || customerId;
 
         if (!companyId || !effectiveCustomerId) {
-            // Some events might not have customer info (e.g. anonymous sale?), skip
+            logger.error(`customerEvent.handler: Missing companyId or customerId for event type ${type} (event id: ${id})`);
             return;
         }
 

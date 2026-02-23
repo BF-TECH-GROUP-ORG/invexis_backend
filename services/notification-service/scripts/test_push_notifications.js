@@ -25,7 +25,7 @@ if (!TEST_FCM_TOKEN) {
     console.log('\n📘 How to get an FCM token:\n');
     console.log('Option 1: Firebase Console');
     console.log('  1. Go to https://console.firebase.google.com');
-    console.log('  2. Select project: invexis-b7713');
+    console.log('  2. Select project: invexis-94bf5');
     console.log('  3. Cloud Messaging → Send test message\n');
 
     console.log('Option 2: Mobile Test App');
@@ -50,7 +50,7 @@ async function runTests() {
     console.log('─'.repeat(50));
 
     try {
-        const serviceAccountPath = path.join(__dirname, '../invexis-b7713-firebase-adminsdk-fbsvc-82c17263cc.json');
+        const serviceAccountPath = path.join(__dirname, '../invexis-94bf5-firebase-adminsdk-fbsvc-2e1e699c1a.json');
         const fs = require('fs');
 
         if (fs.existsSync(serviceAccountPath)) {
@@ -70,7 +70,7 @@ async function runTests() {
             testsPassed++;
         } else {
             console.log('  ❌ Service account file not found at:', serviceAccountPath);
-            console.log('  📂 Expected path: invexis-b7713-firebase-adminsdk-fbsvc-82c17263cc.json\n');
+            console.log('  📂 Expected path: invexis-94bf5-firebase-adminsdk-fbsvc-2e1e699c1a.json\n');
             testsFailed++;
             return;
         }

@@ -12,48 +12,64 @@ const saleEvents = {
    * Create outbox event for sale creation
    */
   async created(sale, items = [], trx = null) {
-    return await Outbox.create(
-      {
-        type: "sale.created",
-        exchange: "events_topic",
-        routingKey: "sale.created",
-        payload: {
-          saleId: sale.saleId,
-          companyId: sale.companyId,
-          shopId: sale.shopId,
-          customerId: sale.customerId,
-          // Helpful customer display fields
-          customerName: sale.customerName,
-          customerPhone: sale.customerPhone,
-          customerEmail: sale.customerEmail,
-          soldBy: sale.soldBy,
-          // hashedCustomerId copied from KnownUser for downstream correlation
-          hashedCustomerId: sale.hashedCustomerId || null,
-          // Debt flag from sale model
-          isDebt: !!sale.isDebt,
-          subTotal: sale.subTotal,
-          discountTotal: sale.discountTotal || 0,
-          taxTotal: sale.taxTotal || 0,
-          totalAmount: sale.totalAmount,
-          status: sale.status,
-          paymentStatus: sale.paymentStatus,
-          paymentMethod: sale.paymentMethod,
-          items: items.map(item => ({
-            productId: item.productId,
-            productName: item.productName,
-            category: item.category,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            costPrice: item.costPrice,
-            discount: item.discount || 0,
-            total: item.total
-          })),
-          createdAt: new Date().toISOString(),
-          traceId: uuidv4(),
-        },
-      },
-      trx
-    );
+    // Validate and format items for analytics-service
+    const validItems = items.filter(i => {
+      if (!i.productId) {
+        console.error(`saleEvents.created: Skipping item missing productId for saleId ${sale.saleId}`);
+        return false;
+      }
+      // Validate numeric fields
+      const numericFields = ['quantity', 'unitPrice', 'costPrice', 'discount', 'tax', 'total'];
+      for (const field of numericFields) {
+        if (i[field] == null || isNaN(Number(i[field]))) {
+          console.error(`saleEvents.created: Skipping item with invalid numeric field ${field} for saleId ${sale.saleId}`);
+          return false;
+        }
+        if (Math.abs(Number(i[field])) > 1e12) {
+          console.error(`saleEvents.created: Skipping item with numeric overflow in field ${field} for saleId ${sale.saleId}`);
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Strictly format payload for analytics-service
+    const payload = {
+      saleId: sale.saleId,
+      companyId: sale.companyId,
+      shopId: sale.shopId,
+      customerId: sale.customerId,
+      customerName: sale.customerName,
+      customerPhone: sale.customerPhone,
+      customerEmail: sale.customerEmail,
+      soldBy: sale.soldBy,
+      hashedCustomerId: sale.hashedCustomerId || null,
+      isDebt: !!sale.isDebt,
+      subTotal: sale.subTotal,
+      discountTotal: sale.discountTotal || 0,
+      taxTotal: sale.taxTotal || 0,
+      totalAmount: sale.totalAmount,
+      status: sale.status,
+      paymentStatus: sale.paymentStatus,
+      paymentMethod: sale.paymentMethod,
+      items: validItems.map(i => ({
+        productId: i.productId,
+        productName: i.productName,
+        quantity: Number(i.quantity),
+        unitPrice: Number(i.unitPrice),
+        costPrice: Number(i.costPrice) || 0,
+        discount: Number(i.discount) || 0,
+        tax: Number(i.tax) || 0,
+        total: Number(i.total) || 0
+      }))
+    };
+
+    return await Outbox.create({
+      type: "sale.created",
+      exchange: "events_topic",
+      routingKey: "sale.created",
+      payload
+    });
   },
 
   /**
@@ -231,31 +247,29 @@ const returnEvents = {
    * This event is for notification purposes only
    */
   async created(saleReturn, sale, items = [], trx = null) {
-    return await Outbox.create(
-      {
-        type: "sale.return.created",
-        exchange: "events_topic",
-        routingKey: "sale.return.created",
-        payload: {
-          returnId: saleReturn.returnId,
-          saleId: saleReturn.saleId,
-          companyId: sale.companyId,
-          shopId: sale.shopId,
-          reason: saleReturn.reason,
-          refundAmount: saleReturn.refundAmount,
-          status: saleReturn.status,
-          items: items, // Include items for reference
-          createdAt: new Date().toISOString(),
-          traceId: uuidv4(),
-        },
-      },
-      trx
-    );
-  },
+    // Add createdAt and traceId to payload
+    payload.items = items.map(item => ({
+      productId: item.productId,
+      productName: item.productName,
+      category: item.category,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      costPrice: item.costPrice,
+      discount: item.discount || 0,
+      total: item.total
+    }));
+    payload.createdAt = new Date().toISOString();
+    payload.traceId = uuidv4();
 
-  /**
-   * Create outbox event for return approval
-   */
+    return await Outbox.create({
+      type: "sale.created",
+      exchange: "events_topic",
+      routingKey: "sale.created",
+      payload
+    }, trx);
+  },
+  /** Create outbox event for return approval
+  */
   async approved(returnId, saleId, companyId, trx = null) {
     return await Outbox.create(
       {

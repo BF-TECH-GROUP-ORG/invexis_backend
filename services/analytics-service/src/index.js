@@ -64,47 +64,52 @@ const initializeDatabase = async () => {
         logger.info("✅ Database connection established");
 
         // Sync models
-        await sequelize.sync({ force: false });
+        await sequelize.sync({force: false });
         logger.info("✅ Database models synchronized");
 
-        // Check for TimescaleDB extension
-        try {
-            await sequelize.query("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;");
-            logger.info("✅ TimescaleDB extension verified");
-        } catch (err) {
-            logger.warn("⚠️ TimescaleDB extension check failed (might already exist):", err.message);
-        }
+        // Skip TimescaleDB hypertable setup in development (tables work as regular Postgres tables)
+        if (process.env.NODE_ENV === 'production') {
+            // Check for TimescaleDB extension (production only)
+            try {
+                await sequelize.query("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;");
+                logger.info("✅ TimescaleDB extension verified");
+            } catch (err) {
+                logger.warn("⚠️ TimescaleDB extension check failed (might already exist):", err.message);
+            }
 
-        // 1. Convert to Hypertable: Analytics Events (Raw)
-        try {
-            await sequelize.query("SELECT create_hypertable('analytics_events', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
-            logger.info("✅ Hypertable 'analytics_events' ready");
-        } catch (err) {
-            logger.warn("⚠️ Hypertable 'analytics_events' creation skipped/failed:", err.message);
-        }
+            // 1. Convert to Hypertable: Analytics Events (Raw)
+            try {
+                await sequelize.query("SELECT create_hypertable('analytics_events', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+                logger.info("✅ Hypertable 'analytics_events' ready");
+            } catch (err) {
+                logger.warn("⚠️ Hypertable 'analytics_events' creation skipped/failed:", err.message);
+            }
 
-        // 2. Convert to Hypertable: Sales Metrics
-        try {
-            await sequelize.query("SELECT create_hypertable('sales_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
-            logger.info("✅ Hypertable 'sales_metrics' ready");
-        } catch (err) {
-            logger.warn("⚠️ Hypertable 'sales_metrics' creation skipped/failed:", err.message);
-        }
+            // 2. Convert to Hypertable: Sales Metrics
+            try {
+                await sequelize.query("SELECT create_hypertable('sales_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+                logger.info("✅ Hypertable 'sales_metrics' ready");
+            } catch (err) {
+                logger.warn("⚠️ Hypertable 'sales_metrics' creation skipped/failed:", err.message);
+            }
 
-        // 3. Convert to Hypertable: Inventory Metrics
-        try {
-            await sequelize.query("SELECT create_hypertable('inventory_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
-            logger.info("✅ Hypertable 'inventory_metrics' ready");
-        } catch (err) {
-            logger.warn("⚠️ Hypertable 'inventory_metrics' creation skipped/failed:", err.message);
-        }
+            // 3. Convert to Hypertable: Inventory Metrics
+            try {
+                await sequelize.query("SELECT create_hypertable('inventory_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+                logger.info("✅ Hypertable 'inventory_metrics' ready");
+            } catch (err) {
+                logger.warn("⚠️ Hypertable 'inventory_metrics' creation skipped/failed:", err.message);
+            }
 
-        // 4. Convert to Hypertable: Sales Item Metrics (Detailed)
-        try {
-            await sequelize.query("SELECT create_hypertable('sales_item_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
-            logger.info("✅ Hypertable 'sales_item_metrics' ready");
-        } catch (err) {
-            logger.warn("⚠️ Hypertable 'sales_item_metrics' creation skipped/failed:", err.message);
+            // 4. Convert to Hypertable: Sales Item Metrics (Detailed)
+            try {
+                await sequelize.query("SELECT create_hypertable('sales_item_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE);");
+                logger.info("✅ Hypertable 'sales_item_metrics' ready");
+            } catch (err) {
+                logger.warn("⚠️ Hypertable 'sales_item_metrics' creation skipped/failed:", err.message);
+            }
+        } else {
+            logger.debug("⏭️ Skipping TimescaleDB hypertable setup in development (using regular Postgres tables)");
         }
 
     } catch (error) {

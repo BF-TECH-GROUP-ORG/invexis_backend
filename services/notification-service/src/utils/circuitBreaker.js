@@ -86,6 +86,55 @@ function createPushCircuitBreaker(fn) {
     resetTimeout: 30000,
     volumeThreshold: 5,
     name: "push-breaker",
+    errorFilter: (err) => {
+      // Be defensive: errors can arrive in multiple shapes depending on
+      // where they originate (firebase admin, HTTP libs, custom wrappers).
+      // Try to extract a meaningful `code` or `status` from common locations
+      // and treat client-side (4xx) / firebase messaging user errors as
+      // non-fatal for circuit-breaking purposes.
+      try {
+        const userErrorCodes = [
+          'messaging/invalid-registration-token',
+          'messaging/registration-token-not-registered',
+          'messaging/invalid-argument',
+          'messaging/invalid-payload',
+          'messaging/mismatched-credential',
+          'messaging/third-party-auth-error',
+        ];
+
+        // Possible places for a code
+        const code = (err && err.error && err.error.code) || err.code || (err && err.code) || null;
+
+        if (code && userErrorCodes.includes(code)) {
+          logger.debug(`🔍 Push error filtered (user error code): ${code}`);
+          return true;
+        }
+
+        // Possible places for an HTTP status
+        const status = (err && err.error && err.error.status) || (err && err.status) || (err && err.response && err.response.status) || (err && err.error && err.error.response && err.error.response.status) || null;
+
+        if (status && status < 500) {
+          logger.debug(`🔍 Push error filtered (4xx status): ${status}`);
+          return true;
+        }
+
+        // Sometimes the message text includes helpful hints
+        if (err && err.message && typeof err.message === 'string') {
+          const msg = err.message.toLowerCase();
+          if (msg.includes('invalid registration') || msg.includes('not registered') || msg.includes('registration-token-not-registered') || msg.includes('invalid-argument')) {
+            logger.debug(`🔍 Push error filtered (message): ${err.message}`);
+            return true;
+          }
+        }
+      } catch (e) {
+        // If our inspection fails, don't accidentally filter valid system errors.
+        logger.debug('⚠️ push errorFilter inspection failed', { inspectError: e && e.message });
+      }
+
+      // Treat everything else (5xx or unknown) as a potential system error
+      // so the circuit breaker can open when appropriate.
+      return false;
+    }
   });
 
   breaker.fallback(() => ({
@@ -95,11 +144,34 @@ function createPushCircuitBreaker(fn) {
   }));
 
   breaker.on("open", () => {
-    logger.warn("⚠️ Push circuit breaker OPENED");
+    const stats = breaker.stats;
+    logger.warn(`⚠️  push circuit breaker open`, {
+      stats: {
+        fires: stats.fires,
+        failures: stats.failures,
+        successes: stats.successes,
+        timeouts: stats.timeouts,
+        fallbacks: stats.fallbacks,
+        errorRate: stats.fires > 0 ? ((stats.failures / stats.fires) * 100).toFixed(2) + '%' : '0%'
+      },
+      resetTimeout: 30000,
+      message: `Circuit breaker opened after ${stats.failures} failures in ${stats.fires} requests`
+    });
+  });
+
+  breaker.on("halfOpen", () => {
+    logger.info("🔄 Push circuit breaker HALF-OPEN (testing recovery)");
   });
 
   breaker.on("close", () => {
-    logger.info("✅ Push circuit breaker CLOSED");
+    const stats = breaker.stats;
+    logger.info("✅ Push circuit breaker CLOSED (service recovered)", {
+      stats: {
+        fires: stats.fires,
+        successes: stats.successes,
+        totalRecovered: stats.successes
+      }
+    });
   });
 
   return breaker;

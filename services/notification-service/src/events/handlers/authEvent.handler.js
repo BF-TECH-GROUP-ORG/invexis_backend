@@ -46,12 +46,32 @@ module.exports = async function handleAuthEvent(event, routingKey) {
         await handleVerificationRequested(data);
         break;
 
+      case "auth.verification.requested":
+        // Alias for verification.requested from auth-service
+        await handleVerificationRequested(data);
+        break;
+
+      case "user.registered":
+      case "auth.user.registered":
+        await handleUserRegistered(data);
+        break;
+
+      case "customer.registered":
+      case "auth.customer.registered":
+        await handleCustomerRegistered(data);
+        break;
+
+      case "auth.session.created":
+        // Session creation - notify user their session is active (optional)
+        await handleSessionCreated(data);
+        break;
+
       case "auth.session.refreshed":
-        // Ignore this event, it's just be noise
+        // Ignore this event, it's just noise
         break;
 
       default:
-        logger.warn(`⚠️ Unhandled auth event type: ${type}`);
+        logger.warn(`⚠️ Unhandled auth event type: ${type}`, { eventType: type, dataKeys: Object.keys(data || {}) });
     }
   } catch (error) {
     logger.error(`❌ Error handling auth event: ${error.message}`);
@@ -392,3 +412,62 @@ async function handleDeviceUpdated(data) {
   }
 }
 
+/**
+ * Handle user registration (confirmed)
+ */
+async function handleUserRegistered(data) {
+  const { userId, email, role, companyId } = data;
+
+  if (!userId || !email) {
+    logger.warn("⚠️ User registered event missing required fields");
+    return;
+  }
+
+  try {
+    logger.info(`✅ User registered: ${email} (${userId}) as ${role}`);
+    // User registered is an internal event - typically handled by auth-service
+    // Just log it for audit trail
+  } catch (error) {
+    logger.error(`❌ Error handling user registered:`, error.message);
+  }
+}
+
+/**
+ * Handle customer registration (confirmed)
+ */
+async function handleCustomerRegistered(data) {
+  const { userId, email, companyId } = data;
+
+  if (!userId || !email) {
+    logger.warn("⚠️ Customer registered event missing required fields");
+    return;
+  }
+
+  try {
+    logger.info(`✅ Customer registered: ${email} (${userId})`);
+    // Customer registered is confirmed - typically handled by auth-service
+    // Just log for audit trail
+  } catch (error) {
+    logger.error(`❌ Error handling customer registered:`, error.message);
+  }
+}
+
+/**
+ * Handle session creation
+ */
+async function handleSessionCreated(data) {
+  const { userId, sessionId, deviceId, ip } = data;
+
+  if (!userId || !sessionId) {
+    logger.warn("⚠️ Session created event missing required fields");
+    return;
+  }
+
+  try {
+    logger.info(`🔐 Session created for user ${userId}`, { deviceId, ip });
+    // Session creation events don't typically need notifications
+    // Just log for audit trail
+  } catch (error) {
+    logger.error(`❌ Error handling session created:`, error.message);
+  }
+}
