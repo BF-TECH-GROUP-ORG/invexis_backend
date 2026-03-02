@@ -110,7 +110,7 @@ load_environment() {
 create_green_compose() {
     log "📝 Creating green deployment compose configuration..."
     
-    local green_compose_file="/tmp/docker compose.green.yml"
+    local green_compose_file="/tmp/docker-compose.green.yml"
     
     # Create a modified compose file for green deployment
     sed 's/-blue:/-green:/g; s/-blue"/-green"/g; s/blue-prod/green-prod/g' "$COMPOSE_FILE" > "$green_compose_file"
@@ -442,7 +442,7 @@ verify_green_deployment() {
 cleanup() {
     log "🧹 Cleaning up temporary files..."
     rm -f "/tmp/green_deployed_services.$$" "/tmp/green_failed_deployments.$$"
-    rm -f "/tmp/docker compose.green.yml"
+    rm -f "/tmp/docker-compose.green.yml"
 }
 
 # Rollback green deployment
