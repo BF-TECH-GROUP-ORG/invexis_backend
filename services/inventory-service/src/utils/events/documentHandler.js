@@ -41,8 +41,9 @@ const handleDocumentEvent = async (event, routingKey) => {
                 if (product) {
                     // Add to images array if not already present
                     if (!product.images) product.images = [];
-                    if (!product.images.includes(url)) {
-                        product.images.push(url);
+                    if (!product.images.some(img => img.url === url)) {
+                        const isPrimary = product.images.length === 0;
+                        product.images.push({ url, isPrimary });
                     }
                     await product.save();
                     logger.info(`✅ Product ${productId} updated with image: ${url}`);

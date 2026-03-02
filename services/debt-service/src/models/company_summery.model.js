@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 // models/companySummary.model.js
 const CompanySummarySchema = new mongoose.Schema({
-    companyId: { type: mongoose.Types.ObjectId, index: true, required: true, unique: true },
+    companyId: { type: String, index: true, required: true, unique: true },
 
 
     totalOutstanding: { type: Number, default: 0 },

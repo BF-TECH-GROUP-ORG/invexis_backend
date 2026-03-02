@@ -52,7 +52,36 @@ const handleJoin = (socket) => {
             isAuthorized = true;
           }
         }
-        // 4. Global Broadcast
+        // 4. Role Room: company:ID:role:ROLE
+        else if (room.includes(':role:') && !room.includes(':shop:')) {
+          const parts = room.split(':');
+          const companyId = parts[1];
+          const role = parts[3];
+          if (companyId === userCompanyId && user.role === role) {
+            isAuthorized = true;
+          }
+        }
+        // 5. Shop Role Room: company:ID:shop:ID:role:ROLE
+        else if (room.includes(':shop:') && room.includes(':role:')) {
+          const parts = room.split(':');
+          const companyId = parts[1];
+          const shopId = parts[3];
+          const role = parts[5];
+          const userShopId = user.shopId || (user.shops && user.shops[0]);
+          if (companyId === userCompanyId && shopId === userShopId && user.role === role) {
+            isAuthorized = true;
+          }
+        }
+        // 6. Department Room: company:ID:dept:DEPT
+        else if (room.includes(':dept:')) {
+          const parts = room.split(':');
+          const companyId = parts[1];
+          const dept = parts[3];
+          if (companyId === userCompanyId && (user.assignedDepartments?.includes(dept) || user.department === dept)) {
+            isAuthorized = true;
+          }
+        }
+        // 6. Global Broadcast
         else if (room === 'global' || room === 'all_users') {
           // Security: Only super_admin can join global broadcast rooms
           if (user.role === 'super_admin') {

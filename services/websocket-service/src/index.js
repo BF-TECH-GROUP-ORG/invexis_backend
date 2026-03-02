@@ -214,10 +214,42 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Join user-specific room automatically and set presence
-  if (socket.userId) {
+  // Join user-specific rooms automatically and set presence
+  if (socket.userId && socket.user) {
+    const user = socket.user;
+    const companyId = user.companyId || (user.companies && user.companies[0]);
+    const shopId = user.shopId || (user.shops && user.shops[0]);
+    const role = user.role;
+    const departments = user.assignedDepartments || (user.department ? [user.department] : []);
+
+    // 1. Personal Room
     socket.join(`user:${socket.userId}`);
+
+    // 2. Company Room
+    if (companyId) socket.join(`company:${companyId}`);
+
+    // 3. Shop Room
+    if (shopId) socket.join(`shop:${shopId}`);
+
+    // 4. Role Room
+    if (companyId && role) socket.join(`company:${companyId}:role:${role}`);
+
+    // 5. Shop Role Room
+    if (companyId && shopId && role) socket.join(`company:${companyId}:shop:${shopId}:role:${role}`);
+
+    // 6. Department Rooms
+    if (companyId && departments.length > 0) {
+      departments.forEach(dept => socket.join(`company:${companyId}:dept:${dept}`));
+    }
+
     markUserOnline(socket.userId);
+
+    logger.info(`User ${socket.userId} auto-joined rooms`, {
+      companyId,
+      shopId,
+      role,
+      departments
+    });
   }
 
   // Use modular handlers

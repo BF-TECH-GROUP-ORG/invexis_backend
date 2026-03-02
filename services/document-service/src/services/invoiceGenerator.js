@@ -134,7 +134,14 @@ class InvoiceGenerator {
             .text("INVOICE", margin, 150);
 
         const status = invoiceData.status?.toUpperCase() || "PAID";
-        const statusColor = status === "PAID" ? colors.success : (status === "FAILED" ? colors.danger : colors.muted);
+        let statusColor = colors.muted;
+        if (status === "PAID" || status === "SUCCEEDED") {
+            statusColor = colors.success;
+        } else if (status === "FAILED") {
+            statusColor = colors.danger;
+        } else if (status === "DEBT" || status === "PENDING") {
+            statusColor = "#f59e0b"; // Amber for debt/pending
+        }
 
         doc.fontSize(10).font("Helvetica").fillColor(colors.text);
 

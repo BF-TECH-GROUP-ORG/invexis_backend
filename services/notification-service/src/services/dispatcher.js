@@ -76,8 +76,9 @@ const dispatchEvent = async (eventPayload) => {
         { title: "Notification", body: "You have a new notification." };
 
     // Create notification for each recipient (personalized if needed)
+    const uniqueRecipients = [...new Set(recipients.map(r => r?.toString()))].filter(Boolean);
     const jobs = [];
-    for (const userId of recipients) {
+    for (const userId of uniqueRecipients) {
         const notification = new Notification({
             // Legacy fields for backward compatibility
             title: legacyContent.title || legacyContent.subject || "Notification",

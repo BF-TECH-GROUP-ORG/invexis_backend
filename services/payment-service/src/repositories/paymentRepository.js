@@ -3,6 +3,7 @@
 
 const { db } = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
+const { toJSONB } = require('../utils/jsonUtils');
 
 class PaymentRepository {
     /**
@@ -58,14 +59,14 @@ class PaymentRepository {
                 gateway_token,
                 reference_id,
                 idempotency_key,
-                customer: customer || {},
-                line_items: JSON.stringify(line_items || []),
+                customer: toJSONB(customer),
+                line_items: toJSONB(line_items, true),
                 status: 'pending',
                 payout_status: initial_payout_status,
                 payout_recipient_id,
-                payout_details: payout_details || {},
-                metadata: metadata || {},
-                location: location || {},
+                payout_details: toJSONB(payout_details),
+                metadata: toJSONB(metadata),
+                location: toJSONB(location),
                 created_at: new Date(),
                 updated_at: new Date()
             })
@@ -121,10 +122,10 @@ class PaymentRepository {
         if (failure_reason) updateData.failure_reason = failure_reason;
         if (cancellation_reason) updateData.cancellation_reason = cancellation_reason;
         if (gateway_token) updateData.gateway_token = gateway_token;
-        if (metadata) updateData.metadata = db.raw('metadata || ?::jsonb', [JSON.stringify(metadata)]);
+        if (metadata) updateData.metadata = db.raw('metadata || ?::jsonb', [toJSONB(metadata)]);
 
-        // Set processed_at when status changes to succeeded or failed
-        if (status === 'succeeded' || status === 'failed') {
+        // Set processed_at when status changes to succeeded, failed, or debt
+        if (status === 'succeeded' || status === 'failed' || status === 'debt') {
             updateData.processed_at = new Date();
         }
 

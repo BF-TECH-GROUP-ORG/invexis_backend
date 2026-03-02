@@ -1,6 +1,7 @@
 // models/SaleItem.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 const SaleItem = sequelize.define(
   "SaleItem",
@@ -25,11 +26,36 @@ const SaleItem = sequelize.define(
       defaultValue: 0,
       comment: "Quantity that has been returned from this sale item"
     },
-    unitPrice: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
-    costPrice: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-    discount: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-    tax: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-    total: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+    unitPrice: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      get() { return Money.toMajor(this.getDataValue('unitPrice')); },
+      set(value) { this.setDataValue('unitPrice', Money.toMinor(value)); }
+    },
+    costPrice: {
+      type: DataTypes.BIGINT,
+      defaultValue: 0,
+      get() { return Money.toMajor(this.getDataValue('costPrice')); },
+      set(value) { this.setDataValue('costPrice', Money.toMinor(value)); }
+    },
+    discount: {
+      type: DataTypes.BIGINT,
+      defaultValue: 0,
+      get() { return Money.toMajor(this.getDataValue('discount')); },
+      set(value) { this.setDataValue('discount', Money.toMinor(value)); }
+    },
+    tax: {
+      type: DataTypes.BIGINT,
+      defaultValue: 0,
+      get() { return Money.toMajor(this.getDataValue('tax')); },
+      set(value) { this.setDataValue('tax', Money.toMinor(value)); }
+    },
+    total: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      get() { return Money.toMajor(this.getDataValue('total')); },
+      set(value) { this.setDataValue('total', Money.toMinor(value)); }
+    },
   },
   {
     tableName: "sale_items",

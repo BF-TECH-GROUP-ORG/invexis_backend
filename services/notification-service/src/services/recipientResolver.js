@@ -85,7 +85,8 @@ class RecipientResolver {
 
         // Special case: AFFECTED_USER (the user directly involved in the event)
         if (role === 'AFFECTED_USER') {
-            const id = affectedUserId || userId || adminId;
+            // Priority: affectedUserId > debtorId (for debt) > userId (often reporter) > adminId
+            const id = affectedUserId || context.debtorId || context.customerId || context.userId || adminId;
 
             // If no registered user found, but it's a debt event with a phone number, 
             // return 'external' to trigger the external notification flow.
@@ -94,7 +95,7 @@ class RecipientResolver {
                 return ['external'];
             }
 
-            return id ? [id] : [];
+            return id ? [id.toString()] : [];
         }
 
         // Special case: Event provides explicit role-based IDs
@@ -154,7 +155,12 @@ class RecipientResolver {
 
             // Handle { ok: true, users: [...] } format from production auth-service
             const users = response.data.users || response.data || [];
-            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+            // Deduplicate and filter out nulls/invalid IDs
+            const userIds = [...new Set(
+                (Array.isArray(users) ? users.map(u => u._id || u.id) : [])
+                    .filter(Boolean)
+                    .map(id => id.toString())
+            )];
 
             this.setCache(cacheKey, userIds);
             return userIds;
@@ -186,7 +192,12 @@ class RecipientResolver {
             });
 
             const users = response.data.users || response.data || [];
-            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+            // Deduplicate and filter out nulls/invalid IDs
+            const userIds = [...new Set(
+                (Array.isArray(users) ? users.map(u => u._id || u.id) : [])
+                    .filter(Boolean)
+                    .map(id => id.toString())
+            )];
 
             this.setCache(cacheKey, userIds);
             return userIds;
@@ -238,7 +249,12 @@ class RecipientResolver {
             });
 
             const users = response.data.users || response.data || [];
-            const userIds = Array.isArray(users) ? users.map(u => u._id || u.id) : [];
+            // Deduplicate and filter out nulls/invalid IDs
+            const userIds = [...new Set(
+                (Array.isArray(users) ? users.map(u => u._id || u.id) : [])
+                    .filter(Boolean)
+                    .map(id => id.toString())
+            )];
 
             if (userIds.length === 0) {
                 logger.warn(`⚠️ No workers found for query`, { params, department });

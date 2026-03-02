@@ -47,9 +47,9 @@ function createEmailCircuitBreaker(fn) {
 function createSmsCircuitBreaker(fn) {
   const breaker = new CircuitBreaker(fn, {
     timeout: 10000,
-    errorThresholdPercentage: 50,
-    resetTimeout: 30000,
-    volumeThreshold: 5,
+    errorThresholdPercentage: 80, // Even less sensitive to transient errors
+    resetTimeout: 10000, // Faster recovery (10s)
+    volumeThreshold: 10, // Minimum 10 requests before opening
     name: "sms-breaker",
     errorFilter: (err) => {
       // Twilio errors typically include a status property or err.error.status.
@@ -82,9 +82,9 @@ function createSmsCircuitBreaker(fn) {
 function createPushCircuitBreaker(fn) {
   const breaker = new CircuitBreaker(fn, {
     timeout: 10000,
-    errorThresholdPercentage: 50,
-    resetTimeout: 30000,
-    volumeThreshold: 5,
+    errorThresholdPercentage: 80, // Even less sensitive to transient errors
+    resetTimeout: 10000, // Faster recovery (10s)
+    volumeThreshold: 10, // Minimum 10 requests before opening
     name: "push-breaker",
     errorFilter: (err) => {
       // Be defensive: errors can arrive in multiple shapes depending on
@@ -154,7 +154,7 @@ function createPushCircuitBreaker(fn) {
         fallbacks: stats.fallbacks,
         errorRate: stats.fires > 0 ? ((stats.failures / stats.fires) * 100).toFixed(2) + '%' : '0%'
       },
-      resetTimeout: 30000,
+      resetTimeout: breaker.options.resetTimeout,
       message: `Circuit breaker opened after ${stats.failures} failures in ${stats.fires} requests`
     });
   });
@@ -200,4 +200,3 @@ module.exports = {
   createPushCircuitBreaker,
   getCircuitBreakerStatus,
 };
-

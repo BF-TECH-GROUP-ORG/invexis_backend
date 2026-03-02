@@ -6,12 +6,9 @@ const internalServiceClient = require('./internalServiceClient');
 const paymentRepository = require('../repositories/paymentRepository');
 const transactionRepository = require('../repositories/transactionRepository');
 const invoiceService = require('./invoiceService');
-const stripeGateway = require('./gateways/stripeGateway');
-const mtnMomoGateway = require('./gateways/mtnMomoGateway');
-const airtelMoneyGateway = require('./gateways/airtelMoneyGateway');
-const mpesaGateway = require('./gateways/mpesaGateway');
 const { publishPaymentEvent } = require('../events/producer');
-const { GATEWAY_TYPES, PAYMENT_STATUS, TRANSACTION_TYPE, TRANSACTION_STATUS, PAYMENT_TYPE } = require('../utils/constants');
+const { GATEWAY_TYPES, PAYMENT_STATUS, TRANSACTION_TYPE, TRANSACTION_STATUS, PAYMENT_TYPE, INVOICE_STATUS } = require('../utils/constants');
+const { getParsed } = require('../utils/jsonUtils');
 
 // Optional: Redis for caching
 let redis;
@@ -85,7 +82,26 @@ class PaymentService {
             // Invoice generation is now purely event-driven after successful payment
             // via document-service to avoid initial insert errors and sync bottlenecks.
 
-            // Create initial transaction record
+            // ⚡ DB FIX: Map statuses to valid DB Enums
+            // For manual recordings (CASH, Bank Transfer, etc), we record them immediately as SUCCESS
+            const isDebt = type === PAYMENT_TYPE.DEBT || metadata?.isDebt;
+            const status = isDebt ? PAYMENT_STATUS.DEBT : PAYMENT_STATUS.SUCCEEDED;
+
+            // ⚡ DB ENUM FIX: We added 'debt' to enums, so we can use it directly
+            const dbStatus = status;
+            const transStatus = TRANSACTION_STATUS.SUCCEEDED;
+
+            // Generate a internal transaction ID
+            const internalTxId = `${gateway.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            const gateway_token = internalTxId;
+
+            const gatewayResult = {
+                success: true,
+                message: `${gateway.toUpperCase()} payment recorded manually`,
+                transaction_id: internalTxId
+            };
+
+            // Create initial transaction record as SUCCEEDED
             const transaction = await transactionRepository.createTransaction({
                 payment_id: payment.payment_id,
                 seller_id,
@@ -94,212 +110,40 @@ class PaymentService {
                 type: TRANSACTION_TYPE.CHARGE,
                 amount,
                 currency,
-                status: TRANSACTION_STATUS.PENDING,
-                metadata: { gateway, initial_request: true, shop_id }
-            });
-
-            // 3. Fetch payee info if applicable
-            let payee = null;
-            if ([PAYMENT_TYPE.SALE, PAYMENT_TYPE.DEBT].includes(type)) {
-                if (!company_id) {
-                    throw new Error(`Company ID is required for payment type: ${type}`);
-                }
-
-                // ⚡ OPTIMIZATION: Skip company-service call for manual payments (Cash/Bank)
-                // as they don't require automated gateway credentials (phones/stripe ids)
-                if (gateway !== GATEWAY_TYPES.CASH && gateway !== GATEWAY_TYPES.MANUAL) {
-                    console.log(`[PaymentService] Initiating automated payment for company: ${company_id} via ${gateway}`);
-                    const settings = await internalServiceClient.getCompanySettings(company_id);
-
-                    if (!settings) {
-                        console.error(`[PaymentService] FAILED: Company settings not found for ID: ${company_id}`);
-                        throw new Error(`Company settings not available for automated payment.`);
-                    }
-
-                    payee = {
-                        momo_phone: settings.momo_phone,
-                        airtel_phone: settings.airtel_phone,
-                        mpesa_phone: settings.mpesa_phone,
-                        stripe_account_id: settings.stripe_account_id,
-                        name: metadata?.company_name || settings.company_name || 'Company'
-                    };
-
-                    // Validate that at least one payment method is available for the requested gateway
-                    if (gateway === GATEWAY_TYPES.MTN_MOMO && !payee.momo_phone) {
-                        throw new Error(`Company ${payee.name} does not support MTN_MOMO payments`);
-                    }
-                    if (gateway === GATEWAY_TYPES.AIRTEL_MONEY && !payee.airtel_phone) {
-                        throw new Error(`Company ${payee.name} does not support AIRTEL_MONEY payments`);
-                    }
-                    if (gateway === GATEWAY_TYPES.MPESA && !payee.mpesa_phone) {
-                        throw new Error(`Company ${payee.name} does not support MPESA payments`);
-                    }
-                    if (gateway === GATEWAY_TYPES.STRIPE && !payee.stripe_account_id) {
-                        throw new Error(`Company ${payee.name} does not support STRIPE payments`);
-                    }
-                } else {
-                    // For Cash/Bank, we only need the name for logging/metadata
-                    payee = {
-                        name: metadata?.company_name || 'Company'
-                    };
-                    console.log(`[PaymentService] Initiating manual payment (${gateway}) for company: ${company_id}`);
-                }
-
-            } else if ([PAYMENT_TYPE.SUBSCRIPTION, PAYMENT_TYPE.TIER].includes(type)) {
-                // Validate that at least one payment method is available for the requested gateway
-                const momoPhone = process.env.INVEXIS_MOMO_PHONE;
-                const airtelPhone = process.env.INVEXIS_AIRTEL_PHONE;
-                const mpesaPhone = process.env.INVEXIS_MPESA_PHONE;
-                const stripeAccountId = process.env.INVEXIS_STRIPE_ACCOUNT_ID;
-
-                if (gateway === GATEWAY_TYPES.MTN_MOMO && !momoPhone) {
-                    throw new Error('Platform MTN MoMo phone number is not configured (INVEXIS_MOMO_PHONE).');
-                }
-                if (gateway === GATEWAY_TYPES.AIRTEL_MONEY && !airtelPhone) {
-                    throw new Error('Platform Airtel Money phone number is not configured (INVEXIS_AIRTEL_PHONE).');
-                }
-                if (gateway === GATEWAY_TYPES.MPESA && !mpesaPhone) {
-                    throw new Error('Platform M-Pesa phone number is not configured (INVEXIS_MPESA_PHONE).');
-                }
-                if (gateway === GATEWAY_TYPES.STRIPE && !stripeAccountId) {
-                    throw new Error('Platform Stripe account ID is not configured (INVEXIS_STRIPE_ACCOUNT_ID).');
-                }
-
-                payee = {
-                    momo_phone: momoPhone,
-                    airtel_phone: airtelPhone,
-                    mpesa_phone: mpesaPhone,
-                    stripe_account_id: stripeAccountId,
-                    name: 'Invexis',
-                    context: type === PAYMENT_TYPE.TIER ? `Tier payment for ${metadata?.tier_id}` : 'Platform Subscription'
-                };
-            }
-
-            // 4. Initiate payment with appropriate gateway
-            let gatewayResult;
-            let gateway_token;
-
-            switch (gateway) {
-                /* case GATEWAY_TYPES.STRIPE:
-                    gatewayResult = await stripeGateway.createPaymentIntent({
-                        amount,
-                        currency,
-                        description,
-                        metadata,
-                        customer_email: customer?.email,
-                        payee, // Pass payee for Stripe Connect if needed
-                        idempotency_key,
-                        reference_id,
-                        type
-                    });
-                    gateway_token = gatewayResult.payment_intent_id;
-                    break; */
-
-                case GATEWAY_TYPES.MTN_MOMO:
-                    gatewayResult = await mtnMomoGateway.initiatePayment({
-                        amount,
-                        currency,
-                        phoneNumber,
-                        description,
-                        metadata,
-                        payee // Injected payee
-                    });
-                    gateway_token = gatewayResult.reference_id;
-                    break;
-
-                case GATEWAY_TYPES.AIRTEL_MONEY:
-                    gatewayResult = await airtelMoneyGateway.initiatePayment({
-                        amount,
-                        currency,
-                        phoneNumber,
-                        description,
-                        metadata,
-                        payee, // Injected payee
-                        reference_id,
-                        type
-                    });
-                    gateway_token = gatewayResult.reference_id;
-                    break;
-
-                /* case GATEWAY_TYPES.MPESA:
-                    gatewayResult = await mpesaGateway.initiatePayment({
-                        amount,
-                        phoneNumber,
-                        description,
-                        metadata,
-                        payee, // Injected payee
-                        reference_id,
-                        type
-                    });
-                    gateway_token = gatewayResult.checkout_request_id;
-                    break; */
-
-                case GATEWAY_TYPES.CASH:
-                case GATEWAY_TYPES.MANUAL:
-                    // Cash and Bank Transfers are immediately successful records
-                    gatewayResult = {
-                        success: true,
-                        message: `${gateway === GATEWAY_TYPES.CASH ? 'Cash' : 'Bank transfer'} payment recorded`,
-                        transaction_id: `${gateway.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(7)}`
-                    };
-                    gateway_token = gatewayResult.transaction_id;
-                    break;
-
-                default:
-                    throw new Error(`Gateway ${gateway} not implemented or disabled`);
-            }
-
-            // ⚡ EDGE CASE: Check Gateway Success
-            if (!gatewayResult.success) {
-                const failureMsg = gatewayResult.message || 'Gateway initiation failed';
-                await paymentRepository.updatePaymentStatus(payment.payment_id, {
-                    status: PAYMENT_STATUS.FAILED,
-                    failure_reason: failureMsg,
-                    metadata: { ...metadata, gateway_response: gatewayResult }
-                });
-
-                // Trigger failed payment handler to create FAILED invoice
-                await this.handleFailedPayment(payment, failureMsg);
-
-                throw new Error(failureMsg);
-            }
-
-            // Update payment with gateway token
-            // For CASH and MANUAL, we mark as SUCCEEDED immediately
-            const isManual = gateway === GATEWAY_TYPES.CASH || gateway === GATEWAY_TYPES.MANUAL;
-            const initialStatus = isManual ? PAYMENT_STATUS.SUCCEEDED : PAYMENT_STATUS.PROCESSING;
-            const transactionStatus = isManual ? TRANSACTION_STATUS.SUCCEEDED : TRANSACTION_STATUS.PENDING;
-
-            await paymentRepository.updatePaymentStatus(payment.payment_id, {
-                status: initialStatus,
-                gateway_token,
-                metadata: { ...metadata, gateway_response: gatewayResult }
-            });
-
-            // Update transaction status
-            await transactionRepository.updateTransactionStatus(transaction.transaction_id, {
-                status: transactionStatus,
+                status: transStatus,
                 gateway_transaction_id: gateway_token,
-                metadata: { gateway_response: gatewayResult }
+                metadata: { gateway, initial_request: true, shop_id, gateway_response: gatewayResult }
             });
 
-            // If manual, trigger success handler immediately to generate PAID invoice
-            if (isManual) {
-                await this.handleSuccessfulPayment({
-                    ...payment,
-                    gateway_token,
-                    status: PAYMENT_STATUS.SUCCEEDED
-                });
+            // Update payment record with final status and token
+            await paymentRepository.updatePaymentStatus(payment.payment_id, {
+                status: dbStatus,
+                gateway_token,
+                metadata: { ...metadata, gateway_response: gatewayResult, is_debt: isDebt, original_status: status }
+            });
+
+            // Trigger success flow immediately to generate invoice (for both Debt and Paid)
+            // (getParsed now imported from jsonUtils)
+            await this.handleSuccessfulPayment({
+                ...payment,
+                line_items: getParsed(payment.line_items),
+                metadata: getParsed(payment.metadata),
+                gateway_token,
+                status: status
+            });
+
+            if (isDebt) {
+                console.log(`[PaymentService] Debt sale recorded for ${reference_id}. Status: DEBT`);
             }
 
-            // Publish event
+            // 5. Publish event
             await publishPaymentEvent.processed({
                 id: payment.payment_id,
                 amount,
                 currency,
-                status: PAYMENT_STATUS.PROCESSING,
+                status: status,
                 order_id,
-                metadata,
+                metadata: { ...metadata, isDebt },
             });
 
             return {
@@ -307,9 +151,8 @@ class PaymentService {
                 payment_id: payment.payment_id,
                 transaction_id: transaction.transaction_id,
                 gateway_token,
-                status: PAYMENT_STATUS.PROCESSING,
-                gateway_response: gatewayResult,
-                message: 'Payment initiated successfully'
+                status: status,
+                message: isDebt ? 'Debt recorded successfully' : 'Payment recorded successfully'
             };
 
         } catch (error) {
@@ -379,85 +222,21 @@ class PaymentService {
             throw new Error('Payment not found');
         }
 
-        // If payment is already in final state, return it with rich data
-        if ([PAYMENT_STATUS.SUCCEEDED, PAYMENT_STATUS.FAILED, PAYMENT_STATUS.CANCELLED].includes(payment.status)) {
-            const invoiceRepo = require('../repositories/invoiceRepository');
-            const invoice = await invoiceRepo.getInvoiceByPaymentId(payment.payment_id);
+        // Since all payments are now manual recordings, the status is final once set
+        // Fetch invoice info for the response
+        const invoiceRepo = require('../repositories/invoiceRepository');
+        const invoice = await invoiceRepo.getInvoiceByPaymentId(payment.payment_id || payment.id);
 
-            return {
-                ...payment,
-                invoice: invoice ? {
-                    invoice_id: invoice.invoice_id,
-                    pdf_url: invoice.pdf_url,
-                    status: invoice.status,
-                    amount_due: invoice.amount_due,
-                    paid_at: invoice.paid_at
-                } : null
-            };
-        }
-
-        // Query gateway for latest status
-        try {
-            let gatewayStatus;
-
-            switch (payment.gateway) {
-                case GATEWAY_TYPES.STRIPE:
-                    gatewayStatus = await stripeGateway.getPaymentStatus(payment.gateway_token);
-                    break;
-
-                case GATEWAY_TYPES.MTN_MOMO:
-                    gatewayStatus = await mtnMomoGateway.checkPaymentStatus(payment.gateway_token);
-                    break;
-
-                case GATEWAY_TYPES.AIRTEL_MONEY:
-                    gatewayStatus = await airtelMoneyGateway.checkPaymentStatus(payment.gateway_token);
-                    break;
-
-                case GATEWAY_TYPES.MPESA:
-                    gatewayStatus = await mpesaGateway.checkPaymentStatus(payment.gateway_token);
-                    break;
-
-                default:
-                    throw new Error(`Gateway ${payment.gateway} not supported`);
-            }
-
-            // Update payment status based on gateway response
-            const newStatus = this.mapGatewayStatus(gatewayStatus.status, payment.gateway);
-
-            if (newStatus !== payment.status) {
-                await paymentRepository.updatePaymentStatus(payment_id, {
-                    status: newStatus,
-                    metadata: { ...payment.metadata, latest_gateway_status: gatewayStatus }
-                });
-
-                // If payment succeeded, generate invoice
-                if (newStatus === PAYMENT_STATUS.SUCCEEDED) {
-                    await this.handleSuccessfulPayment(payment);
-                } else if (newStatus === PAYMENT_STATUS.FAILED) {
-                    await this.handleFailedPayment(payment, 'Gateway returned failed status');
-                }
-            }
-
-            // Fetch invoice info for the response
-            const invoiceRepo = require('../repositories/invoiceRepository');
-            const invoice = await invoiceRepo.getInvoiceByPaymentId(payment_id);
-
-            return {
-                ...(await paymentRepository.getPaymentById(payment_id)),
-                gateway_status: gatewayStatus,
-                invoice: invoice ? {
-                    invoice_id: invoice.invoice_id,
-                    pdf_url: invoice.pdf_url,
-                    status: invoice.status,
-                    amount_due: invoice.amount_due,
-                    paid_at: invoice.paid_at
-                } : null
-            };
-
-        } catch (error) {
-            console.error('Error checking payment status:', error.message);
-            throw error;
-        }
+        return {
+            ...payment,
+            invoice: invoice ? {
+                invoice_id: invoice.invoice_id,
+                pdf_url: invoice.pdf_url,
+                status: invoice.status,
+                amount_due: invoice.amount_due,
+                paid_at: invoice.paid_at
+            } : null
+        };
     }
 
     /**
@@ -491,13 +270,22 @@ class PaymentService {
                     amount: payment.amount,
                     currency: payment.currency,
                     description: payment.description,
-                    metadata: payment.metadata
-                }, payment.line_items || payment.metadata?.line_items || []);
+                    metadata: getParsed(payment.metadata),
+                    lineItems: getParsed(payment.line_items || payment.metadata?.line_items || [])
+                });
             }
 
-            // Mark as PAID and ensure payment_id is linked (important for link-back logic)
+            // Mark as PAID/DEBT and ensure payment_id is linked
+            let invoiceStatus = (payment.status === PAYMENT_STATUS.DEBT) ? INVOICE_STATUS.DEBT : INVOICE_STATUS.PAID;
+
+            // ⚡ REFINEMENT: If this is a debt repayment and the balance is now zero, show "PAID" on the final invoice
+            if (payment.type === 'DEBT' && Number(payment.metadata?.remainingBalance) === 0) {
+                console.log(`[PaymentService] Debt fully cleared for payment ${payment.id || payment.payment_id}. Marking invoice as PAID.`);
+                invoiceStatus = INVOICE_STATUS.PAID;
+            }
+
             await invoiceRepo.updateInvoiceStatus(invoice.invoice_id, {
-                status: 'paid',
+                status: invoiceStatus,
                 payment_id: payment.payment_id || payment.id
             });
 
@@ -563,7 +351,7 @@ class PaymentService {
                     invoiceNumber: invoice.invoice_number || `INV-${Date.now()}`,
                     issueDate: new Date().toISOString(),
                     dueDate: new Date().toISOString(),
-                    status: 'paid',
+                    status: invoiceStatus,
                     paymentMethod: payment.method || payment.gateway || 'cash',
                     subTotal: payment.amount,
                     totalAmount: payment.amount,
@@ -713,36 +501,6 @@ class PaymentService {
      * @param {string} gateway - Gateway type
      * @returns {string} Standard payment status
      */
-    mapGatewayStatus(gatewayStatus, gateway) {
-        const statusMap = {
-            [GATEWAY_TYPES.STRIPE]: {
-                'succeeded': PAYMENT_STATUS.SUCCEEDED,
-                'processing': PAYMENT_STATUS.PROCESSING,
-                'requires_payment_method': PAYMENT_STATUS.PENDING,
-                'requires_confirmation': PAYMENT_STATUS.PENDING,
-                'requires_action': PAYMENT_STATUS.PENDING,
-                'canceled': PAYMENT_STATUS.CANCELLED,
-                'failed': PAYMENT_STATUS.FAILED
-            },
-            [GATEWAY_TYPES.MTN_MOMO]: {
-                'successful': PAYMENT_STATUS.SUCCEEDED,
-                'pending': PAYMENT_STATUS.PROCESSING,
-                'failed': PAYMENT_STATUS.FAILED
-            },
-            [GATEWAY_TYPES.AIRTEL_MONEY]: {
-                'ts': PAYMENT_STATUS.SUCCEEDED,
-                'pending': PAYMENT_STATUS.PROCESSING,
-                'failed': PAYMENT_STATUS.FAILED
-            },
-            [GATEWAY_TYPES.MPESA]: {
-                'succeeded': PAYMENT_STATUS.SUCCEEDED,
-                'pending': PAYMENT_STATUS.PROCESSING,
-                'failed': PAYMENT_STATUS.FAILED
-            }
-        };
-
-        return statusMap[gateway]?.[gatewayStatus.toLowerCase()] || PAYMENT_STATUS.PROCESSING;
-    }
 
     /**
      * Cancel a payment

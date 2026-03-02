@@ -273,7 +273,8 @@ const createSale = async (req, res) => {
           metadata: {
             saleId: sale.saleId,
             initiatedBy: soldBy,
-            knownUserId: finalKnownUserId
+            knownUserId: finalKnownUserId,
+            isDebt: !!isDebt
           }
         };
 
@@ -1169,7 +1170,12 @@ const customerSalesReport = async (req, res) => {
       ],
     });
 
-    return res.json(report[0] || { totalSales: 0, totalRevenue: 0 });
+    const result = report[0]?.toJSON() || { totalSales: 0, totalRevenue: 0 };
+
+    // Convert aggregate sums to major units if they came back as raw numbers
+    if (result.totalRevenue) result.totalRevenue = Money.toMajor(result.totalRevenue);
+
+    return res.json(result);
   } catch (error) {
     console.error("customerSalesReport error:", error);
     return res.status(500).json({ error: error.message });
@@ -1211,9 +1217,16 @@ const salesReport = async (req, res) => {
       ],
     });
 
-    await setCache(cacheKey, report[0] || {}, 600); // 10m
+    const result = report[0]?.toJSON() || {};
 
-    return res.json(report[0] || {});
+    // Convert aggregate sums to major units
+    if (result.totalRevenue) result.totalRevenue = Money.toMajor(result.totalRevenue);
+    if (result.totalTax) result.totalTax = Money.toMajor(result.totalTax);
+    if (result.totalDiscount) result.totalDiscount = Money.toMajor(result.totalDiscount);
+
+    await setCache(cacheKey, result, 600); // 10m
+
+    return res.json(result);
   } catch (error) {
     console.error("salesReport error:", error);
     return res.status(500).json({ error: error.message });
@@ -1290,9 +1303,17 @@ const revenueTrend = async (req, res) => {
       order: [[Sale.sequelize.literal("month"), "ASC"]],
     });
 
-    await setCache(cacheKey, trend, 3600); // 1h
+    const enrichedTrend = trend.map(t => {
+      const data = t.toJSON();
+      return {
+        month: data.month,
+        revenue: Money.toMajor(data.revenue)
+      };
+    });
 
-    return res.json(trend);
+    await setCache(cacheKey, enrichedTrend, 3600); // 1h
+
+    return res.json(enrichedTrend);
   } catch (error) {
     console.error("revenueTrend error:", error);
     return res.status(500).json({ error: error.message });

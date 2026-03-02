@@ -37,7 +37,12 @@ app.use(helmet());
 app.use(compression({ threshold: 512, level: 6 })); // Compress responses > 512 bytes
 app.use(express.json({ limit: '10mb' })); // Reduced from 100mb for better memory usage
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(morgan('combined')); // Use combined format for production-ready logging
+app.use(morgan('combined', {
+    skip: (req, res) => {
+        const url = req.originalUrl || req.url;
+        return (req.method === 'HEAD' || req.method === 'GET') && url === '/health';
+    }
+})); // Use combined format for production-ready logging
 
 // 🔒 SECURITY: Rate Limiting (DDoS Prevention)
 const rateLimit = require("express-rate-limit");

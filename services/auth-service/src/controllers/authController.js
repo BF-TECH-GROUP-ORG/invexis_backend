@@ -22,121 +22,130 @@ function getRefreshCookieOptions(req) {
 
 
 // Register a new user
-const register = async (req, res) => {
-    const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
+const register = async (req, res, next) => {
+    try {
+        const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
 
-    // Auto-generate password (5 chars: Uppercase, Numbers, Symbols)
-    // ONLY if NOT super_admin
-    // Super Admin must provide their own password
-    if (req.body.role === 'super_admin') {
-        if (!req.body.password) {
-            return res.status(400).json({ ok: false, message: 'Password is required for super_admin' });
+        // Auto-generate password (5 chars: Uppercase, Numbers, Symbols)
+        // ONLY if NOT super_admin
+        // Super Admin must provide their own password
+        if (req.body.role === 'super_admin') {
+            if (!req.body.password) {
+                return res.status(400).json({ ok: false, message: 'Password is required for super_admin' });
+            }
+            // No generatedPassword for super_admin
+        } else {
+            // Characters: A-Z, a-z, 0-9, !@#$%^&*
+            // Logic: Ensure at least one of each required type to pass validation regex
+            const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            const lower = "abcdefghijklmnopqrstuvwxyz";
+            const nums = "0123456789";
+            const syms = "!@#$%^&*";
+            const allChars = upper + lower + nums + syms;
+
+            let generatedPassword = "";
+            // Force one of each to ensure compliance
+            generatedPassword += upper.charAt(Math.floor(Math.random() * upper.length));
+            generatedPassword += lower.charAt(Math.floor(Math.random() * lower.length));
+            generatedPassword += nums.charAt(Math.floor(Math.random() * nums.length));
+            generatedPassword += syms.charAt(Math.floor(Math.random() * syms.length));
+
+            // Fill remaining 2 chars randomly
+            for (let i = 0; i < 2; i++) {
+                generatedPassword += allChars.charAt(Math.floor(Math.random() * allChars.length));
+            }
+
+            // Shuffle the password to avoid predictable patterns
+            generatedPassword = generatedPassword.split('').sort(() => 0.5 - Math.random()).join('');
+
+            // Inject generated password into body
+            if (generatedPassword) {
+                req.body.password = generatedPassword;
+                req.body.generatedPassword = generatedPassword;
+            }
         }
-        // No generatedPassword for super_admin
-    } else {
-        // Characters: A-Z, a-z, 0-9, !@#$%^&*
-        // Logic: Ensure at least one of each required type to pass validation regex
-        const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const lower = "abcdefghijklmnopqrstuvwxyz";
-        const nums = "0123456789";
-        const syms = "!@#$%^&*";
-        const allChars = upper + lower + nums + syms;
 
-        let generatedPassword = "";
-        // Force one of each to ensure compliance
-        generatedPassword += upper.charAt(Math.floor(Math.random() * upper.length));
-        generatedPassword += lower.charAt(Math.floor(Math.random() * lower.length));
-        generatedPassword += nums.charAt(Math.floor(Math.random() * nums.length));
-        generatedPassword += syms.charAt(Math.floor(Math.random() * syms.length));
+        // DEBUG: Confirm register flow
+        console.log(`🚀 [DEBUG] Registering user: ${req.body.email}, Role: ${req.body.role}, Pwd: ${req.body.generatedPassword ? 'Generated' : 'Manual'}`);
 
-        // Fill remaining 2 chars randomly
-        for (let i = 0; i < 2; i++) {
-            generatedPassword += allChars.charAt(Math.floor(Math.random() * allChars.length));
+        const result = await authService.register(req.body, options);
+
+        // If result has an error (indicated by status and message)
+        if (result.status && result.message) {
+            return res.status(result.status).json({ ok: false, message: result.message });
         }
 
-        // Shuffle the password to avoid predictable patterns
-        generatedPassword = generatedPassword.split('').sort(() => 0.5 - Math.random()).join('');
-
-        // Inject generated password into body
-        if (generatedPassword) {
-            req.body.password = generatedPassword;
-            req.body.generatedPassword = generatedPassword;
+        // If successful (has user object)
+        if (result.user) {
+            return res.status(201).json({
+                ok: true,
+                user: result.user,
+                verificationTokens: process.env.NODE_ENV !== 'production' ? result.verificationTokens : []
+            });
         }
+
+        // Fallback for unexpected response
+        res.status(500).json({ ok: false, message: 'Unexpected server error' });
+    } catch (err) {
+        console.error('Registration Error:', err);
+        next(err);
     }
-
-    // DEBUG: Confirm register flow
-    console.log(`🚀 [DEBUG] Registering user: ${req.body.email}, Role: ${req.body.role}, Pwd: ${req.body.generatedPassword ? 'Generated' : 'Manual'}`);
-
-    const result = await authService.register(req.body, options);
-
-    // If result has an error (indicated by status and message)
-    if (result.status && result.message) {
-        return res.status(result.status).json({ ok: false, message: result.message });
-    }
-
-    // If successful (has user object)
-    if (result.user) {
-        return res.status(201).json({
-            ok: true,
-            user: result.user,
-            verificationTokens: process.env.NODE_ENV !== 'production' ? result.verificationTokens : []
-        });
-    }
-
-    // Fallback for unexpected response
-    res.status(500).json({ ok: false, message: 'Unexpected server error' });
 };
 
 // Login with credentials
-const login = async (req, res) => {
-    const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
-    const result = await authService.login(req.body, options);
+const login = async (req, res, next) => {
+    try {
+        const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
+        const result = await authService.login(req.body, options);
 
-    // If there's an error response
-    if (result.status && result.message) {
-        return res.status(result.status || 400).json({ ok: false, message: result.message });
-    }
-
-    // 🔍 PROACTIVE SUBSCRIPTION CHECK
-    // If the user's company subscription is expired, we flag it here
-    // so the Frontend can redirect them to the Renewal Page immediately.
-    let subscriptionStatus = null;
-    if (result.user && result.user.companies && result.user.companies.length > 0) {
-        try {
-            const SubscriptionUtil = require('/app/shared/utils/SubscriptionUtil');
-            // Check the first company (assuming single-company user for now)
-            const sub = await SubscriptionUtil.getSubscriptionStatus(result.user.companies[0]);
-
-            if (sub && (sub.isExpired || !sub.isActive)) {
-                subscriptionStatus = {
-                    status: 'expired',
-                    companyId: result.user.companies[0],
-                    expiryDate: sub.endDate,
-                    tier: sub.tier
-                };
-            }
-        } catch (subErr) {
-            console.warn("Auth Login Subscription Check Failed:", subErr.message);
-            // Non-blocking error: allow login to proceed, middleware will catch them later
+        // If there's an error response
+        if (result.status && result.message) {
+            return res.status(result.status || 400).json({ ok: false, message: result.message });
         }
+
+        // 🔍 PROACTIVE SUBSCRIPTION CHECK
+        // If the user's company subscription is expired, we flag it here
+        // so the Frontend can redirect them to the Renewal Page immediately.
+        let subscriptionStatus = null;
+        if (result.user && result.user.companies && result.user.companies.length > 0) {
+            try {
+                const SubscriptionUtil = require('/app/shared/utils/SubscriptionUtil');
+                // Check the first company (assuming single-company user for now)
+                const sub = await SubscriptionUtil.getSubscriptionStatus(result.user.companies[0]);
+
+                if (sub && (sub.isExpired || !sub.isActive)) {
+                    subscriptionStatus = {
+                        status: 'expired',
+                        companyId: result.user.companies[0],
+                        expiryDate: sub.endDate,
+                        tier: sub.tier
+                    };
+                }
+            } catch (subErr) {
+                console.warn("Auth Login Subscription Check Failed:", subErr.message);
+                // Non-blocking error: allow login to proceed, middleware will catch them later
+            }
+        }
+
+        res.cookie('refreshToken', result.refreshToken, {
+            ...getRefreshCookieOptions(req)
+        });
+
+        // Return token + subscription warning if applicable
+        res.json({
+            ok: true,
+            accessToken: result.accessToken,
+            expires_in: tokenService.expiresIn,
+            user: result.user,
+            subscription: subscriptionStatus // Frontend checks this field
+        });
+    } catch (err) {
+        next(err);
     }
-
-    res.cookie('refreshToken', result.refreshToken, {
-        ...getRefreshCookieOptions(req)
-    });
-
-    // Return token + subscription warning if applicable
-    res.json({
-        ok: true,
-        accessToken: result.accessToken,
-        expires_in: tokenService.expiresIn,
-        user: result.user,
-        subscription: subscriptionStatus // Frontend checks this field
-    });
 };
 
 // Request OTP for login
-const requestOtpLogin = async (req, res) => {
+const requestOtpLogin = async (req, res, next) => {
     try {
         const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
         const result = await authService.requestOtpLogin(req.body.identifier, options);
@@ -147,25 +156,28 @@ const requestOtpLogin = async (req, res) => {
 
         res.status(200).json({ ok: true, message: 'OTP sent successfully' });
     } catch (err) {
-        console.error('Error in requestOtpLogin:', err);
-        res.status(500).json({ ok: false, message: 'Internal server error' });
+        next(err);
     }
 };
 
 // Verify OTP for login
-const verifyOtpLogin = async (req, res) => {
-    const { identifier, code } = req.body;
-    const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
-    const result = await authService.verifyOtpLogin(identifier, code, options);
+const verifyOtpLogin = async (req, res, next) => {
+    try {
+        const { identifier, code } = req.body;
+        const options = { ip: req.ip, device: req.get('User-Agent'), location: req.location || {} };
+        const result = await authService.verifyOtpLogin(identifier, code, options);
 
-    if (!result.ok) {
-        return res.status(result.status).json({ ok: false, message: result.message });
+        if (!result.ok) {
+            return res.status(result.status).json({ ok: false, message: result.message });
+        }
+
+        res.cookie('refreshToken', result.refreshToken, {
+            ...getRefreshCookieOptions(req)
+        });
+        res.json({ ok: true, accessToken: result.accessToken, expires_in: tokenService.expiresIn, user: result.user });
+    } catch (err) {
+        next(err);
     }
-
-    res.cookie('refreshToken', result.refreshToken, {
-        ...getRefreshCookieOptions(req)
-    });
-    res.json({ ok: true, accessToken: result.accessToken, expires_in: tokenService.expiresIn, user: result.user });
 };
 
 // Google OAuth callback
@@ -366,15 +378,19 @@ const logoutAll = async (req, res, next) => {
         next(err);
     }
 };// Verify email/phone
-const verify = async (req, res) => {
-    const userId = req.params.userId || (req.user && req.user._id);
-    const result = await authService.verify(userId, req.body);
+const verify = async (req, res, next) => {
+    try {
+        const userId = req.params.userId || (req.user && req.user._id);
+        const result = await authService.verify(userId, req.body);
 
-    if (!result.ok) {
-        return res.status(result.status).json({ ok: false, message: result.message });
+        if (!result.ok) {
+            return res.status(result.status).json({ ok: false, message: result.message });
+        }
+
+        res.json({ ok: true, verified: result.verified });
+    } catch (err) {
+        next(err);
     }
-
-    res.json({ ok: true, verified: result.verified });
 };
 
 // Setup 2FA

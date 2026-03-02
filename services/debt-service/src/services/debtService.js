@@ -5,6 +5,7 @@ const eventRepo = require('../repositories/eventRepository');
 const summaryRepo = require('../repositories/summaryRepository');
 const Repayment = require('../models/repayment.model');
 const Debt = require('../models/debt.model');
+const Money = require('/app/shared/utils/MoneyUtil');
 const { hashIdentifier } = require('../utils/hash');
 
 // Helper to get redis client (check global first, then require fallbacks)
@@ -87,7 +88,7 @@ async function createDebt(payload) {
 
         // Also write to in-memory store for fast reads
         const inMemoryStore = require('../utils/inMemoryStore');
-        inMemoryStore.createDebt(saved);
+        inMemoryStore.createDebt(saved, true); // ⚡ skipQueue=true because we already saved to DB
 
         // NOTE: KnownCustomer upsert removed (handled in sales service).
 
@@ -193,28 +194,23 @@ async function recordRepayment(payload) {
         const debt = await debtRepo.findById(debtId, companyId);
         if (!debt) throw new Error('Debt not found');
 
-        // Fast path: create repayment in-memory + enqueue for persistence
-        const inMemoryStore = require('../utils/inMemoryStore');
-        const repaymentId = paymentId || new mongoose.Types.ObjectId();
-        const repayment = inMemoryStore.createRepayment({
-            companyId,
-            shopId,
-            hashedCustomerId: debt.hashedCustomerId,
-            debtId,
-            paymentId: repaymentId,
-            amountPaid,
-            paymentMethod,
-            paymentReference,
-            createdBy: createdBy || undefined
+        // Idempotency check: prevent duplicate repayments via external reference
+        if (paymentReference && paymentReference !== 'CASH' && paymentReference !== 'MANUAL') {
+            const existing = await repaymentRepo.findByReference(paymentReference, companyId);
+            if (existing) {
+                console.log(`[IDEMPOTENCY] Found existing repayment for reference: ${paymentReference}`);
+                return { debt, repayment: existing };
+            }
+        }
 
-        });
+        const repaymentId = paymentId || new mongoose.Types.ObjectId();
 
         // Trigger Payment Event if applicable (MTN/Airtel/Card)
         const normalizedPaymentMethod = String(paymentMethod).toLowerCase();
 
-        // Logic Branch: CASH vs ASYNC (Mobile/Card/Bank Transfer)
-        const isAsyncPayment = ['mobile', 'card', 'mtn_momo', 'airtel_money', 'mtn', 'airtel', 'bank_transfer'].includes(normalizedPaymentMethod);
-        const isCash = normalizedPaymentMethod === 'cash';
+        // All methods are now manual recordings (synchronous like CASH)
+        const isImmediate = ['cash', 'mobile', 'mtn', 'airtel', 'mtn_momo', 'airtel_money', 'bank_transfer'].includes(normalizedPaymentMethod);
+        const isAsyncPayment = false; // We no longer wait for external webhooks
 
         // 1. Prepare Repayment Record (Pending)
         const initialStatus = 'pending';
@@ -236,10 +232,37 @@ async function recordRepayment(payload) {
             createdAt: new Date()
         });
 
-        // 2. We DO NOT update Debt immediately anymore. 
-        // We wait for payment.succeeded event from payment-service.
-        let savedDebt = null;
-        let wasAutoPaid = false;
+        // Update in-memory store for fast reads (skip background persistence queue)
+        const inMemoryStore = require('../utils/inMemoryStore');
+        const repayment = inMemoryStore.createRepayment(savedRepayment.toObject ? savedRepayment.toObject() : savedRepayment, true);
+
+        // 2. Update Debt immediately for CASH payments. 
+        // For Async (Mobile/Card/Bank), we still wait for payment.succeeded event from payment-service.
+        const balanceBefore = debt.balance;
+        if (isImmediate) {
+            debt.amountPaidNow = (Number(debt.amountPaidNow) || 0) + Number(amountPaid);
+            debt.balance = Math.max(0, Number(debt.totalAmount) - debt.amountPaidNow);
+            debt.status = await computeStatus(debt.totalAmount, debt.amountPaidNow);
+            debt.repayments = debt.repayments || [];
+            debt.repayments.push(repaymentId);
+
+            // Add to balance history
+            if (!debt.balanceHistory) debt.balanceHistory = [];
+            debt.balanceHistory.push({ date: new Date(), balance: debt.balance });
+
+            debt.updatedAt = new Date();
+
+            // Save to DB
+            savedDebt = await debt.save();
+            wasAutoPaid = debt.status === 'PAID';
+
+            // Update in-memory store
+            inMemoryStore.createDebt(debt.toObject ? debt.toObject() : debt, true);
+
+            console.log(`✅ [DebtService] ${normalizedPaymentMethod.toUpperCase()} payment processed immediately for debt ${debt._id}. New balance: ${debt.balance}`);
+        }
+
+        const effectiveBalanceBefore = isImmediate ? balanceBefore : debt.balance;
 
         // 3. Emit Payment Request Event for ALL methods (Cash, Async, etc.)
         const payerPhone = payload.phoneNumber || debt.customer?.phone;
@@ -297,9 +320,9 @@ async function recordRepayment(payload) {
                 initiatedBy: createdBy,
                 // Balance fields for professional invoices
                 totalDebtAmount: debt.totalAmount,
-                balanceBeforeRepayment: debt.balance,
+                balanceBeforeRepayment: effectiveBalanceBefore,
                 amountPaidNow: amountPaid,
-                remainingBalance: Math.max(0, debt.balance - amountPaid)
+                remainingBalance: Math.max(0, effectiveBalanceBefore - amountPaid)
             }
         };
 
@@ -369,6 +392,7 @@ async function recordRepayment(payload) {
                             debtId: debt._id,
                             companyId,
                             shopId,
+                            salesId: debt.salesId,
                             totalAmount: debt.totalAmount,
                             hashedCustomerId: debt.hashedCustomerId,
                             customer: debt.customer || null,
@@ -436,21 +460,20 @@ async function crossCompanyCustomerDebts({ hashedCustomerId, requestingCompanyId
             createdAt: d.createdAt
         };
     }).filter(Boolean);
-    return results;
+    return Money.mapToMajor(results);
 }
 
 async function getDebtWithRepayments({ companyId, debtId }) {
     const debt = await debtRepo.findById(debtId, companyId);
     if (!debt) throw new Error('Debt not found');
 
-    // Load repayments with details, sorted by most recent first
-    const repayments = await Repayment.find({ debtId: debt._id })
+    const repayments = Money.mapToMajor(await Repayment.find({ debtId: debt._id })
         .sort({ paidAt: -1 })
         .lean()
-        .exec();
+        .exec());
 
     // Convert debt to plain object
-    const plain = debt.toObject ? debt.toObject() : debt;
+    const plain = Money.mapToMajor(debt.toObject ? debt.toObject() : debt);
 
     // Attach repayments with formatted details
     plain.repayments = repayments.map(r => ({
@@ -498,7 +521,7 @@ async function listDebts({ companyId, shopId, hashedCustomerId, status, page = 1
         debtRepo.listDebts(filter, { skip, limit, lean: true, sort: { createdAt: -1 } }),
         debtRepo.countDebts(filter)
     ]);
-    const result = { items, total, page, limit, pageCount: Math.ceil(total / limit) };
+    const result = { items: Money.mapToMajor(items), total, page, limit, pageCount: Math.ceil(total / limit) };
     // Cache for 30s
     try { if (redis && redis.set) await redis.set(cacheKey, result, 30); } catch (e) { /* non-critical */ }
     return result;
@@ -523,7 +546,7 @@ async function listAllDebts({ status, page = 1, limit = 50 } = {}) {
         debtRepo.listDebts(filter, { skip, limit, lean: true }),
         debtRepo.countDebts(filter)
     ]);
-    const result = { items, total, page, limit };
+    const result = { items: Money.mapToMajor(items), total, page, limit };
     try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(result), 'EX', 30); } catch (e) { }
     return result;
 }
@@ -550,12 +573,12 @@ async function companyAnalytics({ companyId }) {
         { $group: { _id: null, totalRepaid: { $sum: '$amountPaid' } } }
     ]);
 
-    const result = {
+    const result = Money.mapToMajor({
         totalOutstanding: totals ? totals.totalOutstanding : 0,
         totalCreditSales: totals ? totals.totalCreditSales : 0,
         totalDebts: totals ? totals.totalDebts : 0,
         totalRepaid: repaid ? repaid.totalRepaid : 0
-    };
+    });
 
     try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(result), 'EX', 30); } catch (e) { }
     return result;
@@ -576,10 +599,10 @@ async function shopAnalytics({ shopId }) {
         { $group: { _id: null, totalOutstanding: { $sum: '$balance' }, totalDebts: { $sum: 1 } } }
     ]);
 
-    const result = {
+    const result = Money.mapToMajor({
         totalOutstanding: totals ? totals.totalOutstanding : 0,
         totalDebts: totals ? totals.totalDebts : 0
-    };
+    });
 
     try { if (redis && redis.set) await redis.set(cacheKey, JSON.stringify(result), 'EX', 30); } catch (e) { }
     return result;
@@ -743,7 +766,7 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
                 paymentMethod,
                 paymentReference,
                 createdBy: createdBy || debt.updatedBy || debt.createdBy || undefined
-            });
+            }, true); // ⚡ skipQueue=true because we save manually below
 
             // update debt in-memory
             debt.amountPaidNow = Number(debt.amountPaidNow || 0) + Number(remaining);
@@ -754,12 +777,12 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
             debt.balanceHistory = debt.balanceHistory || [];
             debt.balanceHistory.push({ date: new Date(), balance: debt.balance });
             debt.updatedAt = new Date();
-            inMemoryStore.createDebt(debt);
+            inMemoryStore.createDebt(debt, true);
         } else {
             // nothing to pay but set status to PAID
             debt.status = 'PAID';
             debt.updatedAt = new Date();
-            inMemoryStore.createDebt(debt);
+            inMemoryStore.createDebt(debt, true);
         }
 
         // DIRECT DB WRITE: persist repayment (if any) and updated debt immediately so the DB reflects PAID status
@@ -830,6 +853,7 @@ async function markDebtPaid({ companyId, debtId, paymentMethod = 'MANUAL', payme
                         debtId: debt._id,
                         companyId,
                         shopId: debt.shopId,
+                        salesId: debt.salesId,
                         hashedCustomerId: debt.hashedCustomerId,
                         customer: debt.customer || null,
                         totalAmount: debt.totalAmount,
@@ -865,7 +889,7 @@ async function cancelDebt({ companyId, debtId, reason = null, performedBy }) {
         debt.updatedBy = performedBy || debt.updatedBy || debt.createdBy || undefined;
         debt.updatedAt = new Date();
         const inMemoryStore = require('../utils/inMemoryStore');
-        inMemoryStore.createDebt(debt);
+        inMemoryStore.createDebt(debt, true);
 
         // DIRECT DB WRITE: persist cancelled debt immediately to DB (SYNC - must complete before returning)
         let savedDebt = null;

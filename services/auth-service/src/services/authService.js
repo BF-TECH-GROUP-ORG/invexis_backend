@@ -389,167 +389,174 @@ async function register(data, options = {}) {
     // Create user
     const user = new User(userDataWithoutPrefs);
 
-    // ✅ Parallel: Save user + create preference + create consent
-    const savePromises = [user.save()];
+    try {
+        // ✅ Parallel: Save user + create preference + create consent
+        const savePromises = [user.save()];
 
-    let preference = null;
-    if (value.preferences) {
-        preference = new Preference({ userId: user._id, ...value.preferences });
-        savePromises.push(preference.save());
-    }
+        let preference = null;
+        if (value.preferences) {
+            preference = new Preference({ userId: user._id, ...value.preferences });
+            savePromises.push(preference.save());
+        }
 
-    let consent = null;
-    if (value.consent) {
-        const doc = JSON.stringify({
-            termsVersion: value.consent.termsVersion,
-            privacyVersion: value.consent.privacyVersion,
-            consentGiven: {
-                termsAccepted: value.consent.termsAccepted,
-                privacyAccepted: value.consent.privacyAccepted,
-                nationalIdConsent: value.consent.nationalIdConsent
-            }
-        });
-        const documentHash = crypto.createHash('sha256').update(doc).digest('hex');
-        consent = new Consent({
-            userId: user._id,
-            type: 'terms_and_privacy',
-            version: `${value.consent.termsVersion}|${value.consent.privacyVersion}`,
-            document: doc,
-            documentHash,
-            acceptedAt: new Date(),
-            ip: value.consent.ip || options.ip,
-            device: value.consent.device || options.device,
-            location: options.location || {}
-        });
-        savePromises.push(consent.save());
-    }
+        let consent = null;
+        if (value.consent) {
+            const doc = JSON.stringify({
+                termsVersion: value.consent.termsVersion,
+                privacyVersion: value.consent.privacyVersion,
+                consentGiven: {
+                    termsAccepted: value.consent.termsAccepted,
+                    privacyAccepted: value.consent.privacyAccepted,
+                    nationalIdConsent: value.consent.nationalIdConsent
+                }
+            });
+            const documentHash = crypto.createHash('sha256').update(doc).digest('hex');
+            consent = new Consent({
+                userId: user._id,
+                type: 'terms_and_privacy',
+                version: `${value.consent.termsVersion}|${value.consent.privacyVersion}`,
+                document: doc,
+                documentHash,
+                acceptedAt: new Date(),
+                ip: value.consent.ip || options.ip,
+                device: value.consent.device || options.device,
+                location: options.location || {}
+            });
+            savePromises.push(consent.save());
+        }
 
-    // ✅ Wait for all saves in parallel
-    await Promise.all(savePromises);
+        // ✅ Wait for all saves in parallel
+        await Promise.all(savePromises);
 
-    // Link references
-    if (preference) user.preferences = preference._id;
-    if (consent) {
-        user.consent = consent._id;
-        // Fire-and-forget event
-        publishEvent('user.consent.accepted', {
-            userId: user._id,
-            consentId: consent._id,
-            version: consent.version
-        }).catch(e => console.warn('Failed to publish user.consent.accepted:', e.message));
-    }
+        // Link references
+        if (preference) user.preferences = preference._id;
+        if (consent) {
+            user.consent = consent._id;
+            // Fire-and-forget event
+            publishEvent('user.consent.accepted', {
+                userId: user._id,
+                consentId: consent._id,
+                version: consent.version
+            }).catch(e => console.warn('Failed to publish user.consent.accepted:', e.message));
+        }
 
-    // ✅ Generate OTPs and create verifications in parallel
-    const verificationTokens = [];
-    const verificationPromises = [];
-    const redisPromises = [];
+        // ✅ Generate OTPs and create verifications in parallel
+        const verificationTokens = [];
+        const verificationPromises = [];
 
-    if (value.email && !user.isEmailVerified) {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const emailVerification = Verification.create({
-            userId: user._id,
-            type: 'email',
-            code,
-            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-            meta: { email: value.email }
-        });
-        verificationPromises.push(emailVerification);
-        verificationTokens.push({ type: 'email', code: process.env.NODE_ENV !== 'production' ? code : undefined });
-
-        // Fire-and-forget: Redis cache + event
-        emailVerification.then(v => {
-            redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications).catch(() => { });
-            publishEvent('verification.requested', {
+        if (value.email && !user.isEmailVerified) {
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            const emailVerification = Verification.create({
                 userId: user._id,
                 type: 'email',
-                details: { email: value.email },
-                role: user.role,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                otp: code,
-                preferences: value.preferences || {}
-            }).catch(e => console.warn('Failed to publish verification.requested (email):', e.message));
-        });
-    }
+                code,
+                expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+                meta: { email: value.email }
+            });
+            verificationPromises.push(emailVerification);
+            verificationTokens.push({ type: 'email', code: process.env.NODE_ENV !== 'production' ? code : undefined });
 
-    if (value.phone && !user.isPhoneVerified) {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const phoneVerification = Verification.create({
-            userId: user._id,
-            type: 'phone',
-            code,
-            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-            meta: { phone: value.phone }
-        });
-        verificationPromises.push(phoneVerification);
-        verificationTokens.push({ type: 'phone', code: process.env.NODE_ENV !== 'production' ? code : undefined });
+            // Fire-and-forget: Redis cache + event
+            emailVerification.then(v => {
+                redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications).catch(() => { });
+                publishEvent('verification.requested', {
+                    userId: user._id,
+                    type: 'email',
+                    details: { email: value.email },
+                    role: user.role,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    otp: code,
+                    preferences: value.preferences || {}
+                }).catch(e => console.warn('Failed to publish verification.requested (email):', e.message));
+            });
+        }
 
-        // Fire-and-forget: Redis cache + event
-        phoneVerification.then(v => {
-            redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications).catch(() => { });
-            publishEvent('verification.requested', {
+        if (value.phone && !user.isPhoneVerified) {
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            const phoneVerification = Verification.create({
                 userId: user._id,
                 type: 'phone',
-                details: { phone: value.phone },
-                role: user.role,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                otp: code,
-                preferences: value.preferences || {}
-            }).catch(e => console.warn('Failed to publish verification.requested (phone):', e.message));
-        });
-    }
+                code,
+                expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+                meta: { phone: value.phone }
+            });
+            verificationPromises.push(phoneVerification);
+            verificationTokens.push({ type: 'phone', code: process.env.NODE_ENV !== 'production' ? code : undefined });
 
-    // ✅ Wait for verifications to be created (but not for events/cache)
-    if (verificationPromises.length > 0) {
-        await Promise.all(verificationPromises);
-    }
-
-    // Publish user.created event for company service to create company-user relationship
-    // Optimized: Fire-and-forget
-    // Publish user.created event for company service to create company-user relationship
-    // Optimized: Fire-and-forget
-    // Pass the raw password (generated or provided) so it can be sent via notification
-    publishUserEvent.created(user, data.generatedPassword || data.password).catch(e => console.warn('Failed to publish user.created:', e.message));
-
-    // Role-specific events (Fire-and-forget)
-    publishEvent('user.registered', { userId: user._id, role: user.role, email: user.email, phone: user.phone, firstName: user.firstName, lastName: user.lastName })
-        .catch(e => console.warn('Failed to publish user.registered:', e.message));
-
-    if (user.role === 'customer') {
-        publishEvent('customer.registered', { userId: user._id, firstName: user.firstName, lastName: user.lastName, phone: user.phone, email: user.email })
-            .catch(e => console.warn('Failed to publish customer.registered:', e.message)); // Notification: OTP/welcome
-    } else {
-        publishEvent('internal.user.registered', { userId: user._id, role: user.role, assignedDepartments: user.assignedDepartments, companies: user.companies, shops: user.shops })
-            .catch(e => console.warn('Failed to publish internal.user.registered:', e.message)); // HR/audit
-    }
-
-    // Tenancy event if assigned
-    if (user.companies.length > 0 || user.shops.length > 0) {
-        publishEvent('auth.user.tenancy.assigned', { userId: user._id, companies: user.companies, shops: user.shops })
-            .catch(e => console.warn('Failed to publish auth.user.tenancy.assigned:', e.message));
-    }
-
-    // Cache
-    await redis.set(`user:${user._id}`, JSON.stringify(user.toObject({ versionKey: false })), 'EX', CACHE_TTLS.user);
-
-    // If a company_admin was just created, invalidate global company admins cache
-    try {
-        if (user.role === 'company_admin') {
-            await redis.del('company:admins:all');
+            // Fire-and-forget: Redis cache + event
+            phoneVerification.then(v => {
+                redis.set(`verify:${v._id}`, code, 'EX', CACHE_TTLS.verifications).catch(() => { });
+                publishEvent('verification.requested', {
+                    userId: user._id,
+                    type: 'phone',
+                    details: { phone: value.phone },
+                    role: user.role,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    otp: code,
+                    preferences: value.preferences || {}
+                }).catch(e => console.warn('Failed to publish verification.requested (phone):', e.message));
+            });
         }
-    } catch (e) { console.warn('Failed to invalidate global company admins cache after register:', e && e.message); }
 
-    // Generate refreshToken and session for the new user
-    const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
-    user.sessions.push(session._id);
-    await user.save();
+        // ✅ Wait for verifications to be created (but not for events/cache)
+        if (verificationPromises.length > 0) {
+            await Promise.all(verificationPromises);
+        }
 
-    return {
-        user: user.toObject({ versionKey: false, transform: doc => { delete doc.password; return doc; } }),
-        verificationTokens,
-        refreshToken
-    };
+        // Publish user.created event for company service to create company-user relationship
+        // Optimized: Fire-and-forget
+        // Pass the raw password (generated or provided) so it can be sent via notification
+        publishUserEvent.created(user, data.generatedPassword || data.password).catch(e => console.warn('Failed to publish user.created:', e.message));
+
+        // Role-specific events (Fire-and-forget)
+        publishEvent('user.registered', { userId: user._id, role: user.role, email: user.email, phone: user.phone, firstName: user.firstName, lastName: user.lastName })
+            .catch(e => console.warn('Failed to publish user.registered:', e.message));
+
+        if (user.role === 'customer') {
+            publishEvent('customer.registered', { userId: user._id, firstName: user.firstName, lastName: user.lastName, phone: user.phone, email: user.email })
+                .catch(e => console.warn('Failed to publish customer.registered:', e.message)); // Notification: OTP/welcome
+        } else {
+            publishEvent('internal.user.registered', { userId: user._id, role: user.role, assignedDepartments: user.assignedDepartments, companies: user.companies, shops: user.shops })
+                .catch(e => console.warn('Failed to publish internal.user.registered:', e.message)); // HR/audit
+        }
+
+        // Tenancy event if assigned
+        if (user.companies.length > 0 || user.shops.length > 0) {
+            publishEvent('auth.user.tenancy.assigned', { userId: user._id, companies: user.companies, shops: user.shops })
+                .catch(e => console.warn('Failed to publish auth.user.tenancy.assigned:', e.message));
+        }
+
+        // Cache
+        await redis.set(`user:${user._id}`, JSON.stringify(user.toObject({ versionKey: false })), 'EX', CACHE_TTLS.user);
+
+        // If a company_admin was just created, invalidate global company admins cache
+        try {
+            if (user.role === 'company_admin') {
+                await redis.del('company:admins:all');
+            }
+        } catch (e) { console.warn('Failed to invalidate global company admins cache after register:', e && e.message); }
+
+        // Generate refreshToken and session for the new user
+        const { refreshToken, session } = await tokenService.createSession(user._id, options.device, options.ip, options.location);
+        user.sessions.push(session._id);
+        await user.save();
+
+        return {
+            user: user.toObject({ versionKey: false, transform: doc => { delete doc.password; return doc; } }),
+            verificationTokens,
+            refreshToken
+        };
+    } catch (err) {
+        // Handle MongoDB duplicate key error (code 11000)
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            const message = `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`;
+            return { ok: false, status: 409, message };
+        }
+        throw err;
+    }
 }
 
 // Login (cached, rate-limited)
@@ -910,61 +917,70 @@ async function updateProfile(userId, data, profileImage = null) {
     const { error, value } = updateProfileSchema.validate(data);
     if (error) return { ok: false, status: 400, message: error.details[0].message };
 
-    // ✅ Use lean() for faster query if we're just checking existence
-    const user = await User.findById(userId).lean();
-    if (!user) return { ok: false, status: 404, message: 'User not found' };
+    try {
+        // ✅ Use lean() for faster query if we're just checking existence
+        const user = await User.findById(userId).lean();
+        if (!user) return { ok: false, status: 404, message: 'User not found' };
 
-    // Validate assignedDepartments for worker role if provided
-    if (value.assignedDepartments && user.role === 'worker') {
-        const validDepartments = ['sales', 'management'];
-        const invalidDepartments = value.assignedDepartments.filter(dept => {
-            const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
-            return !validDepartments.includes(normalized);
-        });
-        if (invalidDepartments.length > 0) {
-            return {
-                ok: false,
-                status: 400,
-                message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`
-            };
+        // Validate assignedDepartments for worker role if provided
+        if (value.assignedDepartments && user.role === 'worker') {
+            const validDepartments = ['sales', 'management'];
+            const invalidDepartments = value.assignedDepartments.filter(dept => {
+                const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+                return !validDepartments.includes(normalized);
+            });
+            if (invalidDepartments.length > 0) {
+                return {
+                    ok: false,
+                    status: 400,
+                    message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`
+                };
+            }
+            // Normalize to lowercase
+            value.assignedDepartments = value.assignedDepartments.map(dept => {
+                const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+                return normalized;
+            });
         }
-        // Normalize to lowercase
-        value.assignedDepartments = value.assignedDepartments.map(dept => {
-            const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
-            return normalized;
-        });
-    }
 
-    if (profileImage && profileImage.url) {
-        value.profilePicture = profileImage.url;
-        value.profilePictureCloudinaryId = profileImage.cloudinary_id;
-    }
-    // ✅ Parallel: Update preferences + user
-    const updatePromises = [];
+        if (profileImage && profileImage.url) {
+            value.profilePicture = profileImage.url;
+            value.profilePictureCloudinaryId = profileImage.cloudinary_id;
+        }
+        // ✅ Parallel: Update preferences + user
+        const updatePromises = [];
 
-    if (value.preferences) {
+        if (value.preferences) {
+            updatePromises.push(
+                Preference.findOneAndUpdate(
+                    { userId },
+                    { $set: value.preferences },
+                    { upsert: true, new: false } // Don't need returned doc
+                )
+            );
+        }
+
+        // ✅ Use findByIdAndUpdate with { new: false } for performance if not needed
         updatePromises.push(
-            Preference.findOneAndUpdate(
-                { userId },
-                { $set: value.preferences },
-                { upsert: true, new: false } // Don't need returned doc
-            )
+            User.findByIdAndUpdate(userId, { $set: value }, { new: false, runValidators: true })
         );
+
+        await Promise.all(updatePromises);
+
+        // ✅ Fire-and-forget: Cache invalidation + events
+        invalidateUserCache(userId).catch(() => { });
+        publishUserEvent.updated({ _id: userId, ...value }).catch(e => console.warn('Event failed:', e.message));
+        publishEvent('user.profile.updated', { userId, role: user.role }).catch(() => { });
+
+        return { user: await getCachedUser(userId) };
+    } catch (err) {
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            const message = `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`;
+            return { ok: false, status: 409, message };
+        }
+        throw err;
     }
-
-    // ✅ Use updateOne instead of save for better performance
-    updatePromises.push(
-        User.findByIdAndUpdate(userId, { $set: value }, { new: false })
-    );
-
-    await Promise.all(updatePromises);
-
-    // ✅ Fire-and-forget: Cache invalidation + events
-    invalidateUserCache(userId).catch(() => { });
-    publishUserEvent.updated({ _id: userId, ...value }).catch(e => console.warn('Event failed:', e.message));
-    publishEvent('user.profile.updated', { userId, role: user.role }).catch(() => { });
-
-    return { user: await getCachedUser(userId) };
 }
 
 // ✅ Change Password - Optimized
@@ -1596,50 +1612,59 @@ async function updateUser(adminId, userId, data) {
         return { ok: false, status: 400, message };
     }
 
-    // Handle preferences separately because it's a referenced document
-    if (value.preferences && typeof value.preferences === 'object') {
-        let pref = await Preference.findOne({ userId });
-        if (!pref) {
-            pref = new Preference({ userId });
+    try {
+        // Handle preferences separately because it's a referenced document
+        if (value.preferences && typeof value.preferences === 'object') {
+            let pref = await Preference.findOne({ userId });
+            if (!pref) {
+                pref = new Preference({ userId });
+            }
+            Object.assign(pref, value.preferences);
+            await pref.save();
+
+            // Use the preference ID for the user update
+            value.preferences = pref._id;
         }
-        Object.assign(pref, value.preferences);
-        await pref.save();
 
-        // Use the preference ID for the user update
-        value.preferences = pref._id;
-    }
-
-    // Get existing user to check role if needed for department validation
-    const existingUser = await User.findById(userId);
-    if (!existingUser) {
-        return { ok: false, status: 404, message: 'User not found' };
-    }
-
-    // If updating assignedDepartments and user is a worker, ensure role is in the update or use existing
-    if (value.assignedDepartments && (value.role === 'worker' || existingUser.role === 'worker')) {
-        const validDepartments = ['sales', 'management'];
-        const invalidDepartments = value.assignedDepartments.filter(dept => {
-            const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
-            return !validDepartments.includes(normalized);
-        });
-        if (invalidDepartments.length > 0) {
-            return {
-                ok: false,
-                status: 400,
-                message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`
-            };
+        // Get existing user to check role if needed for department validation
+        const existingUser = await User.findById(userId);
+        if (!existingUser) {
+            return { ok: false, status: 404, message: 'User not found' };
         }
-        // Normalize to lowercase
-        value.assignedDepartments = value.assignedDepartments.map(dept => {
-            const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
-            return normalized;
-        });
-    }
 
-    // Use findByIdAndUpdate with runValidators to ensure schema validation
-    const u = await User.findByIdAndUpdate(userId, value, { new: true, runValidators: true });
-    await invalidateUserCache(userId);
-    return { user: u };
+        // If updating assignedDepartments and user is a worker, ensure role is in the update or use existing
+        if (value.assignedDepartments && (value.role === 'worker' || existingUser.role === 'worker')) {
+            const validDepartments = ['sales', 'management'];
+            const invalidDepartments = value.assignedDepartments.filter(dept => {
+                const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+                return !validDepartments.includes(normalized);
+            });
+            if (invalidDepartments.length > 0) {
+                return {
+                    ok: false,
+                    status: 400,
+                    message: `Invalid departments for worker role: ${invalidDepartments.join(', ')}. Must be one of: ${validDepartments.join(', ')}`
+                };
+            }
+            // Normalize to lowercase
+            value.assignedDepartments = value.assignedDepartments.map(dept => {
+                const normalized = typeof dept === 'string' ? dept.trim().toLowerCase() : String(dept).trim().toLowerCase();
+                return normalized;
+            });
+        }
+
+        // Use findByIdAndUpdate with runValidators to ensure schema validation
+        const u = await User.findByIdAndUpdate(userId, value, { new: true, runValidators: true });
+        await invalidateUserCache(userId);
+        return { user: u };
+    } catch (err) {
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            const message = `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`;
+            return { ok: false, status: 409, message };
+        }
+        throw err;
+    }
 }
 async function deleteUser(adminId, userId) { return deleteAccount(userId); }
 

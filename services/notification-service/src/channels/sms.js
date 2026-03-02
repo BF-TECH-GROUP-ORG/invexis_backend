@@ -10,73 +10,90 @@ const { getSmsMessage, hasTemplate } = require("../config/smsTemplates");
  * Core SMS sending function (wrapped by circuit breaker)
  */
 const sendSMSCore = async (notification, phoneNumber, userId, companyId) => {
+  const MAX_RETRIES = 3;
+  let attempt = 0;
 
-  const startTime = Date.now();
+  while (attempt < MAX_RETRIES) {
+    attempt++;
+    const startTime = Date.now();
 
-  try {
+    try {
+      let messageBody;
 
-    let messageBody;
+      // Use the new simple template system
+      if (notification.templateName && hasTemplate(notification.templateName)) {
+        messageBody = getSmsMessage(
+          notification.templateName,
+          notification.payload || {},
+          { maxLength: 160, truncate: true }
+        );
+        logger.info(`✅ Using SMS template: ${notification.templateName}`);
+      } else if (notification.compiledContent?.sms?.message) {
+        // Support legacy compiled content if it exists
+        messageBody = notification.compiledContent.sms.message;
+        logger.info(`Using legacy compiled SMS content`);
+      } else {
+        // Final fallback to legacy title + body fields
+        const title = notification.title || '';
+        const body = notification.body || '';
+        const combined = title ? `${title}: ${body}` : body;
+        messageBody = combined.length > 160 ? combined.substring(0, 157) + '...' : combined;
+        logger.warn(`No SMS template found for ${notification.templateName}, using legacy fields`);
+      }
 
-    // Use the new simple template system
-    if (notification.templateName && hasTemplate(notification.templateName)) {
-      messageBody = getSmsMessage(
-        notification.templateName,
-        notification.payload || {},
-        { maxLength: 160, truncate: true }
-      );
-      logger.info(`✅ Using SMS template: ${notification.templateName}`);
-    } else if (notification.compiledContent?.sms?.message) {
-      // Support legacy compiled content if it exists
-      messageBody = notification.compiledContent.sms.message;
-      logger.info(`Using legacy compiled SMS content`);
-    } else {
-      // Final fallback to legacy title + body fields
-      const title = notification.title || '';
-      const body = notification.body || '';
-      const combined = title ? `${title}: ${body}` : body;
-      messageBody = combined.length > 160 ? combined.substring(0, 157) + '...' : combined;
-      logger.warn(`No SMS template found for ${notification.templateName}, using legacy fields`);
+      // Validate message
+      if (!messageBody || messageBody.trim().length === 0) {
+        throw new Error('SMS message body is empty');
+      }
+
+      const messageOptions = {
+        body: messageBody,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: phoneNumber,
+      };
+
+      // Send via Twilio
+      const message = await client.messages.create(messageOptions);
+      const responseTime = Date.now() - startTime;
+
+      logger.info(`✅ SMS sent to ${phoneNumber} in ${responseTime}ms (${messageBody.length} chars)${attempt > 1 ? ` (at attempt ${attempt})` : ''}`);
+      logger.debug(`SMS content: "${messageBody}"`);
+
+      return {
+        success: true,
+        providerId: message.sid,
+        responseTime,
+        recipient: phoneNumber,
+        messageLength: messageBody.length,
+        message: messageBody
+      };
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+
+      // Check if this error is retryable (network/DNS issues)
+      // Twilio errors typically have a code. EAI_AGAIN etc are standard node errors.
+      const retryableCodes = ['EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED'];
+      const currentCode = error.code || (error.error && error.error.code);
+
+      if ((retryableCodes.includes(currentCode) || (error.status && error.status >= 500)) && attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s
+        logger.warn(`🔄 Retrying SMS after ${currentCode || error.status} (Attempt ${attempt}/${MAX_RETRIES}) in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      logger.error("❌ SMS send error:", error);
+
+      throw {
+        success: false,
+        error,
+        responseTime,
+        recipient: phoneNumber,
+        attempts: attempt
+      };
     }
-
-    // Validate message
-    if (!messageBody || messageBody.trim().length === 0) {
-      throw new Error('SMS message body is empty');
-    }
-
-    const messageOptions = {
-      body: messageBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: phoneNumber,
-    };
-
-    // Send via Twilio
-    const message = await client.messages.create(messageOptions);
-    const responseTime = Date.now() - startTime;
-
-    logger.info(`✅ SMS sent to ${phoneNumber} in ${responseTime}ms (${messageBody.length} chars)`);
-    logger.debug(`SMS content: "${messageBody}"`);
-
-    return {
-      success: true,
-      providerId: message.sid,
-      responseTime,
-      recipient: phoneNumber,
-      messageLength: messageBody.length,
-      message: messageBody
-    };
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-    logger.error("❌ SMS send error:", error);
-
-    throw {
-      success: false,
-      error,
-      responseTime,
-      recipient: phoneNumber,
-    };
   }
-
-}
+};
 
 // Wrap with circuit breaker
 const smsCircuitBreaker = createSmsCircuitBreaker(sendSMSCore);
@@ -213,4 +230,4 @@ const sendSMS = async (notification, phoneNumber, userId, companyId) => {
   }
 }
 
-module.exports = { sendSMS , smsCircuitBreaker } 
+module.exports = { sendSMS, smsCircuitBreaker } 

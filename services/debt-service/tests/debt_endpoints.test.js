@@ -32,7 +32,7 @@ describe('Debt Endpoints', () => {
         debtId = res.body.debt._id;
     });
 
-    it('should record a repayment', async () => {
+    it('should record a repayment (CASH) and update balance immediately', async () => {
         const res = await request(app)
             .post('/debt/repayment')
             .send({
@@ -43,6 +43,9 @@ describe('Debt Endpoints', () => {
             });
         expect(res.statusCode).toBe(201);
         expect(res.body.repayment).toBeDefined();
+        expect(res.body.debt).toBeDefined();
+        // Since original debt was 100, and repayment is 50, new balance should be 50
+        expect(res.body.debt.balance).toBe(50);
         repaymentId = res.body.repayment._id;
     });
 

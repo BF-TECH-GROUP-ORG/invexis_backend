@@ -29,6 +29,7 @@ async function handlePaymentProcessed(data) {
         // Use event deduplication to prevent duplicate processing
         const processed = await processEventOnce(
             `payment_processed_${paymentId}`,
+            'payment.processed',
             async () => {
                 // Find debt by ID or Order ID
                 let debt;
@@ -36,7 +37,7 @@ async function handlePaymentProcessed(data) {
                     debt = await Debt.findById(debtId);
                 } else if (targetOrderId) {
                     // Try finding by ID first if orderId maps to _id
-                    if (targetOrderId.match(/^[0-9a-fA-F]{24}$/)) {
+                    if (String(targetOrderId).match(/^[0-9a-fA-F]{24}$/)) {
                         debt = await Debt.findById(targetOrderId);
                     }
                     if (!debt) {
@@ -57,8 +58,8 @@ async function handlePaymentProcessed(data) {
                 if (repaymentId) {
                     const repayment = await Repayment.findById(repaymentId);
                     if (repayment) {
-                        if (repayment.status === 'succeeded') {
-                            console.log(`ℹ️ Repayment ${repaymentId} already succeeded. Skipping.`);
+                        if (repayment.status === 'succeeded' || repayment.status === 'debt') {
+                            console.log(`ℹ️ Repayment ${repaymentId} already processed (Status: ${repayment.status}). Skipping balance update.`);
                             return { success: true, message: 'Already processed' };
                         }
                         repayment.status = 'succeeded';
@@ -71,9 +72,15 @@ async function handlePaymentProcessed(data) {
                     console.warn(`⚠️ No repaymentId in metadata for payment ${paymentId}. Crediting debt directly.`);
                 }
 
-                // 3. Update Debt Balance
-                debt.amountPaidNow = (debt.amountPaidNow || 0) + amount;
-                debt.balance = Math.max(0, debt.totalAmount - debt.amountPaidNow);
+                // 3. Update Debt Balance (Skip if already applied by debtService.recordRepayment)
+                if (debt.repayments && debt.repayments.includes(repaymentId)) {
+                    console.log(`ℹ️ Debt ${debt._id} balance already updated for repayment ${repaymentId}. Skipping.`);
+                } else {
+                    debt.amountPaidNow = (debt.amountPaidNow || 0) + amount;
+                    debt.balance = Math.max(0, debt.totalAmount - debt.amountPaidNow);
+                    if (!debt.repayments) debt.repayments = [];
+                    debt.repayments.push(repaymentId);
+                }
                 debt.lastPaymentDate = new Date();
 
                 // Track in balance history
@@ -191,6 +198,7 @@ async function handlePaymentRefunded(data) {
     try {
         const processed = await processEventOnce(
             `payment_refunded_${paymentId}`,
+            'payment.refunded',
             async () => {
                 let debt;
                 if (debtId) {

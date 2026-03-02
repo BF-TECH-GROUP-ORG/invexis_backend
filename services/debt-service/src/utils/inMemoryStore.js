@@ -21,12 +21,14 @@ class InMemoryStore {
     }
 
     // Create a debt in memory and enqueue for persistence (Redis if available)
-    createDebt(debt) {
+    createDebt(debt, skipQueue = false) {
         // prefer Mongo ObjectId strings for compatibility with Mongoose schemas
         const id = debt._id || new mongoose.Types.ObjectId().toString();
         const now = new Date();
         const doc = Object.assign({ _id: id, createdAt: now, updatedAt: now }, debt);
         this.debts.set(id.toString(), doc);
+
+        if (skipQueue) return doc;
 
         const envelope = { type: 'debt', doc };
         const redis = getRedis();
@@ -41,12 +43,14 @@ class InMemoryStore {
     }
 
     // Record repayment in memory and enqueue
-    createRepayment(repayment) {
+    createRepayment(repayment, skipQueue = false) {
         // prefer Mongo ObjectId strings for compatibility with Mongoose schemas
         const id = repayment._id || new mongoose.Types.ObjectId().toString();
         const now = new Date();
         const doc = Object.assign({ _id: id, createdAt: now, paidAt: repayment.paidAt || now }, repayment);
         this.repayments.set(id.toString(), doc);
+
+        if (skipQueue) return doc;
 
         const envelope = { type: 'repayment', doc };
         const redis = getRedis();
@@ -91,8 +95,8 @@ class InMemoryStore {
         const envelope = { type: 'event', doc: eventDoc };
         const redis = getRedis();
         if (redis && typeof redis.rpush === 'function') {
-            try { 
-                redis.rpush(WRITE_QUEUE_KEY, JSON.stringify(envelope)).catch(() => { }); 
+            try {
+                redis.rpush(WRITE_QUEUE_KEY, JSON.stringify(envelope)).catch(() => { });
                 console.log(`[InMemoryStore] 📌 Event enqueued to Redis: ${eventDoc.eventType}`);
             } catch (e) { console.warn('[InMemoryStore] Failed to enqueue to Redis:', e); }
         } else {

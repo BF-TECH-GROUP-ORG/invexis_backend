@@ -13,26 +13,29 @@ const extractUserId = (content) => {
 
 // Helper to emit to multiple targets
 const emitToTargets = (io, targets, eventName, data) => {
-  targets.forEach((target) => {
-    try {
-      // Debug: Check if room has active sockets
-      const room = io.sockets.adapter.rooms.get(target);
-      const socketCount = room ? room.size : 0;
+  try {
+    if (!targets || targets.length === 0) return;
 
-      logger.info(`Attempting to emit ${eventName} to ${target}`, {
-        socketCount,
-        hasSockets: socketCount > 0
-      });
+    // Use a single emitter chain to ensure and-grouping/deduplication if needed,
+    // OR just loop but be aware that Socket.io to().to() means OR in newer versions or AND in older?
+    // Actually, in Socket.io, io.to('r1').to('r2').emit() sends to users in (r1 OR r2),
+    // and it handles deduplication automatically (only one message per socket).
 
-      io.to(target).emit(eventName, {
-        ...data,
-        event: eventName,
-        ts: Date.now(),
-      });
-    } catch (err) {
-      logger.error(`Failed to emit ${eventName} to ${target}:`, err);
-    }
-  });
+    let emitter = io;
+    targets.forEach((target) => {
+      emitter = emitter.to(target);
+    });
+
+    emitter.emit(eventName, {
+      ...data,
+      event: eventName,
+      ts: Date.now(),
+    });
+
+    logger.debug(`Emitted ${eventName} to targets: ${targets.join(', ')}`);
+  } catch (err) {
+    logger.error(`Failed to emit ${eventName}:`, err);
+  }
 };
 
 const startRealtimeConsumer = async (io) => {
@@ -152,13 +155,13 @@ const startRealtimeConsumer = async (io) => {
           roomCount: rooms.length
         });
 
-        if (!userId && targetUserIds.length === 0) {
-          logger.warn(`Notification event ${routingKey} missing userId/targetUserIds`);
+        if (!userId && targetUserIds.length === 0 && rooms.length === 0) {
+          logger.warn(`Notification event ${routingKey} missing userId/targetUserIds/rooms`);
           return;
         }
 
         // Handle notification events
-        if (routingKey.includes("created") || routingKey.includes("sent")) {
+        if (routingKey.includes("created") || routingKey.includes("sent") || routingKey.includes("broadcast")) {
           if (targetUserIds.length > 0) {
             emitToTargets(
               io,
@@ -170,6 +173,7 @@ const startRealtimeConsumer = async (io) => {
             // Use emitToTargets for consistent logging
             emitToTargets(io, [`user:${userId}`], "notification", notificationData);
           }
+
           if (rooms.length > 0) {
             emitToTargets(io, rooms, "notification", notificationData);
           }

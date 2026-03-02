@@ -47,6 +47,33 @@ class Money {
             currency: currency
         }).format(major);
     }
+
+    /**
+     * Deeply map known money fields in an object or array from minor to major units
+     * Useful for .lean() query results where getters are bypassed.
+     */
+    static mapToMajor(input, decimals = 2, fields = ['totalAmount', 'balance', 'amountPaidNow', 'amountPaid', 'refundAmount', 'unitPrice', 'totalPrice', 'totalOutstanding', 'totalCreditSales', 'totalRepaid']) {
+        if (!input) return input;
+
+        if (Array.isArray(input)) {
+            return input.map(item => this.mapToMajor(item, decimals, fields));
+        }
+
+        if (typeof input !== 'object') return input;
+
+        const output = { ...input };
+        for (const key in output) {
+            if (fields.includes(key) && typeof output[key] === 'number') {
+                output[key] = this.toMajor(output[key], decimals);
+            } else if (typeof output[key] === 'object' && output[key] !== null) {
+                // Handle nested objects/arrays recursively
+                if (key !== '_id' && !(output[key] instanceof Date)) {
+                    output[key] = this.mapToMajor(output[key], decimals, fields);
+                }
+            }
+        }
+        return output;
+    }
 }
 
 module.exports = Money;

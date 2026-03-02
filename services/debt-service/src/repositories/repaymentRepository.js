@@ -5,8 +5,13 @@ async function createRepayment(doc) {
     return r.save();
 }
 
+async function findByReference(paymentReference, companyId) {
+    if (!paymentReference || paymentReference === 'CASH' || paymentReference === 'MANUAL') return null;
+    return Repayment.findOne({ paymentReference, companyId });
+}
+
 async function aggregateRepayments(matchStage) {
     return Repayment.aggregate([{ $match: matchStage }, { $group: { _id: null, totalRepaid: { $sum: '$amountPaid' } } }]);
 }
 
-module.exports = { createRepayment, aggregateRepayments };
+module.exports = { createRepayment, aggregateRepayments, findByReference };

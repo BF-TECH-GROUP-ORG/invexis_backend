@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 // models/customerSummary.model.js
 // NOTE: Customer summaries are now keyed by hashedCustomerId instead of raw customerId
 const CustomerSummarySchema = new mongoose.Schema({
-    companyId: { type: mongoose.Types.ObjectId, index: true, required: true },
+    companyId: { type: String, index: true, required: true },
     hashedCustomerId: { type: String, index: true, required: true },
 
     totalDebts: { type: Number, default: 0 },

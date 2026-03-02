@@ -44,6 +44,14 @@ services:
       - "traefik.http.routers.traefik-dashboard.tls=true"
       - "traefik.http.routers.traefik-dashboard.middlewares=auth"
       - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_BASIC_AUTH}"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   # ================================================================================
   # OBSERVABILITY STACK
@@ -85,6 +93,14 @@ services:
       - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.prometheus.tls=true"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   grafana:
     image: grafana/grafana:10.2.2
@@ -128,6 +144,14 @@ services:
       - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.grafana.tls=true"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   grafana-postgres:
     image: postgres:15-alpine
@@ -183,6 +207,14 @@ services:
       - "traefik.http.routers.elasticsearch.rule=Host(`elasticsearch.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.elasticsearch.tls=true"
       - "traefik.http.services.elasticsearch.loadbalancer.server.port=9200"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
 
   logstash:
     image: docker.elastic.co/logstash/logstash:8.11.1
@@ -265,6 +297,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     security_opt:
       - no-new-privileges:true
     user: "999:999"
@@ -308,6 +348,14 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     user: "999:999"
@@ -332,6 +380,14 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     user: "999:999"
@@ -356,6 +412,14 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     user: "999:999"
@@ -383,6 +447,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     security_opt:
       - no-new-privileges:true
     command: >
@@ -418,6 +490,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     security_opt:
       - no-new-privileges:true
     user: "999:999"
@@ -446,6 +526,14 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     user: "999:999"
@@ -475,6 +563,14 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     security_opt:
       - no-new-privileges:true
     labels:
@@ -498,6 +594,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       LOG_LEVEL: ${API_GATEWAY_LOG_LEVEL:-info}
       JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       ALLOWED_ORIGINS: https://${DOMAIN:-invexix.com},https://api.${DOMAIN:-invexix.com}
     volumes:
@@ -515,6 +612,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -544,6 +649,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       FRONTEND_URL: https://${DOMAIN:-invexix.com}
       GOOGLE_CALLBACK_URL: https://api.${DOMAIN:-invexix.com}/auth/google/callback
     volumes:
@@ -561,6 +667,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -583,6 +697,7 @@ services:
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -598,6 +713,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -617,6 +740,7 @@ services:
       PORT: 9001
       DB_POSTGRES: postgresql://invexis:${SHOP_POSTGRES_PASSWORD}@shop-postgres:5432/shopdb
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -632,6 +756,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -651,6 +783,7 @@ services:
       PORT: 8007
       DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/inventorydb?authSource=admin
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -666,6 +799,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -685,6 +826,7 @@ services:
       PORT: 9000
       DB_MYSQL: mysql://invexis:${SALES_MYSQL_PASSWORD}@sales-mysql:3306/salesdb
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
       - sales_uploads:/app/uploads
@@ -701,6 +843,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -754,6 +904,7 @@ services:
       PORT: 9003
       MONGO_URI: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/reportdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       JWT_ACCESS_SECRET: ${JWT_SECRET}
     volumes:
       - ./shared:/app/shared:ro
@@ -770,6 +921,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -792,6 +951,7 @@ services:
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
       FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
       FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -807,6 +967,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -830,6 +998,7 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -845,6 +1014,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -865,6 +1042,7 @@ services:
       DB_POSTGRES: postgresql://invexis:${ANALYTICS_POSTGRES_PASSWORD}@analytics-postgres:5432/analyticsdb
       DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/analyticsdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -882,6 +1060,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -901,6 +1087,7 @@ services:
       PORT: 8003
       DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/auditdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -916,6 +1103,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -935,6 +1130,7 @@ services:
       PORT: 8005
       DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/debtdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -950,6 +1146,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -969,6 +1173,7 @@ services:
       PORT: 9004
       MONGO_URI: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/invexis_document?authSource=admin
       LOG_LEVEL: info
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -982,6 +1187,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -1000,6 +1213,7 @@ services:
       NODE_ENV: production
       PORT: 9002
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
     volumes:
       - ./shared:/app/shared:ro
     networks:
@@ -1013,6 +1227,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     read_only: true

@@ -88,7 +88,7 @@ async function handleDebtCreated(data) {
     try {
         const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-        // Admin Notification (In-App/Push)
+        // Admin/Staff Notification (In-App/Push) - Targeted to SHOP if available
         await dispatchBroadcastEvent({
             event: "debt.created",
             data: {
@@ -100,14 +100,30 @@ async function handleDebtCreated(data) {
                 customerName: customer?.name || "Customer",
                 amount: totalDebt,
                 dueDate,
+                shopName: data.shopName || "Our Shop",
+                performedByName: data.performedByName || "Staff",
                 ...data
             },
             companyId,
+            shopId, // Precision: Target specific shop room
             templateName: "debt.created",
-            scope: "department",
+            scope: shopId ? "shop" : "department",
             departmentId: DEPARTMENTS.MANAGEMENT,
             roles: ["company_admin", "worker"]
         });
+
+        // Debtor In-App Notification (if system user)
+        const debtorId = data.debtorId || data.customerId;
+        if (debtorId && debtorId !== 'external' && !debtorId.toString().startsWith('guest_')) {
+            const { dispatchEvent } = require("../../services/dispatcher");
+            await dispatchEvent({
+                event: "debt.created",
+                templateName: "debt.created",
+                companyId,
+                recipients: [debtorId.toString()],
+                data: { ...data, customerName: customer?.name || "Customer" }
+            });
+        }
 
         // Customer SMS
         const customerPhone = customer?.phone || data.customerPhone || data.phone;
@@ -150,7 +166,7 @@ async function handleRepaymentCreated(data) {
     try {
         const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-        // Admin Notification
+        // Admin/Staff Notification - Targeted to SHOP
         await dispatchBroadcastEvent({
             event: "debt.repayment.created",
             data: {
@@ -160,14 +176,30 @@ async function handleRepaymentCreated(data) {
                 remainingBalance: safeBalance,
                 companyId,
                 customerName: safeCustomerName,
+                shopName: data.shopName || "Our Shop",
+                performedByName: data.performedByName || "Staff",
                 ...data
             },
             companyId,
+            shopId: data.shopId,
             templateName: "debt.payment.received",
-            scope: "department",
+            scope: data.shopId ? "shop" : "department",
             departmentId: DEPARTMENTS.MANAGEMENT,
             roles: ["company_admin", "worker"]
         });
+
+        // Debtor In-App Notification (if system user)
+        const debtorId = data.debtorId || data.customerId;
+        if (debtorId && debtorId !== 'external') {
+            const { dispatchEvent } = require("../../services/dispatcher");
+            await dispatchEvent({
+                event: "debt.payment.received",
+                templateName: "debt.payment.received",
+                companyId,
+                recipients: [debtorId.toString()],
+                data: { ...data, amount: safeAmount, remainingBalance: safeBalance }
+            });
+        }
 
         // Customer SMS
         const customerPhone = customer?.phone || data.customerPhone || data.phone;
@@ -204,7 +236,7 @@ async function handleDebtFullyPaid(data) {
     try {
         const { dispatchBroadcastEvent } = require("../../services/dispatcher");
 
-        // Admin Notification
+        // Admin/Staff Notification - Targeted to SHOP
         await dispatchBroadcastEvent({
             event: "debt.fully_paid",
             data: {
@@ -213,13 +245,29 @@ async function handleDebtFullyPaid(data) {
                 amount: totalAmount,
                 customerName: customer?.name || "Customer",
                 remainingBalance: 0,
+                shopName: data.shopName || "Our Shop",
+                performedByName: data.performedByName || "Staff",
                 ...data
             },
             companyId,
+            shopId: data.shopId,
             templateName: "debt.fully.paid",
-            scope: "company",
+            scope: data.shopId ? "shop" : "company",
             roles: ["company_admin", "worker"]
         });
+
+        // Debtor In-App Notification (if system user)
+        const debtorId = data.debtorId || data.customerId;
+        if (debtorId && debtorId !== 'external') {
+            const { dispatchEvent } = require("../../services/dispatcher");
+            await dispatchEvent({
+                event: "debt.fully_paid",
+                templateName: "debt.fully.paid",
+                companyId,
+                recipients: [debtorId.toString()],
+                data: { ...data, amount: totalAmount }
+            });
+        }
 
         // Customer SMS
         await sendCustomerSms({
@@ -328,9 +376,8 @@ async function handleDebtStatusUpdated(data) {
         });
 
         // Customer SMS if PAID or FULLY_PAID
-        // Note: Check for duplicate if 'debt.fully_paid' event is also emitted.
-        // Assuming 'debt.status.updated' might be the catch-all for manual updates.
-        if (status === 'PAID' || status === 'FULLY_PAID') {
+        // Note: EXCLUDE FULLY_PAID if it's already handled by handleDebtFullyPaid
+        if (status === 'PAID') {
             await sendCustomerSms({
                 event: "debt.status.updated.customer",
                 templateName: "debt.payment.received",

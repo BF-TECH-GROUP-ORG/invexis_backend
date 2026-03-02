@@ -247,24 +247,32 @@ const returnEvents = {
    * This event is for notification purposes only
    */
   async created(saleReturn, sale, items = [], trx = null) {
-    // Add createdAt and traceId to payload
-    payload.items = items.map(item => ({
-      productId: item.productId,
-      productName: item.productName,
-      category: item.category,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      costPrice: item.costPrice,
-      discount: item.discount || 0,
-      total: item.total
-    }));
-    payload.createdAt = new Date().toISOString();
-    payload.traceId = uuidv4();
+    const payload = {
+      returnId: saleReturn.returnId,
+      saleId: saleReturn.saleId,
+      companyId: sale.companyId,
+      shopId: sale.shopId,
+      reason: saleReturn.reason,
+      refundAmount: saleReturn.refundAmount,
+      status: saleReturn.status,
+      items: items.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        category: item.category,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        costPrice: item.costPrice,
+        discount: item.discount || 0,
+        total: item.total
+      })),
+      createdAt: new Date().toISOString(),
+      traceId: uuidv4()
+    };
 
     return await Outbox.create({
-      type: "sale.created",
+      type: "sale.return.created",
       exchange: "events_topic",
-      routingKey: "sale.created",
+      routingKey: "sale.return.created",
       payload
     }, trx);
   },

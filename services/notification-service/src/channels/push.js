@@ -38,145 +38,163 @@ const sanitizePayload = (payload) => {
 };
 
 const sendPushCore = async (notification, fcmToken, userId, companyId) => {
-  const startTime = Date.now();
+  const MAX_RETRIES = 3;
+  let attempt = 0;
 
-  try {
-    // Get push-specific compiled content or fallback to legacy fields
-    const pushContent = notification.getContentForChannel('push');
+  while (attempt < MAX_RETRIES) {
+    attempt++;
+    const startTime = Date.now();
 
-    let messagePayload;
+    try {
+      // Get push-specific compiled content or fallback to legacy fields
+      const pushContent = notification.getContentForChannel('push');
 
-    if (pushContent) {
-      // Use compiled push template content
-      // Sanitize and flatten data payload
-      const sanitizedData = sanitizePayload({
-        notificationId: notification._id.toString(),
-        ...(pushContent.data || {}),
-        ...notification.payload
-      });
+      let messagePayload;
 
-      messagePayload = {
-        notification: {
-          title: pushContent.title,
-          body: pushContent.body,
-        },
-        data: sanitizedData,
-        token: fcmToken,
-      };
+      if (pushContent) {
+        // Use compiled push template content
+        // Sanitize and flatten data payload
+        const sanitizedData = sanitizePayload({
+          notificationId: notification._id.toString(),
+          ...(pushContent.data || {}),
+          ...notification.payload
+        });
 
-      // Add push-specific options
-      if (pushContent.sound && pushContent.sound !== 'default') {
-        messagePayload.notification.sound = pushContent.sound;
-      }
-
-      if (pushContent.badge) {
-        messagePayload.notification.badge = pushContent.badge.toString();
-      }
-
-      // Set priority
-      if (pushContent.priority === 'high') {
-        messagePayload.android = {
-          priority: 'high',
-        };
-        messagePayload.apns = {
-          headers: {
-            'apns-priority': '10',
+        messagePayload = {
+          notification: {
+            title: pushContent.title,
+            body: pushContent.body,
           },
+          data: sanitizedData,
+          token: fcmToken,
         };
-      }
 
-      // Add category for iOS
-      if (pushContent.category) {
-        messagePayload.apns = {
-          ...messagePayload.apns,
-          payload: {
-            aps: {
-              category: pushContent.category,
+        // Add push-specific options
+        if (pushContent.sound && pushContent.sound !== 'default') {
+          messagePayload.notification.sound = pushContent.sound;
+        }
+
+        if (pushContent.badge) {
+          messagePayload.notification.badge = pushContent.badge.toString();
+        }
+
+        // Set priority
+        if (pushContent.priority === 'high') {
+          messagePayload.android = {
+            priority: 'high',
+          };
+          messagePayload.apns = {
+            headers: {
+              'apns-priority': '10',
             },
+          };
+        }
+
+        // Add category for iOS
+        if (pushContent.category) {
+          messagePayload.apns = {
+            ...messagePayload.apns,
+            payload: {
+              aps: {
+                category: pushContent.category,
+              },
+            },
+          };
+        }
+      } else {
+        // Fallback to legacy fields
+        const sanitizedData = sanitizePayload({
+          notificationId: notification._id.toString(),
+          ...notification.payload,
+        });
+
+        messagePayload = {
+          notification: {
+            title: notification.title,
+            body: notification.body,
           },
+          data: sanitizedData,
+          token: fcmToken,
         };
+        logger.warn(`No push template found for notification ${notification._id}, using legacy fields`);
       }
-    } else {
-      // Fallback to legacy fields
-      const sanitizedData = sanitizePayload({
-        notificationId: notification._id.toString(),
-        ...notification.payload,
-      });
 
-      messagePayload = {
-        notification: {
-          title: notification.title,
-          body: notification.body,
-        },
-        data: sanitizedData,
-        token: fcmToken,
-      };
-      logger.warn(`No push template found for notification ${notification._id}, using legacy fields`);
-    }
+      const response = await messaging.send(messagePayload);
+      const responseTime = Date.now() - startTime;
 
-    const response = await messaging.send(messagePayload);
-    const responseTime = Date.now() - startTime;
+      logger.info(
+        `✅ Push sent to token ${fcmToken.substring(
+          0,
+          10
+        )}... in ${responseTime}ms (Title: ${messagePayload.notification.title})${attempt > 1 ? ` (at attempt ${attempt})` : ''}`
+      );
 
-    logger.info(
-      `✅ Push sent to token ${fcmToken.substring(
-        0,
-        10
-      )}... in ${responseTime}ms (Title: ${messagePayload.notification.title})`
-    );
-
-    return {
-      success: true,
-      providerId: response, // Firebase message ID
-      responseTime,
-      recipient: fcmToken,
-      title: messagePayload.notification.title
-    };
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-
-    // Check for known "user" errors that shouldn't trip the circuit breaker
-    const errorCode = error.code || error.errorInfo?.code;
-    const ignoreBreakerErrors = [
-      'messaging/invalid-registration-token',
-      'messaging/registration-token-not-registered',
-      'messaging/invalid-argument'
-    ];
-
-    if (errorCode && ignoreBreakerErrors.includes(errorCode)) {
-      logger.warn(`⚠️ Push failed due to invalid token (Breaker safe): ${fcmToken.substring(0, 10)}... - ${errorCode}`, {
-        error: error.message,
-        code: errorCode,
-        responseTime,
-        token: fcmToken.substring(0, 10) + '...'
-      });
       return {
-        success: false,
-        providerId: null,
+        success: true,
+        providerId: response, // Firebase message ID
         responseTime,
         recipient: fcmToken,
-        error: errorCode,
-        isUserError: true // Flag to indicate this isn't a system failure
+        title: messagePayload.notification.title
       };
-    }
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
 
-    // Real system errors - wrap properly for circuit breaker to detect
-    const wrappedError = new Error(error.message);
-    wrappedError.error = {
-      code: error.code || error.errorInfo?.code,
-      status: error.status || error.errorInfo?.status,
-      response: error.response,
-      message: error.message
-    };
-    
-    logger.error("❌ Push send error:", {
-      error: error.message,
-      code: error.code || error.errorInfo?.code,
-      errorInfo: error.errorInfo || error,
-      responseTime,
-      token: fcmToken.substring(0, 10) + '...',
-      notificationId: notification._id.toString()
-    });
-    throw wrappedError;
+      // Check for known "user" errors that shouldn't trip the circuit breaker
+      const errorCode = error.code || error.errorInfo?.code;
+      const ignoreBreakerErrors = [
+        'messaging/invalid-registration-token',
+        'messaging/registration-token-not-registered',
+        'messaging/invalid-argument'
+      ];
+
+      if (errorCode && ignoreBreakerErrors.includes(errorCode)) {
+        logger.warn(`⚠️ Push failed due to invalid token (Breaker safe): ${fcmToken.substring(0, 10)}... - ${errorCode}`, {
+          error: error.message,
+          code: errorCode,
+          responseTime,
+          token: fcmToken.substring(0, 10) + '...'
+        });
+        return {
+          success: false,
+          providerId: null,
+          responseTime,
+          recipient: fcmToken,
+          error: errorCode,
+          isUserError: true // Flag to indicate this isn't a system failure
+        };
+      }
+
+      // Check if this error is retryable (network/DNS issues)
+      const retryableErrors = ['EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT', 'messaging/internal-error', 'messaging/server-unavailable'];
+      const currentCode = error.code || error.errorInfo?.code;
+
+      if (retryableErrors.includes(currentCode) && attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s
+        logger.warn(`🔄 Retrying push after ${currentCode} (Attempt ${attempt}/${MAX_RETRIES}) in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // Real system errors - wrap properly for circuit breaker to detect
+      const wrappedError = new Error(error.message);
+      wrappedError.error = {
+        code: error.code || error.errorInfo?.code,
+        status: error.status || error.errorInfo?.status,
+        response: error.response,
+        message: error.message
+      };
+
+      logger.error("❌ Push send error:", {
+        error: error.message,
+        code: error.code || error.errorInfo?.code,
+        errorInfo: error.errorInfo || error,
+        responseTime,
+        token: fcmToken.substring(0, 10) + '...',
+        notificationId: notification._id.toString(),
+        attempts: attempt
+      });
+      throw wrappedError;
+    }
   }
 };
 

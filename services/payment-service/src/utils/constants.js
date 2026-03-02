@@ -12,6 +12,7 @@ const GATEWAY_TYPES = {
 
 const PAYMENT_STATUS = {
     PENDING: 'pending',
+    DEBT: 'debt',
     PROCESSING: 'processing',
     SUCCEEDED: 'succeeded',
     FAILED: 'failed',
@@ -41,6 +42,8 @@ const INVOICE_STATUS = {
     DRAFT: 'draft',
     OPEN: 'open',
     PAID: 'paid',
+    DEBT: 'debt',
+    PENDING: 'pending',
     VOID: 'void'
 };
 

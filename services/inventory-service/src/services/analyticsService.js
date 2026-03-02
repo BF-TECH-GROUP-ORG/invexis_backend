@@ -7,7 +7,7 @@ const ProductVariation = require('../models/ProductVariation');
 const Alert = require('../models/Alert');
 const Discount = require('../models/Discount');
 const logger = require('../utils/logger');
-
+const MoneyUtil = require('/app/shared/utils/MoneyUtil');
 
 class AnalyticsService {
     /**
@@ -194,10 +194,10 @@ class AnalyticsService {
             outOfStockUnits: data.outOfStockCount || 0,
             lowStockUnits: data.lowStockCount || 0,
             overstockedUnits: data.overstockedCount || 0,
-            totalInventoryValue: this._round(data.totalCostValue || 0), // Usually Inventory Value = Cost Value
-            totalCostValue: this._round(data.totalCostValue || 0),
-            totalRetailValue: this._round(data.totalRetailValue || 0),
-            averageUnitCost: data.totalUnits ? this._round(data.totalCostValue / data.totalUnits) : 0
+            totalInventoryValue: MoneyUtil.toMajor(data.totalRetailValue || 0), // Usually Inventory Value = Cost Value, but front-end uses Base Price
+            totalCostValue: MoneyUtil.toMajor(data.totalCostValue || 0),
+            totalRetailValue: MoneyUtil.toMajor(data.totalRetailValue || 0),
+            averageUnitCost: data.totalUnits ? MoneyUtil.toMajor(data.totalCostValue / data.totalUnits) : 0
         };
     }
 
@@ -322,7 +322,7 @@ class AnalyticsService {
             totalInventoryUnits: snapshot.totalUnits,
             totalInventoryValue: snapshot.totalInventoryValue,
             netStockMovement: moveData.netChange,
-            grossProfit: this._round(grossProfit),
+            grossProfit: MoneyUtil.toMajor(grossProfit),
             lowStockItemsCount: snapshot.lowStockUnits,
             stockoutRiskItemsCount: snapshot.outOfStockUnits, // Reuse out of stock or fetch specialized risk count
 
@@ -338,7 +338,7 @@ class AnalyticsService {
                 }),
                 totalInventoryValue: [], // Requires historical cost lookups, complex.
                 netStockMovement: dailyTrend.map(d => d.net), // Array of numbers
-                grossProfit: dailyTrend.map(d => this._round(d.profit))
+                grossProfit: dailyTrend.map(d => MoneyUtil.toMajor(d.profit))
             }
         };
     }
@@ -433,7 +433,7 @@ class AnalyticsService {
                 $group: {
                     _id: '$category.name', // Group by Name
                     categoryId: { $first: '$category._id' },
-                    value: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.cost', { $ifNull: ['$product.costPrice', 0] }] }] } }
+                    value: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.basePrice', { $ifNull: ['$product.costPrice', 0] }] }] } }
                 }
             },
             { $sort: { value: -1 } }
@@ -466,7 +466,7 @@ class AnalyticsService {
                             $sum: {
                                 $multiply: [
                                     { $toDouble: { $ifNull: ['$stockQty', 0] } },
-                                    { $toDouble: { $ifNull: ['$pricing.cost', 0] } }
+                                    { $toDouble: { $ifNull: ['$pricing.basePrice', 0] } }
                                 ]
                             }
                         }
@@ -505,19 +505,19 @@ class AnalyticsService {
                 $facet: {
                     inStock: [
                         { $match: { stockQty: { $gt: 0 } } },
-                        { $group: { _id: null, value: { $sum: { $multiply: [{ $toDouble: { $ifNull: ['$stockQty', 0] } }, { $toDouble: { $ifNull: ['$pricing.cost', 0] } }] } } } }
+                        { $group: { _id: null, value: { $sum: { $multiply: [{ $toDouble: { $ifNull: ['$stockQty', 0] } }, { $toDouble: { $ifNull: ['$pricing.basePrice', 0] } }] } } } }
                     ],
                     lowStock: [
                         { $match: { isLowStock: true } },
-                        { $group: { _id: null, value: { $sum: { $multiply: [{ $toDouble: { $ifNull: ['$stockQty', 0] } }, { $toDouble: { $ifNull: ['$pricing.cost', 0] } }] } } } }
+                        { $group: { _id: null, value: { $sum: { $multiply: [{ $toDouble: { $ifNull: ['$stockQty', 0] } }, { $toDouble: { $ifNull: ['$pricing.basePrice', 0] } }] } } } }
                     ],
                     outOfStock: [
                         { $match: { stockQty: 0 } },
-                        { $group: { _id: null, value: { $sum: { $multiply: [{ $toDouble: { $ifNull: ['$stockQty', 0] } }, { $toDouble: { $ifNull: ['$pricing.cost', 0] } }] } } } } // Value 0 usually
+                        { $group: { _id: null, value: { $sum: { $multiply: [{ $toDouble: { $ifNull: ['$stockQty', 0] } }, { $toDouble: { $ifNull: ['$pricing.basePrice', 0] } }] } } } } // Value 0 usually
                     ],
                     overstocked: [
                         { $match: { stockQty: { $gt: 100 } } },
-                        { $group: { _id: null, value: { $sum: { $multiply: [{ $toDouble: { $ifNull: ['$stockQty', 0] } }, { $toDouble: { $ifNull: ['$pricing.cost', 0] } }] } } } }
+                        { $group: { _id: null, value: { $sum: { $multiply: [{ $toDouble: { $ifNull: ['$stockQty', 0] } }, { $toDouble: { $ifNull: ['$pricing.basePrice', 0] } }] } } } }
                     ]
                 }
             }
@@ -525,22 +525,22 @@ class AnalyticsService {
 
         const statusRes = byStatusAgg[0];
         const byStatus = [
-            { status: 'inStock', value: this._round(statusRes.inStock[0]?.value || 0) },
-            { status: 'lowStock', value: this._round(statusRes.lowStock[0]?.value || 0) },
-            { status: 'outOfStock', value: this._round(statusRes.outOfStock[0]?.value || 0) },
-            { status: 'overstocked', value: this._round(statusRes.overstocked[0]?.value || 0) }
+            { status: 'inStock', value: MoneyUtil.toMajor(statusRes.inStock[0]?.value || 0) },
+            { status: 'lowStock', value: MoneyUtil.toMajor(statusRes.lowStock[0]?.value || 0) },
+            { status: 'outOfStock', value: MoneyUtil.toMajor(statusRes.outOfStock[0]?.value || 0) },
+            { status: 'overstocked', value: MoneyUtil.toMajor(statusRes.overstocked[0]?.value || 0) }
         ];
 
         return {
             byCategory: byCategory.map(c => ({
                 categoryId: c.categoryId ? String(c.categoryId) : 'unknown',
                 categoryName: c._id || 'Uncategorized',
-                value: this._round(c.value)
+                value: MoneyUtil.toMajor(c.value)
             })),
             byShop: byShop.map(s => ({
                 shopId: String(s._id),
                 shopName: String(s._id),
-                value: this._round(s.value)
+                value: MoneyUtil.toMajor(s.value)
             })),
             byStatus
         };
@@ -726,9 +726,9 @@ class AnalyticsService {
         const data = await StockChange.aggregate(pipeline);
         return data.map(d => ({
             date: d.date,
-            revenue: this._round(d.revenue),
-            cost: this._round(d.cost),
-            profit: this._round(d.profit)
+            revenue: MoneyUtil.toMajor(d.revenue),
+            cost: MoneyUtil.toMajor(d.cost),
+            profit: MoneyUtil.toMajor(d.profit)
         }));
     }
 
@@ -795,8 +795,8 @@ class AnalyticsService {
             const dateStr = curr.toISOString().split('T')[0];
             result.push({ date: dateStr, totalValue: this._round(runningValue) });
 
-            const change = trendMap[dateStr] || 0;
-            runningValue -= change; // Reverse the change to get previous day
+            const change = MoneyUtil.toMajor(trendMap[dateStr] || 0);
+            runningValue = this._round(runningValue - change); // Reverse the change to get previous day
 
             curr.setDate(curr.getDate() - 1);
         }
@@ -837,7 +837,7 @@ class AnalyticsService {
                         $sum: {
                             $multiply: [
                                 { $toDouble: { $ifNull: ['$stockQty', 0] } },
-                                { $toDouble: { $ifNull: ['$pricing.cost', 0] } }
+                                { $toDouble: { $ifNull: ['$pricing.basePrice', 0] } }
                             ]
                         }
                     },
@@ -913,9 +913,9 @@ class AnalyticsService {
             performance.push({
                 shopId: sId,
                 shopName: sId, // TODO: Fetch real name
-                inventoryValue: this._round(val),
+                inventoryValue: MoneyUtil.toMajor(val),
                 stockTurnoverRate: this._round(turnover),
-                grossProfit: this._round(grossProfit),
+                grossProfit: MoneyUtil.toMajor(grossProfit),
                 stockoutRate: this._round(stockoutRate)
             });
         }
@@ -1117,15 +1117,15 @@ class AnalyticsService {
         const results = data.map(item => {
             const pTrend = trends
                 .filter(t => String(t._id.productId) === String(item._id))
-                .map(t => this._round(t.dailyProfit));
+                .map(t => MoneyUtil.toMajor(t.dailyProfit));
 
             return {
                 productId: item._id,
                 productName: item.productName,
                 currentStock: stockMap[String(item._id)] || 0,
                 unitsSold: item.unitsSold,
-                revenue: this._round(item.revenue),
-                grossProfit: this._round(item.grossProfit),
+                revenue: MoneyUtil.toMajor(item.revenue),
+                grossProfit: MoneyUtil.toMajor(item.grossProfit),
                 profitTrend: pTrend
             };
         });
@@ -1298,7 +1298,7 @@ class AnalyticsService {
                 name: product.name,
                 sku: product.sku,
                 profitability: {
-                    grossProfit: this._round(totalProfit),
+                    grossProfit: MoneyUtil.toMajor(totalProfit),
                     profitMarginPercent: sales.totalRevenue > 0 ? this._round((totalProfit / sales.totalRevenue) * 100) : 0,
                     basePrice: pricing.basePrice || 0,
                     cost: pricing.cost || 0
@@ -1632,7 +1632,7 @@ class AnalyticsService {
             { $match: { 'product.companyId': companyId, 'product.isDeleted': false, ...(shopId ? { 'product.shopId': shopId } : {}) } },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
             { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
-            { $group: { _id: '$productId', totalQty: { $sum: '$stockQty' }, productValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.cost', 0] }] } } } },
+            { $group: { _id: '$productId', totalQty: { $sum: '$stockQty' }, productValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.basePrice', 0] }] } } } },
             { $group: { _id: null, totalProducts: { $sum: 1 }, totalStock: { $sum: '$totalQty' }, inventoryValue: { $sum: '$productValue' }, avgStockPerProduct: { $avg: '$totalQty' } } }
         ]);
         const inventory = invAgg[0] || { totalProducts: 0, totalStock: 0, inventoryValue: 0, avgStockPerProduct: 0 };
@@ -1727,20 +1727,20 @@ class AnalyticsService {
             timestamp: new Date(),
             kpis: {
                 revenue: {
-                    total: this._round(revenue.totalRevenue),
-                    daily: this._round(revenue.totalRevenue / period),
+                    total: MoneyUtil.toMajor(revenue.totalRevenue),
+                    daily: MoneyUtil.toMajor(revenue.totalRevenue / period),
                     unitsSold: revenue.totalUnitsSold,
-                    avgOrderValue: this._round(revenue.avgOrderValue)
+                    avgOrderValue: MoneyUtil.toMajor(revenue.avgOrderValue)
                 },
                 profitability: {
-                    grossProfit: this._round(grossProfit),
+                    grossProfit: MoneyUtil.toMajor(grossProfit),
                     profitMargin: this._round(profitMargin),
-                    costOfGoods: this._round(revenue.totalCost)
+                    costOfGoods: MoneyUtil.toMajor(revenue.totalCost)
                 },
                 inventory: {
                     totalProducts: inventory.totalProducts,
                     totalStock: inventory.totalStock,
-                    inventoryValue: this._round(inventory.inventoryValue),
+                    inventoryValue: MoneyUtil.toMajor(inventory.inventoryValue),
                     avgStockPerProduct: this._round(inventory.avgStockPerProduct),
                     lowStockCount,
                     outOfStockCount,
@@ -1758,7 +1758,7 @@ class AnalyticsService {
                     name: p.name,
                     sku: p.sku,
                     unitsSold: p.unitsSold,
-                    revenue: this._round(p.revenue)
+                    revenue: MoneyUtil.toMajor(p.revenue)
                 }))
             },
             stockBreakdown: stockMovement.map(s => ({
@@ -1852,7 +1852,7 @@ class AnalyticsService {
             today: {
                 sales: {
                     units: todaySales[0]?.units || 0,
-                    revenue: this._round(todaySales[0]?.revenue || 0)
+                    revenue: MoneyUtil.toMajor(todaySales[0]?.revenue || 0)
                 },
                 stockChanges: todayChanges
             },
@@ -1967,24 +1967,24 @@ class AnalyticsService {
             summary: {
                 totalTransactions: transactions,
                 totalUnits: totalSalesUnits,
-                totalRevenue: this._round(totalRevenue),
-                totalCost: this._round(totalCost),
-                grossProfit: this._round(totalRevenue - totalCost),
+                totalRevenue: MoneyUtil.toMajor(totalRevenue),
+                totalCost: MoneyUtil.toMajor(totalCost),
+                grossProfit: MoneyUtil.toMajor(totalRevenue - totalCost),
                 profitMargin: totalRevenue > 0 ? this._round(((totalRevenue - totalCost) / totalRevenue * 100)) : 0,
-                avgTransactionValue: transactions > 0 ? this._round(totalRevenue / transactions) : 0,
+                avgTransactionValue: transactions > 0 ? MoneyUtil.toMajor(totalRevenue / transactions) : 0,
                 avgUnitsPerTransaction: transactions > 0 ? this._round(totalSalesUnits / transactions) : 0
             },
             dailyTrend: dailySalesTrend.map(d => ({
                 date: d._id,
                 units: d.units,
-                revenue: this._round(d.revenue),
-                cost: this._round(d.cost),
+                revenue: MoneyUtil.toMajor(d.revenue),
+                cost: MoneyUtil.toMajor(d.cost),
                 margin: d.revenue > 0 ? this._round((d.revenue - d.cost) / d.revenue * 100) : 0
             })),
             byCategory: salesByCategory.map(c => ({
                 category: c._id || 'Uncategorized',
                 units: c.units,
-                revenue: this._round(c.revenue),
+                revenue: MoneyUtil.toMajor(c.revenue),
                 productsInvolved: c.products,
                 revenueShare: totalRevenue > 0 ? this._round(c.revenue / totalRevenue * 100) : 0
             }))
@@ -2048,7 +2048,7 @@ class AnalyticsService {
             { $match: match },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
             { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
-            { $group: { _id: '$productId', name: { $first: '$product.name' }, sku: { $first: '$product.sku' }, value: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.cost', 0] }] } }, quantity: { $sum: '$stockQty' } } },
+            { $group: { _id: '$productId', name: { $first: '$product.name' }, sku: { $first: '$product.sku' }, value: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.basePrice', 0] }] } }, quantity: { $sum: '$stockQty' } } },
             { $sort: { value: -1 } }
         ]);
 
@@ -2128,7 +2128,7 @@ class AnalyticsService {
             { $unwind: { path: '$variations', preserveNullAndEmptyArrays: true } },
             { $lookup: { from: 'productpricings', localField: 'pricingId', foreignField: '_id', as: 'pricing' } },
             { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
-            { $group: { _id: '$_id', name: { $first: '$name' }, sku: { $first: '$sku' }, quantity: { $sum: { $ifNull: ['$variations.stockQty', 0] } }, value: { $sum: { $multiply: [{ $ifNull: ['$variations.stockQty', 0] }, { $ifNull: ['$pricing.cost', 0] }] } }, createdAt: { $first: '$createdAt' } } }
+            { $group: { _id: '$_id', name: { $first: '$name' }, sku: { $first: '$sku' }, quantity: { $sum: { $ifNull: ['$variations.stockQty', 0] } }, value: { $sum: { $multiply: [{ $ifNull: ['$variations.stockQty', 0] }, { $ifNull: ['$pricing.basePrice', 0] }] } }, createdAt: { $first: '$createdAt' } } }
         ]);
 
         return {
@@ -2139,7 +2139,7 @@ class AnalyticsService {
                     c: { count: categorized.filter(p => p.category === 'C').length, message: 'Low-value items - Consider bulk ordering or clearance' }
                 },
                 slowMovers: { count: slowMovers.length, items: slowMovers, action: 'Review pricing or run promotions' },
-                deadStock: { count: deadStock.length, items: deadStock, potentialLoss: this._round(deadStock.reduce((sum, d) => sum + d.value, 0)), action: 'Consider clearance sales' }
+                deadStock: { count: deadStock.length, items: deadStock, potentialLoss: MoneyUtil.toMajor(deadStock.reduce((sum, d) => sum + d.value, 0)), action: 'Consider clearance sales' }
             }
         };
     }
@@ -2194,7 +2194,7 @@ class AnalyticsService {
             { $match: { 'product.companyId': companyId, ...(shopId ? { 'product.shopId': shopId } : {}) } },
             { $lookup: { from: 'productpricings', localField: 'product.pricingId', foreignField: '_id', as: 'pricing' } },
             { $unwind: { path: '$pricing', preserveNullAndEmptyArrays: true } },
-            { $group: { _id: '$productId', productValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.cost', 0] }] } } } },
+            { $group: { _id: '$productId', productValue: { $sum: { $multiply: ['$stockQty', { $ifNull: ['$pricing.basePrice', 0] }] } } } },
             { $group: { _id: null, value: { $avg: '$productValue' } } }
         ]);
 
@@ -2384,14 +2384,14 @@ class AnalyticsService {
             timestamp: new Date(),
             sales: {
                 totalUnits: sales.totalUnitsSold,
-                totalRevenue: this._round(sales.totalRevenue),
-                totalCost: this._round(sales.totalCost),
-                grossProfit: this._round(grossProfit),
+                totalRevenue: MoneyUtil.toMajor(sales.totalRevenue),
+                totalCost: MoneyUtil.toMajor(sales.totalCost),
+                grossProfit: MoneyUtil.toMajor(grossProfit),
                 profitMargin: this._round(profitMargin),
-                avgTransactionValue: sales.transactionCount > 0 ? this._round(sales.totalRevenue / sales.transactionCount) : 0,
+                avgTransactionValue: sales.transactionCount > 0 ? MoneyUtil.toMajor(sales.totalRevenue / sales.transactionCount) : 0,
                 avgUnitsPerTransaction: sales.transactionCount > 0 ? this._round(sales.totalUnitsSold / sales.transactionCount) : 0,
                 transactionCount: sales.transactionCount,
-                dailyAvgRevenue: this._round(sales.totalRevenue / parseInt(period))
+                dailyAvgRevenue: MoneyUtil.toMajor(sales.totalRevenue / parseInt(period))
             },
             inventory: {
                 totalProducts: snapshot.totalSKUs,
@@ -2490,7 +2490,7 @@ class AnalyticsService {
                 sales: {
                     unitsSold: p.unitsSold,
                     transactionCount: p.transactionCount,
-                    totalRevenue: this._round(revenue),
+                    totalRevenue: MoneyUtil.toMajor(revenue),
                     velocityPerDay: this._round(dailyVelocity)
                 },
                 inventory: {
@@ -2545,11 +2545,11 @@ class AnalyticsService {
 
         return {
             today: {
-                revenue: this._round(todayStats.revenue),
+                revenue: MoneyUtil.toMajor(todayStats.revenue),
                 units: todayStats.units
             },
             yesterday: {
-                revenue: this._round(yesterdayStats.revenue),
+                revenue: MoneyUtil.toMajor(yesterdayStats.revenue),
                 units: yesterdayStats.units
             },
             growth: {

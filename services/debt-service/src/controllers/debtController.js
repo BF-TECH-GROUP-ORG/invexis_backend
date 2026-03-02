@@ -1,9 +1,10 @@
 const debtService = require('../services/debtService');
+const Money = require('/app/shared/utils/MoneyUtil');
 
 async function createDebt(req, res) {
     try {
         // enforce multi-tenancy
-        const companyId = req.body.companyId|| req.query.companyId || req.params.companyId;
+        const companyId = req.body.companyId || req.query.companyId || req.params.companyId;
         if (!companyId) return res.status(400).json({ error: 'companyId required' });
 
         // Validate hashedCustomerId format if provided (sales-service should produce the hash)
@@ -46,9 +47,9 @@ async function getDebt(req, res) {
         const debtId = req.params.debtId;
         if (!companyId) return res.status(400).json({ error: 'companyId required' });
         if (!debtId) return res.status(400).json({ error: 'debtId required' });
-        
+
         const debt = await debtService.getDebtWithRepayments({ companyId, debtId });
-        res.json({ 
+        res.json({
             debt,
             message: 'Debt retrieved successfully with payment history'
         });
@@ -308,9 +309,9 @@ async function internalLookup(req, res) {
             success: true,
             exists: true,
             hashedCustomerId: summary.hashedCustomerId,
-            totalOutstanding: summary.totalOutstanding || 0,
+            totalOutstanding: Money.toMajor(summary.totalOutstanding || 0),
             numActiveDebts: summary.numActiveDebts || 0,
-            largestDebt: summary.largestDebt || 0,
+            largestDebt: Money.toMajor(summary.largestDebt || 0),
             worstShareLevel: summary.worstShareLevel || 'NONE',
             riskScore: summary.riskScore || 0,
             riskLabel: summary.riskLabel || 'GOOD',

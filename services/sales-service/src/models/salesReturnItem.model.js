@@ -1,6 +1,7 @@
 // models/SalesReturnItem.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
+const Money = require("/app/shared/utils/MoneyUtil");
 
 const SalesReturnItem = sequelize.define(
   "SalesReturnItem",
@@ -27,8 +28,10 @@ const SalesReturnItem = sequelize.define(
       allowNull: false,
     },
     refundAmount: {
-      type: DataTypes.DECIMAL(12, 2),
+      type: DataTypes.BIGINT,
       defaultValue: 0,
+      get() { return Money.toMajor(this.getDataValue('refundAmount')); },
+      set(value) { this.setDataValue('refundAmount', Money.toMinor(value)); }
     },
   },
   {

@@ -27,7 +27,7 @@ class WebSocketPublisher {
         type: 'notification.created', // Standardized with consumer expectations
         source: 'notification-service',
         userId: notification.userId?.toString(),
-        targetUserIds: [notification.userId?.toString()], // Add targetUserIds array
+        targetUserIds: notification.userId ? [notification.userId.toString()] : [], // Ensure targetUserIds is populated
         data: {
           notificationId: notification._id.toString(),
           userId: notification.userId?.toString(),
@@ -78,13 +78,43 @@ class WebSocketPublisher {
     }
 
     try {
+      const companyId = notification.companyId?.toString();
+      const rooms = [];
+
+      // 1. Determine target rooms based on scope and filters
+      if (notification.scope === 'system') {
+        rooms.push('global', 'all_users');
+      } else if (companyId) {
+        if (notification.scope === 'shop' && notification.shopId) {
+          if (notification.roles && notification.roles.length > 0) {
+            // Role-specific rooms WITHIN a shop
+            notification.roles.forEach(role => {
+              rooms.push(`company:${companyId}:shop:${notification.shopId.toString()}:role:${role}`);
+            });
+          } else {
+            rooms.push(`shop:${notification.shopId.toString()}`);
+          }
+        } else if (notification.roles && notification.roles.length > 0) {
+          // Role-specific rooms (Company-wide)
+          notification.roles.forEach(role => {
+            rooms.push(`company:${companyId}:role:${role}`);
+          });
+        } else if (notification.departmentId) {
+          // Department-specific room
+          rooms.push(`company:${companyId}:dept:${notification.departmentId.toString()}`);
+        } else {
+          // Default: Entire company
+          rooms.push(`company:${companyId}`);
+        }
+      }
+
       const payload = {
         type: 'notification.broadcast',
         source: 'notification-service',
-        rooms: [`company:${notification.companyId?.toString()}`], // Add rooms for websocket-service
+        rooms: rooms,
         data: {
           notificationId: notification._id.toString(),
-          companyId: notification.companyId?.toString(),
+          companyId: companyId,
           shopId: notification.shopId?.toString(),
           scope: notification.scope,
           title: notification.title,

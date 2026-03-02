@@ -3,6 +3,7 @@
 
 const invoiceRepository = require('../repositories/invoiceRepository');
 const { INVOICE_STATUS } = require('../utils/constants');
+const { getParsed } = require('../utils/jsonUtils');
 
 class InvoiceService {
     /**
@@ -10,20 +11,23 @@ class InvoiceService {
      * @param {Object} paymentData - Payment information
      * @returns {Promise<Object>} Created invoice
      */
-    async generateInvoice(paymentData) {
+    async generateInvoice(paymentData, items = []) {
         try {
             const invoiceData = {
-                payment_id: paymentData.payment_id,
+                payment_id: paymentData.payment_id || null,
                 seller_id: paymentData.seller_id,
                 company_id: paymentData.company_id,
                 shop_id: paymentData.shop_id,
-                amount_due: paymentData.amount,
+                amount_due: paymentData.amount || paymentData.amount_due,
                 currency: paymentData.currency,
                 status: INVOICE_STATUS.OPEN,
-                customer: paymentData.customer || {},
-                line_items: paymentData.lineItems || [],
+                customer: getParsed(paymentData.customer || {}),
+                line_items: (() => {
+                    const items_raw = getParsed(paymentData.lineItems || paymentData.line_items || items || []);
+                    return Array.isArray(items_raw) ? items_raw : [items_raw];
+                })(),
                 metadata: {
-                    ...(paymentData.metadata || {}),
+                    ...getParsed(paymentData.metadata || {}),
                     payment_method: paymentData.method,
                     gateway: paymentData.gateway,
                     description: paymentData.description,

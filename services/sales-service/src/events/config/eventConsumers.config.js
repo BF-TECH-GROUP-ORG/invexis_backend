@@ -55,5 +55,13 @@ module.exports = [
     description:
       "Handles inventory return confirmation events from inventory-service",
   },
+  {
+    name: "debtEvents",
+    queue: "sales_debt_events_queue",
+    exchange: exchanges.topic,
+    pattern: "debt.#",
+    handler: require("../handlers/debtEvent.handler"),
+    description: "Handles debt completion events from debt-service",
+  },
 ];
 

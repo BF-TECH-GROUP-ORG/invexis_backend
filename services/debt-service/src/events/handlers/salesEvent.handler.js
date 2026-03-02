@@ -236,16 +236,22 @@ async function handlePaymentStatusChanged(data) {
 
 module.exports = async function handleSalesEvent(event) {
     try {
-        const { type, payload, data } = event;
-        const eventData = payload || data;
+        let { type, payload, data } = event;
+        let eventData = payload || data;
 
         if (!type || !eventData) {
-            logger.error('❌ Invalid event structure');
-            return;
+            // If it's a flat object (like the one in the error log), 'type' is at root
+            if (event.type) {
+                type = event.type;
+                eventData = event;
+            } else {
+                logger.error('❌ Invalid event structure: missing type');
+                return;
+            }
         }
 
-        const traceId = eventData.traceId || eventData.trace_id;
-        const fallbackId = eventData.saleId || '';
+        const traceId = eventData.traceId || eventData.trace_id || eventData.traceId;
+        const fallbackId = eventData.saleId || eventData.id || '';
         const eventId = traceId || `${type}:${fallbackId}`;
 
         logger.info(`💰 Processing sales event: ${type}`, { eventId });
@@ -260,6 +266,10 @@ module.exports = async function handleSalesEvent(event) {
 
                     case 'sale.payment.status.changed':
                         return await handlePaymentStatusChanged(eventData);
+
+                    case 'sale.return.restore_stock':
+                        logger.info(`ℹ️ Skipping ${type} - not relevant for debt-service`);
+                        return { success: true, message: 'Ignored' };
 
                     default:
                         logger.warn(`⚠️ Unhandled sales event type: ${type}`);

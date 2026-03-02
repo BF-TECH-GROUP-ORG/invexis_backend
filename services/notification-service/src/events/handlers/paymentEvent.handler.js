@@ -77,6 +77,8 @@ async function handlePaymentSuccess(data) {
         customerName: safeCustomerName,
         paymentMethod: paymentMethod || "Unknown",
         paymentId,
+        shopName: data.shopName || "Our Shop",
+        performedByName: data.performedByName || data.userName || "Staff",
         ...data,
       },
       companyId,

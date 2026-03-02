@@ -16,7 +16,8 @@ async function measureAsync(label, fn) {
         const ms = Number(hrtimeToMs(start));
         const threshold = Number(process.env.PERF_LOG_THRESHOLD_MS || 5);
         const always = process.env.PERF_LOG_ALWAYS === 'true';
-        if (always || ms >= threshold) {
+        const enabled = process.env.PERF_LOG_ENABLED !== 'false';
+        if ((always || ms >= threshold) && enabled) {
             console.debug(`[perf] ${label} -> ${ms.toFixed(3)} ms`);
         }
         return result;

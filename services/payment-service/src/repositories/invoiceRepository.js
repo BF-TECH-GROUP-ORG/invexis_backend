@@ -3,6 +3,7 @@
 
 const { db } = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
+const { toJSONB } = require('../utils/jsonUtils');
 
 class InvoiceRepository {
     /**
@@ -27,22 +28,24 @@ class InvoiceRepository {
 
         const invoice_id = uuidv4();
 
+        const insertData = {
+            invoice_id,
+            payment_id,
+            seller_id,
+            company_id,
+            shop_id,
+            amount_due,
+            currency: currency || 'XAF',
+            status: status || 'open',
+            line_items: toJSONB(line_items, true),
+            customer: toJSONB(customer),
+            pdf_url,
+            metadata: toJSONB(metadata),
+            created_at: new Date()
+        };
+
         const [invoice] = await db('invoices')
-            .insert({
-                invoice_id,
-                payment_id,
-                seller_id,
-                company_id,
-                shop_id,
-                amount_due,
-                currency: currency || 'XAF',
-                status: status || 'open',
-                line_items: line_items || [],
-                customer: customer || {},
-                pdf_url,
-                metadata: metadata || {},
-                created_at: new Date()
-            })
+            .insert(insertData)
             .returning('*');
 
         return invoice;
@@ -119,7 +122,7 @@ class InvoiceRepository {
         }
 
         if (metadata) {
-            updateData.metadata = db.raw('metadata || ?::jsonb', [JSON.stringify(metadata)]);
+            updateData.metadata = db.raw('metadata || ?::jsonb', [toJSONB(metadata)]);
         }
 
         const [invoice] = await db('invoices')

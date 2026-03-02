@@ -3,6 +3,7 @@
 
 const { db } = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
+const { toJSONB } = require('../utils/jsonUtils');
 
 class TransactionRepository {
     /**
@@ -38,7 +39,7 @@ class TransactionRepository {
                 currency: currency || 'XAF',
                 status: status || 'pending',
                 gateway_transaction_id,
-                metadata: metadata || {},
+                metadata: toJSONB(metadata),
                 created_at: new Date()
             })
             .returning('*');
@@ -96,7 +97,7 @@ class TransactionRepository {
         }
 
         if (metadata) {
-            updateData.metadata = db.raw('metadata || ?::jsonb', [JSON.stringify(metadata)]);
+            updateData.metadata = db.raw('metadata || ?::jsonb', [toJSONB(metadata)]);
         }
 
         const [transaction] = await db('transactions')

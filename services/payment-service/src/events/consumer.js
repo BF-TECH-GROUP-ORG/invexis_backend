@@ -8,6 +8,7 @@ const paymentService = require('../services/paymentService');
 const { getLogger } = require('/app/shared/logger');
 
 const logger = getLogger('payment-consumer');
+const { getParsed } = require('../utils/jsonUtils');
 
 /**
  * ⚡ UTILITY: Unwrap Standardized Event Envelope
@@ -72,6 +73,8 @@ const handlePaymentRequested = async (rawContent, routingKey) => {
 
         // Map event payload to payment service internal structure
         // Map event payload to payment service internal structure
+        // (getParsed now imported from jsonUtils)
+
         const paymentData = {
             type: effectiveType,
             reference_id: referenceId,
@@ -90,21 +93,22 @@ const handlePaymentRequested = async (rawContent, routingKey) => {
             })(),
             gateway_token: paymentToken, // pm_xxx for Stripe
             phoneNumber: phoneNumber, // ⚡ CRITICAL: Pass top-level phone for gateway
-            customer: content.customer || {
+            customer: getParsed(content.customer) || {
                 name: content.customerName || initiatedBy?.name || null,
                 phone: phoneNumber || null,
                 email: content.customerEmail || null
             },
             description: content.description || `Payment for ${effectiveType} ${referenceId || 'transaction'}`,
             seller_id: content.sellerId || initiatedBy?.userId || effectiveCompanyId,
-            line_items: content.lineItems || [],
+            line_items: getParsed(content.lineItems || content.line_items || []),
             idempotency_key: idempotencyKey || `${source || 'service'}-${referenceId}`,
             metadata: {
                 source,
-                originalEvent: content,
+                ...getParsed(content.metadata || {}), // Preserve incoming metadata at top level
+                originalEventId: content.id,
                 initiatedBy,
-                saleId: content.saleId || content.metadata?.saleId, // CRITICAL: Extract saleId
-                debtId: content.debtId || content.metadata?.debtId, // CRITICAL: Extract debtId
+                saleId: content.saleId || content.metadata?.saleId,
+                debtId: content.debtId || content.metadata?.debtId,
                 knownUserId: content.metadata?.knownUserId
             }
         };
@@ -210,11 +214,12 @@ const handleSaleCreated = async (rawContent, routingKey) => {
                         amount: totalAmount,
                         currency: content.currency || 'XAF',
                         description: `Invoice for Sale #${saleId}`,
-                        status: 'pending',
+                        status: content.isDebt ? 'debt' : 'pending',
                         customer: {
                             name: customerName,
                             phone: customerPhone
                         },
+                        line_items: getParsed(items),
                         metadata: { saleId, shopId, isManual: true }
                     }, items);
                 }

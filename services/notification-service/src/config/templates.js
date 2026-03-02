@@ -671,7 +671,7 @@ const templates = {
     "payment.success": {
         inApp: {
             subject: 'Payment Received',
-            content: 'Payment of **{{formatCurrency amount}}** received from **{{customerName}}** ({{paymentMethod}}). {{#if url}}[Download Invoice]({{url}}){{/if}}'
+            content: 'Payment of **{{formatCurrency amount}}** received from **{{customerName}}** via **{{paymentMethod}}** at **{{shopName}}** (recorded by **{{performedByName}}**). {{#if url}}[Invoice]({{url}}){{/if}}'
         },
         push: {
             content: JSON.stringify({
@@ -1076,7 +1076,7 @@ const templates = {
         },
         inApp: {
             subject: 'New Debt Recorded',
-            content: 'New debt of **{{formatCurrency amount}}** recorded for **{{customerName}}** at **{{shopName}}** by **{{performedByName}}**.'
+            content: 'New debt of **{{formatCurrency amount}}** recorded for **{{customerName}}** at **{{shopName}}** by **{{performedByName}}**. Due on **{{dueDate}}**.'
         },
         push: {
             title: 'New Debt Recorded',
@@ -1097,7 +1097,7 @@ const templates = {
         },
         inApp: {
             subject: 'Debt Payment Received',
-            content: 'Debt payment of **{{formatCurrency amount}}** received from **{{customerName}}** at **{{shopName}}** (recorded by **{{performedByName}}**).'
+            content: 'Debt payment of **{{formatCurrency amount}}** received from **{{customerName}}** at **{{shopName}}** by **{{performedByName}}**. Remaining: **{{formatCurrency remainingBalance}}**.'
         },
         push: {
             title: 'Debt Payment',
@@ -1138,7 +1138,7 @@ const templates = {
         },
         inApp: {
             subject: 'Debt Cleared via Payment',
-            content: 'Debt for **{{customerName}}** at **{{shopName}}** has been fully paid.'
+            content: 'Debt for **{{customerName}}** at **{{shopName}}** has been fully paid and cleared by **{{performedByName}}**.'
         },
         push: {
             title: 'Debt Fully Paid',

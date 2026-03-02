@@ -183,6 +183,7 @@ const handleDebtFullyPaid = async (payload) => {
             debtId,
             companyId,
             shopId,
+            salesId,
             totalAmount,
             fullyPaidAt
         } = payload;
@@ -194,6 +195,7 @@ const handleDebtFullyPaid = async (payload) => {
             debtId,
             companyId,
             shopId,
+            salesId,
             amount: totalAmount,
             customer: {
                 name: payload.customer?.name,
@@ -297,6 +299,7 @@ const handleDebtMarkedAsPaid = async (payload) => {
             debtId,
             companyId,
             shopId,
+            salesId,
             hashedCustomerId,
             customer,
             totalAmount,
@@ -314,6 +317,7 @@ const handleDebtMarkedAsPaid = async (payload) => {
             debtId,
             companyId,
             shopId,
+            salesId,
             hashedCustomerId,
             repaymentId,
             amount: totalAmount,

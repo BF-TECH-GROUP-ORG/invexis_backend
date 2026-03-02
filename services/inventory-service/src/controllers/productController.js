@@ -22,6 +22,54 @@ const { productEvents } = require('../events/eventHelpers');
 const { scanDel, setCache, getCache, delCache } = require('../utils/redisHelper');
 const logger = require('../utils/logger');
 
+/**
+ * Normalizes incoming product request body to match backend schema.
+ * Handles nested objects (status, identifiers) and compatibility fields.
+ */
+const normalizeProductBody = (body) => {
+  if (!body) return;
+
+  // Handle nested status object from frontend
+  if (body.status && typeof body.status === 'object') {
+    const statusObj = body.status;
+
+    // Map to top-level status string
+    body.status = statusObj.active ? 'active' : 'inactive';
+
+    // Map other fields from nested status
+    if (statusObj.visibility !== undefined) body.visibility = statusObj.visibility;
+    else if (statusObj.visible !== undefined) body.visibility = statusObj.visible ? 'public' : 'hidden';
+
+    if (statusObj.featured !== undefined) body.featured = statusObj.featured;
+    if (statusObj.availability !== undefined) body.availability = statusObj.availability;
+    if (statusObj.condition !== undefined) body.condition = statusObj.condition;
+
+    if (statusObj.isDeleted !== undefined) body.isDeleted = statusObj.isDeleted;
+    if (statusObj.deletedAt !== undefined) body.deletedAt = statusObj.deletedAt;
+    if (statusObj.deletedBy !== undefined) body.deletedBy = statusObj.deletedBy;
+  }
+
+  // Handle nested identifiers object
+  if (body.identifiers && typeof body.identifiers === 'object') {
+    const idObj = body.identifiers;
+    ['sku', 'asin', 'upc', 'ean', 'barcode', 'barcodePayload', 'qrCode', 'qrPayload', 'scanId'].forEach(field => {
+      if (idObj[field] !== undefined) body[field] = idObj[field];
+    });
+  }
+
+  // Handle featured field consistency
+  if (body.isFeatured !== undefined && body.featured === undefined) {
+    body.featured = body.isFeatured;
+  }
+  if (body.featured !== undefined && body.isFeatured === undefined) {
+    body.isFeatured = body.featured;
+  }
+
+  // Handle dates
+  if (body.expiryDate) body.expiryDate = new Date(body.expiryDate);
+  if (body.manufacturingDate) body.manufacturingDate = new Date(body.manufacturingDate);
+};
+
 const getAllProducts = asyncHandler(async (req, res) => {
   const {
     page = 1,
@@ -320,6 +368,9 @@ const createProduct = asyncHandler(async (req, res) => {
   const newVideos = req.body.videos || [];
   delete req.body.images;
   delete req.body.videos;
+
+  // Normalize request body
+  normalizeProductBody(req.body);
 
   // EDGE CASE: Images array limit (max 10 images per product)
   if (newImages.length > 10) {
@@ -808,6 +859,9 @@ const updateProduct = asyncHandler(async (req, res) => {
   delete req.body.images;
   delete req.body.videos;
 
+  // Normalize request body
+  normalizeProductBody(req.body);
+
   // EDGE CASE: Images array limit (max 10 images total)
   if (newImages.length > 10) {
     return res.status(400).json({
@@ -1015,7 +1069,7 @@ const updateProduct = asyncHandler(async (req, res) => {
   // Perform the update
   const product = await Product.findByIdAndUpdate(
     id,
-    req.body,
+    { $set: req.body }, // Use $set to avoid overwriting unprovided fields if necessary, or just req.body
     { new: true, runValidators: true }
   ).populate('categoryId', 'name slug level')
     .populate('pricingId');
@@ -1041,6 +1095,14 @@ const updateProduct = asyncHandler(async (req, res) => {
       message: 'Product not found after update'
     });
   }
+
+  // If x-replace-videos is true, we should have already filtered/replaced videoUrlsToSave
+  // The normalization above happened, but we need to ensure product.videoUrls is updated if we didn't use findByIdAndUpdate correctly for arrays
+  if (req.headers['x-replace-videos'] === 'true') {
+    product.videoUrls = videoUrlsToSave;
+    await product.save();
+  }
+
 
   // Update pricing if provided
   if (req.body.pricing && product.pricingId) {

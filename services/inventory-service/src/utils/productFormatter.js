@@ -1,5 +1,7 @@
 // services/inventory-service/src/utils/productFormatter.js
 
+const Money = require('/app/shared/utils/MoneyUtil');
+
 /**
  * Helper to format enriched product response uniformly
  * Ensures zero duplication by explicitly excluding raw fields that are re-mapped.
@@ -45,6 +47,7 @@ const formatEnrichedProduct = (product, variations, stockInfo, specsInfo) => {
 
     return {
         ...productData,
+        costPrice: Money.toMajor(costPrice),
 
         // Variations with their own stock info
         variations: variations.map(variation => ({
@@ -76,21 +79,21 @@ const formatEnrichedProduct = (product, variations, stockInfo, specsInfo) => {
         // Enhanced pricing info (full details)
         pricing: product.pricingId ? {
             id: product.pricingId._id,
-            basePrice: product.pricingId.basePrice,
-            salePrice: product.pricingId.salePrice,
-            cost: product.pricingId.cost,
+            basePrice: Money.toMajor(product.pricingId.basePrice),
+            salePrice: Money.toMajor(product.pricingId.salePrice),
+            cost: Money.toMajor(product.pricingId.cost),
             currency: product.pricingId.currency,
-            marginAmount: product.pricingId.marginAmount,
+            marginAmount: Money.toMajor(product.pricingId.marginAmount),
             marginPercent: product.pricingId.marginPercent,
-            saleMarginAmount: product.pricingId.saleMarginAmount,
+            saleMarginAmount: Money.toMajor(product.pricingId.saleMarginAmount),
             saleMarginPercent: product.pricingId.saleMarginPercent,
             profitRank: product.pricingId.profitRank,
             effectiveFrom: product.pricingId.effectiveFrom,
             effectiveTo: product.pricingId.effectiveTo,
-            previousBasePrice: product.pricingId.previousBasePrice,
+            previousBasePrice: Money.toMajor(product.pricingId.previousBasePrice),
             priceChangedAt: product.pricingId.priceChangedAt,
-            revenue: product.pricingId.revenue,
-            profit: product.pricingId.profit
+            revenue: Money.toMajor(product.pricingId.revenue),
+            profit: Money.toMajor(product.pricingId.profit)
         } : null,
 
         // QR and Barcode information (full details)
@@ -147,7 +150,7 @@ const formatEnrichedProduct = (product, variations, stockInfo, specsInfo) => {
         // Sales and performance data
         sales: {
             totalSold: product.sales?.totalSold || 0,
-            revenue: product.sales?.revenue || 0,
+            revenue: Money.toMajor(product.sales?.revenue || 0),
             lastSaleDate: product.sales?.lastSaleDate
         },
 

@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 // models/shopSummary.model.js
 const ShopSummarySchema = new mongoose.Schema({
-    companyId: { type: mongoose.Types.ObjectId, index: true, required: true },
-    shopId: { type: mongoose.Types.ObjectId, index: true, required: true },
+    companyId: { type: String, index: true, required: true },
+    shopId: { type: String, index: true, required: true },
 
 
     totalOutstanding: { type: Number, default: 0 },
