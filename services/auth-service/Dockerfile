@@ -5,6 +5,7 @@ RUN addgroup -g 1001 -S nodejs \
  && adduser -S appuser -u 1001
 
 WORKDIR /app
+RUN mkdir -p /app/logs && chown -R 1001:1001 /app/logs
 
 # Copy dependency manifests
 COPY package.json package-lock.json ./

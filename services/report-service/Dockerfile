@@ -6,6 +6,7 @@ RUN apk add --no-cache python3 make g++
 
 # Set working directory
 WORKDIR /app
+RUN mkdir -p /app/logs && chown -R 1001:1001 /app/logs
 
 # Copy package files
 COPY package*.json ./
@@ -22,6 +23,7 @@ RUN adduser -S appuser -u 1001
 
 # Set working directory
 WORKDIR /app
+RUN mkdir -p /app/logs && chown -R 1001:1001 /app/logs
 
 # Copy dependencies from builder stage
 COPY --from=builder /app/node_modules ./node_modules
