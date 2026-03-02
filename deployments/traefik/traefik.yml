@@ -88,10 +88,10 @@ ping:
   entryPoint: "traefik"
 
 # Tracing configuration (optional)
-tracing:
-  jaeger:
-    samplingServerURL: "http://jaeger:14268/api/sampling"
-    localAgentHostPort: "jaeger:6831"
+# tracing:
+#   jaeger:
+#     samplingServerURL: "http://jaeger:14268/api/sampling"
+#     localAgentHostPort: "jaeger:6831"
 
 # Global middleware configuration
 # Note: These are defined here and can be applied to routes
