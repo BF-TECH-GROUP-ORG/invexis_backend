@@ -210,11 +210,12 @@ check_databases() {
     # 1. Start core infra if not running
     info "Ensuring core infrastructure containers are up..."
     docker compose -f "$COMPOSE_FILE" up -d \
+        traefik \
         company-postgres shop-postgres payment-postgres analytics-postgres \
         sales-mysql mongodb redis rabbitmq
     
     # 2. Wait for each to be healthy
-    local infra_services=("company-postgres" "shop-postgres" "payment-postgres" "analytics-postgres" "sales-mysql" "mongodb" "redis" "rabbitmq")
+    local infra_services=("traefik" "company-postgres" "shop-postgres" "payment-postgres" "analytics-postgres" "sales-mysql" "mongodb" "redis" "rabbitmq")
     
     for service in "${infra_services[@]}"; do
         if ! wait_for_healthy "$service"; then
