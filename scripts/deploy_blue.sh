@@ -173,7 +173,7 @@ pull_images() {
 # Helper: Wait for a container to be healthy
 wait_for_healthy() {
     local service=$1
-    local max_attempts=30
+    local max_attempts=60
     local attempt=1
     
     info "⏳ Waiting for $service to be healthy..."
@@ -291,7 +291,7 @@ health_check() {
     log "🏥 Running health checks for blue services..."
     
     local services=($(get_services_list))
-    local max_attempts=30
+    local max_attempts=60
     local attempt=1
     local unhealthy_services=()
     
