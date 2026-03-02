@@ -598,7 +598,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
-      CORS_ORIGIN: https://${DOMAIN:-dutumegroup.com},https://backend.${DOMAIN:-dutumegroup.com}
+      CORS_ORIGIN: '*'
     volumes:
       - ./shared:/app/shared:ro
     networks:

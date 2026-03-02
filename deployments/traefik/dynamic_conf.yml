@@ -90,8 +90,7 @@ http:
     cors:
       headers:
         accessControlAllowOriginList:
-          - "https://*.${DOMAIN}"
-          - "https://${DOMAIN}"
+          - "*"
         accessControlAllowMethods:
           - "GET"
           - "POST"

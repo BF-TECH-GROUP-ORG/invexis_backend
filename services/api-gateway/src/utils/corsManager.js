@@ -13,11 +13,6 @@ const parseEnvOrigins = (raw) => {
     return process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3000', 'http://localhost:5173'];
   }
   if (raw.trim() === '*') {
-    // Only allow '*' if specifically requested AND NOT in production (safety)
-    if (process.env.NODE_ENV === 'production') {
-      console.warn('corsManager: wildcard CORS detected in production. Restricting to empty list.');
-      return [];
-    }
     return ['*'];
   }
   return raw.split(',').map(s => s.trim()).filter(Boolean);
