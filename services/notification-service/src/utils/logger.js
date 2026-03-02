@@ -1,6 +1,16 @@
 // src/utils/logger.js
 const winston = require('winston');
 const path = require('path');
+const fs = require('fs');
+
+const logDir = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
+try {
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+    }
+} catch (err) {
+    console.error('Failed to create log directory:', err.message);
+}
 
 const logger = winston.createLogger({
     level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
@@ -17,7 +27,10 @@ const logger = winston.createLogger({
             )
         }),
         new winston.transports.File({
-            filename: path.join(__dirname, '../../logs', 'dev.log')
+            filename: path.join(logDir, 'notification-service.log'),
+            maxsize: 100 * 1024 * 1024,
+            maxFiles: 5,
+            tailable: true
         })
     ]
 });

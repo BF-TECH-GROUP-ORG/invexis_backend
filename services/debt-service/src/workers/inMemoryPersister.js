@@ -8,7 +8,7 @@ const metrics = require('../utils/metrics');
 
 function getRedis() {
     if (global && global.redisClient) return global.redisClient;
-    try { return require('/app/shared/redis.js'); } catch (e) { try { return require('/aapp/shared/redis'); } catch (e2) { return null; } }
+    try { return require('/app/shared/redis.js'); } catch (e) { try { return require('/app/shared/redis'); } catch (e2) { return null; } }
 }
 // DO NOT cache redis at module load; call getRedis() at runtime to pick up global.redisClient
 const WRITE_QUEUE_KEY = 'write_queue';
