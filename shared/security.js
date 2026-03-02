@@ -65,8 +65,13 @@ class SecurityManager {
   // Gateway trust validation (replaces CORS for microservices)
   getGatewayTrustMiddleware() {
     return (req, res, next) => {
-      // Allow in development or if trust is disabled
-      if (process.env.NODE_ENV !== 'production' || !this.options.trustGateway) {
+      // Allow in development, if trust is disabled, or for health checks
+      if (
+        process.env.NODE_ENV !== 'production' ||
+        !this.options.trustGateway ||
+        req.path === '/health' ||
+        req.path === '/'
+      ) {
         return next();
       }
 
