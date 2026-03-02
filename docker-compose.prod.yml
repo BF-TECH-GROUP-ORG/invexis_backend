@@ -309,7 +309,6 @@ services:
           memory: 512M
     security_opt:
       - no-new-privileges:true
-    user: "999:999"
     command: >
       postgres 
       -c shared_preload_libraries=pg_stat_statements
@@ -360,7 +359,6 @@ services:
           memory: 256M
     security_opt:
       - no-new-privileges:true
-    user: "999:999"
 
   payment-postgres:
     image: postgres:15-alpine
@@ -392,7 +390,6 @@ services:
           memory: 256M
     security_opt:
       - no-new-privileges:true
-    user: "999:999"
 
   analytics-postgres:
     image: postgres:15-alpine
@@ -424,7 +421,6 @@ services:
           memory: 256M
     security_opt:
       - no-new-privileges:true
-    user: "999:999"
 
   # MySQL for sales service
   sales-mysql:
@@ -464,8 +460,6 @@ services:
       --innodb-buffer-pool-size=512M
       --innodb-log-file-size=128M
       --max-connections=200
-      --query-cache-type=1
-      --query-cache-size=128M
       --slow-query-log=1
       --long-query-time=2
 
@@ -502,7 +496,6 @@ services:
           memory: 512M
     security_opt:
       - no-new-privileges:true
-    user: "999:999"
     command: >
       mongod 
       --auth
@@ -538,7 +531,6 @@ services:
           memory: 256M
     security_opt:
       - no-new-privileges:true
-    user: "999:999"
     command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
 
   # RabbitMQ for messaging
