@@ -155,7 +155,7 @@ http:
   routers:
     # API Gateway routing with blue/green support
     api-gateway:
-      rule: "Host(`api.${DOMAIN:-localhost}`)"
+      rule: "Host(`backend.${DOMAIN:-localhost}`)"
       service: "api-gateway-active"
       priority: 100
       middlewares:
@@ -239,7 +239,7 @@ http:
           interval: "30s"
           timeout: "10s"
           headers:
-            Host: "api.${DOMAIN:-localhost}"
+            Host: "backend.${DOMAIN:-localhost}"
 
     # Standby API Gateway (green, ready for traffic switch)
     api-gateway-standby:
