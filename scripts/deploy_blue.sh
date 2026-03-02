@@ -126,9 +126,14 @@ get_services_list() {
     echo "${services_array[@]}"
 }
 
-# Pull Docker images
+# Pull Docker images (optional if built locally)
 pull_images() {
-    log "🐳 Pulling Docker images for blue deployment..."
+    # If using localhost registry and images exist, skip pulling
+    if [[ "$DOCKER_REGISTRY" == "localhost:5000" ]]; then
+        info "using local development registry, checking for local images..."
+    fi
+
+    log "🐳 Checking Docker images for blue deployment..."
     
     local services=($(get_services_list))
     local failed_pulls=()
@@ -137,22 +142,32 @@ pull_images() {
         local image_name="${service%-blue}"
         local full_image="$DOCKER_REGISTRY/invexis/$image_name:$DEPLOY_TAG"
         
-        info "Pulling $full_image..."
+        # Check if image exists locally first
+        if docker image inspect "$full_image" >/dev/null 2>&1; then
+            log "✅ Image $full_image found locally, skipping pull"
+            continue
+        fi
+
+        info "Pulling $full_image from registry..."
         if docker pull "$full_image"; then
             log "✅ Successfully pulled $full_image"
         else
-            error "❌ Failed to pull $full_image"
-            failed_pulls+=("$full_image")
+            warn "⚠️ Failed to pull $full_image. If you built locally, this is fine."
+            # Only exit if the image doesn't exist at all
+            if ! docker image inspect "$full_image" >/dev/null 2>&1; then
+                error "❌ Image $full_image NOT found locally and pull failed."
+                failed_pulls+=("$full_image")
+            fi
         fi
     done
     
     if [[ ${#failed_pulls[@]} -gt 0 ]]; then
-        error "Failed to pull the following images:"
+        error "Critical images missing:"
         printf '  %s\n' "${failed_pulls[@]}"
         exit 1
     fi
     
-    log "✅ All images pulled successfully"
+    log "✅ Image verification complete"
 }
 
 # Helper: Wait for a container to be healthy
