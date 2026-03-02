@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-COMPOSE_FILE="$PROJECT_ROOT/deployments/docker/docker compose.prod.yml"
+COMPOSE_FILE="$PROJECT_ROOT/deployments/docker/docker-compose.prod.yml"
 ENV_FILE="$PROJECT_ROOT/deployments/secrets/envs/.env.prod"
 
 # Default values
