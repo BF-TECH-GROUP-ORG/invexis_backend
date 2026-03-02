@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-COMPOSE_FILE="$PROJECT_ROOT/docker-compose.prod.yml"
+COMPOSE_FILE="$PROJECT_ROOT/docker compose.prod.yml"
 ENV_FILE="$PROJECT_ROOT/deployments/secrets/envs/.env.prod"
 
 # Default values
@@ -57,9 +57,9 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check if docker-compose is available
-    if ! command -v docker-compose >/dev/null 2>&1; then
-        error "docker-compose is not installed"
+    # Check if docker compose is available
+    if ! docker compose version >/dev/null 2>&1; then
+        error "docker compose is not installed"
         exit 1
     fi
     
@@ -209,7 +209,7 @@ check_databases() {
     
     # 1. Start core infra if not running
     info "Ensuring core infrastructure containers are up..."
-    docker-compose -f "$COMPOSE_FILE" up -d \
+    docker compose -f "$COMPOSE_FILE" up -d \
         company-postgres shop-postgres payment-postgres analytics-postgres \
         sales-mysql mongodb redis rabbitmq
     
@@ -245,7 +245,7 @@ deploy_blue_services() {
         for service in "${batch[@]}"; do
             (
                 info "Starting $service..."
-                if docker-compose -f "$COMPOSE_FILE" up -d "$service"; then
+                if docker compose -f "$COMPOSE_FILE" up -d "$service"; then
                     log "✅ $service started successfully"
                     echo "$service" >> "/tmp/deployed_services.$$"
                 else

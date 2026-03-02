@@ -16,7 +16,7 @@ NC='\033[0m'
 
 # Configuration
 TAG="${1:-latest}"
-REGISTRY="${DOCKER_REGISTRY:-localhost:5000}" # Matches docker-compose.prod.yml default namespace
+REGISTRY="${DOCKER_REGISTRY:-localhost:5000}" # Matches docker compose.prod.yml default namespace
 
 SERVICES=(
     "api-gateway"

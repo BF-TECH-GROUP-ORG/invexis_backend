@@ -245,7 +245,7 @@ backup_configurations() {
     # Backup important configuration files
     local config_files=(
         "$PROJECT_ROOT/deployments"
-        "$PROJECT_ROOT/docker-compose.yml"
+        "$PROJECT_ROOT/docker compose.yml"
         "$PROJECT_ROOT/scripts"
     )
     

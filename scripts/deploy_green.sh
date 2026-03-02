@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-COMPOSE_FILE="$PROJECT_ROOT/deployments/docker/docker-compose.prod.yml"
+COMPOSE_FILE="$PROJECT_ROOT/deployments/docker/docker compose.prod.yml"
 ENV_FILE="$PROJECT_ROOT/deployments/secrets/envs/.env.prod"
 
 # Default values
@@ -58,9 +58,9 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check if docker-compose is available
-    if ! command -v docker-compose >/dev/null 2>&1; then
-        error "docker-compose is not installed"
+    # Check if docker compose is available
+    if ! command -v docker compose >/dev/null 2>&1; then
+        error "docker compose is not installed"
         exit 1
     fi
     
@@ -110,7 +110,7 @@ load_environment() {
 create_green_compose() {
     log "📝 Creating green deployment compose configuration..."
     
-    local green_compose_file="/tmp/docker-compose.green.yml"
+    local green_compose_file="/tmp/docker compose.green.yml"
     
     # Create a modified compose file for green deployment
     sed 's/-blue:/-green:/g; s/-blue"/-green"/g; s/blue-prod/green-prod/g' "$COMPOSE_FILE" > "$green_compose_file"
@@ -203,7 +203,7 @@ deploy_green_services() {
         for service in "${batch[@]}"; do
             (
                 info "Starting green $service..."
-                if docker-compose -f "$green_compose_file" up -d "$service"; then
+                if docker compose -f "$green_compose_file" up -d "$service"; then
                     log "✅ Green $service started successfully"
                     echo "$service" >> "/tmp/green_deployed_services.$$"
                 else
@@ -442,7 +442,7 @@ verify_green_deployment() {
 cleanup() {
     log "🧹 Cleaning up temporary files..."
     rm -f "/tmp/green_deployed_services.$$" "/tmp/green_failed_deployments.$$"
-    rm -f "/tmp/docker-compose.green.yml"
+    rm -f "/tmp/docker compose.green.yml"
 }
 
 # Rollback green deployment
