@@ -1,8 +1,6 @@
-// shared/logger.js
-// Production-ready logging module with structured logging
-
 const winston = require('winston');
 const path = require('path');
+const fs = require('fs');
 
 class Logger {
   constructor(serviceName, options = {}) {
@@ -60,26 +58,38 @@ class Logger {
     }));
 
     // File transports in production
-    if (process.env.NODE_ENV === 'production') {
-      // All logs
-      transports.push(new winston.transports.File({
-        filename: path.join('/app/logs', `${this.serviceName}.log`),
-        level: this.options.level,
-        format: winston.format.combine(...formats),
-        maxsize: this.options.maxSize,
-        maxFiles: this.options.maxFiles,
-        tailable: true
-      }));
+    if (process.env.NODE_ENV === 'production' || process.env.ENABLE_FILE_LOGGING === 'true') {
+      try {
+        const logDir = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
 
-      // Error logs only
-      transports.push(new winston.transports.File({
-        filename: path.join('/app/logs', `${this.serviceName}-error.log`),
-        level: 'error',
-        format: winston.format.combine(...formats),
-        maxsize: this.options.maxSize,
-        maxFiles: this.options.maxFiles,
-        tailable: true
-      }));
+        // Ensure log directory exists
+        if (!fs.existsSync(logDir)) {
+          fs.mkdirSync(logDir, { recursive: true });
+        }
+
+        // All logs
+        transports.push(new winston.transports.File({
+          filename: path.join(logDir, `${this.serviceName}.log`),
+          level: this.options.level,
+          format: winston.format.combine(...formats),
+          maxsize: this.options.maxSize,
+          maxFiles: this.options.maxFiles,
+          tailable: true
+        }));
+
+        // Error logs only
+        transports.push(new winston.transports.File({
+          filename: path.join(logDir, `${this.serviceName}-error.log`),
+          level: 'error',
+          format: winston.format.combine(...formats),
+          maxsize: this.options.maxSize,
+          maxFiles: this.options.maxFiles,
+          tailable: true
+        }));
+      } catch (err) {
+        // Fallback: If file logging fails (e.g. permissions), don't crash the whole app
+        console.error('Failed to initialize file logging, falling back to console only:', err.message);
+      }
     }
 
     return winston.createLogger({
@@ -230,7 +240,7 @@ class Logger {
 
       // Override res.end to log response
       const originalEnd = res.end;
-      res.end = function(...args) {
+      res.end = function (...args) {
         const responseTime = Date.now() - start;
         this.logRequest(req, res, responseTime);
         return originalEnd.apply(res, args);
