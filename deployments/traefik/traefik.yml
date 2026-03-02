@@ -35,7 +35,6 @@ providers:
     exposedByDefault: false
     network: "invexis-prod-network"
     watch: true
-    pollInterval: "5s"
   file:
     filename: "/etc/traefik/dynamic_conf.yml"
     watch: true
