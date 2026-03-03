@@ -44,7 +44,13 @@ module.exports = {
 
   production: {
     client: 'pg',
-    connection: process.env.DATABASE_URL, // for example, Heroku-style connection string
+    connection: process.env.DB_POSTGRES || {
+      host: process.env.DB_HOST || 'shop-postgres',
+      port: process.env.DB_PORT || 5432,
+      database: process.env.DB_NAME || 'shopdb',
+      user: process.env.DB_USER || 'invexis',
+      password: process.env.DB_PASSWORD || ''
+    },
     pool: { min: 2, max: 10 },
     migrations: {
       tableName: 'knex_migrations',
