@@ -980,6 +980,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8008
+      MONGO_URI: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/notificationdb?authSource=admin
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
