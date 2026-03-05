@@ -1001,6 +1001,18 @@ services:
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      # Email Configuration
+      EMAIL_HOST: smtp.gmail.com
+      EMAIL_PORT: 587
+      EMAIL_SECURE: "false"
+      EMAIL_USER: invexiscompany@gmail.com
+      EMAIL_PASS: cczv dxom gold pzxv
+      EMAIL_FROM: "Invexis Notifications <no-reply@invexis.com>"
+      # Twilio Configuration
+      TWILIO_SID: AC083d54a8441c415fa7049fcf5194ed8a
+      TWILIO_AUTH_TOKEN: 223d4376d1386e184bba0a36955a5d83
+      TWILIO_SECRET: VaabfczTX7dq6nCB99LTaFxUHwc7EB0E
+      TWILIO_PHONE_NUMBER: "+16812588292"
     volumes:
     - ./shared:/app/shared:ro
     networks:
