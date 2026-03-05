@@ -84,7 +84,13 @@ module.exports = async function handleAuthEvent(event, routingKey) {
  */
 async function handleUserCreated(data) {
   console.log(`👤 [handleUserCreated] ENTRY - userId: ${data.userId}, email: ${data.email}`);
-  const { userId, email, phone, companyId, preferences } = data;
+  const { userId, email, phone, preferences, companies } = data;
+  let { companyId } = data;
+
+  // Derive companyId from companies array if missing (for auth-service compatibility)
+  if (!companyId && Array.isArray(companies) && companies.length > 0) {
+    companyId = companies[0].toString();
+  }
 
   if (!userId || !email) {
     console.log(`⚠️  [handleUserCreated] Missing required fields - userId: ${userId}, email: ${email}`);

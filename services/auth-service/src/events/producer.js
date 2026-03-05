@@ -27,6 +27,7 @@ const publishUserEvent = {
                     lastName: user.lastName,
                     role: user.role,
                     companies: user.companies || [],
+                    companyId: user.companies && user.companies.length > 0 ? user.companies[0].toString() : 'system',
                     shops: user.shops || [],
                     createdAt: user.createdAt,
                     password, // Pass plain password if provided (for notification)
