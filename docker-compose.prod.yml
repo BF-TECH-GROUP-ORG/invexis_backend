@@ -1,9 +1,20 @@
 version: '3.8'
 services:
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3.3
     container_name: invexis-traefik-prod
-    restart: always
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=invexis-prod-network"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.file.filename=/etc/traefik/dynamic_conf.yml"
+      - "--providers.file.watch=true"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=bflabscompany@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+      - "--log.level=INFO"
+      - "--api.dashboard=true"
     ports:
     - 80:80
     - 443:443
@@ -18,6 +29,11 @@ services:
     - TRAEFIK_LOG_LEVEL=${TRAEFIK_LOG_LEVEL:-INFO}
     - DOMAIN=${DOMAIN}
     - ACME_EMAIL=${ACME_EMAIL}
+    - DOCKER_API_VERSION=1.53
+    - BASIC_AUTH_USERS=${TRAEFIK_BASIC_AUTH:-admin:$$apr1$$H6usneSb$$IgWfHOf7n7do1LomS7qS5/}
+    - ADMIN_IP_WHITELIST=0.0.0.0/0
+    - TRAEFIK_BASIC_AUTH=${TRAEFIK_BASIC_AUTH:-admin:$$apr1$$H6usneSb$$IgWfHOf7n7do1LomS7qS5/}
+    - HTTPLOG_LEVEL=DEBUG
     networks:
     - invexis-prod-network
     healthcheck:
@@ -33,6 +49,7 @@ services:
     - traefik.enable=true
     - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN:-localhost}`)
     - traefik.http.routers.traefik-dashboard.tls=true
+    - traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt
     - traefik.http.routers.traefik-dashboard.middlewares=auth
     - traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_BASIC_AUTH}
     deploy:
@@ -77,7 +94,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    user: nobody:nogroup
+    user: "65534:65534"
     read_only: true
     tmpfs:
     - /tmp
@@ -85,6 +102,7 @@ services:
     - traefik.enable=true
     - traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN:-localhost}`)
     - traefik.http.routers.prometheus.tls=true
+    - traefik.http.routers.prometheus.tls.certresolver=letsencrypt
     - traefik.http.services.prometheus.loadbalancer.server.port=9090
     deploy:
       resources:
@@ -141,6 +159,7 @@ services:
     - traefik.enable=true
     - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN:-localhost}`)
     - traefik.http.routers.grafana.tls=true
+    - traefik.http.routers.grafana.tls.certresolver=letsencrypt
     - traefik.http.services.grafana.loadbalancer.server.port=3000
     deploy:
       resources:
@@ -205,6 +224,7 @@ services:
     - traefik.enable=true
     - traefik.http.routers.elasticsearch.rule=Host(`elasticsearch.${DOMAIN:-localhost}`)
     - traefik.http.routers.elasticsearch.tls=true
+    - traefik.http.routers.elasticsearch.tls.certresolver=letsencrypt
     - traefik.http.services.elasticsearch.loadbalancer.server.port=9200
     deploy:
       resources:
@@ -273,6 +293,7 @@ services:
     - traefik.enable=true
     - traefik.http.routers.kibana.rule=Host(`kibana.${DOMAIN:-localhost}`)
     - traefik.http.routers.kibana.tls=true
+    - traefik.http.routers.kibana.tls.certresolver=letsencrypt
     - traefik.http.services.kibana.loadbalancer.server.port=5601
   company-postgres:
     image: postgres:15-alpine
@@ -571,6 +592,7 @@ services:
     - traefik.enable=true
     - traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.${DOMAIN:-localhost}`)
     - traefik.http.routers.rabbitmq.tls=true
+    - traefik.http.routers.rabbitmq.tls.certresolver=letsencrypt
     - traefik.http.services.rabbitmq.loadbalancer.server.port=15672
   api-gateway-blue:
     image: ${DOCKER_REGISTRY:-localhost:5000}/invexis/api-gateway:${DEPLOY_TAG:-latest}
@@ -585,13 +607,25 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
-      CORS_ORIGIN: '*'
+      CORS_ORIGIN: https://invexix.com,https://www.invexix.com,https://admin.invexix.com,https://backend.dutumegroup.com
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       SESSION_SECRET: ${SESSION_SECRET:-invexis_secret_2026}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      AUTH_SERVICE_URL: http://auth-service-blue:8001
+      COMPANY_SERVICE_URL: http://company-service-blue:8002
+      SHOP_SERVICE_URL: http://shop-service-blue:8007
+      INVENTORY_SERVICE_URL: http://inventory-service-blue:8003
+      SALES_SERVICE_URL: http://sales-service-blue:8004
+      PAYMENT_SERVICE_URL: http://payment-service-blue:8008
+      NOTIFICATION_SERVICE_URL: http://notification-service-blue:8006
+      ANALYTICS_SERVICE_URL: http://analytics-service-blue:8009
+      REPORT_SERVICE_URL: http://report-service-blue:8010
+      AUDIT_SERVICE_URL: http://audit-service-blue:8011
+      DEBT_SERVICE_URL: http://debt-service-blue:8012
+      DOCUMENT_SERVICE_URL: http://document-service-blue:8013
     volumes:
     - ./shared:/app/shared:ro
     networks:
@@ -602,17 +636,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:8000/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -630,8 +658,10 @@ services:
     user: 1001:1001
     labels:
     - traefik.enable=true
-    - traefik.http.routers.api-gateway-blue.rule=Host(`backend.${DOMAIN:-localhost}`)
+    - traefik.http.routers.api-gateway-blue.rule=Host(`backend.dutumegroup.com`)
+    - traefik.http.routers.api-gateway-blue.entrypoints=websecure
     - traefik.http.routers.api-gateway-blue.tls=true
+    - traefik.http.routers.api-gateway-blue.tls.certresolver=letsencrypt
     - traefik.http.routers.api-gateway-blue.priority=100
     - traefik.http.services.api-gateway-blue.loadbalancer.server.port=8000
     - traefik.http.routers.api-gateway-blue.middlewares=rate-limit,security-headers
@@ -779,17 +809,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:9001/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:9001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -834,17 +858,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:8007/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8007/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -890,17 +908,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:9000/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:9000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -945,17 +957,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:9003/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:9003/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -1005,17 +1011,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:8008/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8008/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -1064,17 +1064,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:8009/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8009/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -1122,17 +1116,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:8002/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8002/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -1158,6 +1146,7 @@ services:
       NODE_ENV: production
       PORT: 8003
       DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/auditdb?authSource=admin
+      MONGO_URI: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/auditdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
@@ -1177,17 +1166,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:8003/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8003/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -1213,6 +1196,7 @@ services:
       NODE_ENV: production
       PORT: 8005
       DB_MONGO: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/debtdb?authSource=admin
+      MONGO_URI: mongodb://root:${MONGO_ROOT_PASSWORD}@mongodb:27017/debtdb?authSource=admin
       RABBITMQ_URL: amqp://invexis:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
@@ -1232,17 +1216,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:8005/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8005/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -1285,17 +1263,11 @@ services:
       mongodb:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:9004/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:9004/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -1329,6 +1301,7 @@ services:
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      CORS_ORIGIN: https://invexix.com,https://www.invexix.com,https://admin.invexix.com,https://backend.dutumegroup.com
     volumes:
     - ./shared:/app/shared:ro
     networks:
@@ -1337,17 +1310,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - wget
-      - --no-verbose
-      - --tries=1
-      - --spider
-      - http://localhost:9002/health
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:9002/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     deploy:
       resources:
         limits:
@@ -1364,8 +1331,10 @@ services:
     user: 1001:1001
     labels:
     - traefik.enable=true
-    - traefik.http.routers.websocket-blue.rule=Host(`ws.${DOMAIN:-localhost}`)
+    - traefik.http.routers.websocket-blue.rule=Host(`ws.dutumegroup.com`)
+    - traefik.http.routers.websocket-blue.entrypoints=websecure
     - traefik.http.routers.websocket-blue.tls=true
+    - traefik.http.routers.websocket-blue.tls.certresolver=letsencrypt
     - traefik.http.services.websocket-blue.loadbalancer.server.port=9002
     - deployment.color=blue
 volumes:

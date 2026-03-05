@@ -44,7 +44,7 @@ certificatesResolvers:
   letsencrypt:
     acme:
       tlsChallenge: {}
-      email: "${ACME_EMAIL}"
+      email: "bflabscompany@gmail.com"
       storage: "/data/acme.json"
       caServer: "https://acme-v02.api.letsencrypt.org/directory"
       # For staging/testing, use: https://acme-staging-v02.api.letsencrypt.org/directory
@@ -53,16 +53,16 @@ certificatesResolvers:
 api:
   dashboard: true
   debug: false
-  insecure: false
+  insecure: true
 
 # Logging configuration
 log:
-  level: "${TRAEFIK_LOG_LEVEL:-INFO}"
-  filePath: "/var/log/traefik/traefik.log"
+  level: "INFO"
+  # filePath: "/var/log/traefik/traefik.log"
   format: "json"
 
 accessLog:
-  filePath: "/var/log/traefik/access.log"
+  # filePath: "/var/log/traefik/access.log"
   format: "json"
   filters:
     statusCodes:

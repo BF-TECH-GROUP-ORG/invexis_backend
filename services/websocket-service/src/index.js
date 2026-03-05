@@ -43,7 +43,7 @@ const { initAdapter } = require('./config/adapter');
 // Socket.IO setup
 const io = socketIo(server, {
   cors: {
-    origin: "*",
+    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : "*",
     methods: ["GET", "POST"],
     credentials: true
   },

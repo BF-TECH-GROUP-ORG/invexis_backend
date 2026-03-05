@@ -9,9 +9,6 @@
 tls:
   options:
     default:
-      sslProtocols:
-        - "TLSv1.2"
-        - "TLSv1.3"
       cipherSuites:
         - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
         - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
@@ -23,8 +20,6 @@ tls:
         - "secp384r1"
       minVersion: "VersionTLS12"
     strict:
-      sslProtocols:
-        - "TLSv1.3"
       minVersion: "VersionTLS13"
 
 # Middleware definitions
@@ -33,14 +28,6 @@ http:
     # Security headers middleware
     security-headers:
       headers:
-        accessControlAllowMethods:
-          - "GET"
-          - "POST"
-          - "PUT"
-          - "DELETE"
-          - "PATCH"
-          - "OPTIONS"
-        accessControlMaxAge: 100
         hostsProxyHeaders:
           - "X-Forwarded-Host"
         referrerPolicy: "same-origin"
@@ -90,7 +77,10 @@ http:
     cors:
       headers:
         accessControlAllowOriginList:
-          - "*"
+          - "https://invexix.com"
+          - "https://www.invexix.com"
+          - "https://admin.invexix.com"
+          - "https://backend.dutumegroup.com"
         accessControlAllowMethods:
           - "GET"
           - "POST"
@@ -103,10 +93,15 @@ http:
           - "Authorization"
           - "X-Requested-With"
           - "X-API-Key"
+          - "Accept"
+          - "Origin"
+          - "X-CSRF-Token"
+          - "ngrok-skip-browser-warning"
         accessControlExposeHeaders:
           - "X-Total-Count"
           - "X-Page-Count"
         accessControlMaxAge: 86400
+        accessControlAllowCredentials: true
         addVaryHeader: true
 
     # Authentication middleware (basic auth for admin interfaces)
@@ -142,27 +137,20 @@ http:
     compression:
       compress: true
 
-    # Request/response size limits
-    buffering:
-      maxRequestBodyBytes: 10485760 # 10MB
-      memRequestBodyBytes: 2097152 # 2MB
-      maxResponseBodyBytes: 10485760 # 10MB
-      memResponseBodyBytes: 2097152 # 2MB
-      retryExpression: "IsNetworkError() && Attempts() <= 2"
+
+
 
   # Blue/Green routing configuration
   routers:
     # API Gateway routing with blue/green support
     api-gateway:
-      rule: "Host(`backend.${DOMAIN:-localhost}`)"
+      rule: "Host(`backend.dutumegroup.com`) && (PathPrefix(`/api`) || PathPrefix(`/health`))"
       service: "api-gateway-active"
+      entryPoints: ["websecure"]
       priority: 100
       middlewares:
         - "security-headers"
         - "cors"
-        - "api-rate-limit"
-        - "circuit-breaker"
-        - "retry"
         - "compression"
       tls:
         certResolver: "letsencrypt"
@@ -170,8 +158,9 @@ http:
 
     # WebSocket routing
     websocket:
-      rule: "Host(`ws.${DOMAIN:-localhost}`)"
+      rule: "Host(`ws.dutumegroup.com`)"
       service: "websocket-active"
+      entryPoints: ["websecure"]
       middlewares:
         - "security-headers"
         - "rate-limit"
@@ -181,20 +170,19 @@ http:
 
     # Monitoring dashboards
     prometheus:
-      rule: "Host(`prometheus.${DOMAIN:-localhost}`)"
+      rule: "Host(`prometheus.dutumegroup.com`)"
       service: "prometheus"
+      entryPoints: ["websecure"]
       middlewares:
-        - "auth"
-        - "admin-whitelist"
-        - "admin-rate-limit"
         - "security-headers"
       tls:
         certResolver: "letsencrypt"
         options: "strict"
 
     grafana:
-      rule: "Host(`grafana.${DOMAIN:-localhost}`)"
+      rule: "Host(`grafana.dutumegroup.com`)"
       service: "grafana"
+      entryPoints: ["websecure"]
       middlewares:
         - "security-headers"
         - "compression"
@@ -203,24 +191,20 @@ http:
         options: "strict"
 
     kibana:
-      rule: "Host(`kibana.${DOMAIN:-localhost}`)"
+      rule: "Host(`kibana.dutumegroup.com`)"
       service: "kibana"
+      entryPoints: ["websecure"]
       middlewares:
-        - "auth"
-        - "admin-whitelist"
-        - "admin-rate-limit"
         - "security-headers"
       tls:
         certResolver: "letsencrypt"
         options: "strict"
 
     rabbitmq:
-      rule: "Host(`rabbitmq.${DOMAIN:-localhost}`)"
+      rule: "Host(`rabbitmq.dutumegroup.com`)"
       service: "rabbitmq"
+      entryPoints: ["websecure"]
       middlewares:
-        - "auth"
-        - "admin-whitelist"
-        - "admin-rate-limit"
         - "security-headers"
       tls:
         certResolver: "letsencrypt"
@@ -238,7 +222,7 @@ http:
           interval: "30s"
           timeout: "10s"
           headers:
-            Host: "backend.${DOMAIN:-localhost}"
+            Host: "backend.dutumegroup.com"
 
     # Standby API Gateway (green, ready for traffic switch)
     api-gateway-standby:
