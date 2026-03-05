@@ -22,8 +22,9 @@ const deliveryLogSchema = new mongoose.Schema(
     },
     companyId: {
       type: String,
-      required: true,
+      required: false,
       index: true,
+      default: 'system'
     },
     status: {
       type: String,
